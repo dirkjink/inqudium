@@ -62,10 +62,10 @@ Configuration, algorithms, and events shared. Execution native. That's the plan.
 | Module                       | Artifact ID                      | Status       |
 |------------------------------|----------------------------------|--------------|
 | Core (SPI)                   | `inqudium-core`                  | Not started  |
-| Circuit Breaker (imperative) | `inqudium-circuitbreaker`        | Not started  |
+| Circuit Breaker (imperative) | `inqudium-circuitbreaker`        | Planned      |
 | Retry (imperative)           | `inqudium-retry`                 | Planned      |
 | Rate Limiter (imperative)    | `inqudium-ratelimiter`           | Planned      |
-| Bulkhead (imperative)        | `inqudium-bulkhead`              | Planned      |
+| Bulkhead (imperative)        | `inqudium-bulkhead`              | Not started  |
 | Time Limiter (imperative)    | `inqudium-timelimiter`           | Planned      |
 | Cache (imperative)           | `inqudium-cache`                 | Planned      |
 | Kotlin Coroutines (native)   | `inqudium-kotlin`                | Planned      |
