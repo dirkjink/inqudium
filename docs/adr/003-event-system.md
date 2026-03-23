@@ -2,6 +2,7 @@
 
 **Status:** Accepted  
 **Date:** 2026-03-22  
+**Last updated:** 2026-03-23  
 **Deciders:** Core team
 
 ## Context
@@ -93,6 +94,55 @@ This separation is intentional. Binding `InqEvent` to `jdk.jfr.Event` would forc
 The JFR binder (ADR-007) bridges the gap: it subscribes to `InqEventPublisher`, receives `InqEvent` instances, and creates the corresponding `jdk.jfr.Event` — mapping fields one-to-one. The same pattern applies to the Micrometer binder, which maps events to metric increments and timer recordings.
 
 See ADR-007 for the JFR event design and the binder mechanism.
+
+### Events are observational — not a control mechanism
+
+Events flow in **one direction: out.** They are notifications about something that has already happened. No element uses events from another element to make state decisions. This is a deliberate constraint with two important implications.
+
+#### Cross-element communication happens through the pipeline, not through events
+
+Consider a typical composition:
+
+```
+Call → CircuitBreaker → TimeLimiter → external service
+       (outer layer)     (inner layer)
+```
+
+When the TimeLimiter fires, it throws a `TimeoutException`. This exception propagates upward to the Circuit Breaker through the normal pipeline call stack (ADR-002). The Circuit Breaker records it as `onError(TimeoutException)`, counts it in its sliding window, and opens when the failure rate threshold is exceeded.
+
+The Circuit Breaker **already reacts to timeouts** — not because it subscribes to TimeLimiter events, but because errors propagate naturally through the decoration layers. This is exactly what functional decoration (ADR-002) is designed for.
+
+If the Circuit Breaker were to additionally consume TimeLimiter events through the event bus, two problems emerge:
+
+1. **Double-counting.** The Circuit Breaker sees the timeout twice — once as an exception through the pipeline, once as an event. Deduplication logic would be needed to prevent a single timeout from counting double in the sliding window.
+2. **Module coupling.** The Circuit Breaker would need to know `TimeLimiterEvent` as a type. This creates a dependency from `inqudium-circuitbreaker` to `inqudium-timelimiter` — violating the zero-transitive-dependency principle from ADR-001.
+
+The pipeline already provides the semantics that event-based cross-element communication would attempt to replicate — but without the coupling, without the deduplication, and without the indirection overhead on the hot path.
+
+#### Cross-instance coordination is an explicit API, not event subscription
+
+There is a legitimate scenario that the pipeline does not cover: **cross-instance reaction.** For example: "When the Circuit Breaker for Service-A opens, the Circuit Breaker for Service-B should also open because B depends on A." These two breakers protect different calls — there is no shared pipeline.
+
+Even in this case, the solution is not event subscription between elements. A Circuit Breaker subscribing to another Circuit Breaker's events creates hidden coupling: the behavior depends on subscription order, event bus timing, and whether the subscription was set up before the first failure. This is fragile and invisible in code.
+
+The planned approach is an **explicit, declarative API**:
+
+```java
+CircuitBreakerGroup.of(breakerA, breakerB)
+    .propagateOpen();  // A opens → B opens
+```
+
+This makes the dependency relationship visible in application code, testable in isolation (configure the group, force-open A, assert B is open), and free from event-bus timing concerns. The group implementation calls `forceOpen()` directly on the dependent breaker — a command, not a reaction to an event.
+
+After any such state change, events are emitted as usual — but they document the propagation, they don't drive it.
+
+#### The rule
+
+```
+Pipeline       → controls what happens within a call chain
+Explicit API   → controls what happens across element instances
+Events         → document what happened (observability only)
+```
 
 ## Consequences
 
