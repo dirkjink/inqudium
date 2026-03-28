@@ -46,7 +46,7 @@ The rationale: a project that adopts a reactive paradigm typically wants the ful
 
 Every Inqudium module ships with a `module-info.java` that declares its exports and dependencies. This is a deliberate investment that pays off in three ways:
 
-1. **Strong encapsulation.** The `internal` packages (e.g. `io.inqudium.circuitbreaker.internal`) are not exported. JPMS enforces this at compile time and runtime — not just by convention, but by the module system itself. Consumers cannot accidentally depend on internal state machine classes, even via reflection.
+1. **Strong encapsulation.** The `internal` packages (e.g. `eu.inqudium.circuitbreaker.internal`) are not exported. JPMS enforces this at compile time and runtime — not just by convention, but by the module system itself. Consumers cannot accidentally depend on internal state machine classes, even via reflection.
 
 2. **Explicit dependency graph.** Each module declares exactly what it `requires`. `inqudium-circuitbreaker` requires `inqudium.core` and nothing else. This makes the dependency graph verifiable by the compiler and visible in tools like `jdeps`.
 
@@ -58,9 +58,9 @@ Example `module-info.java` for `inqudium-circuitbreaker`:
 module inqudium.circuitbreaker {
     requires inqudium.core;
 
-    exports io.inqudium.circuitbreaker;
-    exports io.inqudium.circuitbreaker.event;
-    // io.inqudium.circuitbreaker.internal is NOT exported
+    exports eu.inqudium.circuitbreaker;
+    exports eu.inqudium.circuitbreaker.event;
+    // eu.inqudium.circuitbreaker.internal is NOT exported
 }
 ```
 

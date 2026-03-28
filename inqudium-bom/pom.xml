@@ -4,7 +4,7 @@
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
-    <groupId>io.inqudium</groupId>
+    <groupId>eu.inqudium</groupId>
     <artifactId>inqudium-bom</artifactId>
     <version>${revision}</version>
     <packaging>pom</packaging>
@@ -20,58 +20,58 @@
         <dependencies>
             <!-- Core -->
             <dependency>
-                <groupId>io.inqudium</groupId>
+                <groupId>eu.inqudium</groupId>
                 <artifactId>inqudium-core</artifactId>
                 <version>${revision}</version>
             </dependency>
 
             <!-- Imperative elements -->
             <dependency>
-                <groupId>io.inqudium</groupId>
+                <groupId>eu.inqudium</groupId>
                 <artifactId>inqudium-circuitbreaker</artifactId>
                 <version>${revision}</version>
             </dependency>
             <dependency>
-                <groupId>io.inqudium</groupId>
+                <groupId>eu.inqudium</groupId>
                 <artifactId>inqudium-retry</artifactId>
                 <version>${revision}</version>
             </dependency>
             <dependency>
-                <groupId>io.inqudium</groupId>
+                <groupId>eu.inqudium</groupId>
                 <artifactId>inqudium-ratelimiter</artifactId>
                 <version>${revision}</version>
             </dependency>
             <dependency>
-                <groupId>io.inqudium</groupId>
+                <groupId>eu.inqudium</groupId>
                 <artifactId>inqudium-bulkhead</artifactId>
                 <version>${revision}</version>
             </dependency>
             <dependency>
-                <groupId>io.inqudium</groupId>
+                <groupId>eu.inqudium</groupId>
                 <artifactId>inqudium-timelimiter</artifactId>
                 <version>${revision}</version>
             </dependency>
 
             <!-- Native paradigm implementations -->
             <dependency>
-                <groupId>io.inqudium</groupId>
+                <groupId>eu.inqudium</groupId>
                 <artifactId>inqudium-kotlin</artifactId>
                 <version>${revision}</version>
             </dependency>
             <dependency>
-                <groupId>io.inqudium</groupId>
+                <groupId>eu.inqudium</groupId>
                 <artifactId>inqudium-reactor</artifactId>
                 <version>${revision}</version>
             </dependency>
             <dependency>
-                <groupId>io.inqudium</groupId>
+                <groupId>eu.inqudium</groupId>
                 <artifactId>inqudium-rxjava3</artifactId>
                 <version>${revision}</version>
             </dependency>
 
             <!-- Integrations -->
             <dependency>
-                <groupId>io.inqudium</groupId>
+                <groupId>eu.inqudium</groupId>
                 <artifactId>inqudium-spring-boot3</artifactId>
                 <version>${revision}</version>
             </dependency>

@@ -105,6 +105,60 @@ circuitBreaker.getEventPublisher()
     .onEvent(CircuitBreakerOnStateTransitionEvent.class, event -> { ... });
 ```
 
+### Publisher creation and wiring
+
+Each element creates its own `InqEventPublisher` during construction. The element does not receive the publisher from outside — it creates it as an internal component:
+
+```java
+// Inside CircuitBreaker.of(name, config):
+public static CircuitBreaker of(String name, CircuitBreakerConfig config) {
+    var publisher = InqEventPublisher.create(name, InqElementType.CIRCUIT_BREAKER);
+    return new CircuitBreaker(name, config, publisher);
+}
+```
+
+The factory method `InqEventPublisher.create()` wires two delivery paths internally:
+
+```java
+public static InqEventPublisher create(String elementName, InqElementType elementType) {
+    return new DefaultInqEventPublisher(elementName, elementType);
+}
+```
+
+When `publish(event)` is called, the `DefaultInqEventPublisher`:
+
+1. **Delivers to local consumers** — the consumer list managed by this publisher instance via `onEvent()`.
+2. **Forwards to global exporters** — calls `InqEventExporterRegistry.export(event)` to reach all registered `InqEventExporter` implementations.
+
+```
+element.publish(event)
+   │
+   ├─► Local consumers (registered via this.onEvent())
+   │     → Dashboard widget, custom listener, etc.
+   │
+   └─► InqEventExporterRegistry.export(event)
+         → KafkaExporter, JfrBinder, MicrometerBinder, etc.
+```
+
+The element and its consumers are unaware of the global exporter layer. The exporter layer is unaware of individual per-element subscriptions. The `DefaultInqEventPublisher` bridges both — this is the only point where the two scopes meet.
+
+**Why the element creates the publisher itself:**
+
+- **No external wiring needed.** The developer creates an element with `CircuitBreaker.of(name, config)` — the publisher is ready immediately. No builder step, no factory injection, no Spring bean dependency.
+- **Lifecycle alignment.** The publisher lives exactly as long as the element. No orphaned publishers, no dangling subscriptions.
+- **Testability.** In tests, `InqEventPublisher.create()` can be replaced with a recording implementation that captures events for assertion. The element's constructor also accepts a publisher for direct injection in unit tests:
+
+```java
+// In production: element creates its own publisher
+var cb = CircuitBreaker.of("paymentService", config);
+
+// In tests: inject a recording publisher
+var recorder = new RecordingEventPublisher();
+var cb = new CircuitBreaker("paymentService", config, recorder);
+// ... exercise the circuit breaker ...
+assertThat(recorder.events()).hasSize(3);
+```
+
 ### Event scope: two layers by design
 
 The event system operates at two distinct scopes. This is intentional — each scope serves a different audience with different needs.

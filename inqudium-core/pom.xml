@@ -5,7 +5,7 @@
     <modelVersion>4.0.0</modelVersion>
 
     <parent>
-        <groupId>io.inqudium</groupId>
+        <groupId>eu.inqudium</groupId>
         <artifactId>inqudium-parent</artifactId>
         <version>${revision}</version>
     </parent>

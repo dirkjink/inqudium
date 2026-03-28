@@ -141,9 +141,9 @@ META-INF/services/<fully-qualified-SPI-interface-name>
 For Inqudium's SPIs:
 
 ```
-META-INF/services/io.inqudium.core.context.InqContextPropagator
-META-INF/services/io.inqudium.core.compatibility.InqCompatibilityOptions
-META-INF/services/io.inqudium.core.event.InqEventExporter
+META-INF/services/eu.inqudium.core.context.InqContextPropagator
+META-INF/services/eu.inqudium.core.compatibility.InqCompatibilityOptions
+META-INF/services/eu.inqudium.core.event.InqEventExporter
 ```
 
 Each line in the file is a fully qualified class name of a provider implementation. Empty lines and lines starting with `#` are ignored (standard ServiceLoader behavior).
@@ -155,7 +155,7 @@ In a modular application (JPMS), ServiceLoader discovery requires the provider m
 ```java
 module com.mycompany.inqudium.extensions {
     requires inqudium.core;
-    provides io.inqudium.core.context.InqContextPropagator
+    provides eu.inqudium.core.context.InqContextPropagator
         with com.mycompany.MdcContextPropagator;
 }
 ```

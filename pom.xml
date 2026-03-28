@@ -4,7 +4,7 @@
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
-    <groupId>io.inqudium</groupId>
+    <groupId>eu.inqudium</groupId>
     <artifactId>inqudium-parent</artifactId>
     <version>${revision}</version>
     <packaging>pom</packaging>
@@ -92,7 +92,7 @@
         <dependencies>
             <!-- Inqudium modules (via BOM) -->
             <dependency>
-                <groupId>io.inqudium</groupId>
+                <groupId>eu.inqudium</groupId>
                 <artifactId>inqudium-bom</artifactId>
                 <version>${revision}</version>
                 <type>pom</type>
