@@ -39,16 +39,12 @@ public final class InqTimeoutProfile {
   // Fields
   // -------------------------------------------------------------------------
 
-  /**
-   * Immutable snapshot of the configured timeout components at build time.
-   */
+  /** Immutable snapshot of the configured timeout components at build time. */
   private final Map<AgnosticTimeoutType, Duration> timeoutComponents;
 
   private final double safetyMarginFactor;
 
-  /**
-   * Strategy selected at build time; stateless and safe to share.
-   */
+  /** Strategy selected at build time; stateless and safe to share. */
   private final TimeoutCalculator calculator;
 
   // -------------------------------------------------------------------------
@@ -61,15 +57,13 @@ public final class InqTimeoutProfile {
     this.safetyMarginFactor = b.safetyMarginFactor;
     // Select the strategy implementation that matches the chosen TimeoutCalculation
     this.calculator = switch (b.method) {
-      case RSS -> new RssTimeoutCalculator();
+      case RSS -> new RssTimeoutCalculator(b.sigmaLevel);
       case WORST_CASE -> new WorstCaseTimeoutCalculator();
       case MAX -> new MaxTimeoutCalculator();
     };
   }
 
-  /**
-   * Creates a new builder.
-   */
+  /** Creates a new builder. */
   public static Builder builder() {
     return new Builder();
   }
@@ -190,6 +184,19 @@ public final class InqTimeoutProfile {
   }
 
   /**
+   * Returns the {@link SigmaLevel} used by the RSS calculator, or
+   * {@link java.util.Optional#empty()} when the active strategy is not RSS.
+   *
+   * @return an {@link java.util.Optional} containing the sigma level for RSS profiles,
+   *         empty for WORST_CASE and MAX profiles
+   */
+  public java.util.Optional<SigmaLevel> getSigmaLevel() {
+    return calculator instanceof RssTimeoutCalculator rss
+        ? java.util.Optional.of(rss.getSigmaLevel())
+        : java.util.Optional.empty();
+  }
+
+  /**
    * Returns the safety margin factor.
    *
    * @return the factor (e.g. {@code 1.2} for a 20 % margin above the computed value)
@@ -211,13 +218,12 @@ public final class InqTimeoutProfile {
    */
   public static final class Builder {
 
-    /**
-     * EnumMap guarantees ordering by declaration and O(1) put/get.
-     */
+    /** EnumMap guarantees ordering by declaration and O(1) put/get. */
     private final EnumMap<AgnosticTimeoutType, Duration> timeoutComponents =
         new EnumMap<>(AgnosticTimeoutType.class);
 
     private TimeoutCalculation method = TimeoutCalculation.RSS;
+    private SigmaLevel sigmaLevel = SigmaLevel.TWO_SIGMA;
     private double safetyMarginFactor = 1.2;
 
     private Builder() {
@@ -323,6 +329,21 @@ public final class InqTimeoutProfile {
      */
     public Builder method(TimeoutCalculation method) {
       this.method = Objects.requireNonNull(method);
+      return this;
+    }
+
+    /**
+     * Sets the {@link SigmaLevel} used by the RSS calculator.
+     *
+     * <p>Only has an effect when the calculation method is
+     * {@link TimeoutCalculation#RSS}; ignored for other strategies.
+     * Defaults to {@link SigmaLevel#TWO_SIGMA} (95.45 % coverage).
+     *
+     * @param sigmaLevel the sigma level; must not be {@code null}
+     * @return this builder
+     */
+    public Builder sigmaLevel(SigmaLevel sigmaLevel) {
+      this.sigmaLevel = Objects.requireNonNull(sigmaLevel, "sigmaLevel must not be null");
       return this;
     }
 
