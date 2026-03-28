@@ -17,310 +17,79 @@ A resilience library occupies a uniquely sensitive position in an application's 
 - The sliding window calculation is corrected — the circuit breaker now opens at a slightly different failure rate for the same configuration.
 - The backoff jitter algorithm is improved — retry intervals have a different distribution.
 - The default value for `slidingWindowType` changes from `COUNT_BASED` to `TIME_BASED`.
-- The rate limiter's token replenishment timing is fixed — under high concurrency, slightly more or fewer requests are permitted per second.
-- The event emission order changes — a state transition event now fires before the call returns, not after.
 
-These changes are improvements — bug fixes, better defaults, more correct behavior. But they alter how the system behaves under load, and in a resilience context, altered behavior can cascade: a circuit breaker that opens 2% earlier may trigger a fallback path that was previously untested.
+Tests pass. Staging may pass. But production behavior changes — and in a resilience library, that can mean unexpected circuit breaker openings, different retry patterns, or altered bulkhead behavior under load.
 
-**Category 3: Semantic breaking changes** — The behavior change is intentional and documented, but subtle enough that it is easily missed in a changelog. For example: `InqRetryExhaustedException` now includes the attempt durations, causing its `toString()` output to change — breaking log parsers that match on the exception message.
-
-### Why semantic versioning alone is insufficient
-
-Semantic versioning signals "there is a breaking change" (major bump) or "there is not" (minor/patch bump). It does not help with Category 2, where the change is a bug fix or improvement that the maintainer considers non-breaking but the consumer's production system depends on the exact previous behavior.
-
-The Spring Boot approach of deprecation cycles and migration guides helps for API changes but does not address behavioral changes that have no API surface to deprecate.
-
-### What production teams need
-
-A mechanism that allows:
-
-1. **Upgrade the library version** without any behavioral change — the new version behaves exactly like the old one.
-2. **Opt in to behavioral changes** individually — test each change in staging before enabling it in production.
-3. **Opt in to all behavioral changes at once** — for teams that prefer to adopt everything at once after testing.
-4. **Know what changed** — each behavioral change is documented with its flag, its old behavior, its new behavior, and its rationale.
+**Category 3: Semantic breaking changes** — The behavior is correct, but observable side effects change: `toString()` output changes (breaking log parsers), event ordering shifts (breaking monitoring assertions), metrics keys are renamed. These are subtle enough to survive code review but impactful enough to break production observability.
 
 ## Decision
 
-### Compatibility flags in `InqCompatibility`
+Behavioral and semantic breaking changes are gated behind named **compatibility flags**. A flag controls which implementation variant is active — old behavior (default until explicitly changed) or new behavior (opt-in). Flags are resolved once at configuration build time and are immutable for the lifetime of the element.
 
-Behavioral breaking changes are controlled by named boolean flags in a central `InqCompatibility` configuration. Each flag has a clear name, a default value (old behavior), and documentation.
+### The `InqCompatibility` mechanism
 
-```java
-var compatibility = InqCompatibility.builder()
-    .flag(InqFlag.SLIDING_WINDOW_BOUNDARY_INCLUSIVE, true)   // new behavior
-    .flag(InqFlag.BACKOFF_JITTER_UNIFORM_DISTRIBUTION, true) // new behavior
-    .build();
-
-var circuitBreaker = CircuitBreaker.of("paymentService",
-    CircuitBreakerConfig.builder()
-        .compatibility(compatibility)
-        .failureRateThreshold(50)
-        .build());
-```
-
-### Flag design
-
-Each flag is an enum constant in `InqFlag`:
+Each behavioral breaking change gets a named constant in the `InqFlag` enum. Each constant documents in its Javadoc: since which version it was introduced, the old behavior, the new behavior, and the default.
 
 ```java
-public enum InqFlag {
+InqCompatibility.preserveAll()   // All flags off — maximum stability across upgrades
+InqCompatibility.adoptAll()      // All flags on — after staging validation
 
-    /**
-     * Since: 0.3.0
-     * Old behavior: Sliding window boundary check uses < (exclusive).
-     *               A window of size 10 opens at call #11.
-     * New behavior:  Sliding window boundary check uses <= (inclusive).
-     *               A window of size 10 opens at call #10.
-     * Default: false (old behavior preserved)
-     */
-    SLIDING_WINDOW_BOUNDARY_INCLUSIVE,
-
-    /**
-     * Since: 0.4.0
-     * Old behavior: Backoff jitter uses a simple random offset.
-     * New behavior:  Backoff jitter uses uniform distribution for
-     *               more even spread across retry storms.
-     * Default: false (old behavior preserved)
-     */
-    BACKOFF_JITTER_UNIFORM_DISTRIBUTION,
-
-    // ... future flags
-}
+// Or individually:
+InqCompatibility.builder()
+    .flag(InqFlag.SLIDING_WINDOW_BOUNDARY_INCLUSIVE, true)
+    .flag(InqFlag.RETRY_BACKOFF_FULL_JITTER, false)
+    .build()
 ```
 
-Each flag documents:
-- **Since** — which version introduced the change
-- **Old behavior** — what happens when the flag is `false` (default)
-- **New behavior** — what happens when the flag is `true`
-- **Default** — always `false` for at least one minor version after introduction
+`InqCompatibility` is passed to the element registry at startup and applies globally to all elements created from that registry. Per-element overrides are not supported — compatibility is a deployment-level decision, not a per-element tuning parameter.
 
-### Lifecycle of a flag
+### Abgrenzung zu Konfiguration und Feature-Toggles
 
-```
-Version 0.3.0:  Flag introduced, default = false (old behavior)
-                Changelog documents the flag, old vs. new behavior, migration guide.
-                Startup log: "InqFlag.SLIDING_WINDOW_BOUNDARY_INCLUSIVE is available.
-                             Enable it to adopt the new sliding window boundary semantics."
+**Abgrenzung zur Konfiguration**
 
-Version 0.4.0:  Default changes to true (new behavior).
-                Startup warning if explicitly set to false: "You are using legacy behavior
-                for SLIDING_WINDOW_BOUNDARY_INCLUSIVE. This will be removed in 1.0.0."
+Reguläre Konfigurationswerte wie `failureRateThreshold`, `slidingWindowSize` oder `waitDurationInOpenState` sind **Domänenparameter**: Sie steuern, *was* Inqudium mit den Laufzeitdaten macht, und sind dauerhaft Teil des Element-Designs. Der Nutzer wählt sie bewusst anhand fachlicher Anforderungen und pflegt sie langfristig.
 
-Version 1.0.0:  Flag removed. New behavior is the only behavior.
-                Code that references the removed flag gets a compilation error
-                (enum constant deleted) — forcing acknowledgment.
-```
+Compatibility-Flags sind **Migrationsparameter**: Sie steuern, *wie* eine interne Algorithmus-Implementierung vorübergehend zwischen altem und neuem Verhalten wählt. Sie existieren ausschließlich innerhalb eines definierten Versionsfensters und haben ein garantiertes Entfernungsdatum. Der Nutzer trifft keine fachliche Entscheidung — er entscheidet nur über den *Zeitpunkt* der Übernahme einer Änderung.
 
-The lifecycle guarantees:
-- **At least one minor version** where the old behavior is the default — consumers can upgrade without surprises.
-- **At least one minor version** where the new behavior is the default but the old is still available — consumers can opt out if needed.
-- **At the next major version**, the flag is removed — no permanent compatibility debt.
+| | Konfiguration | Compatibility-Flag |
+|---|---|---|
+| Zweck | Domänensteuerung | Migrationssteuerung |
+| Lebensdauer | Dauerhaft | Bis zum nächsten Major |
+| Entscheidungsträger | Fachlich motiviert | Upgrade-Zeitplan |
+| Anzahl | Viele, kontextspezifisch | Klein (2–5 aktiv) |
 
-### Bulk adoption
+**Abgrenzung zu Feature-Toggles**
 
-For teams that want to adopt all new behaviors at once:
+Feature-Toggles (im Sinne von Continuous Delivery) dienen dazu, neues Produktverhalten schrittweise für Nutzer auszurollen — oft per Request, per User-Segment oder per Environment, gesteuert durch externe Systeme wie LaunchDarkly. Sie sind ein operatives Werkzeug.
 
-```java
-var compatibility = InqCompatibility.adoptAll();
-```
+Compatibility-Flags unterscheiden sich in drei wesentlichen Punkten:
 
-This enables all flags that exist in the current version. It is the "I trust the library authors" shortcut for teams with good staging environments.
+1. **Auflösungszeitpunkt:** Flags werden einmalig beim Aufbau der Konfiguration (`builder().build()`) aufgelöst und sind danach für die Lebensdauer des Elements unveränderlich. Es gibt kein Laufzeit-Branching und keine externe Abhängigkeit.
 
-The inverse:
+2. **Steuerung:** Sie werden im Anwendungscode konfiguriert (`InqCompatibility.preserveAll()`), nicht durch ein externes Toggle-System. Ein Wechsel erfordert eine Code-Änderung und ein Redeploy — bewusst, weil es sich um eine Upgrade-Entscheidung handelt, nicht um ein operatives Kill-Switch.
 
-```java
-var compatibility = InqCompatibility.preserveAll();
-```
+3. **Lebensende:** Feature-Toggles können dauerhaft bestehen bleiben (z. B. Kill-Switches). Compatibility-Flags haben ein **garantiertes Entfernungsdatum**: Sie werden spätestens beim nächsten Major entfernt, und die Enum-Konstante wird gelöscht — damit der Compiler alle verbliebenen Verwendungen zwingt, aufgeräumt zu werden.
 
-This explicitly locks all flags to `false` — useful for production deployments where stability is paramount and behavioral changes are adopted one by one after validation.
+### Flag lifecycle
 
-### ServiceLoader-based configuration: `InqCompatibilityOptions`
+Each flag passes through three version stages before removal:
 
-Flags can also be configured without code changes via a ServiceLoader-discoverable `InqCompatibilityOptions` implementation:
+| Version | Default | Status |
+|---|---|---|
+| 0.3.0 | `false` (old behavior) | Introduced — new behavior is opt-in |
+| 0.4.0 | `true` (new behavior) | New behavior is default — old behavior is opt-out |
+| 1.0.0 | — | Flag removed — `InqFlag` constant deleted |
 
-```java
-/**
- * SPI for providing compatibility flag defaults.
- * Discovered via ServiceLoader at startup.
- *
- * Multiple providers are merged in order: if a provider implements
- * Comparable<InqCompatibilityOptions>, providers are sorted before merging.
- * Later providers override earlier ones for the same flag.
- * Non-Comparable providers are merged after all Comparable providers,
- * in ServiceLoader discovery order (non-deterministic).
- */
-public interface InqCompatibilityOptions {
+At the removal version, the `InqFlag` constant is deleted from the enum. Any application that still references it gets a compilation error — forcing the developer to consciously clean up the flag reference. This is intentional: there must be no silent perpetuation of old behavior past the major version boundary.
 
-    /**
-     * Returns the flags this provider configures.
-     * Only flags explicitly returned are set — absent flags retain their defaults.
-     */
-    Map<InqFlag, Boolean> flags();
-}
-```
+Guarantees:
+- At least one minor version to test the new behavior (opt-in phase).
+- At least one minor version to opt out if staging reveals problems (opt-out phase).
+- Removed at the next major — no permanent compatibility debt.
 
-A concrete implementation with explicit ordering:
+### Performance: zero hot-path overhead
 
-```java
-public class CompanyWideDefaults implements InqCompatibilityOptions,
-                                            Comparable<InqCompatibilityOptions> {
-    @Override
-    public Map<InqFlag, Boolean> flags() {
-        return Map.of(
-            InqFlag.SLIDING_WINDOW_BOUNDARY_INCLUSIVE, true,
-            InqFlag.BACKOFF_JITTER_UNIFORM_DISTRIBUTION, false
-        );
-    }
-
-    @Override
-    public int compareTo(InqCompatibilityOptions other) {
-        return 0; // lowest priority — applied first, can be overridden
-    }
-}
-
-public class TeamSpecificOverrides implements InqCompatibilityOptions,
-                                              Comparable<InqCompatibilityOptions> {
-    @Override
-    public Map<InqFlag, Boolean> flags() {
-        return Map.of(
-            InqFlag.BACKOFF_JITTER_UNIFORM_DISTRIBUTION, true  // override company default
-        );
-    }
-
-    @Override
-    public int compareTo(InqCompatibilityOptions other) {
-        return 1; // higher priority — applied after CompanyWideDefaults
-    }
-}
-```
-
-The merge order is:
-
-```
-1. All Comparable providers, sorted by compareTo (ascending — lower value = applied first)
-2. All non-Comparable providers, in ServiceLoader discovery order
-3. Later providers override earlier providers for the same flag
-```
-
-This means: a provider with `compareTo` returning `0` forms the base, a provider returning `1` overrides it, and non-Comparable providers override last. The pattern supports a layered configuration model — company-wide defaults → team overrides → environment-specific adjustments — with deterministic ordering when `Comparable` is implemented.
-
-### Resolution model: three layers with explicit merge strategy
-
-Flag values can come from three sources. The resolution must be deterministic and predictable. The three layers, from lowest to highest priority:
-
-```
-Layer 1 (lowest):   Built-in defaults         InqFlag enum defaults (always false)
-Layer 2:            ServiceLoader              InqCompatibilityOptions providers
-Layer 3 (highest):  Programmatic API           .compatibility(compatibility) on the element config
-```
-
-The critical question is what happens when both Layer 2 (ServiceLoader) and Layer 3 (programmatic API) set flags. There are two possible strategies:
-
-#### Strategy A: Programmatic replaces ServiceLoader entirely
-
-If `.compatibility(compatibility)` is set on a config builder, the ServiceLoader flags are **completely ignored** for that element. The programmatic configuration is the sole source of truth.
-
-```java
-// ServiceLoader sets: SLIDING_WINDOW=true, JITTER=true
-// Programmatic sets: SLIDING_WINDOW=false
-
-// Result with Strategy A:
-//   SLIDING_WINDOW = false  (from programmatic)
-//   JITTER = false          (default — ServiceLoader was ignored entirely)
-```
-
-**Advantage:** Simple mental model. If you configure programmatically, you own the full state.
-**Disadvantage:** Setting one flag programmatically silently disables all ServiceLoader flags. Easy to accidentally lose flags that were intentionally set in the ServiceLoader provider.
-
-#### Strategy B: Programmatic overrides ServiceLoader per-flag (merge)
-
-The layers are merged. ServiceLoader flags form the base, and programmatic flags override individual values on top:
-
-```java
-// ServiceLoader sets: SLIDING_WINDOW=true, JITTER=true
-// Programmatic sets: SLIDING_WINDOW=false
-
-// Result with Strategy B:
-//   SLIDING_WINDOW = false  (programmatic overrides ServiceLoader)
-//   JITTER = true           (ServiceLoader value preserved — not overridden)
-```
-
-**Advantage:** Additive. The ServiceLoader provides organization-wide defaults. Individual elements override specific flags without losing the rest.
-**Disadvantage:** Harder to reason about. The final state of a flag depends on whether someone else set it in a ServiceLoader provider that may not be visible in the current codebase.
-
-#### Decision: Strategy B (merge) as default, Strategy A available as opt-in
-
-**Strategy B (merge)** is the default because it matches the most common real-world pattern: an operations team provides organization-wide compatibility defaults via a shared ServiceLoader JAR, and individual services override specific flags where needed. Losing all ServiceLoader flags because one element sets one flag programmatically is a pit of failure.
-
-Strategy A is available as an explicit opt-in for elements that need full control:
-
-```java
-var compatibility = InqCompatibility.builder()
-    .ignoreServiceLoader()                                    // Strategy A: replace, don't merge
-    .flag(InqFlag.SLIDING_WINDOW_BOUNDARY_INCLUSIVE, false)
-    .build();
-```
-
-The resolution is then:
-
-```
-1. Start with built-in defaults (all false)
-2. If ServiceLoader providers exist and ignoreServiceLoader is NOT set:
-     Sort Comparable providers by compareTo, append non-Comparable providers
-     Merge flags in order (later providers override earlier ones for the same flag)
-3. If programmatic .compatibility() is set:
-     Merge programmatic flags on top of current state (per-flag override)
-     OR if ignoreServiceLoader: replace current state entirely with programmatic flags
-4. Final state is locked — no further changes at runtime
-```
-
-### Startup logging (updated)
-
-The startup log shows the resolved state **and its origin per flag**:
-
-```
-[Inqudium] Compatibility flags (resolved):
-  ServiceLoader providers (sorted): CompanyWideDefaults [0], TeamSpecificOverrides [1]
-  
-  SLIDING_WINDOW_BOUNDARY_INCLUSIVE:      true  (ServiceLoader: CompanyWideDefaults)
-  BACKOFF_JITTER_UNIFORM_DISTRIBUTION:   true  (ServiceLoader: TeamSpecificOverrides, overrides CompanyWideDefaults)
-  
-  Source precedence: defaults → ServiceLoader (sorted) → programmatic API
-  2 of 2 flags adopted. Run with adopt-all: true to enable all new behaviors.
-```
-
-For elements using `ignoreServiceLoader()`:
-
-```
-[Inqudium] Compatibility flags for 'paymentService' (resolved, ServiceLoader ignored):
-  SLIDING_WINDOW_BOUNDARY_INCLUSIVE:      false (programmatic)
-  BACKOFF_JITTER_UNIFORM_DISTRIBUTION:   false (default)
-```
-
-This makes the resolution transparent — in post-incident analysis, you know exactly which layer determined each flag's value.
-
-### Spring Boot configuration
-
-```yaml
-inqudium:
-  compatibility:
-    adopt-all: false                                    # default
-    flags:
-      sliding-window-boundary-inclusive: true            # opt in to this one
-      backoff-jitter-uniform-distribution: false         # keep old behavior
-```
-
-Or:
-
-```yaml
-inqudium:
-  compatibility:
-    adopt-all: true   # adopt everything at once
-```
-
-### Where flags are checked
-
-Flags are checked at **configuration time**, not at call time. When a `CircuitBreakerConfig` is built, the compatibility flags determine which algorithm implementation is selected. The selected implementation is fixed for the lifetime of the element instance. There is no per-call branching — no `if (flag.isEnabled())` on the hot path.
+Flags are resolved **once, at configuration build time**. The builder selects the algorithm implementation at that point. The selected implementation is fixed for the lifetime of the element instance. There is no per-call branching — no `if (flag.isEnabled())` on the hot path.
 
 ```java
 // Inside CircuitBreakerConfig.builder().build()
@@ -329,20 +98,18 @@ this.slidingWindow = compatibility.isEnabled(InqFlag.SLIDING_WINDOW_BOUNDARY_INC
     : new ExclusiveSlidingWindow(windowSize);  // legacy
 ```
 
-This is critical for performance: the flag resolution happens once at startup, and the element runs without branching overhead.
-
 ### What does NOT get a flag
 
-- **API breaking changes** (renamed methods, removed classes) — these are communicated via semantic versioning and deprecation annotations. No flag needed — the compiler is the flag.
-- **New features** — a new configuration option with a default value is additive, not breaking. No flag needed.
-- **Security fixes** — if the old behavior is a security vulnerability, the fix is unconditional. No flag — the old behavior is simply removed.
-- **Bug fixes that only affect incorrect usage** — if the old behavior violated the documented contract (e.g., `failureRateThreshold(50)` opened at 60% due to a bug), the fix is unconditional. The old behavior was wrong, not alternative.
+- **API breaking changes** — communicated via semantic versioning and deprecation annotations. The compiler is the flag.
+- **New features** — a new configuration option with a sensible default is additive, not breaking. No flag needed.
+- **Security fixes** — if the old behavior is a security vulnerability, the fix is unconditional. No opt-out.
+- **Bug fixes that correct a violated contract** — if the old behavior was wrong per the documented specification (e.g., `failureRateThreshold(50)` opened at 60% due to a bug), the fix is unconditional. The old behavior was not an alternative — it was a defect.
 
-Flags are reserved for changes where **both the old and the new behavior are reasonable**, and the change affects production behavior in a way that should be validated before adoption.
+Flags are reserved for changes where **both the old and the new behavior are reasonable**, and the choice affects production behavior in a way that should be validated before adoption.
 
 ### Relationship to event system (ADR-003)
 
-When a flag changes behavior, the affected element emits a one-time `InqCompatibilityEvent` at creation time:
+When a flag is active, the affected element emits a one-time `InqCompatibilityEvent` at creation time:
 
 ```java
 public class InqCompatibilityEvent extends InqEvent {
@@ -352,29 +119,36 @@ public class InqCompatibilityEvent extends InqEvent {
 }
 ```
 
-This event is captured by all observability consumers (Micrometer, JFR, custom listeners) and provides an audit trail of which compatibility choices are active in a running system. Useful for post-incident analysis: "Was the new sliding window behavior active when the circuit breaker opened unexpectedly?"
+This event flows through all observability consumers (Micrometer, JFR, custom listeners) and provides an audit trail of which compatibility choices are active in a running system. Useful for post-incident analysis: "Was the new sliding window behavior active when the circuit breaker opened unexpectedly?"
+
+### Startup logging
+
+At application startup, Inqudium logs the active compatibility state:
+
+```
+[Inqudium] Compatibility flags:
+  SLIDING_WINDOW_BOUNDARY_INCLUSIVE  = false (legacy — introduced 0.3.0, default-on in 0.4.0)
+  RETRY_BACKOFF_FULL_JITTER          = true  (adopted — introduced 0.4.0, default-on in 0.5.0)
+```
+
+This makes the active behavior visible without requiring the developer to inspect the code.
 
 ## Consequences
 
 **Positive:**
 - Library upgrades are safe by default — no behavioral changes without explicit opt-in.
 - Individual flags enable incremental adoption — test one change at a time in staging.
-- `adoptAll()` and `preserveAll()` provide clear bulk strategies.
-- ServiceLoader-based `InqCompatibilityOptions` enables flag management without code changes — swap a JAR or config file between environments.
-- Three-layer resolution (defaults → ServiceLoader → programmatic) supports both organization-wide defaults and per-element overrides.
-- Startup logging shows the resolved state **and the source per flag** — full transparency for post-incident analysis.
-- Flag lifecycle (introduced → default-on → removed) prevents permanent compatibility debt.
+- `adoptAll()` and `preserveAll()` provide clear bulk strategies for both ends of the spectrum.
+- Startup logging makes the active behavior visible — no hidden state.
+- Flag lifecycle prevents permanent compatibility debt.
 - Configuration-time resolution means zero performance overhead on the hot path.
 - Compatibility events provide an audit trail in production.
 
 **Negative:**
 - Every behavioral change requires defining a flag, documenting both behaviors, and maintaining the branching code until the flag is removed. This increases the cost of making behavioral changes — intentionally.
-- The flag lifecycle adds complexity to the release process. Each minor release must decide which flags to introduce, which to flip to default-on, and which to remove.
-- The merge strategy (Strategy B) means the final flag state depends on the combination of ServiceLoader providers and programmatic overrides. This is more powerful but harder to reason about than a simple replace. The startup log mitigates this by showing the origin of each flag's value.
-- Consumers who never read changelogs will run with old behavior indefinitely (flags default to `false`). The startup log mitigates this but cannot force adoption.
-- Multiple `InqCompatibilityOptions` providers via ServiceLoader are supported. Providers that implement `Comparable` are sorted deterministically; non-Comparable providers fall back to ServiceLoader discovery order. For fully deterministic resolution, all providers should implement `Comparable`.
+- The flag lifecycle adds process overhead to the release workflow.
+- The startup log mitigates silent misconfigurations but cannot enforce adoption.
 
 **Neutral:**
 - The flag mechanism lives in `inqudium-core` alongside the configuration infrastructure. All paradigm modules respect the same flags — a flag that changes sliding window semantics affects the imperative, Kotlin, Reactor, and RxJava implementations identically (because the sliding window algorithm is shared in core, per ADR-005).
-- The number of active flags at any given time should be small (2-5). If the flag count grows large, it signals that the library is making too many behavioral changes per release cycle.
-- `ignoreServiceLoader()` is available as an escape hatch for elements that need complete programmatic control. Its usage should be rare and deliberate.
+- The number of active flags at any given time should be small (2–5). A large flag count signals that the library is making too many behavioral changes per release cycle.
