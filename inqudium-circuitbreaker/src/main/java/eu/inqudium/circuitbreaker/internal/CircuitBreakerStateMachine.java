@@ -160,6 +160,7 @@ public final class CircuitBreakerStateMachine implements CircuitBreaker {
         try {
             transitionTo(CircuitBreakerState.HALF_OPEN, "manual");
             halfOpenCallCount = 0;
+            slidingWindow.reset();  // fresh window for probe evaluation
         } finally {
             lock.unlock();
         }
@@ -256,6 +257,7 @@ public final class CircuitBreakerStateMachine implements CircuitBreaker {
             if (elapsed.compareTo(config.getWaitDurationInOpenState()) >= 0) {
                 transitionTo(CircuitBreakerState.HALF_OPEN, "timer");
                 halfOpenCallCount = 0;
+                slidingWindow.reset();  // fresh window for probe evaluation
             }
         }
     }

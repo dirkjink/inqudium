@@ -218,55 +218,75 @@ class CircuitBreakerTest {
             var cb = CircuitBreaker.of("test", config);
             cb.transitionToHalfOpenState();
 
-            // When / Then — first two calls succeed
+            // When / Then — both probe calls succeed
             assertThat(cb.executeSupplier(() -> "ok1")).isEqualTo("ok1");
             assertThat(cb.executeSupplier(() -> "ok2")).isEqualTo("ok2");
         }
 
         @Test
-        void should_reject_calls_beyond_the_probe_limit() {
-            // Given — permits 2 calls in half-open
+        void should_reject_calls_beyond_the_probe_limit_while_probes_are_in_flight() throws Exception {
+            // Given — permits 2 calls in half-open, 1 will block
             var time = timeRef("2026-01-01T00:00:00Z");
             var config = smallWindowConfig(time::get);
             var cb = CircuitBreaker.of("test", config);
             cb.transitionToHalfOpenState();
 
-            // When — exhaust the 2 probe permits
-            cb.executeSupplier(() -> "ok1");
-            cb.executeSupplier(() -> "ok2");
+            var entered = new java.util.concurrent.CountDownLatch(2);
+            var release = new java.util.concurrent.CountDownLatch(1);
+            var executor = java.util.concurrent.Executors.newFixedThreadPool(2);
 
-            // Then — 3rd call is rejected
-            assertThatThrownBy(() -> cb.executeSupplier(() -> "ok3"))
+            // Hold both probe permits with blocking calls
+            for (int i = 0; i < 2; i++) {
+                executor.submit(() -> cb.executeSupplier(() -> {
+                    entered.countDown();
+                    try { release.await(5, java.util.concurrent.TimeUnit.SECONDS); }
+                    catch (InterruptedException ignored) {}
+                    return "blocking";
+                }));
+            }
+
+            entered.await(2, java.util.concurrent.TimeUnit.SECONDS);
+
+            // When / Then — 3rd call is rejected because both probe slots are occupied
+            assertThatThrownBy(() -> cb.executeSupplier(() -> "rejected"))
                     .isInstanceOf(InqCallNotPermittedException.class);
+
+            release.countDown();
+            executor.shutdown();
         }
 
         @Test
-        void should_close_on_successful_probe() {
-            // Given
+        void should_close_after_all_probes_succeed() {
+            // Given — permits 2 probes, needs all to complete before evaluation
             var time = timeRef("2026-01-01T00:00:00Z");
             var config = smallWindowConfig(time::get);
             var cb = CircuitBreaker.of("test", config);
             cb.transitionToHalfOpenState();
 
-            // When — probe succeeds
-            cb.executeSupplier(() -> "ok");
+            // When — first probe: not enough data yet, stays HALF_OPEN
+            cb.executeSupplier(() -> "ok1");
+            assertThat(cb.getState()).isEqualTo(CircuitBreakerState.HALF_OPEN);
 
-            // Then — transitions to CLOSED
+            // Second probe: now 2/2 probes, 0% failure rate → CLOSED
+            cb.executeSupplier(() -> "ok2");
+
+            // Then
             assertThat(cb.getState()).isEqualTo(CircuitBreakerState.CLOSED);
         }
 
         @Test
-        void should_reopen_on_failed_probe() {
-            // Given
+        void should_reopen_when_probe_failure_rate_exceeds_threshold() {
+            // Given — permits 2 probes, 50% failure threshold
             var time = timeRef("2026-01-01T00:00:00Z");
             var config = smallWindowConfig(time::get);
             var cb = CircuitBreaker.of("test", config);
             cb.transitionToHalfOpenState();
 
-            // When — probe fails
+            // When — 1 success + 1 failure = 50% failure rate
+            cb.executeSupplier(() -> "ok");
             catchThrowable(() -> cb.executeSupplier(() -> { throw new RuntimeException("fail"); }));
 
-            // Then — transitions back to OPEN
+            // Then — 50% >= 50% threshold → OPEN
             assertThat(cb.getState()).isEqualTo(CircuitBreakerState.OPEN);
         }
     }

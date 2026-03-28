@@ -72,7 +72,14 @@ final class DefaultCircuitBreakerBehavior implements CircuitBreakerBehavior {
     public CircuitBreakerState onSuccess(CircuitBreakerState currentState, WindowSnapshot snapshot, CircuitBreakerConfig config) {
         return switch (currentState) {
             case CLOSED -> evaluateThresholds(snapshot, config);
-            case HALF_OPEN -> CircuitBreakerState.CLOSED; // probe succeeded → close
+            case HALF_OPEN -> {
+                // Only close when all permitted probe calls have completed successfully.
+                // The window is reset on HALF_OPEN entry, so totalCalls == probes executed so far.
+                if (snapshot.totalCalls() >= config.getPermittedNumberOfCallsInHalfOpenState()) {
+                    yield CircuitBreakerState.CLOSED;
+                }
+                yield CircuitBreakerState.HALF_OPEN;
+            }
             case OPEN -> CircuitBreakerState.OPEN; // should not happen, but safe
         };
     }
