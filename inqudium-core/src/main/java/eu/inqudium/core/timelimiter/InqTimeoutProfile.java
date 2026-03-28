@@ -1,90 +1,84 @@
 package eu.inqudium.core.timelimiter;
 
 import java.time.Duration;
-import java.util.ArrayList;
-import java.util.List;
+import java.util.EnumMap;
+import java.util.Map;
 import java.util.Objects;
 
 /**
  * Central timeout derivation tool (ADR-012).
  *
- * <p>Takes HTTP client timeout components as input and computes the TimeLimiter
- * timeout and Circuit Breaker {@code slowCallDurationThreshold} using either
- * RSS (Root Sum of Squares) or worst-case addition.
+ * <p>Takes HTTP client timeout components as input — keyed by the agnostic
+ * {@link AgnosticTimeoutType} — and computes the TimeLimiter timeout and
+ * Circuit Breaker {@code slowCallDurationThreshold} using either RSS
+ * (Root Sum of Squares) or worst-case addition.
+ *
+ * <p>Setting the same {@link AgnosticTimeoutType} more than once always
+ * replaces the previous value; no duplicate accumulation occurs.
  *
  * <h2>Usage</h2>
  * <pre>{@code
  * var profile = InqTimeoutProfile.builder()
- *     .connectTimeout(Duration.ofMillis(250))
- *     .responseTimeout(Duration.ofSeconds(3))
+ *     .connectTimeout(Duration.ofMillis(250))      // → CONNECTION_ESTABLISHMENT
+ *     .responseTimeout(Duration.ofSeconds(3))       // → READ_INACTIVITY
  *     .method(TimeoutCalculation.RSS)
- *     .safetyMarginFactor(1.2)   // 20% above computed value
+ *     .safetyMarginFactor(1.2)
  *     .build();
  *
- * Duration tlTimeout = profile.timeLimiterTimeout();
+ * Duration tlTimeout     = profile.timeLimiterTimeout();
  * Duration slowThreshold = profile.slowCallDurationThreshold();
  * }</pre>
  *
- * <p>The profile is a pure computation — no framework coupling. Works with
- * Netty, OkHttp, Apache HttpClient, or any other client.
+ * <p>The profile is a pure computation — no framework coupling.
  *
  * @since 0.1.0
  */
 public final class InqTimeoutProfile {
 
-  private final List<Duration> timeoutComponents;
+  // -------------------------------------------------------------------------
+  // Fields
+  // -------------------------------------------------------------------------
+
+  /** Immutable snapshot of the configured timeout components at build time. */
+  private final Map<AgnosticTimeoutType, Duration> timeoutComponents;
+
   private final TimeoutCalculation method;
   private final double safetyMarginFactor;
 
+  /** Stateless; safe to share. */
+  private final TimeoutCalculator calculator;
+
+  // -------------------------------------------------------------------------
+  // Construction
+  // -------------------------------------------------------------------------
+
   private InqTimeoutProfile(Builder b) {
-    this.timeoutComponents = List.copyOf(b.timeoutComponents);
+    // Defensive copy — the builder's EnumMap is mutable
+    this.timeoutComponents = Map.copyOf(b.timeoutComponents);
     this.method = b.method;
     this.safetyMarginFactor = b.safetyMarginFactor;
+    this.calculator = new TimeoutCalculator();
   }
 
-  /**
-   * Creates a new builder.
-   *
-   * @return a new builder
-   */
+  /** Creates a new builder. */
   public static Builder builder() {
     return new Builder();
   }
 
+  // -------------------------------------------------------------------------
+  // Core computations
+  // -------------------------------------------------------------------------
+
   /**
    * Computes the recommended TimeLimiter timeout.
    *
-   * <p>Uses the selected method (RSS or worst-case) to combine timeout
-   * components, then applies the safety margin factor.
+   * <p>Delegates to {@link TimeoutCalculator} using the configured components,
+   * combination method, and safety margin factor.
    *
    * @return the computed TimeLimiter timeout
    */
   public Duration timeLimiterTimeout() {
-    if (timeoutComponents.isEmpty()) {
-      return Duration.ofSeconds(5); // fallback
-    }
-
-    double nominalMs = 0;
-    double toleranceSumOrSquaredSum = 0;
-
-    for (var component : timeoutComponents) {
-      double ms = component.toMillis();
-      nominalMs += ms * 0.5; // assume nominal is ~50% of timeout
-      double tolerance = ms * 0.5; // tolerance is the other 50%
-
-      switch (method) {
-        case RSS -> toleranceSumOrSquaredSum += tolerance * tolerance;
-        case WORST_CASE -> toleranceSumOrSquaredSum += tolerance;
-      }
-    }
-
-    double combinedTolerance = switch (method) {
-      case RSS -> Math.sqrt(toleranceSumOrSquaredSum);
-      case WORST_CASE -> toleranceSumOrSquaredSum;
-    };
-
-    double totalMs = (nominalMs + combinedTolerance) * safetyMarginFactor;
-    return Duration.ofMillis(Math.round(totalMs));
+    return calculator.calculate(timeoutComponents.values(), method, safetyMarginFactor);
   }
 
   /**
@@ -99,28 +93,73 @@ public final class InqTimeoutProfile {
     return timeLimiterTimeout();
   }
 
+  // -------------------------------------------------------------------------
+  // Typed accessors — convenience aliases for common timeout types
+  // -------------------------------------------------------------------------
+
   /**
-   * Returns the first timeout component (typically connectTimeout).
+   * Returns the configured {@link AgnosticTimeoutType#CONNECTION_ESTABLISHMENT} timeout.
    *
-   * @return the connect timeout, or Duration.ZERO if no components configured
+   * @return the value, or {@link Duration#ZERO} if not configured
    */
   public Duration connectTimeout() {
-    return timeoutComponents.isEmpty() ? Duration.ZERO : timeoutComponents.getFirst();
+    return getTimeout(AgnosticTimeoutType.CONNECTION_ESTABLISHMENT);
   }
 
   /**
-   * Returns the second timeout component (typically responseTimeout).
+   * Returns the configured {@link AgnosticTimeoutType#READ_INACTIVITY} timeout.
    *
-   * @return the response timeout, or Duration.ZERO if fewer than 2 components
+   * @return the value, or {@link Duration#ZERO} if not configured
    */
   public Duration responseTimeout() {
-    return timeoutComponents.size() < 2 ? Duration.ZERO : timeoutComponents.get(1);
+    return getTimeout(AgnosticTimeoutType.READ_INACTIVITY);
   }
+
+  /**
+   * Returns the configured {@link AgnosticTimeoutType#CONNECTION_ACQUIRE} timeout.
+   *
+   * @return the value, or {@link Duration#ZERO} if not configured
+   */
+  public Duration connectionAcquireTimeout() {
+    return getTimeout(AgnosticTimeoutType.CONNECTION_ACQUIRE);
+  }
+
+  /**
+   * Returns the configured {@link AgnosticTimeoutType#WRITE_OPERATION} timeout.
+   *
+   * @return the value, or {@link Duration#ZERO} if not configured
+   */
+  public Duration writeOperationTimeout() {
+    return getTimeout(AgnosticTimeoutType.WRITE_OPERATION);
+  }
+
+  /**
+   * Returns the configured timeout for the given {@link AgnosticTimeoutType}.
+   *
+   * @param type the timeout type; must not be {@code null}
+   * @return the configured value, or {@link Duration#ZERO} if not set
+   */
+  public Duration getTimeout(AgnosticTimeoutType type) {
+    return timeoutComponents.getOrDefault(Objects.requireNonNull(type), Duration.ZERO);
+  }
+
+  /**
+   * Returns a read-only view of all configured timeout components.
+   *
+   * @return unmodifiable map of all configured timeout types and their durations
+   */
+  public Map<AgnosticTimeoutType, Duration> getTimeoutComponents() {
+    return timeoutComponents;
+  }
+
+  // -------------------------------------------------------------------------
+  // Strategy / configuration accessors
+  // -------------------------------------------------------------------------
 
   /**
    * Returns the calculation method used.
    *
-   * @return RSS or WORST_CASE
+   * @return {@link TimeoutCalculation#RSS} or {@link TimeoutCalculation#WORST_CASE}
    */
   public TimeoutCalculation getMethod() {
     return method;
@@ -129,246 +168,118 @@ public final class InqTimeoutProfile {
   /**
    * Returns the safety margin factor.
    *
-   * @return the factor (e.g. 1.2 for 20% margin)
+   * @return the factor (e.g. {@code 1.2} for a 20 % margin above the computed value)
    */
   public double getSafetyMarginFactor() {
     return safetyMarginFactor;
   }
 
+  // -------------------------------------------------------------------------
+  // Builder
+  // -------------------------------------------------------------------------
+
   /**
-   * Provides an agnostic configuration model for HTTP client timeouts.
-   * <p>
-   * This class abstracts the specific timeout parameters of various JVM HTTP clients
-   * (like Apache HttpClient, OkHttp, Java 11+ HttpClient, and Spring WebClient)
-   * into a unified set of configuration properties.
-   * </p>
+   * Fluent builder for {@link InqTimeoutProfile}.
    *
-   * <h3>1. Timeout Configuration incl. Data Types &amp; Units (JVM)</h3>
-   * <table border="1" cellpadding="5" cellspacing="0">
-   * <tr>
-   * <th>HTTP Client (JVM)</th>
-   * <th>Timeout Parameter</th>
-   * <th>Data Type &amp; Unit</th>
-   * <th>Monitored Time Span</th>
-   * </tr>
-   * <tr>
-   * <td><b>Apache HttpClient</b></td>
-   * <td>{@code ConnectTimeout}</td>
-   * <td><b>v5:</b> {@code Timeout}<br><b>v4:</b> {@code int} (ms)</td>
-   * <td>Time limit for the initial TCP handshake.</td>
-   * </tr>
-   * <tr>
-   * <td></td>
-   * <td>{@code ResponseTimeout} (v5) / {@code SocketTimeout} (v4)</td>
-   * <td><b>v5:</b> {@code Timeout}<br><b>v4:</b> {@code int} (ms)</td>
-   * <td>Maximum inactivity time between two received data packets.</td>
-   * </tr>
-   * <tr>
-   * <td></td>
-   * <td>{@code ConnectionRequestTimeout}</td>
-   * <td><b>v5:</b> {@code Timeout}<br><b>v4:</b> {@code int} (ms)</td>
-   * <td>Maximum wait time for a free connection from the connection pool.</td>
-   * </tr>
-   * <tr>
-   * <td><b>OkHttp</b></td>
-   * <td>{@code connectTimeout}</td>
-   * <td>{@code long} + {@code TimeUnit} or {@code Duration}</td>
-   * <td>Time for establishing the TCP connection and TLS handshake.</td>
-   * </tr>
-   * <tr>
-   * <td></td>
-   * <td>{@code readTimeout}</td>
-   * <td>{@code long} + {@code TimeUnit} or {@code Duration}</td>
-   * <td>Maximum inactivity between two successful read operations.</td>
-   * </tr>
-   * <tr>
-   * <td></td>
-   * <td>{@code writeTimeout}</td>
-   * <td>{@code long} + {@code TimeUnit} or {@code Duration}</td>
-   * <td>Maximum time a single write operation is allowed to block on the network socket.</td>
-   * </tr>
-   * <tr>
-   * <td></td>
-   * <td>{@code callTimeout}</td>
-   * <td>{@code long} + {@code TimeUnit} or {@code Duration}</td>
-   * <td>Hard upper limit for the entire call.</td>
-   * </tr>
-   * <tr>
-   * <td><b>Java 11+ HttpClient</b></td>
-   * <td>{@code connectTimeout}</td>
-   * <td>{@code java.time.Duration}</td>
-   * <td>Maximum time allowed for establishing the connection.</td>
-   * </tr>
-   * <tr>
-   * <td></td>
-   * <td>{@code timeout}</td>
-   * <td>{@code java.time.Duration}</td>
-   * <td>Maximum total time for the specific request.</td>
-   * </tr>
-   * <tr>
-   * <td><b>Spring WebClient</b><br><i>(Reactor Netty)</i></td>
-   * <td>{@code CONNECT_TIMEOUT_MILLIS}</td>
-   * <td>{@code Integer} (strictly <b>ms</b>)</td>
-   * <td>Configured in Netty {@code ChannelOption}. Monitors purely the TCP establishment.</td>
-   * </tr>
-   * <tr>
-   * <td></td>
-   * <td>{@code ReadTimeoutHandler}</td>
-   * <td>{@code int} + {@code TimeUnit} or {@code Duration}</td>
-   * <td>Netty level: Time span without new received data.</td>
-   * </tr>
-   * <tr>
-   * <td></td>
-   * <td>{@code WriteTimeoutHandler}</td>
-   * <td>{@code int} + {@code TimeUnit} or {@code Duration}</td>
-   * <td>Netty level: Maximum time a single write operation to the socket is allowed to block.</td>
-   * </tr>
-   * <tr>
-   * <td></td>
-   * <td>{@code responseTimeout}</td>
-   * <td>{@code java.time.Duration}</td>
-   * <td>HttpClient level: Wait time for the response after sending the request.</td>
-   * </tr>
-   * <tr>
-   * <td></td>
-   * <td>{@code .timeout()}</td>
-   * <td>{@code java.time.Duration}</td>
-   * <td>Reactive operator: Hard upper limit for the asynchronous pipeline.</td>
-   * </tr>
-   * </table>
-   *
-   * <h3>2. Agnostic HTTP Timeout Configuration Set</h3>
-   * <table border="1" cellpadding="5" cellspacing="0">
-   * <tr>
-   * <th>Timeout Type</th>
-   * <th>Agnostic Parameter Name</th>
-   * <th>Monitored Time Span</th>
-   * <th>Equivalent in Common Clients</th>
-   * </tr>
-   * <tr>
-   * <td><b>Pool Wait Time</b></td>
-   * <td>{@code connectionAcquireTimeout}</td>
-   * <td>The maximum time waiting for a free TCP connection from an internal pool.</td>
-   * <td>Apache: {@code ConnectionRequestTimeout}<br>Spring: {@code ConnectionProvider}</td>
-   * </tr>
-   * <tr>
-   * <td><b>Connection Establishment</b></td>
-   * <td>{@code connectionEstablishmentTimeout}</td>
-   * <td>The time for the actual TCP connection (and TLS handshake).</td>
-   * <td>OkHttp/Java 11+: {@code connectTimeout}<br>Apache: {@code ConnectTimeout}</td>
-   * </tr>
-   * <tr>
-   * <td><b>Read Inactivity</b></td>
-   * <td>{@code readInactivityTimeout}</td>
-   * <td>Maximum wait time between two received data packets.</td>
-   * <td>OkHttp: {@code readTimeout}<br>Apache: {@code ResponseTimeout}</td>
-   * </tr>
-   * <tr>
-   * <td><b>Write Operation</b></td>
-   * <td>{@code writeOperationTimeout}</td>
-   * <td>Maximum time a single write operation to the network socket is allowed to block.</td>
-   * <td>OkHttp: {@code writeTimeout}<br>Spring: {@code WriteTimeoutHandler}</td>
-   * </tr>
-   * <tr>
-   * <td><b>Total Execution Time</b></td>
-   * <td>{@code totalExecutionTimeout}</td>
-   * <td>Absolute upper limit for the entire lifecycle of the call.</td>
-   * <td>Java 11+: {@code timeout}<br>OkHttp: {@code callTimeout}<br>Spring: {@code .timeout()}</td>
-   * </tr>
-   * </table>
-   *
-   * <h3>3. Mapping: Agnostic Configuration to JVM Clients</h3>
-   * <table border="1" cellpadding="5" cellspacing="0">
-   * <tr>
-   * <th>Agnostic Parameter</th>
-   * <th>Apache HttpClient (v5)</th>
-   * <th>OkHttp</th>
-   * <th>Java 11+ HttpClient</th>
-   * <th>Spring WebClient <i>(Reactor Netty)</i></th>
-   * </tr>
-   * <tr>
-   * <td><b>{@code connectionAcquireTimeout}</b></td>
-   * <td>{@code ConnectionRequestTimeout}</td>
-   * <td>Implicitly covered by {@code callTimeout}. If unset: infinite block.</td>
-   * <td>Implicitly covered by total {@code timeout}. If unset: infinite block.</td>
-   * <td>{@code pendingAcquireTimeout}</td>
-   * </tr>
-   * <tr>
-   * <td><b>{@code connectionEstablishmentTimeout}</b></td>
-   * <td>{@code ConnectTimeout}</td>
-   * <td>{@code connectTimeout}</td>
-   * <td>{@code connectTimeout}</td>
-   * <td>{@code ChannelOption.CONNECT_TIMEOUT_MILLIS}</td>
-   * </tr>
-   * <tr>
-   * <td><b>{@code readInactivityTimeout}</b></td>
-   * <td>{@code ResponseTimeout}</td>
-   * <td>{@code readTimeout}</td>
-   * <td>Implicitly covered by total {@code timeout}. If unset: infinite block.</td>
-   * <td>{@code ReadTimeoutHandler}</td>
-   * </tr>
-   * <tr>
-   * <td><b>{@code writeOperationTimeout}</b></td>
-   * <td>No native limit. Relies on OS-level TCP socket timeouts.</td>
-   * <td>{@code writeTimeout}</td>
-   * <td>Implicitly covered by total {@code timeout}. If unset: infinite block.</td>
-   * <td>{@code WriteTimeoutHandler}</td>
-   * </tr>
-   * <tr>
-   * <td><b>{@code totalExecutionTimeout}</b></td>
-   * <td>No native limit. Requires external wrapper (e.g., timed {@code Future}).</td>
-   * <td>{@code callTimeout}</td>
-   * <td>{@code timeout}</td>
-   * <td>{@code .timeout(Duration)}</td>
-   * </tr>
-   * </table>
+   * <p>Each timeout type maps to exactly one {@link AgnosticTimeoutType} key.
+   * Calling the same setter twice replaces the previously stored value —
+   * no accumulation takes place.
    */
   public static final class Builder {
 
-    private final List<Duration> timeoutComponents = new ArrayList<>();
+    /** EnumMap guarantees ordering by declaration and O(1) put/get. */
+    private final EnumMap<AgnosticTimeoutType, Duration> timeoutComponents =
+        new EnumMap<>(AgnosticTimeoutType.class);
+
     private TimeoutCalculation method = TimeoutCalculation.RSS;
     private double safetyMarginFactor = 1.2;
 
     private Builder() {
     }
 
+    // ------------------------------------------------------------------
+    // Convenience setters — named after well-known HTTP client parameters
+    // ------------------------------------------------------------------
+
     /**
-     * Adds the HTTP connect timeout as a component.
+     * Sets the {@link AgnosticTimeoutType#CONNECTION_ESTABLISHMENT} timeout
+     * (TCP + TLS handshake).
      *
-     * @param timeout the connect timeout
+     * <p>Replaces any previously set value for this type.
+     *
+     * @param timeout the connect timeout; must not be {@code null}
      * @return this builder
      */
     public Builder connectTimeout(Duration timeout) {
-      timeoutComponents.add(Objects.requireNonNull(timeout));
-      return this;
+      return timeout(AgnosticTimeoutType.CONNECTION_ESTABLISHMENT, timeout);
     }
 
     /**
-     * Adds the HTTP response timeout as a component.
+     * Sets the {@link AgnosticTimeoutType#READ_INACTIVITY} timeout
+     * (maximum gap between received data packets).
      *
-     * @param timeout the response timeout
+     * <p>Replaces any previously set value for this type.
+     *
+     * @param timeout the response / read-inactivity timeout; must not be {@code null}
      * @return this builder
      */
     public Builder responseTimeout(Duration timeout) {
-      timeoutComponents.add(Objects.requireNonNull(timeout));
-      return this;
+      return timeout(AgnosticTimeoutType.READ_INACTIVITY, timeout);
     }
 
     /**
-     * Adds an additional timeout component (e.g. TLS handshake).
+     * Sets the {@link AgnosticTimeoutType#CONNECTION_ACQUIRE} timeout
+     * (max wait for a free connection from the pool).
      *
-     * @param timeout the additional timeout
+     * <p>Replaces any previously set value for this type.
+     *
+     * @param timeout the pool-acquire timeout; must not be {@code null}
      * @return this builder
      */
-    public Builder additionalTimeout(Duration timeout) {
-      timeoutComponents.add(Objects.requireNonNull(timeout));
+    public Builder connectionAcquireTimeout(Duration timeout) {
+      return timeout(AgnosticTimeoutType.CONNECTION_ACQUIRE, timeout);
+    }
+
+    /**
+     * Sets the {@link AgnosticTimeoutType#WRITE_OPERATION} timeout
+     * (max time a single socket write is allowed to block).
+     *
+     * <p>Replaces any previously set value for this type.
+     *
+     * @param timeout the write-operation timeout; must not be {@code null}
+     * @return this builder
+     */
+    public Builder writeOperationTimeout(Duration timeout) {
+      return timeout(AgnosticTimeoutType.WRITE_OPERATION, timeout);
+    }
+
+    /**
+     * Generic setter — sets a timeout for the given {@link AgnosticTimeoutType}.
+     *
+     * <p>Replaces any previously set value for this type.
+     * Prefer the named convenience methods ({@link #connectTimeout},
+     * {@link #responseTimeout}, etc.) for readability.
+     *
+     * @param type    the timeout type; must not be {@code null}
+     * @param timeout the duration; must not be {@code null}
+     * @return this builder
+     */
+    public Builder timeout(AgnosticTimeoutType type, Duration timeout) {
+      timeoutComponents.put(
+          Objects.requireNonNull(type, "type must not be null"),
+          Objects.requireNonNull(timeout, "timeout must not be null"));
       return this;
     }
+
+    // ------------------------------------------------------------------
+    // Strategy setters
+    // ------------------------------------------------------------------
 
     /**
      * Sets the calculation method.
      *
-     * @param method RSS (default) or WORST_CASE
+     * @param method {@link TimeoutCalculation#RSS} (default) or
+     *               {@link TimeoutCalculation#WORST_CASE}; must not be {@code null}
      * @return this builder
      */
     public Builder method(TimeoutCalculation method) {
@@ -379,11 +290,15 @@ public final class InqTimeoutProfile {
     /**
      * Sets the safety margin factor applied to the computed timeout.
      *
-     * @param factor the factor (e.g. 1.2 for 20% margin). Default: 1.2
+     * @param factor the factor (e.g. {@code 1.2} for 20 % margin); must be ≥ 1.0
      * @return this builder
+     * @throws IllegalArgumentException if {@code factor} is less than 1.0
      */
     public Builder safetyMarginFactor(double factor) {
-      if (factor < 1.0) throw new IllegalArgumentException("Safety margin factor must be >= 1.0, got: " + factor);
+      if (factor < 1.0) {
+        throw new IllegalArgumentException(
+            "Safety margin factor must be >= 1.0, got: " + factor);
+      }
       this.safetyMarginFactor = factor;
       return this;
     }
@@ -391,7 +306,7 @@ public final class InqTimeoutProfile {
     /**
      * Builds the timeout profile.
      *
-     * @return the computed profile
+     * @return the computed, immutable profile
      */
     public InqTimeoutProfile build() {
       return new InqTimeoutProfile(this);
