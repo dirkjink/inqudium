@@ -23,6 +23,6 @@
  * {@code Mono.delay()}) based on the {@code waitDuration} in the result.
  *
  * @see eu.inqudium.core.InqClock
- * @see eu.inqudium.core.exception.InqRequestNotPermittedException
+ * @see InqRequestNotPermittedException
  */
 package eu.inqudium.core.ratelimiter;

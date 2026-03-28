@@ -19,6 +19,6 @@
  * <p>Backoff strategies live in the {@link eu.inqudium.core.retry.backoff} sub-package.
  *
  * @see eu.inqudium.core.retry.backoff
- * @see eu.inqudium.core.exception.InqRetryExhaustedException
+ * @see InqRetryExhaustedException
  */
 package eu.inqudium.core.retry;

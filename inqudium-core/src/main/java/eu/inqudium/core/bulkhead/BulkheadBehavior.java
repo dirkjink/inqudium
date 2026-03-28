@@ -15,34 +15,34 @@ package eu.inqudium.core.bulkhead;
  */
 public interface BulkheadBehavior {
 
-  /**
-   * Returns the default semaphore-based behavior.
-   *
-   * @return the default behavior
-   */
-  static BulkheadBehavior defaultBehavior() {
-    return DefaultBulkheadBehavior.INSTANCE;
-  }
+    /**
+     * Attempts to acquire a concurrency permit.
+     *
+     * @param state  current bulkhead state
+     * @param config bulkhead configuration
+     * @return result with permit status and updated state
+     */
+    BulkheadResult tryAcquire(BulkheadState state, BulkheadConfig config);
 
-  /**
-   * Attempts to acquire a concurrency permit.
-   *
-   * @param state  current bulkhead state
-   * @param config bulkhead configuration
-   * @return result with permit status and updated state
-   */
-  BulkheadResult tryAcquire(BulkheadState state, BulkheadConfig config);
+    /**
+     * Releases a previously acquired permit.
+     *
+     * <p>Must be called exactly once per successful {@link #tryAcquire},
+     * in a finally block.
+     *
+     * @param state current bulkhead state
+     * @return updated state with decremented concurrent call count
+     */
+    BulkheadState release(BulkheadState state);
 
-  /**
-   * Releases a previously acquired permit.
-   *
-   * <p>Must be called exactly once per successful {@link #tryAcquire},
-   * in a finally block.
-   *
-   * @param state current bulkhead state
-   * @return updated state with decremented concurrent call count
-   */
-  BulkheadState release(BulkheadState state);
+    /**
+     * Returns the default semaphore-based behavior.
+     *
+     * @return the default behavior
+     */
+    static BulkheadBehavior defaultBehavior() {
+        return DefaultBulkheadBehavior.INSTANCE;
+    }
 }
 
 /**
@@ -50,23 +50,22 @@ public interface BulkheadBehavior {
  */
 final class DefaultBulkheadBehavior implements BulkheadBehavior {
 
-  static final DefaultBulkheadBehavior INSTANCE = new DefaultBulkheadBehavior();
+    static final DefaultBulkheadBehavior INSTANCE = new DefaultBulkheadBehavior();
 
-  private DefaultBulkheadBehavior() {
-  }
+    private DefaultBulkheadBehavior() {}
 
-  @Override
-  public BulkheadResult tryAcquire(BulkheadState state, BulkheadConfig config) {
-    if (state.concurrentCalls() < config.getMaxConcurrentCalls()) {
-      var newState = new BulkheadState(state.concurrentCalls() + 1);
-      return BulkheadResult.permitted(newState);
+    @Override
+    public BulkheadResult tryAcquire(BulkheadState state, BulkheadConfig config) {
+        if (state.concurrentCalls() < config.getMaxConcurrentCalls()) {
+            var newState = new BulkheadState(state.concurrentCalls() + 1);
+            return BulkheadResult.permitted(newState);
+        }
+        return BulkheadResult.denied(state);
     }
-    return BulkheadResult.denied(state);
-  }
 
-  @Override
-  public BulkheadState release(BulkheadState state) {
-    int updated = Math.max(0, state.concurrentCalls() - 1);
-    return new BulkheadState(updated);
-  }
+    @Override
+    public BulkheadState release(BulkheadState state) {
+        int updated = Math.max(0, state.concurrentCalls() - 1);
+        return new BulkheadState(updated);
+    }
 }

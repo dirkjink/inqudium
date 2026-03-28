@@ -10,5 +10,5 @@ package eu.inqudium.core.context;
  * @since 0.1.0
  */
 public interface InqContextSnapshot {
-  // Marker interface — implementations carry their own state
+    // Marker interface — implementations carry their own state
 }

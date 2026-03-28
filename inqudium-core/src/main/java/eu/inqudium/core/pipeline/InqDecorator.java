@@ -15,26 +15,26 @@ import java.util.function.Supplier;
  */
 public interface InqDecorator {
 
-  /**
-   * Wraps a supplier with this element's resilience logic.
-   *
-   * @param supplier the supplier to decorate (may be another decorator's output)
-   * @param <T>      the result type
-   * @return a decorated supplier
-   */
-  <T> Supplier<T> decorate(Supplier<T> supplier);
+    /**
+     * Wraps a supplier with this element's resilience logic.
+     *
+     * @param supplier the supplier to decorate (may be another decorator's output)
+     * @param <T>      the result type
+     * @return a decorated supplier
+     */
+    <T> Supplier<T> decorate(Supplier<T> supplier);
 
-  /**
-   * Returns the element type for pipeline ordering.
-   *
-   * @return the element type
-   */
-  InqElementType getElementType();
+    /**
+     * Returns the element type for pipeline ordering.
+     *
+     * @return the element type
+     */
+    InqElementType getElementType();
 
-  /**
-   * Returns the element instance name for diagnostics and event correlation.
-   *
-   * @return the element name
-   */
-  String getName();
+    /**
+     * Returns the element instance name for diagnostics and event correlation.
+     *
+     * @return the element name
+     */
+    String getName();
 }

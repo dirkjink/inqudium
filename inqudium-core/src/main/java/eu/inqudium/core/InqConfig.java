@@ -13,13 +13,13 @@ import eu.inqudium.core.compatibility.InqCompatibility;
  */
 public interface InqConfig {
 
-  /**
-   * Returns the compatibility flags for this configuration.
-   *
-   * <p>Used at configuration time to select algorithm variants based on
-   * behavioral change flags (ADR-013).
-   *
-   * @return the compatibility instance
-   */
-  InqCompatibility getCompatibility();
+    /**
+     * Returns the compatibility flags for this configuration.
+     *
+     * <p>Used at configuration time to select algorithm variants based on
+     * behavioral change flags (ADR-013).
+     *
+     * @return the compatibility instance
+     */
+    InqCompatibility getCompatibility();
 }

@@ -9,11 +9,11 @@ package eu.inqudium.core.bulkhead;
  */
 public record BulkheadResult(boolean permitted, BulkheadState updatedState) {
 
-  public static BulkheadResult permitted(BulkheadState state) {
-    return new BulkheadResult(true, state);
-  }
+    public static BulkheadResult permitted(BulkheadState state) {
+        return new BulkheadResult(true, state);
+    }
 
-  public static BulkheadResult denied(BulkheadState state) {
-    return new BulkheadResult(false, state);
-  }
+    public static BulkheadResult denied(BulkheadState state) {
+        return new BulkheadResult(false, state);
+    }
 }

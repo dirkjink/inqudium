@@ -32,25 +32,25 @@
  */
 module inqudium.core {
 
-  // ── Exports: all public packages ──
+    // ── Exports: all public packages ──
 
-  exports eu.inqudium.core;
-  exports eu.inqudium.core.circuitbreaker;
-  exports eu.inqudium.core.retry;
-  exports eu.inqudium.core.retry.backoff;
-  exports eu.inqudium.core.ratelimiter;
-  exports eu.inqudium.core.bulkhead;
-  exports eu.inqudium.core.timelimiter;
-  exports eu.inqudium.core.cache;
-  exports eu.inqudium.core.event;
-  exports eu.inqudium.core.context;
-  exports eu.inqudium.core.compatibility;
-  exports eu.inqudium.core.exception;
-  exports eu.inqudium.core.pipeline;
+    exports eu.inqudium.core;
+    exports eu.inqudium.core.circuitbreaker;
+    exports eu.inqudium.core.retry;
+    exports eu.inqudium.core.retry.backoff;
+    exports eu.inqudium.core.ratelimiter;
+    exports eu.inqudium.core.bulkhead;
+    exports eu.inqudium.core.timelimiter;
+    exports eu.inqudium.core.cache;
+    exports eu.inqudium.core.event;
+    exports eu.inqudium.core.context;
+    exports eu.inqudium.core.compatibility;
+    exports eu.inqudium.core.exception;
+    exports eu.inqudium.core.pipeline;
 
-  // ── ServiceLoader SPI declarations ──
+    // ── ServiceLoader SPI declarations ──
 
-  uses eu.inqudium.core.context.InqContextPropagator;
-  uses eu.inqudium.core.compatibility.InqCompatibilityOptions;
-  uses eu.inqudium.core.event.InqEventExporter;
+    uses eu.inqudium.core.context.InqContextPropagator;
+    uses eu.inqudium.core.compatibility.InqCompatibilityOptions;
+    uses eu.inqudium.core.event.InqEventExporter;
 }

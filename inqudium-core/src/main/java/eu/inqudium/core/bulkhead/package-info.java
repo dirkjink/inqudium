@@ -24,6 +24,6 @@
  * {@code try/finally} (imperative), {@code doFinally} (Reactor/RxJava),
  * coroutine {@code try/finally} (Kotlin). Permit leakage is a fatal correctness bug.
  *
- * @see eu.inqudium.core.exception.InqBulkheadFullException
+ * @see InqBulkheadFullException
  */
 package eu.inqudium.core.bulkhead;

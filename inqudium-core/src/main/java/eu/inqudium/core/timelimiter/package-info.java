@@ -26,6 +26,6 @@
  * lives in the paradigm modules, not in core. The imperative TimeLimiter uses
  * {@code CompletionStage} exclusively — no synchronous {@code Supplier} decoration.
  *
- * @see eu.inqudium.core.exception.InqTimeLimitExceededException
+ * @see InqTimeLimitExceededException
  */
 package eu.inqudium.core.timelimiter;

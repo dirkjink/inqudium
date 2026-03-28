@@ -23,61 +23,53 @@ import java.util.Objects;
  */
 public abstract class InqEvent {
 
-  private final String callId;
-  private final String elementName;
-  private final InqElementType elementType;
-  private final Instant timestamp;
+    private final String callId;
+    private final String elementName;
+    private final InqElementType elementType;
+    private final Instant timestamp;
 
-  /**
-   * Creates a new event with the given identity fields.
-   *
-   * @param callId      the unique call identifier (shared across the pipeline)
-   * @param elementName the name of the element instance
-   * @param elementType the type of the element
-   * @param timestamp   when the event occurred
-   */
-  protected InqEvent(String callId, String elementName, InqElementType elementType, Instant timestamp) {
-    this.callId = Objects.requireNonNull(callId, "callId must not be null");
-    this.elementName = Objects.requireNonNull(elementName, "elementName must not be null");
-    this.elementType = Objects.requireNonNull(elementType, "elementType must not be null");
-    this.timestamp = Objects.requireNonNull(timestamp, "timestamp must not be null");
-  }
+    /**
+     * Creates a new event with the given identity fields.
+     *
+     * @param callId      the unique call identifier (shared across the pipeline)
+     * @param elementName the name of the element instance
+     * @param elementType the type of the element
+     * @param timestamp   when the event occurred
+     */
+    protected InqEvent(String callId, String elementName, InqElementType elementType, Instant timestamp) {
+        this.callId = Objects.requireNonNull(callId, "callId must not be null");
+        this.elementName = Objects.requireNonNull(elementName, "elementName must not be null");
+        this.elementType = Objects.requireNonNull(elementType, "elementType must not be null");
+        this.timestamp = Objects.requireNonNull(timestamp, "timestamp must not be null");
+    }
 
-  /**
-   * Returns the unique call identifier shared across all elements in the pipeline.
-   */
-  public String getCallId() {
-    return callId;
-  }
+    /** Returns the unique call identifier shared across all elements in the pipeline. */
+    public String getCallId() {
+        return callId;
+    }
 
-  /**
-   * Returns the name of the element instance that emitted this event.
-   */
-  public String getElementName() {
-    return elementName;
-  }
+    /** Returns the name of the element instance that emitted this event. */
+    public String getElementName() {
+        return elementName;
+    }
 
-  /**
-   * Returns the type of the element that emitted this event.
-   */
-  public InqElementType getElementType() {
-    return elementType;
-  }
+    /** Returns the type of the element that emitted this event. */
+    public InqElementType getElementType() {
+        return elementType;
+    }
 
-  /**
-   * Returns the timestamp when this event occurred.
-   */
-  public Instant getTimestamp() {
-    return timestamp;
-  }
+    /** Returns the timestamp when this event occurred. */
+    public Instant getTimestamp() {
+        return timestamp;
+    }
 
-  @Override
-  public String toString() {
-    return getClass().getSimpleName() + "{" +
-        "callId='" + callId + '\'' +
-        ", elementName='" + elementName + '\'' +
-        ", elementType=" + elementType +
-        ", timestamp=" + timestamp +
-        '}';
-  }
+    @Override
+    public String toString() {
+        return getClass().getSimpleName() + "{" +
+                "callId='" + callId + '\'' +
+                ", elementName='" + elementName + '\'' +
+                ", elementType=" + elementType +
+                ", timestamp=" + timestamp +
+                '}';
+    }
 }

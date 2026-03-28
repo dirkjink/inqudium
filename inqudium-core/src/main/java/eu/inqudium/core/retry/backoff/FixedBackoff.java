@@ -14,13 +14,13 @@ import java.time.Duration;
  */
 public final class FixedBackoff implements BackoffStrategy {
 
-  @Override
-  public Duration computeDelay(int attemptNumber, Duration initialInterval) {
-    return initialInterval;
-  }
+    @Override
+    public Duration computeDelay(int attemptNumber, Duration initialInterval) {
+        return initialInterval;
+    }
 
-  @Override
-  public String toString() {
-    return "FixedBackoff";
-  }
+    @Override
+    public String toString() {
+        return "FixedBackoff";
+    }
 }

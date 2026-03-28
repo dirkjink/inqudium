@@ -12,17 +12,13 @@ import java.time.Instant;
  */
 public record CallOutcome(boolean success, long durationNanos, Instant timestamp) {
 
-  /**
-   * Creates a successful outcome.
-   */
-  public static CallOutcome success(long durationNanos, Instant timestamp) {
-    return new CallOutcome(true, durationNanos, timestamp);
-  }
+    /** Creates a successful outcome. */
+    public static CallOutcome success(long durationNanos, Instant timestamp) {
+        return new CallOutcome(true, durationNanos, timestamp);
+    }
 
-  /**
-   * Creates a failed outcome.
-   */
-  public static CallOutcome failure(long durationNanos, Instant timestamp) {
-    return new CallOutcome(false, durationNanos, timestamp);
-  }
+    /** Creates a failed outcome. */
+    public static CallOutcome failure(long durationNanos, Instant timestamp) {
+        return new CallOutcome(false, durationNanos, timestamp);
+    }
 }

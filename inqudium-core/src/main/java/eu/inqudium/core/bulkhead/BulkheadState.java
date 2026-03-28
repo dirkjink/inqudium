@@ -8,10 +8,8 @@ package eu.inqudium.core.bulkhead;
  */
 public record BulkheadState(int concurrentCalls) {
 
-  /**
-   * Creates the initial state with zero concurrent calls.
-   */
-  public static BulkheadState initial() {
-    return new BulkheadState(0);
-  }
+    /** Creates the initial state with zero concurrent calls. */
+    public static BulkheadState initial() {
+        return new BulkheadState(0);
+    }
 }
