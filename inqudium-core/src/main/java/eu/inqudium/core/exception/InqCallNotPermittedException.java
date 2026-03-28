@@ -3,6 +3,8 @@ package eu.inqudium.core.exception;
 import eu.inqudium.core.InqElementType;
 import eu.inqudium.core.circuitbreaker.CircuitBreakerState;
 
+import java.util.Locale;
+
 /**
  * Thrown when a circuit breaker rejects a call because it is in
  * {@link CircuitBreakerState#OPEN} or {@link CircuitBreakerState#HALF_OPEN}
@@ -15,6 +17,11 @@ import eu.inqudium.core.circuitbreaker.CircuitBreakerState;
  */
 public class InqCallNotPermittedException extends InqException {
 
+  /**
+   * Call rejected — circuit breaker is OPEN.
+   */
+  public static final String CODE = "INQ-CB-001";
+
   private final CircuitBreakerState state;
   private final float failureRate;
 
@@ -26,8 +33,8 @@ public class InqCallNotPermittedException extends InqException {
    * @param failureRate the current failure rate (0.0 to 100.0)
    */
   public InqCallNotPermittedException(String elementName, CircuitBreakerState state, float failureRate) {
-    super(elementName, InqElementType.CIRCUIT_BREAKER,
-        String.format(java.util.Locale.ROOT, "CircuitBreaker '%s' is %s (failure rate: %.1f%%)", elementName, state, failureRate));
+    super(CODE, elementName, InqElementType.CIRCUIT_BREAKER,
+        String.format(Locale.ROOT, "CircuitBreaker '%s' is %s (failure rate: %.1f%%)", elementName, state, failureRate));
     this.state = state;
     this.failureRate = failureRate;
   }

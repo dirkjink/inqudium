@@ -25,7 +25,6 @@ public final class CircuitBreakerConfig implements InqConfig {
   private final int permittedNumberOfCallsInHalfOpenState;
   private final InqClock clock;
   private final InqCompatibility compatibility;
-
   private CircuitBreakerConfig(Builder b) {
     this.failureRateThreshold = b.failureRateThreshold;
     this.slowCallRateThreshold = b.slowCallRateThreshold;

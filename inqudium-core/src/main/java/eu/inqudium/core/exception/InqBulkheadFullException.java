@@ -2,6 +2,8 @@ package eu.inqudium.core.exception;
 
 import eu.inqudium.core.InqElementType;
 
+import java.util.Locale;
+
 /**
  * Thrown when a bulkhead rejects a call because the maximum number of concurrent
  * calls has been reached and the wait timeout (if any) has expired.
@@ -12,6 +14,11 @@ import eu.inqudium.core.InqElementType;
  * @since 0.1.0
  */
 public class InqBulkheadFullException extends InqException {
+
+  /**
+   * Call rejected — max concurrent calls reached.
+   */
+  public static final String CODE = "INQ-BH-001";
 
   private final int concurrentCalls;
   private final int maxConcurrentCalls;
@@ -24,8 +31,8 @@ public class InqBulkheadFullException extends InqException {
    * @param maxConcurrentCalls the configured maximum
    */
   public InqBulkheadFullException(String elementName, int concurrentCalls, int maxConcurrentCalls) {
-    super(elementName, InqElementType.BULKHEAD,
-        String.format(java.util.Locale.ROOT, "Bulkhead '%s' is full (%d/%d concurrent calls)", elementName, concurrentCalls, maxConcurrentCalls));
+    super(CODE, elementName, InqElementType.BULKHEAD,
+        String.format(Locale.ROOT, "Bulkhead '%s' is full (%d/%d concurrent calls)", elementName, concurrentCalls, maxConcurrentCalls));
     this.concurrentCalls = concurrentCalls;
     this.maxConcurrentCalls = maxConcurrentCalls;
   }

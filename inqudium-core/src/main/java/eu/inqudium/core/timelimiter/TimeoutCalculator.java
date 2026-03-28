@@ -25,7 +25,9 @@ import java.util.Collection;
  */
 public interface TimeoutCalculator {
 
-  /** Fallback returned by every implementation when no components are present. */
+  /**
+   * Fallback returned by every implementation when no components are present.
+   */
   Duration FALLBACK = Duration.ofSeconds(5);
 
   /**

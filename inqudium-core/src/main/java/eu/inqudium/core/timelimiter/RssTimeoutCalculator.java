@@ -32,7 +32,9 @@ import java.util.Objects;
  */
 public final class RssTimeoutCalculator implements TimeoutCalculator {
 
-  /** Applied as multiplier to the raw RSS value. */
+  /**
+   * Applied as multiplier to the raw RSS value.
+   */
   private final SigmaLevel sigmaLevel;
 
   /**

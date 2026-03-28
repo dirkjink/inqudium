@@ -331,13 +331,72 @@ class InqFailureTest {
     void should_produce_readable_messages() {
       // Given / When / Then
       assertThat(new InqCallNotPermittedException("payment", CircuitBreakerState.OPEN, 75.5f).getMessage())
-          .contains("payment", "OPEN", "75.5%");
+          .contains("INQ-CB-001", "payment", "OPEN", "75.5%");
 
       assertThat(new InqBulkheadFullException("order", 25, 25).getMessage())
-          .contains("order", "25/25");
+          .contains("INQ-BH-001", "order", "25/25");
 
       assertThat(new InqRetryExhaustedException("inventory", 3, new RuntimeException()).getMessage())
-          .contains("inventory", "3 attempts");
+          .contains("INQ-RT-001", "inventory", "3 attempts");
+    }
+  }
+
+  @Nested
+  @DisplayName("Error codes (ADR-021)")
+  class ErrorCodes {
+
+    @Test
+    void should_carry_the_correct_error_code_on_each_exception_type() {
+      // Given / When / Then
+      assertThat(new InqCallNotPermittedException("svc", CircuitBreakerState.OPEN, 50f).getCode())
+          .isEqualTo("INQ-CB-001");
+      assertThat(new InqRequestNotPermittedException("svc", Duration.ofMillis(100)).getCode())
+          .isEqualTo("INQ-RL-001");
+      assertThat(new InqBulkheadFullException("svc", 10, 10).getCode())
+          .isEqualTo("INQ-BH-001");
+      assertThat(new InqTimeLimitExceededException("svc", Duration.ofSeconds(3), Duration.ofMillis(3100)).getCode())
+          .isEqualTo("INQ-TL-001");
+      assertThat(new InqRetryExhaustedException("svc", 3, new RuntimeException()).getCode())
+          .isEqualTo("INQ-RT-001");
+    }
+
+    @Test
+    void should_prepend_error_code_to_message() {
+      // Given
+      var exception = new InqCallNotPermittedException("payment", CircuitBreakerState.OPEN, 80.0f);
+
+      // When
+      var message = exception.getMessage();
+
+      // Then — message starts with the code
+      assertThat(message).startsWith("INQ-CB-001: ");
+    }
+
+    @Test
+    void should_follow_the_inq_xx_nnn_format() {
+      // Given
+      var codes = new String[]{
+          InqCallNotPermittedException.CODE,
+          InqRequestNotPermittedException.CODE,
+          InqBulkheadFullException.CODE,
+          InqTimeLimitExceededException.CODE,
+          InqRetryExhaustedException.CODE
+      };
+
+      // When / Then — all match INQ-XX-NNN pattern
+      for (var code : codes) {
+        assertThat(code).matches("INQ-[A-Z]{2}-\\d{3}");
+      }
+    }
+
+    @Test
+    void should_expose_code_as_public_static_constant() {
+      // Given / When / Then — constants accessible without instantiation
+      assertThat(InqCallNotPermittedException.CODE).isNotBlank();
+      assertThat(InqRequestNotPermittedException.CODE).isNotBlank();
+      assertThat(InqBulkheadFullException.CODE).isNotBlank();
+      assertThat(InqTimeLimitExceededException.CODE).isNotBlank();
+      assertThat(InqRetryExhaustedException.CODE).isNotBlank();
     }
   }
 }

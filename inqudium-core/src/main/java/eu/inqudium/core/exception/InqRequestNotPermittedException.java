@@ -3,6 +3,7 @@ package eu.inqudium.core.exception;
 import eu.inqudium.core.InqElementType;
 
 import java.time.Duration;
+import java.util.Locale;
 
 /**
  * Thrown when a rate limiter denies a request because no permits are available
@@ -15,6 +16,11 @@ import java.time.Duration;
  */
 public class InqRequestNotPermittedException extends InqException {
 
+  /**
+   * Request denied — no permits available.
+   */
+  public static final String CODE = "INQ-RL-001";
+
   private final Duration waitEstimate;
 
   /**
@@ -24,8 +30,8 @@ public class InqRequestNotPermittedException extends InqException {
    * @param waitEstimate estimated duration until the next permit becomes available
    */
   public InqRequestNotPermittedException(String elementName, Duration waitEstimate) {
-    super(elementName, InqElementType.RATE_LIMITER,
-        String.format(java.util.Locale.ROOT, "RateLimiter '%s' denied request (next permit in ~%dms)", elementName, waitEstimate.toMillis()));
+    super(CODE, elementName, InqElementType.RATE_LIMITER,
+        String.format(Locale.ROOT, "RateLimiter '%s' denied request (next permit in ~%dms)", elementName, waitEstimate.toMillis()));
     this.waitEstimate = waitEstimate;
   }
 

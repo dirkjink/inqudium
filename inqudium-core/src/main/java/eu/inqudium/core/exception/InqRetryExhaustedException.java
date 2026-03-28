@@ -2,6 +2,8 @@ package eu.inqudium.core.exception;
 
 import eu.inqudium.core.InqElementType;
 
+import java.util.Locale;
+
 /**
  * Thrown when a retry element has exhausted all configured attempts.
  *
@@ -13,6 +15,11 @@ import eu.inqudium.core.InqElementType;
  */
 public class InqRetryExhaustedException extends InqException {
 
+  /**
+   * All retry attempts exhausted.
+   */
+  public static final String CODE = "INQ-RT-001";
+
   private final int attempts;
 
   /**
@@ -23,8 +30,8 @@ public class InqRetryExhaustedException extends InqException {
    * @param lastCause   the exception from the final attempt
    */
   public InqRetryExhaustedException(String elementName, int attempts, Throwable lastCause) {
-    super(elementName, InqElementType.RETRY,
-        String.format(java.util.Locale.ROOT, "Retry '%s' exhausted after %d attempts", elementName, attempts),
+    super(CODE, elementName, InqElementType.RETRY,
+        String.format(Locale.ROOT, "Retry '%s' exhausted after %d attempts", elementName, attempts),
         lastCause);
     this.attempts = attempts;
   }

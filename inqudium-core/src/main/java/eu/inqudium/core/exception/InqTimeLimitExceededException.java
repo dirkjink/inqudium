@@ -3,6 +3,7 @@ package eu.inqudium.core.exception;
 import eu.inqudium.core.InqElementType;
 
 import java.time.Duration;
+import java.util.Locale;
 
 /**
  * Thrown when a time limiter fires because the caller's maximum wait time
@@ -16,6 +17,11 @@ import java.time.Duration;
  */
 public class InqTimeLimitExceededException extends InqException {
 
+  /**
+   * Caller wait time exceeded configured timeout.
+   */
+  public static final String CODE = "INQ-TL-001";
+
   private final Duration configuredDuration;
   private final Duration actualDuration;
 
@@ -27,8 +33,8 @@ public class InqTimeLimitExceededException extends InqException {
    * @param actualDuration     how long the caller actually waited
    */
   public InqTimeLimitExceededException(String elementName, Duration configuredDuration, Duration actualDuration) {
-    super(elementName, InqElementType.TIME_LIMITER,
-        String.format(java.util.Locale.ROOT, "TimeLimiter '%s' timed out after %dms (configured: %dms)",
+    super(CODE, elementName, InqElementType.TIME_LIMITER,
+        String.format(Locale.ROOT, "TimeLimiter '%s' timed out after %dms (configured: %dms)",
             elementName, actualDuration.toMillis(), configuredDuration.toMillis()));
     this.configuredDuration = configuredDuration;
     this.actualDuration = actualDuration;

@@ -33,17 +33,5 @@ public enum TimeoutCalculation {
    * <p>Use when the timeout components are sequentially dependent (e.g. retry attempts)
    * or when a conservative upper bound is preferred over a statistical estimate.
    */
-  WORST_CASE,
-
-  /**
-   * Maximum — uses the single largest configured timeout as the result.
-   *
-   * <p>Returns the maximum value among all individual timeout components, scaled
-   * by the safety margin factor. All other components are ignored.
-   *
-   * <p>Use when only the dominant (slowest) timeout component matters and the
-   * remaining ones are negligible in comparison — e.g. when one component is an
-   * order of magnitude larger than all others.
-   */
-  MAX
+  WORST_CASE
 }
