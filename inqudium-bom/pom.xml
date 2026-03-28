@@ -9,7 +9,7 @@
     <version>${revision}</version>
     <packaging>pom</packaging>
 
-    <n>Inqudium BOM</n>
+    <name>Inqudium BOM</name>
     <description>Bill of Materials for Inqudium — import this to align versions across modules.</description>
 
     <properties>
@@ -94,6 +94,7 @@
                 <configuration>
                     <updatePomFile>true</updatePomFile>
                     <flattenMode>bom</flattenMode>
+                    <outputDirectory>${project.build.directory}/flatten</outputDirectory>
                 </configuration>
                 <executions>
                     <execution>

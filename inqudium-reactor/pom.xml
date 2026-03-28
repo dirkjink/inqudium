@@ -12,7 +12,7 @@
 
     <artifactId>inqudium-reactor</artifactId>
 
-    <n>Inqudium Project Reactor</n>
+    <name>Inqudium Project Reactor</name>
     <description>Native Project Reactor implementation — Sinks.One, Mono.delay(), Subscription backpressure. All elements.</description>
 
     <dependencies>

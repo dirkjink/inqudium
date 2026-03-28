@@ -12,6 +12,6 @@
 
     <artifactId>inqudium-core</artifactId>
 
-    <n>Inqudium Core</n>
+    <name>Inqudium Core</name>
     <description>Shared contracts, configurations, pure algorithms, and events — the SPI for all paradigm implementations.</description>
 </project>

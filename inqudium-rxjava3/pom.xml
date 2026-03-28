@@ -12,7 +12,7 @@
 
     <artifactId>inqudium-rxjava3</artifactId>
 
-    <n>Inqudium RxJava 3</n>
+    <name>Inqudium RxJava 3</name>
     <description>Native RxJava 3 implementation — BehaviorSubject, Single.timer(), Flowable backpressure. All elements.</description>
 
     <dependencies>
