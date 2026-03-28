@@ -22,7 +22,7 @@ import java.util.function.Supplier;
  * Result result = resilient.get();
  * }</pre>
  *
- * <p>When a {@link PipelineOrder} is set, the {@link #shield} calls can be in any
+ * <p>When a {@link PipelineOrder} is set, the {@link Builder#shield(InqDecorator)} calls can be in any
  * order — the pipeline sorts them. When no order is set, {@link PipelineOrder#INQUDIUM}
  * is the default.
  *
