@@ -32,13 +32,19 @@ import java.util.Collection;
  */
 public interface TimeoutCalculator {
 
-  /** Fallback returned by every implementation when no components are present. */
+  /**
+   * Fallback returned by every implementation when no components are present.
+   */
   Duration FALLBACK = Duration.ofSeconds(5);
 
-  /** Fraction of each component treated as the nominal value. */
+  /**
+   * Fraction of each component treated as the nominal value.
+   */
   double NOMINAL_FRACTION = 0.5;
 
-  /** Fraction of each component treated as the tolerance band. */
+  /**
+   * Fraction of each component treated as the tolerance band.
+   */
   double TOLERANCE_FRACTION = 0.5;
 
   /**

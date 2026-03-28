@@ -39,12 +39,16 @@ public final class InqTimeoutProfile {
   // Fields
   // -------------------------------------------------------------------------
 
-  /** Immutable snapshot of the configured timeout components at build time. */
+  /**
+   * Immutable snapshot of the configured timeout components at build time.
+   */
   private final Map<AgnosticTimeoutType, Duration> timeoutComponents;
 
   private final double safetyMarginFactor;
 
-  /** Strategy selected at build time; stateless and safe to share. */
+  /**
+   * Strategy selected at build time; stateless and safe to share.
+   */
   private final TimeoutCalculator calculator;
 
   // -------------------------------------------------------------------------
@@ -63,7 +67,9 @@ public final class InqTimeoutProfile {
     };
   }
 
-  /** Creates a new builder. */
+  /**
+   * Creates a new builder.
+   */
   public static Builder builder() {
     return new Builder();
   }
@@ -205,7 +211,9 @@ public final class InqTimeoutProfile {
    */
   public static final class Builder {
 
-    /** EnumMap guarantees ordering by declaration and O(1) put/get. */
+    /**
+     * EnumMap guarantees ordering by declaration and O(1) put/get.
+     */
     private final EnumMap<AgnosticTimeoutType, Duration> timeoutComponents =
         new EnumMap<>(AgnosticTimeoutType.class);
 
