@@ -7,18 +7,10 @@ import java.util.Collection;
  * Strategy interface for computing the TimeLimiter timeout from a set of
  * HTTP timeout components (ADR-012).
  *
- * <p>For each component {@code tᵢ} the nominal value is assumed to be 50 % of
- * the configured timeout; the tolerance accounts for the remaining 50 %:
- * <pre>
- *   nominal_i   = tᵢ × 0.5
- *   tolerance_i = tᵢ × 0.5
- * </pre>
- *
- * <p>How the individual tolerances are combined into a single value is left to
- * the concrete implementation. The final timeout is always:
- * <pre>
- *   result = (Σ nominal_i + combined_tolerance) × safetyMarginFactor
- * </pre>
+ * <p>Each configured timeout component {@code tᵢ} is treated as the full
+ * tolerance — i.e. the upper bound that component is allowed to consume.
+ * How those individual tolerances are combined into a single result is left
+ * to the concrete implementation.
  *
  * <p>When {@code components} is empty, every implementation must return the
  * five-second fallback defined by {@link #FALLBACK}.
@@ -28,24 +20,13 @@ import java.util.Collection;
  *
  * @see RssTimeoutCalculator
  * @see WorstCaseTimeoutCalculator
+ * @see MaxTimeoutCalculator
  * @since 0.1.0
  */
 public interface TimeoutCalculator {
 
-  /**
-   * Fallback returned by every implementation when no components are present.
-   */
+  /** Fallback returned by every implementation when no components are present. */
   Duration FALLBACK = Duration.ofSeconds(5);
-
-  /**
-   * Fraction of each component treated as the nominal value.
-   */
-  double NOMINAL_FRACTION = 0.5;
-
-  /**
-   * Fraction of each component treated as the tolerance band.
-   */
-  double TOLERANCE_FRACTION = 0.5;
 
   /**
    * Computes the recommended timeout from the given components.

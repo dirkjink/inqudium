@@ -7,10 +7,10 @@ import java.util.Objects;
 /**
  * {@link TimeoutCalculator} implementation for the RSS (Root Sum of Squares) strategy.
  *
- * <p>Combines the individual tolerance bands as a quadratic sum scaled by a
- * configurable {@link SigmaLevel}:
+ * <p>Treats each configured timeout component as its full tolerance and combines
+ * them as a quadratic sum scaled by a configurable {@link SigmaLevel}:
  * <pre>
- *   combined_tolerance = sigmaLevel × √(tolerance_1² + tolerance_2² + … + tolerance_n²)
+ *   result = σ × √(t₁² + t₂² + … + tₙ²) × safetyMarginFactor
  * </pre>
  *
  * <p>The sigma level controls what fraction of requests the computed timeout
@@ -32,7 +32,7 @@ import java.util.Objects;
  */
 public final class RssTimeoutCalculator implements TimeoutCalculator {
 
-  /** Applied as multiplier to the raw RSS tolerance. */
+  /** Applied as multiplier to the raw RSS value. */
   private final SigmaLevel sigmaLevel;
 
   /**
@@ -63,9 +63,8 @@ public final class RssTimeoutCalculator implements TimeoutCalculator {
   /**
    * {@inheritDoc}
    *
-   * <p>Accumulates the squared tolerances of all components, takes the square root
-   * to obtain the 1σ RSS tolerance, scales it by the configured {@link SigmaLevel},
-   * and then applies the safety margin factor.
+   * <p>Computes {@code σ × √(Σtᵢ²) × safetyMarginFactor}, where each {@code tᵢ}
+   * is the full millisecond value of the corresponding timeout component.
    */
   @Override
   public Duration calculate(Collection<Duration> components, double safetyMarginFactor) {
@@ -73,19 +72,13 @@ public final class RssTimeoutCalculator implements TimeoutCalculator {
       return FALLBACK;
     }
 
-    double nominalSumMs = 0.0;
-    double squaredToleranceSum = 0.0;
-
+    double squaredSum = 0.0;
     for (Duration component : components) {
       double ms = component.toMillis();
-      nominalSumMs += ms * NOMINAL_FRACTION;
-      double tolerance = ms * TOLERANCE_FRACTION;
-      squaredToleranceSum += tolerance * tolerance; // accumulate squared values for √ below
+      squaredSum += Math.pow(ms, 2);
     }
 
-    // Scale the 1σ RSS result by the chosen sigma level multiplier
-    double combinedTolerance = sigmaLevel.multiplier() * Math.sqrt(squaredToleranceSum);
-    double totalMs = (nominalSumMs + combinedTolerance) * safetyMarginFactor;
+    double totalMs = sigmaLevel.multiplier() * Math.sqrt(squaredSum) * safetyMarginFactor;
     return Duration.ofMillis(Math.round(totalMs));
   }
 }

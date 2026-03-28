@@ -146,12 +146,10 @@ class InqTimeoutProfileTest {
       }
 
       @Test
-      void two_sigma_timeout_is_exactly_twice_the_tolerance_of_one_sigma_timeout() {
-        // Given — isolate the tolerance portion by using a single component with margin=1.0
-        //   nominal   = 1000 ms × 0.5 = 500 ms
-        //   tolerance = 1000 ms × 0.5 = 500 ms
-        //   1σ result = 500 + 1×500 = 1000 ms
-        //   2σ result = 500 + 2×500 = 1500 ms
+      void two_sigma_timeout_is_exactly_twice_the_one_sigma_timeout() {
+        // Given — with a single component the formula reduces to σ × t:
+        //   1σ result = 1 × 1000 ms = 1000 ms
+        //   2σ result = 2 × 1000 ms = 2000 ms
         var components = java.util.List.of(Duration.ofSeconds(1));
         var oneSigma = new RssTimeoutCalculator(SigmaLevel.ONE_SIGMA);
         var twoSigma = new RssTimeoutCalculator(SigmaLevel.TWO_SIGMA);
@@ -162,12 +160,12 @@ class InqTimeoutProfileTest {
 
         // Then
         assertThat(result1).isEqualTo(Duration.ofMillis(1000));
-        assertThat(result2).isEqualTo(Duration.ofMillis(1500));
+        assertThat(result2).isEqualTo(Duration.ofMillis(2000));
       }
 
       @Test
-      void three_sigma_timeout_is_exactly_three_times_the_tolerance_of_one_sigma_timeout() {
-        // Given — same derivation as above; 3σ result = 500 + 3×500 = 2000 ms
+      void three_sigma_timeout_is_exactly_three_times_the_one_sigma_timeout() {
+        // Given — 3σ result = 3 × 1000 ms = 3000 ms
         var components = java.util.List.of(Duration.ofSeconds(1));
         var oneSigma = new RssTimeoutCalculator(SigmaLevel.ONE_SIGMA);
         var threeSigma = new RssTimeoutCalculator(SigmaLevel.THREE_SIGMA);
@@ -178,7 +176,7 @@ class InqTimeoutProfileTest {
 
         // Then
         assertThat(result1).isEqualTo(Duration.ofMillis(1000));
-        assertThat(result3).isEqualTo(Duration.ofMillis(2000));
+        assertThat(result3).isEqualTo(Duration.ofMillis(3000));
       }
 
       @Test
@@ -259,8 +257,8 @@ class InqTimeoutProfileTest {
 
     @Test
     void worst_case_total_equals_the_sum_of_all_individual_component_timeouts_when_margin_is_one() {
-      // Given — with safetyMarginFactor=1.0 the formula reduces to:
-      //   result = Σ(ms_i × 0.5) + Σ(ms_i × 0.5) = Σ ms_i
+      // Given — with safetyMarginFactor=1.0 the formula reduces to Σtᵢ:
+      //   result = (1000 + 2000) × 1.0 = 3000 ms
       var c1 = Duration.ofSeconds(1); // 1000 ms
       var c2 = Duration.ofSeconds(2); // 2000 ms
       var components = java.util.List.of(c1, c2);
