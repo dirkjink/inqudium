@@ -15,26 +15,26 @@ import java.time.Duration;
  */
 public class InqRequestNotPermittedException extends InqException {
 
-    private final Duration waitEstimate;
+  private final Duration waitEstimate;
 
-    /**
-     * Creates a new exception indicating that the rate limiter denied the request.
-     *
-     * @param elementName  the rate limiter instance name
-     * @param waitEstimate estimated duration until the next permit becomes available
-     */
-    public InqRequestNotPermittedException(String elementName, Duration waitEstimate) {
-        super(elementName, InqElementType.RATE_LIMITER,
-                String.format("RateLimiter '%s' denied request (next permit in ~%dms)", elementName, waitEstimate.toMillis()));
-        this.waitEstimate = waitEstimate;
-    }
+  /**
+   * Creates a new exception indicating that the rate limiter denied the request.
+   *
+   * @param elementName  the rate limiter instance name
+   * @param waitEstimate estimated duration until the next permit becomes available
+   */
+  public InqRequestNotPermittedException(String elementName, Duration waitEstimate) {
+    super(elementName, InqElementType.RATE_LIMITER,
+        String.format("RateLimiter '%s' denied request (next permit in ~%dms)", elementName, waitEstimate.toMillis()));
+    this.waitEstimate = waitEstimate;
+  }
 
-    /**
-     * Returns the estimated wait time until the next permit.
-     *
-     * @return the estimated wait duration
-     */
-    public Duration getWaitEstimate() {
-        return waitEstimate;
-    }
+  /**
+   * Returns the estimated wait time until the next permit.
+   *
+   * @return the estimated wait duration
+   */
+  public Duration getWaitEstimate() {
+    return waitEstimate;
+  }
 }

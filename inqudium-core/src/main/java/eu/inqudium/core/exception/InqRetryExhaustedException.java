@@ -13,38 +13,38 @@ import eu.inqudium.core.InqElementType;
  */
 public class InqRetryExhaustedException extends InqException {
 
-    private final int attempts;
+  private final int attempts;
 
-    /**
-     * Creates a new exception indicating that all retry attempts have failed.
-     *
-     * @param elementName the retry instance name
-     * @param attempts    total number of attempts made (including the initial call)
-     * @param lastCause   the exception from the final attempt
-     */
-    public InqRetryExhaustedException(String elementName, int attempts, Throwable lastCause) {
-        super(elementName, InqElementType.RETRY,
-                String.format("Retry '%s' exhausted after %d attempts", elementName, attempts),
-                lastCause);
-        this.attempts = attempts;
-    }
+  /**
+   * Creates a new exception indicating that all retry attempts have failed.
+   *
+   * @param elementName the retry instance name
+   * @param attempts    total number of attempts made (including the initial call)
+   * @param lastCause   the exception from the final attempt
+   */
+  public InqRetryExhaustedException(String elementName, int attempts, Throwable lastCause) {
+    super(elementName, InqElementType.RETRY,
+        String.format("Retry '%s' exhausted after %d attempts", elementName, attempts),
+        lastCause);
+    this.attempts = attempts;
+  }
 
-    /**
-     * Returns the total number of attempts made, including the initial call.
-     *
-     * @return the attempt count (e.g. 3 means initial call + 2 retries)
-     */
-    public int getAttempts() {
-        return attempts;
-    }
+  /**
+   * Returns the total number of attempts made, including the initial call.
+   *
+   * @return the attempt count (e.g. 3 means initial call + 2 retries)
+   */
+  public int getAttempts() {
+    return attempts;
+  }
 
-    /**
-     * Returns the exception from the final attempt.
-     * Equivalent to {@link #getCause()}.
-     *
-     * @return the last cause
-     */
-    public Throwable getLastCause() {
-        return getCause();
-    }
+  /**
+   * Returns the exception from the final attempt.
+   * Equivalent to {@link #getCause()}.
+   *
+   * @return the last cause
+   */
+  public Throwable getLastCause() {
+    return getCause();
+  }
 }

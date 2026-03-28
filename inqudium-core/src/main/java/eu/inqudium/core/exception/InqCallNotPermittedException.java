@@ -15,38 +15,38 @@ import eu.inqudium.core.circuitbreaker.CircuitBreakerState;
  */
 public class InqCallNotPermittedException extends InqException {
 
-    private final CircuitBreakerState state;
-    private final float failureRate;
+  private final CircuitBreakerState state;
+  private final float failureRate;
 
-    /**
-     * Creates a new exception indicating that the circuit breaker rejected the call.
-     *
-     * @param elementName the circuit breaker instance name
-     * @param state       the current state of the circuit breaker
-     * @param failureRate the current failure rate (0.0 to 100.0)
-     */
-    public InqCallNotPermittedException(String elementName, CircuitBreakerState state, float failureRate) {
-        super(elementName, InqElementType.CIRCUIT_BREAKER,
-                String.format("CircuitBreaker '%s' is %s (failure rate: %.1f%%)", elementName, state, failureRate));
-        this.state = state;
-        this.failureRate = failureRate;
-    }
+  /**
+   * Creates a new exception indicating that the circuit breaker rejected the call.
+   *
+   * @param elementName the circuit breaker instance name
+   * @param state       the current state of the circuit breaker
+   * @param failureRate the current failure rate (0.0 to 100.0)
+   */
+  public InqCallNotPermittedException(String elementName, CircuitBreakerState state, float failureRate) {
+    super(elementName, InqElementType.CIRCUIT_BREAKER,
+        String.format("CircuitBreaker '%s' is %s (failure rate: %.1f%%)", elementName, state, failureRate));
+    this.state = state;
+    this.failureRate = failureRate;
+  }
 
-    /**
-     * Returns the circuit breaker state at the time of rejection.
-     *
-     * @return the current state (typically {@link CircuitBreakerState#OPEN})
-     */
-    public CircuitBreakerState getState() {
-        return state;
-    }
+  /**
+   * Returns the circuit breaker state at the time of rejection.
+   *
+   * @return the current state (typically {@link CircuitBreakerState#OPEN})
+   */
+  public CircuitBreakerState getState() {
+    return state;
+  }
 
-    /**
-     * Returns the failure rate at the time of rejection.
-     *
-     * @return the failure rate as a percentage (0.0 to 100.0)
-     */
-    public float getFailureRate() {
-        return failureRate;
-    }
+  /**
+   * Returns the failure rate at the time of rejection.
+   *
+   * @return the failure rate as a percentage (0.0 to 100.0)
+   */
+  public float getFailureRate() {
+    return failureRate;
+  }
 }

@@ -13,38 +13,38 @@ import eu.inqudium.core.InqElementType;
  */
 public class InqBulkheadFullException extends InqException {
 
-    private final int concurrentCalls;
-    private final int maxConcurrentCalls;
+  private final int concurrentCalls;
+  private final int maxConcurrentCalls;
 
-    /**
-     * Creates a new exception indicating that the bulkhead is full.
-     *
-     * @param elementName      the bulkhead instance name
-     * @param concurrentCalls  the current number of in-flight calls
-     * @param maxConcurrentCalls the configured maximum
-     */
-    public InqBulkheadFullException(String elementName, int concurrentCalls, int maxConcurrentCalls) {
-        super(elementName, InqElementType.BULKHEAD,
-                String.format("Bulkhead '%s' is full (%d/%d concurrent calls)", elementName, concurrentCalls, maxConcurrentCalls));
-        this.concurrentCalls = concurrentCalls;
-        this.maxConcurrentCalls = maxConcurrentCalls;
-    }
+  /**
+   * Creates a new exception indicating that the bulkhead is full.
+   *
+   * @param elementName        the bulkhead instance name
+   * @param concurrentCalls    the current number of in-flight calls
+   * @param maxConcurrentCalls the configured maximum
+   */
+  public InqBulkheadFullException(String elementName, int concurrentCalls, int maxConcurrentCalls) {
+    super(elementName, InqElementType.BULKHEAD,
+        String.format("Bulkhead '%s' is full (%d/%d concurrent calls)", elementName, concurrentCalls, maxConcurrentCalls));
+    this.concurrentCalls = concurrentCalls;
+    this.maxConcurrentCalls = maxConcurrentCalls;
+  }
 
-    /**
-     * Returns the number of concurrent calls at the time of rejection.
-     *
-     * @return the current concurrent call count
-     */
-    public int getConcurrentCalls() {
-        return concurrentCalls;
-    }
+  /**
+   * Returns the number of concurrent calls at the time of rejection.
+   *
+   * @return the current concurrent call count
+   */
+  public int getConcurrentCalls() {
+    return concurrentCalls;
+  }
 
-    /**
-     * Returns the configured maximum concurrent calls.
-     *
-     * @return the maximum
-     */
-    public int getMaxConcurrentCalls() {
-        return maxConcurrentCalls;
-    }
+  /**
+   * Returns the configured maximum concurrent calls.
+   *
+   * @return the maximum
+   */
+  public int getMaxConcurrentCalls() {
+    return maxConcurrentCalls;
+  }
 }

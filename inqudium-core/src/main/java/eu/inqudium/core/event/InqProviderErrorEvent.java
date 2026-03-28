@@ -15,46 +15,54 @@ import java.time.Instant;
  */
 public class InqProviderErrorEvent extends InqEvent {
 
-    private final String providerClassName;
-    private final String spiInterfaceName;
-    private final String errorMessage;
-    private final String phase;
+  private final String providerClassName;
+  private final String spiInterfaceName;
+  private final String errorMessage;
+  private final String phase;
 
-    /**
-     * Creates a new provider error event.
-     *
-     * @param providerClassName the class name of the failing provider
-     * @param spiInterfaceName  the SPI interface the provider implements
-     * @param phase             "construction" or "execution"
-     * @param errorMessage      the error description
-     * @param timestamp         when the error occurred
-     */
-    public InqProviderErrorEvent(String providerClassName, String spiInterfaceName,
-                                 String phase, String errorMessage, Instant timestamp) {
-        super("system", "InqServiceLoader", InqElementType.CACHE, timestamp);
-        this.providerClassName = providerClassName;
-        this.spiInterfaceName = spiInterfaceName;
-        this.phase = phase;
-        this.errorMessage = errorMessage;
-    }
+  /**
+   * Creates a new provider error event.
+   *
+   * @param providerClassName the class name of the failing provider
+   * @param spiInterfaceName  the SPI interface the provider implements
+   * @param phase             "construction" or "execution"
+   * @param errorMessage      the error description
+   * @param timestamp         when the error occurred
+   */
+  public InqProviderErrorEvent(String providerClassName, String spiInterfaceName,
+                               String phase, String errorMessage, Instant timestamp) {
+    super("system", "InqServiceLoader", InqElementType.CACHE, timestamp);
+    this.providerClassName = providerClassName;
+    this.spiInterfaceName = spiInterfaceName;
+    this.phase = phase;
+    this.errorMessage = errorMessage;
+  }
 
-    /** Returns the fully qualified class name of the failing provider. */
-    public String getProviderClassName() {
-        return providerClassName;
-    }
+  /**
+   * Returns the fully qualified class name of the failing provider.
+   */
+  public String getProviderClassName() {
+    return providerClassName;
+  }
 
-    /** Returns the SPI interface name the provider was supposed to implement. */
-    public String getSpiInterfaceName() {
-        return spiInterfaceName;
-    }
+  /**
+   * Returns the SPI interface name the provider was supposed to implement.
+   */
+  public String getSpiInterfaceName() {
+    return spiInterfaceName;
+  }
 
-    /** Returns the failure phase: "construction" or "execution". */
-    public String getPhase() {
-        return phase;
-    }
+  /**
+   * Returns the failure phase: "construction" or "execution".
+   */
+  public String getPhase() {
+    return phase;
+  }
 
-    /** Returns the error message describing the failure. */
-    public String getErrorMessage() {
-        return errorMessage;
-    }
+  /**
+   * Returns the error message describing the failure.
+   */
+  public String getErrorMessage() {
+    return errorMessage;
+  }
 }

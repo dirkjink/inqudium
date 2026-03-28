@@ -26,67 +26,67 @@ import java.util.function.Consumer;
  */
 final class DefaultInqEventPublisher implements InqEventPublisher {
 
-    private final String elementName;
-    private final InqElementType elementType;
-    private final List<InqEventConsumer> consumers = new CopyOnWriteArrayList<>();
+  private final String elementName;
+  private final InqElementType elementType;
+  private final List<InqEventConsumer> consumers = new CopyOnWriteArrayList<>();
 
-    DefaultInqEventPublisher(String elementName, InqElementType elementType) {
-        this.elementName = Objects.requireNonNull(elementName, "elementName must not be null");
-        this.elementType = Objects.requireNonNull(elementType, "elementType must not be null");
+  DefaultInqEventPublisher(String elementName, InqElementType elementType) {
+    this.elementName = Objects.requireNonNull(elementName, "elementName must not be null");
+    this.elementType = Objects.requireNonNull(elementType, "elementType must not be null");
+  }
+
+  @Override
+  public void publish(InqEvent event) {
+    Objects.requireNonNull(event, "event must not be null");
+
+    // Deliver to local consumers
+    for (var consumer : consumers) {
+      try {
+        consumer.accept(event);
+      } catch (Exception e) {
+        // Consumer exceptions are swallowed — a broken consumer must never
+        // affect the resilience element's operation (ADR-003, ADR-014 Convention 3)
+        logConsumerError(consumer, event, e);
+      }
     }
 
-    @Override
-    public void publish(InqEvent event) {
-        Objects.requireNonNull(event, "event must not be null");
+    // Forward to global exporters
+    InqEventExporterRegistry.export(event);
+  }
 
-        // Deliver to local consumers
-        for (var consumer : consumers) {
-            try {
-                consumer.accept(event);
-            } catch (Exception e) {
-                // Consumer exceptions are swallowed — a broken consumer must never
-                // affect the resilience element's operation (ADR-003, ADR-014 Convention 3)
-                logConsumerError(consumer, event, e);
-            }
-        }
+  @Override
+  public void onEvent(InqEventConsumer consumer) {
+    Objects.requireNonNull(consumer, "consumer must not be null");
+    consumers.add(consumer);
+  }
 
-        // Forward to global exporters
-        InqEventExporterRegistry.export(event);
-    }
+  @Override
+  public <E extends InqEvent> void onEvent(Class<E> eventType, Consumer<E> consumer) {
+    Objects.requireNonNull(eventType, "eventType must not be null");
+    Objects.requireNonNull(consumer, "consumer must not be null");
 
-    @Override
-    public void onEvent(InqEventConsumer consumer) {
-        Objects.requireNonNull(consumer, "consumer must not be null");
-        consumers.add(consumer);
-    }
+    // Wrap the typed consumer in a filtering InqEventConsumer
+    consumers.add(event -> {
+      if (eventType.isInstance(event)) {
+        consumer.accept(eventType.cast(event));
+      }
+    });
+  }
 
-    @Override
-    public <E extends InqEvent> void onEvent(Class<E> eventType, Consumer<E> consumer) {
-        Objects.requireNonNull(eventType, "eventType must not be null");
-        Objects.requireNonNull(consumer, "consumer must not be null");
+  private void logConsumerError(InqEventConsumer consumer, InqEvent event, Exception e) {
+    // Use System.Logger (JDK Platform Logging) — no SLF4J dependency in core
+    System.getLogger(DefaultInqEventPublisher.class.getName())
+        .log(System.Logger.Level.WARNING,
+            "Event consumer {0} threw on event {1}: {2}",
+            consumer.getClass().getName(), event.getClass().getSimpleName(), e.getMessage());
+  }
 
-        // Wrap the typed consumer in a filtering InqEventConsumer
-        consumers.add(event -> {
-            if (eventType.isInstance(event)) {
-                consumer.accept(eventType.cast(event));
-            }
-        });
-    }
-
-    private void logConsumerError(InqEventConsumer consumer, InqEvent event, Exception e) {
-        // Use System.Logger (JDK Platform Logging) — no SLF4J dependency in core
-        System.getLogger(DefaultInqEventPublisher.class.getName())
-                .log(System.Logger.Level.WARNING,
-                        "Event consumer {0} threw on event {1}: {2}",
-                        consumer.getClass().getName(), event.getClass().getSimpleName(), e.getMessage());
-    }
-
-    @Override
-    public String toString() {
-        return "InqEventPublisher{" +
-                "elementName='" + elementName + '\'' +
-                ", elementType=" + elementType +
-                ", consumers=" + consumers.size() +
-                '}';
-    }
+  @Override
+  public String toString() {
+    return "InqEventPublisher{" +
+        "elementName='" + elementName + '\'' +
+        ", elementType=" + elementType +
+        ", consumers=" + consumers.size() +
+        '}';
+  }
 }

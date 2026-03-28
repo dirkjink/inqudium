@@ -16,17 +16,18 @@ package eu.inqudium.core.context;
  */
 public interface InqContextScope extends AutoCloseable {
 
-    /**
-     * Restores the previous context.
-     *
-     * <p>Does not throw checked exceptions — safe for use in finally blocks
-     * and try-with-resources.
-     */
-    @Override
-    void close();
+  /**
+   * A no-op scope for cases where no propagators are registered.
+   */
+  InqContextScope NOOP = () -> {
+  };
 
-    /**
-     * A no-op scope for cases where no propagators are registered.
-     */
-    InqContextScope NOOP = () -> {};
+  /**
+   * Restores the previous context.
+   *
+   * <p>Does not throw checked exceptions — safe for use in finally blocks
+   * and try-with-resources.
+   */
+  @Override
+  void close();
 }

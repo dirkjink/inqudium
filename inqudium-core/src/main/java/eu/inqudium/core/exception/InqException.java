@@ -17,51 +17,51 @@ import eu.inqudium.core.InqElementType;
  */
 public abstract class InqException extends RuntimeException {
 
-    private final String elementName;
-    private final InqElementType elementType;
+  private final String elementName;
+  private final InqElementType elementType;
 
-    /**
-     * Creates a new exception with element context.
-     *
-     * @param elementName the name of the element instance (e.g. "paymentService")
-     * @param elementType the type of the element
-     * @param message     the detail message
-     */
-    protected InqException(String elementName, InqElementType elementType, String message) {
-        super(message);
-        this.elementName = elementName;
-        this.elementType = elementType;
-    }
+  /**
+   * Creates a new exception with element context.
+   *
+   * @param elementName the name of the element instance (e.g. "paymentService")
+   * @param elementType the type of the element
+   * @param message     the detail message
+   */
+  protected InqException(String elementName, InqElementType elementType, String message) {
+    super(message);
+    this.elementName = elementName;
+    this.elementType = elementType;
+  }
 
-    /**
-     * Creates a new exception with element context and a cause.
-     *
-     * @param elementName the name of the element instance
-     * @param elementType the type of the element
-     * @param message     the detail message
-     * @param cause       the underlying cause
-     */
-    protected InqException(String elementName, InqElementType elementType, String message, Throwable cause) {
-        super(message, cause);
-        this.elementName = elementName;
-        this.elementType = elementType;
-    }
+  /**
+   * Creates a new exception with element context and a cause.
+   *
+   * @param elementName the name of the element instance
+   * @param elementType the type of the element
+   * @param message     the detail message
+   * @param cause       the underlying cause
+   */
+  protected InqException(String elementName, InqElementType elementType, String message, Throwable cause) {
+    super(message, cause);
+    this.elementName = elementName;
+    this.elementType = elementType;
+  }
 
-    /**
-     * Returns the name of the element instance that threw this exception.
-     *
-     * @return the element name, e.g. "paymentService"
-     */
-    public String getElementName() {
-        return elementName;
-    }
+  /**
+   * Returns the name of the element instance that threw this exception.
+   *
+   * @return the element name, e.g. "paymentService"
+   */
+  public String getElementName() {
+    return elementName;
+  }
 
-    /**
-     * Returns the type of the element that threw this exception.
-     *
-     * @return the element type
-     */
-    public InqElementType getElementType() {
-        return elementType;
-    }
+  /**
+   * Returns the type of the element that threw this exception.
+   *
+   * @return the element type
+   */
+  public InqElementType getElementType() {
+    return elementType;
+  }
 }
