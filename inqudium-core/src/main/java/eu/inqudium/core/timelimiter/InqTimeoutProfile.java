@@ -134,6 +134,16 @@ public final class InqTimeoutProfile {
   }
 
   /**
+   * Returns the configured {@link AgnosticTimeoutType#SERVER_RESPONSE} timeout
+   * (Time To First Byte — TTFB).
+   *
+   * @return the value, or {@link Duration#ZERO} if not configured
+   */
+  public Duration serverResponseTimeout() {
+    return getTimeout(AgnosticTimeoutType.SERVER_RESPONSE);
+  }
+
+  /**
    * Returns the configured timeout for the given {@link AgnosticTimeoutType}.
    *
    * @param type the timeout type; must not be {@code null}
@@ -251,6 +261,19 @@ public final class InqTimeoutProfile {
      */
     public Builder writeOperationTimeout(Duration timeout) {
       return timeout(AgnosticTimeoutType.WRITE_OPERATION, timeout);
+    }
+
+    /**
+     * Sets the {@link AgnosticTimeoutType#SERVER_RESPONSE} timeout
+     * (maximum wait for the first response byte, TTFB).
+     *
+     * <p>Replaces any previously set value for this type.
+     *
+     * @param timeout the server-response (TTFB) timeout; must not be {@code null}
+     * @return this builder
+     */
+    public Builder serverResponseTimeout(Duration timeout) {
+      return timeout(AgnosticTimeoutType.SERVER_RESPONSE, timeout);
     }
 
     /**
