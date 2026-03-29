@@ -10,6 +10,10 @@ import java.util.concurrent.ThreadLocalRandom;
  */
 public class Fast96BitId {
 
+  // Base64URL encoding alphabet (URL and filename safe, RFC 4648)
+  private static final char[] BASE64_URL_ALPHABET =
+      "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_".toCharArray();
+
   // Pre-calculated lookup table for extremely fast hex conversion
   private static final char[] HEX_DIGITS =
       {'0', '1', '2', '3', '4', '5', '6', '7',
@@ -24,7 +28,7 @@ public class Fast96BitId {
    *
    * @return A 24-character hexadecimal string.
    */
-  public static String randomId() {
+  public static String randomIdHex() {
     ThreadLocalRandom random = ThreadLocalRandom.current();
 
     // Fetch exactly 96 bits of randomness
@@ -39,6 +43,47 @@ public class Fast96BitId {
 
     // Format the 32-bit part into the remaining 8 characters
     formatHexInt(part2, 8, idChars, 16);
+
+    // Create the final String using a single allocation
+    return new String(idChars);
+  }
+
+  /**
+   * Generates a 96-bit random identifier formatted as a 16-character Base64URL string.
+   *
+   * @return A 16-character Base64URL string.
+   */
+  public static String randomIdBase64() {
+    ThreadLocalRandom random = ThreadLocalRandom.current();
+
+    // Fetch exactly 96 bits of randomness
+    long p1 = random.nextLong(); // 64 bits
+    int p2 = random.nextInt();   // 32 bits
+
+    // Initialize a character array of exactly 16 characters (96 bits / 6 bits per char)
+    char[] idChars = new char[16];
+
+    // Extract the first 10 characters from the top 60 bits of p1
+    idChars[0] = BASE64_URL_ALPHABET[(int) ((p1 >>> 58) & 63)];
+    idChars[1] = BASE64_URL_ALPHABET[(int) ((p1 >>> 52) & 63)];
+    idChars[2] = BASE64_URL_ALPHABET[(int) ((p1 >>> 46) & 63)];
+    idChars[3] = BASE64_URL_ALPHABET[(int) ((p1 >>> 40) & 63)];
+    idChars[4] = BASE64_URL_ALPHABET[(int) ((p1 >>> 34) & 63)];
+    idChars[5] = BASE64_URL_ALPHABET[(int) ((p1 >>> 28) & 63)];
+    idChars[6] = BASE64_URL_ALPHABET[(int) ((p1 >>> 22) & 63)];
+    idChars[7] = BASE64_URL_ALPHABET[(int) ((p1 >>> 16) & 63)];
+    idChars[8] = BASE64_URL_ALPHABET[(int) ((p1 >>> 10) & 63)];
+    idChars[9] = BASE64_URL_ALPHABET[(int) ((p1 >>> 4) & 63)];
+
+    // The 11th character straddles the boundary: bottom 4 bits of p1 and top 2 bits of p2
+    idChars[10] = BASE64_URL_ALPHABET[(int) (((p1 & 0xF) << 2) | ((p2 >>> 30) & 3))];
+
+    // Extract the remaining 5 characters from the lower 30 bits of p2
+    idChars[11] = BASE64_URL_ALPHABET[(p2 >>> 24) & 63];
+    idChars[12] = BASE64_URL_ALPHABET[(p2 >>> 18) & 63];
+    idChars[13] = BASE64_URL_ALPHABET[(p2 >>> 12) & 63];
+    idChars[14] = BASE64_URL_ALPHABET[(p2 >>> 6) & 63];
+    idChars[15] = BASE64_URL_ALPHABET[p2 & 63];
 
     // Create the final String using a single allocation
     return new String(idChars);

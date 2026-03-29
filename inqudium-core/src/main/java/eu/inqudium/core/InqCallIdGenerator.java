@@ -1,5 +1,7 @@
 package eu.inqudium.core;
 
+import eu.inqudium.core.callid.Fast96BitId;
+
 import java.util.UUID;
 
 /**
@@ -38,12 +40,12 @@ import java.util.UUID;
 public interface InqCallIdGenerator {
 
   /**
-   * Returns the default generator backed by {@link UUID#randomUUID()}.
+   * Returns the default generator backed.
    *
    * @return the UUID-based generator
    */
   static InqCallIdGenerator uuid() {
-    return () -> UUID.randomUUID().toString();
+    return Fast96BitId::randomIdBase64;
   }
 
   /**

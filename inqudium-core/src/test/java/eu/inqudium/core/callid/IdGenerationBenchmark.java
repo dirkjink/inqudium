@@ -28,14 +28,14 @@ import java.util.concurrent.TimeUnit;
  * <p>
  * <h1>JMH Benchmark Results and Analysis.</h1>
  * <p>
- * The data clearly demonstrates the massive performance benefits of the custom,
- * optimized ID generators compared to the standard Java library. All three custom
- * implementations significantly outperform the built-in {@link java.util.UUID}.
+ * The introduction of the Base64URL-encoded 96-bit ID generator ({@code Fast96BitIdBase64})
+ * has set a new performance ceiling. It not only outperforms all other implementations in
+ * raw speed but also sets a new low for memory allocation.
  *
  * <h3>1. Throughput Comparison (Operations per Millisecond)</h3>
  * <p>
- * This metric ({@code thrpt}) shows how many IDs each strategy can generate in a
- * single millisecond. A higher number indicates better performance.
+ * This metric ({@code thrpt}) shows the number of IDs generated per millisecond.
+ * A higher score means a faster generator.
  * <table border="1">
  * <caption>Throughput Results Comparison</caption>
  * <tr>
@@ -44,41 +44,50 @@ import java.util.concurrent.TimeUnit;
  * <th>Relative Performance</th>
  * </tr>
  * <tr>
- * <td>Fast96BitId</td>
- * <td>~ 69,096</td>
- * <td><b>19.3x faster</b></td>
+ * <td>Fast96BitIdBase64</td>
+ * <td>~ 83,788</td>
+ * <td><b>23.1x faster</b></td>
+ * </tr>
+ * <tr>
+ * <td>Fast96BitIdHex</td>
+ * <td>~ 69,228</td>
+ * <td><b>19.1x faster</b></td>
  * </tr>
  * <tr>
  * <td>FastUUID</td>
- * <td>~ 52,656</td>
- * <td><b>14.7x faster</b></td>
+ * <td>~ 52,754</td>
+ * <td><b>14.5x faster</b></td>
  * </tr>
  * <tr>
  * <td>FastNanoId</td>
- * <td>~ 43,760</td>
- * <td><b>12.2x faster</b></td>
+ * <td>~ 43,727</td>
+ * <td><b>12.1x faster</b></td>
  * </tr>
  * <tr>
  * <td>StandardJavaUUID</td>
- * <td>~ 3,571</td>
+ * <td>~ 3,627</td>
  * <td>1.0x (Baseline)</td>
  * </tr>
  * </table>
  *
  * <h3>2. Memory Allocation (Bytes per Operation)</h3>
  * <p>
- * The metric {@code gc.alloc.rate.norm} reveals how much memory is allocated on
- * the heap for each generated ID. A lower number means less pressure on the
- * Garbage Collector (GC).
+ * The {@code gc.alloc.rate.norm} metric shows the exact footprint of objects created
+ * per method call. Lower is better, as it drastically reduces Garbage Collector overhead.
  * <table border="1">
  * <caption>Memory Allocation Comparison</caption>
  * <tr>
  * <th>Implementation</th>
  * <th>Allocation (B/op)</th>
- * <th>Memory Reduction</th>
+ * <th>Memory Footprint vs Baseline</th>
  * </tr>
  * <tr>
- * <td>Fast96BitId</td>
+ * <td>Fast96BitIdBase64</td>
+ * <td>104 Bytes</td>
+ * <td><b>- 67.5%</b></td>
+ * </tr>
+ * <tr>
+ * <td>Fast96BitIdHex</td>
  * <td>128 Bytes</td>
  * <td><b>- 60.0%</b></td>
  * </tr>
@@ -101,19 +110,21 @@ import java.util.concurrent.TimeUnit;
  *
  * <h3>Key Takeaways &amp; Technical Insights</h3>
  * <ul>
- * <li><b>The Bottleneck of the Standard UUID:</b> StandardJavaUUID allocates 320 bytes per call,
- * triggering the Garbage Collector much more frequently. Furthermore, its internal reliance
- * on {@code SecureRandom} causes massive overhead compared to {@code ThreadLocalRandom}.</li>
- * <li><b>The Zero-Allocation Strategy Works:</b> Fast96BitId and FastNanoId only allocate 128 bytes
- * per operation. This represents the absolute minimum memory required to allocate the final
- * {@link java.lang.String} object and its backing array in Java. No temporary objects are wasted.</li>
- * <li><b>Fast96BitId is the Absolute Winner:</b> By requiring less entropy (only 96 bits) and
- * assembling a shorter string (24 characters), it achieves the highest throughput,
- * approaching 70,000 IDs per millisecond.</li>
- * <li><b>FastUUID beats FastNanoId:</b> While generating a 36-character UUID seems like it should
- * be slower than a 21-character NanoId, FastUUID uses highly predictable, sequential bit-shifting
- * and hardcoded array indices. The CPU and the Java JIT compiler optimize this much better
- * than the {@code for}-loop and array lookups required by FastNanoId.</li>
+ * <li><b>The Base64 Advantage:</b> {@code Fast96BitIdBase64} is the undisputed winner. Generating a
+ * 16-character string is significantly faster than generating a 24-character hex string, even though
+ * both encode the exact same 96 bits of randomness.</li>
+ * <li><b>Record Low Memory Footprint:</b> The Base64 implementation only allocates <b>104 bytes</b>
+ * per operation. Because the final string is only 16 characters long, the underlying character array
+ * (or byte array in modern Java versions via Compact Strings) is smaller than the 24-character array
+ * required by the Hex implementation (128 bytes).</li>
+ * <li><b>Fewer Writes, Higher Speed:</b> The Base64 method only requires 16 array writes (one for each
+ * character) and utilizes slightly fewer, heavily optimized bitwise operations to extract 6 bits at a
+ * time. The Hex method requires 24 array writes. At the scale of tens of thousands of operations per
+ * millisecond, these saved CPU cycles create a massive 20% throughput increase over the Hex variant.</li>
+ * <li><b>The Baseline Remains Far Behind:</b> The standard {@link java.util.UUID} remains stuck at
+ * roughly ~3,600 ops/ms and 320 bytes per operation, highlighting once again how expensive
+ * {@code SecureRandom} and object creation are when cryptographically secure uniqueness is not strictly
+ * required.</li>
  * </ul>
  */
 @State(Scope.Thread)
@@ -130,10 +141,17 @@ public class IdGenerationBenchmark {
   }
 
   @Benchmark
-  public void benchmarkFast96BitId(Blackhole blackhole) {
+  public void benchmarkFast96BitIdBase64(Blackhole blackhole) {
     // Consume the result using Blackhole to prevent the JIT compiler
     // from optimizing away the method call entirely (dead code elimination)
-    blackhole.consume(Fast96BitId.randomId());
+    blackhole.consume(Fast96BitId.randomIdBase64());
+  }
+
+  @Benchmark
+  public void benchmarkFast96BitIdHex(Blackhole blackhole) {
+    // Consume the result using Blackhole to prevent the JIT compiler
+    // from optimizing away the method call entirely (dead code elimination)
+    blackhole.consume(Fast96BitId.randomIdHex());
   }
 
   @Benchmark
