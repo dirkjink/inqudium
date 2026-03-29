@@ -14,43 +14,39 @@ import java.time.Duration;
  */
 public final class ExponentialBackoff implements BackoffStrategy {
 
-  private final double multiplier;
+    private final double multiplier;
 
-  /**
-   * Creates an exponential backoff with the default multiplier of 2.0.
-   */
-  public ExponentialBackoff() {
-    this(2.0);
-  }
-
-  /**
-   * Creates an exponential backoff with a custom multiplier.
-   *
-   * @param multiplier the growth factor per attempt (must be >= 1.0)
-   */
-  public ExponentialBackoff(double multiplier) {
-    if (multiplier < 1.0) {
-      throw new IllegalArgumentException("Multiplier must be >= 1.0, got: " + multiplier);
+    /** Creates an exponential backoff with the default multiplier of 2.0. */
+    public ExponentialBackoff() {
+        this(2.0);
     }
-    this.multiplier = multiplier;
-  }
 
-  @Override
-  public Duration computeDelay(int attemptNumber, Duration initialInterval) {
-    double factor = Math.pow(multiplier, attemptNumber - 1);
-    long millis = (long) (initialInterval.toMillis() * factor);
-    return Duration.ofMillis(millis);
-  }
+    /**
+     * Creates an exponential backoff with a custom multiplier.
+     *
+     * @param multiplier the growth factor per attempt (must be >= 1.0)
+     */
+    public ExponentialBackoff(double multiplier) {
+        if (multiplier < 1.0) {
+            throw new IllegalArgumentException("Multiplier must be >= 1.0, got: " + multiplier);
+        }
+        this.multiplier = multiplier;
+    }
 
-  /**
-   * Returns the configured multiplier.
-   */
-  public double getMultiplier() {
-    return multiplier;
-  }
+    @Override
+    public Duration computeDelay(int attemptNumber, Duration initialInterval) {
+        double factor = Math.pow(multiplier, attemptNumber - 1);
+        long millis = (long) (initialInterval.toMillis() * factor);
+        return Duration.ofMillis(millis);
+    }
 
-  @Override
-  public String toString() {
-    return "ExponentialBackoff{multiplier=" + multiplier + '}';
-  }
+    /** Returns the configured multiplier. */
+    public double getMultiplier() {
+        return multiplier;
+    }
+
+    @Override
+    public String toString() {
+        return "ExponentialBackoff{multiplier=" + multiplier + '}';
+    }
 }

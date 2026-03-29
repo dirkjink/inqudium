@@ -18,12 +18,12 @@ import eu.inqudium.core.InqElement;
  */
 public interface InqDecorator extends InqElement {
 
-  /**
-   * Wraps a call with this element's resilience logic, preserving the callId.
-   *
-   * @param call the call to decorate (carries the shared callId)
-   * @param <T>  the result type
-   * @return a decorated call with the same callId
-   */
-  <T> InqCall<T> decorate(InqCall<T> call);
+    /**
+     * Wraps a call with this element's resilience logic, preserving the callId.
+     *
+     * @param call the call to decorate (carries the shared callId)
+     * @param <T>  the result type
+     * @return a decorated call with the same callId
+     */
+    <T> InqCall<T> decorate(InqCall<T> call);
 }

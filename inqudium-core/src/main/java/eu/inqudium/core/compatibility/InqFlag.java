@@ -18,15 +18,15 @@ package eu.inqudium.core.compatibility;
  */
 public enum InqFlag {
 
-  // No flags defined yet in 0.1.0-SNAPSHOT.
-  // Flags will be added as behavioral changes are introduced.
-  // Example:
-  //
-  // /**
-  //  * Since: 0.3.0
-  //  * Old behavior: Sliding window boundary check uses < (exclusive).
-  //  * New behavior:  Sliding window boundary check uses <= (inclusive).
-  //  * Default: false (old behavior preserved)
-  //  */
-  // SLIDING_WINDOW_BOUNDARY_INCLUSIVE
+    // No flags defined yet in 0.1.0-SNAPSHOT.
+    // Flags will be added as behavioral changes are introduced.
+    // Example:
+    //
+    // /**
+    //  * Since: 0.3.0
+    //  * Old behavior: Sliding window boundary check uses < (exclusive).
+    //  * New behavior:  Sliding window boundary check uses <= (inclusive).
+    //  * Default: false (old behavior preserved)
+    //  */
+    // SLIDING_WINDOW_BOUNDARY_INCLUSIVE
 }

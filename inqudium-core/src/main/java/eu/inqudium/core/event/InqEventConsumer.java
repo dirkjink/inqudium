@@ -11,14 +11,14 @@ package eu.inqudium.core.event;
 @FunctionalInterface
 public interface InqEventConsumer {
 
-  /**
-   * Called when an event is published.
-   *
-   * <p>Implementations must be thread-safe — events may be published from
-   * any thread depending on the paradigm. Implementations must not throw —
-   * exceptions are caught and logged but do not affect the element's operation.
-   *
-   * @param event the published event
-   */
-  void accept(InqEvent event);
+    /**
+     * Called when an event is published.
+     *
+     * <p>Implementations must be thread-safe — events may be published from
+     * any thread depending on the paradigm. Implementations must not throw —
+     * exceptions are caught and logged but do not affect the element's operation.
+     *
+     * @param event the published event
+     */
+    void accept(InqEvent event);
 }

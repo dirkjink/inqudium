@@ -3,6 +3,7 @@ package eu.inqudium.retry.event;
 import eu.inqudium.core.InqElementType;
 import eu.inqudium.core.event.InqEvent;
 
+import java.time.Duration;
 import java.time.Instant;
 
 /**
@@ -12,7 +13,7 @@ import java.time.Instant;
  */
 public abstract class RetryEvent extends InqEvent {
 
-  protected RetryEvent(String callId, String elementName, Instant timestamp) {
-    super(callId, elementName, InqElementType.RETRY, timestamp);
-  }
+    protected RetryEvent(String callId, String elementName, Instant timestamp) {
+        super(callId, elementName, InqElementType.RETRY, timestamp);
+    }
 }

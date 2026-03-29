@@ -12,7 +12,7 @@ import java.time.Instant;
  */
 public abstract class CircuitBreakerEvent extends InqEvent {
 
-  protected CircuitBreakerEvent(String callId, String elementName, Instant timestamp) {
-    super(callId, elementName, InqElementType.CIRCUIT_BREAKER, timestamp);
-  }
+    protected CircuitBreakerEvent(String callId, String elementName, Instant timestamp) {
+        super(callId, elementName, InqElementType.CIRCUIT_BREAKER, timestamp);
+    }
 }

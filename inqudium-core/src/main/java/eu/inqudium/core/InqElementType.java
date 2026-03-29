@@ -11,33 +11,21 @@ package eu.inqudium.core;
  */
 public enum InqElementType {
 
-  /**
-   * Circuit breaker — cascading failure shield (element symbol: Cb).
-   */
-  CIRCUIT_BREAKER,
+    /** Circuit breaker — cascading failure shield (element symbol: Cb). */
+    CIRCUIT_BREAKER,
 
-  /**
-   * Retry — configurable backoff on transient failures (element symbol: Rt).
-   */
-  RETRY,
+    /** Retry — configurable backoff on transient failures (element symbol: Rt). */
+    RETRY,
 
-  /**
-   * Rate limiter — throughput control via token bucket (element symbol: Rl).
-   */
-  RATE_LIMITER,
+    /** Rate limiter — throughput control via token bucket (element symbol: Rl). */
+    RATE_LIMITER,
 
-  /**
-   * Bulkhead — failure isolation via concurrency limiting (element symbol: Bh).
-   */
-  BULKHEAD,
+    /** Bulkhead — failure isolation via concurrency limiting (element symbol: Bh). */
+    BULKHEAD,
 
-  /**
-   * Time limiter — caller wait time bound, no thread interrupt (element symbol: Tl).
-   */
-  TIME_LIMITER,
+    /** Time limiter — caller wait time bound, no thread interrupt (element symbol: Tl). */
+    TIME_LIMITER,
 
-  /**
-   * Cache — response caching to reduce load (element symbol: Ca).
-   */
-  CACHE
+    /** Cache — response caching to reduce load (element symbol: Ca). */
+    CACHE
 }

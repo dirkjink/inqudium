@@ -35,152 +35,150 @@ import java.util.function.Supplier;
  */
 public final class InqPipeline {
 
-  private static final System.Logger LOGGER = System.getLogger(InqPipeline.class.getName());
+    private static final org.slf4j.Logger LOGGER = org.slf4j.LoggerFactory.getLogger(InqPipeline.class);
 
-  private InqPipeline() {
-  }
+    private InqPipeline() {}
 
-  /**
-   * Starts building a pipeline for the given supplier.
-   *
-   * @param supplier the operation to protect
-   * @param <T>      the result type
-   * @return a new pipeline builder
-   */
-  public static <T> Builder<T> of(Supplier<T> supplier) {
-    return new Builder<>(Objects.requireNonNull(supplier, "supplier must not be null"));
-  }
-
-  /**
-   * Pipeline builder that collects decorators and composes them.
-   *
-   * @param <T> the result type of the protected operation
-   */
-  public static final class Builder<T> {
-
-    private final Supplier<T> supplier;
-    private final List<InqDecorator> decorators = new ArrayList<>();
-    private PipelineOrder order = PipelineOrder.INQUDIUM;
-    private InqCallIdGenerator callIdGenerator = InqCallIdGenerator.uuid();
-
-    private Builder(Supplier<T> supplier) {
-      this.supplier = supplier;
+    /**
+     * Starts building a pipeline for the given supplier.
+     *
+     * @param supplier the operation to protect
+     * @param <T>      the result type
+     * @return a new pipeline builder
+     */
+    public static <T> Builder<T> of(Supplier<T> supplier) {
+        return new Builder<>(Objects.requireNonNull(supplier, "supplier must not be null"));
     }
 
     /**
-     * Adds a resilience element to the pipeline.
+     * Pipeline builder that collects decorators and composes them.
      *
-     * @param decorator the element's decorator
-     * @return this builder
+     * @param <T> the result type of the protected operation
      */
-    public Builder<T> shield(InqDecorator decorator) {
-      Objects.requireNonNull(decorator, "decorator must not be null");
-      decorators.add(decorator);
-      return this;
-    }
+    public static final class Builder<T> {
 
-    /**
-     * Sets the pipeline ordering strategy.
-     *
-     * @param order the ordering to use (default: {@link PipelineOrder#INQUDIUM})
-     * @return this builder
-     */
-    public Builder<T> order(PipelineOrder order) {
-      this.order = Objects.requireNonNull(order, "order must not be null");
-      return this;
-    }
+        private final Supplier<T> supplier;
+        private final List<InqDecorator> decorators = new ArrayList<>();
+        private PipelineOrder order = PipelineOrder.INQUDIUM;
+        private InqCallIdGenerator callIdGenerator = InqCallIdGenerator.uuid();
 
-    /**
-     * Sets the call ID generator for this pipeline.
-     *
-     * @param callIdGenerator the generator to use (default: UUID)
-     * @return this builder
-     */
-    public Builder<T> callIdGenerator(InqCallIdGenerator callIdGenerator) {
-      this.callIdGenerator = Objects.requireNonNull(callIdGenerator, "callIdGenerator must not be null");
-      return this;
-    }
-
-    /**
-     * Composes all elements into a single decorated supplier.
-     *
-     * <p>Elements are sorted according to the selected order. On each invocation,
-     * the pipeline generates a callId, wraps the supplier in an {@link InqCall},
-     * and passes it through the decoration chain. Context propagation is activated
-     * around the outermost call.
-     *
-     * @return the decorated supplier
-     */
-    public Supplier<T> decorate() {
-      var sorted = new ArrayList<>(decorators);
-      sorted.sort(Comparator.comparingInt(d -> order.positionOf(d.getElementType())));
-
-      validate(sorted);
-
-      // Capture sorted decorators for the lambda
-      var chain = List.copyOf(sorted);
-      final InqCallIdGenerator gen = callIdGenerator;
-      final Supplier<T> originalSupplier = supplier;
-
-      return () -> {
-        var callId = gen.generate();
-
-        // Build the InqCall chain: innermost decorator wraps the original supplier,
-        // outermost decorator wraps everything.
-        InqCall<T> call = InqCall.of(callId, originalSupplier);
-        for (int i = chain.size() - 1; i >= 0; i--) {
-          call = chain.get(i).decorate(call);
+        private Builder(Supplier<T> supplier) {
+            this.supplier = supplier;
         }
 
-        // Activate context propagation around the entire chain
-        final InqCall<T> outermost = call;
-        try (var ctxScope = InqContextPropagation.activateFor(
-            callId, "pipeline", InqElementType.CACHE)) {
-          return outermost.execute();
+        /**
+         * Adds a resilience element to the pipeline.
+         *
+         * @param decorator the element's decorator
+         * @return this builder
+         */
+        public Builder<T> shield(InqDecorator decorator) {
+            Objects.requireNonNull(decorator, "decorator must not be null");
+            decorators.add(decorator);
+            return this;
         }
-      };
-    }
 
-    private void validate(List<InqDecorator> sorted) {
-      int retryPos = -1;
-      int cbPos = -1;
-      int tlPos = -1;
-      int rlPos = -1;
-
-      for (int i = 0; i < sorted.size(); i++) {
-        switch (sorted.get(i).getElementType()) {
-          case RETRY -> retryPos = i;
-          case CIRCUIT_BREAKER -> cbPos = i;
-          case TIME_LIMITER -> tlPos = i;
-          case RATE_LIMITER -> rlPos = i;
-          default -> {
-          }
+        /**
+         * Sets the pipeline ordering strategy.
+         *
+         * @param order the ordering to use (default: {@link PipelineOrder#INQUDIUM})
+         * @return this builder
+         */
+        public Builder<T> order(PipelineOrder order) {
+            this.order = Objects.requireNonNull(order, "order must not be null");
+            return this;
         }
-      }
 
-      if (retryPos >= 0 && cbPos >= 0 && retryPos < cbPos) {
-        LOGGER.log(System.Logger.Level.WARNING,
-            "Pipeline warning: Retry '{0}' is outside CircuitBreaker '{1}'. " +
-                "Retry may attempt to retry against an open circuit breaker. " +
-                "Consider configuring Retry to not retry on InqCallNotPermittedException, " +
-                "or move Retry inside CircuitBreaker.",
-            sorted.get(retryPos).getName(), sorted.get(cbPos).getName());
-      }
+        /**
+         * Sets the call ID generator for this pipeline.
+         *
+         * @param callIdGenerator the generator to use (default: UUID)
+         * @return this builder
+         */
+        public Builder<T> callIdGenerator(InqCallIdGenerator callIdGenerator) {
+            this.callIdGenerator = Objects.requireNonNull(callIdGenerator, "callIdGenerator must not be null");
+            return this;
+        }
 
-      if (tlPos >= 0 && retryPos >= 0 && tlPos > retryPos) {
-        LOGGER.log(System.Logger.Level.WARNING,
-            "Pipeline warning: TimeLimiter '{0}' is inside Retry '{1}'. " +
-                "Each retry attempt gets a fresh timeout, but total caller wait time is unbounded.",
-            sorted.get(tlPos).getName(), sorted.get(retryPos).getName());
-      }
+        /**
+         * Composes all elements into a single decorated supplier.
+         *
+         * <p>Elements are sorted according to the selected order. On each invocation,
+         * the pipeline generates a callId, wraps the supplier in an {@link InqCall},
+         * and passes it through the decoration chain. Context propagation is activated
+         * around the outermost call.
+         *
+         * @return the decorated supplier
+         */
+        public Supplier<T> decorate() {
+            var sorted = new ArrayList<>(decorators);
+            sorted.sort(Comparator.comparingInt(d -> order.positionOf(d.getElementType())));
 
-      if (rlPos >= 0 && retryPos >= 0 && rlPos > retryPos) {
-        LOGGER.log(System.Logger.Level.WARNING,
-            "Pipeline warning: RateLimiter '{0}' is inside Retry '{1}'. " +
-                "Each retry attempt consumes a rate limit permit. " +
-                "Consider moving RateLimiter outside Retry.",
-            sorted.get(rlPos).getName(), sorted.get(retryPos).getName());
-      }
+            validate(sorted);
+
+            // Capture sorted decorators for the lambda
+            var chain = List.copyOf(sorted);
+            final InqCallIdGenerator gen = callIdGenerator;
+            final Supplier<T> originalSupplier = supplier;
+
+            return () -> {
+                var callId = gen.generate();
+
+                // Build the InqCall chain: innermost decorator wraps the original supplier,
+                // outermost decorator wraps everything.
+                InqCall<T> call = InqCall.of(callId, originalSupplier);
+                for (int i = chain.size() - 1; i >= 0; i--) {
+                    call = chain.get(i).decorate(call);
+                }
+
+                // Activate context propagation around the entire chain
+                final InqCall<T> outermost = call;
+                try (var ctxScope = InqContextPropagation.activateFor(
+                        callId, "pipeline", InqElementType.CACHE)) {
+                    return outermost.execute();
+                }
+            };
+        }
+
+        private void validate(List<InqDecorator> sorted) {
+            int retryPos = -1;
+            int cbPos = -1;
+            int tlPos = -1;
+            int rlPos = -1;
+
+            for (int i = 0; i < sorted.size(); i++) {
+                switch (sorted.get(i).getElementType()) {
+                    case RETRY -> retryPos = i;
+                    case CIRCUIT_BREAKER -> cbPos = i;
+                    case TIME_LIMITER -> tlPos = i;
+                    case RATE_LIMITER -> rlPos = i;
+                    default -> {}
+                }
+            }
+
+            if (retryPos >= 0 && cbPos >= 0 && retryPos < cbPos) {
+                LOGGER.warn(
+                        "Pipeline warning: Retry '{}' is outside CircuitBreaker '{}'. " +
+                        "Retry may attempt to retry against an open circuit breaker. " +
+                        "Consider configuring Retry to not retry on InqCallNotPermittedException, " +
+                        "or move Retry inside CircuitBreaker.",
+                        sorted.get(retryPos).getName(), sorted.get(cbPos).getName());
+            }
+
+            if (tlPos >= 0 && retryPos >= 0 && tlPos > retryPos) {
+                LOGGER.warn(
+                        "Pipeline warning: TimeLimiter '{}' is inside Retry '{}'. " +
+                        "Each retry attempt gets a fresh timeout, but total caller wait time is unbounded.",
+                        sorted.get(tlPos).getName(), sorted.get(retryPos).getName());
+            }
+
+            if (rlPos >= 0 && retryPos >= 0 && rlPos > retryPos) {
+                LOGGER.warn(
+                        "Pipeline warning: RateLimiter '{}' is inside Retry '{}'. " +
+                        "Each retry attempt consumes a rate limit permit. " +
+                        "Consider moving RateLimiter outside Retry.",
+                        sorted.get(rlPos).getName(), sorted.get(retryPos).getName());
+            }
+        }
     }
-  }
 }

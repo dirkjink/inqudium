@@ -12,11 +12,11 @@ import java.time.Duration;
  */
 public record PermitResult(boolean permitted, Duration waitDuration, TokenBucketState updatedState) {
 
-  public static PermitResult permitted(TokenBucketState state) {
-    return new PermitResult(true, Duration.ZERO, state);
-  }
+    public static PermitResult permitted(TokenBucketState state) {
+        return new PermitResult(true, Duration.ZERO, state);
+    }
 
-  public static PermitResult denied(Duration estimatedWait, TokenBucketState state) {
-    return new PermitResult(false, estimatedWait, state);
-  }
+    public static PermitResult denied(Duration estimatedWait, TokenBucketState state) {
+        return new PermitResult(false, estimatedWait, state);
+    }
 }

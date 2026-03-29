@@ -11,29 +11,25 @@ import java.time.Instant;
  */
 public class CircuitBreakerOnStateTransitionEvent extends CircuitBreakerEvent {
 
-  private final CircuitBreakerState fromState;
-  private final CircuitBreakerState toState;
+    private final CircuitBreakerState fromState;
+    private final CircuitBreakerState toState;
 
-  public CircuitBreakerOnStateTransitionEvent(String callId, String elementName,
-                                              CircuitBreakerState fromState,
-                                              CircuitBreakerState toState,
-                                              Instant timestamp) {
-    super(callId, elementName, timestamp);
-    this.fromState = fromState;
-    this.toState = toState;
-  }
+    public CircuitBreakerOnStateTransitionEvent(String callId, String elementName,
+                                                 CircuitBreakerState fromState,
+                                                 CircuitBreakerState toState,
+                                                 Instant timestamp) {
+        super(callId, elementName, timestamp);
+        this.fromState = fromState;
+        this.toState = toState;
+    }
 
-  /**
-   * Returns the state before the transition.
-   */
-  public CircuitBreakerState getFromState() {
-    return fromState;
-  }
+    /** Returns the state before the transition. */
+    public CircuitBreakerState getFromState() {
+        return fromState;
+    }
 
-  /**
-   * Returns the state after the transition.
-   */
-  public CircuitBreakerState getToState() {
-    return toState;
-  }
+    /** Returns the state after the transition. */
+    public CircuitBreakerState getToState() {
+        return toState;
+    }
 }

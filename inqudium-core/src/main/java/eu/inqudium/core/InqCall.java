@@ -36,47 +36,47 @@ import java.util.function.Supplier;
  */
 public record InqCall<T>(String callId, Supplier<T> supplier) {
 
-  public InqCall {
-    Objects.requireNonNull(callId, "callId must not be null");
-    Objects.requireNonNull(supplier, "supplier must not be null");
-  }
+    public InqCall {
+        Objects.requireNonNull(callId, "callId must not be null");
+        Objects.requireNonNull(supplier, "supplier must not be null");
+    }
 
-  /**
-   * Creates a new call with the given callId and supplier.
-   *
-   * @param callId   the call identifier
-   * @param supplier the operation
-   * @param <T>      the result type
-   * @return a new InqCall
-   */
-  public static <T> InqCall<T> of(String callId, Supplier<T> supplier) {
-    return new InqCall<>(callId, supplier);
-  }
+    /**
+     * Creates a new call with the given callId and supplier.
+     *
+     * @param callId   the call identifier
+     * @param supplier the operation
+     * @param <T>      the result type
+     * @return a new InqCall
+     */
+    public static <T> InqCall<T> of(String callId, Supplier<T> supplier) {
+        return new InqCall<>(callId, supplier);
+    }
 
-  /**
-   * Creates a new call with the same callId but a different supplier.
-   *
-   * <p>Used by decorators to wrap the supplier while preserving the callId:
-   * <pre>{@code
-   * return call.withSupplier(() -> {
-   *     acquirePermit(call.callId());
-   *     return call.supplier().get();
-   * });
-   * }</pre>
-   *
-   * @param newSupplier the decorated supplier
-   * @return a new InqCall with the same callId
-   */
-  public InqCall<T> withSupplier(Supplier<T> newSupplier) {
-    return new InqCall<>(this.callId, newSupplier);
-  }
+    /**
+     * Creates a new call with the same callId but a different supplier.
+     *
+     * <p>Used by decorators to wrap the supplier while preserving the callId:
+     * <pre>{@code
+     * return call.withSupplier(() -> {
+     *     acquirePermit(call.callId());
+     *     return call.supplier().get();
+     * });
+     * }</pre>
+     *
+     * @param newSupplier the decorated supplier
+     * @return a new InqCall with the same callId
+     */
+    public InqCall<T> withSupplier(Supplier<T> newSupplier) {
+        return new InqCall<>(this.callId, newSupplier);
+    }
 
-  /**
-   * Executes the supplier and returns the result.
-   *
-   * @return the result of the call
-   */
-  public T execute() {
-    return supplier.get();
-  }
+    /**
+     * Executes the supplier and returns the result.
+     *
+     * @return the result of the call
+     */
+    public T execute() {
+        return supplier.get();
+    }
 }

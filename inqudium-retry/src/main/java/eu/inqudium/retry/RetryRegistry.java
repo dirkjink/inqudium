@@ -16,49 +16,20 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public final class RetryRegistry implements InqRegistry<Retry, RetryConfig> {
 
-  private final RetryConfig defaultConfig;
-  private final ConcurrentHashMap<String, Retry> instances = new ConcurrentHashMap<>();
+    private final RetryConfig defaultConfig;
+    private final ConcurrentHashMap<String, Retry> instances = new ConcurrentHashMap<>();
 
-  public RetryRegistry(RetryConfig defaultConfig) {
-    this.defaultConfig = Objects.requireNonNull(defaultConfig);
-  }
+    public RetryRegistry(RetryConfig defaultConfig) {
+        this.defaultConfig = Objects.requireNonNull(defaultConfig);
+    }
 
-  public RetryRegistry() {
-    this(RetryConfig.ofDefaults());
-  }
+    public RetryRegistry() { this(RetryConfig.ofDefaults()); }
 
-  @Override
-  public Retry get(String name) {
-    return get(name, defaultConfig);
-  }
-
-  @Override
-  public Retry get(String name, RetryConfig config) {
-    return instances.computeIfAbsent(name, n -> Retry.of(n, config));
-  }
-
-  @Override
-  public void register(String name, RetryConfig config) {
-    instances.computeIfAbsent(name, n -> Retry.of(n, config));
-  }
-
-  @Override
-  public Optional<Retry> find(String name) {
-    return Optional.ofNullable(instances.get(name));
-  }
-
-  @Override
-  public Set<String> getAllNames() {
-    return Set.copyOf(instances.keySet());
-  }
-
-  @Override
-  public Map<String, Retry> getAll() {
-    return Map.copyOf(instances);
-  }
-
-  @Override
-  public RetryConfig getDefaultConfig() {
-    return defaultConfig;
-  }
+    @Override public Retry get(String name) { return get(name, defaultConfig); }
+    @Override public Retry get(String name, RetryConfig config) { return instances.computeIfAbsent(name, n -> Retry.of(n, config)); }
+    @Override public void register(String name, RetryConfig config) { instances.computeIfAbsent(name, n -> Retry.of(n, config)); }
+    @Override public Optional<Retry> find(String name) { return Optional.ofNullable(instances.get(name)); }
+    @Override public Set<String> getAllNames() { return Set.copyOf(instances.keySet()); }
+    @Override public Map<String, Retry> getAll() { return Map.copyOf(instances); }
+    @Override public RetryConfig getDefaultConfig() { return defaultConfig; }
 }

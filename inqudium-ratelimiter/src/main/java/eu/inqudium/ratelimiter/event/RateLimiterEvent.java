@@ -11,7 +11,7 @@ import java.time.Instant;
  * @since 0.1.0
  */
 public abstract class RateLimiterEvent extends InqEvent {
-  protected RateLimiterEvent(String callId, String elementName, Instant timestamp) {
-    super(callId, elementName, InqElementType.RATE_LIMITER, timestamp);
-  }
+    protected RateLimiterEvent(String callId, String elementName, Instant timestamp) {
+        super(callId, elementName, InqElementType.RATE_LIMITER, timestamp);
+    }
 }

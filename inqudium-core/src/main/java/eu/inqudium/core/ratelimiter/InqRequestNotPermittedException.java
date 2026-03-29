@@ -1,7 +1,8 @@
 package eu.inqudium.core.ratelimiter;
 
-import eu.inqudium.core.InqElementType;
 import eu.inqudium.core.exception.InqException;
+
+import eu.inqudium.core.InqElementType;
 
 import java.time.Duration;
 import java.util.Locale;
@@ -17,31 +18,29 @@ import java.util.Locale;
  */
 public class InqRequestNotPermittedException extends InqException {
 
-  /**
-   * Request denied — no permits available.
-   */
-  public static final String CODE = "INQ-RL-001";
+    /** Request denied — no permits available. */
+    public static final String CODE = "INQ-RL-001";
 
-  private final Duration waitEstimate;
+    private final Duration waitEstimate;
 
-  /**
-   * Creates a new exception indicating that the rate limiter denied the request.
-   *
-   * @param elementName  the rate limiter instance name
-   * @param waitEstimate estimated duration until the next permit becomes available
-   */
-  public InqRequestNotPermittedException(String elementName, Duration waitEstimate) {
-    super(CODE, elementName, InqElementType.RATE_LIMITER,
-        String.format(Locale.ROOT, "RateLimiter '%s' denied request (next permit in ~%dms)", elementName, waitEstimate.toMillis()));
-    this.waitEstimate = waitEstimate;
-  }
+    /**
+     * Creates a new exception indicating that the rate limiter denied the request.
+     *
+     * @param elementName  the rate limiter instance name
+     * @param waitEstimate estimated duration until the next permit becomes available
+     */
+    public InqRequestNotPermittedException(String elementName, Duration waitEstimate) {
+        super(CODE, elementName, InqElementType.RATE_LIMITER,
+                String.format(Locale.ROOT, "RateLimiter '%s' denied request (next permit in ~%dms)", elementName, waitEstimate.toMillis()));
+        this.waitEstimate = waitEstimate;
+    }
 
-  /**
-   * Returns the estimated wait time until the next permit.
-   *
-   * @return the estimated wait duration
-   */
-  public Duration getWaitEstimate() {
-    return waitEstimate;
-  }
+    /**
+     * Returns the estimated wait time until the next permit.
+     *
+     * @return the estimated wait duration
+     */
+    public Duration getWaitEstimate() {
+        return waitEstimate;
+    }
 }

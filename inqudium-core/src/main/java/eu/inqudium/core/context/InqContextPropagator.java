@@ -25,33 +25,33 @@ import eu.inqudium.core.InqElementType;
  */
 public interface InqContextPropagator {
 
-  /**
-   * Captures the current context from the calling thread/scope.
-   *
-   * @return an opaque snapshot that can be restored later on a different thread
-   */
-  InqContextSnapshot capture();
+    /**
+     * Captures the current context from the calling thread/scope.
+     *
+     * @return an opaque snapshot that can be restored later on a different thread
+     */
+    InqContextSnapshot capture();
 
-  /**
-   * Restores a previously captured snapshot on the current thread/scope.
-   *
-   * @param snapshot the snapshot to restore (from a previous {@link #capture()} call)
-   * @return a scope handle that must be closed to restore the previous context
-   */
-  InqContextScope restore(InqContextSnapshot snapshot);
+    /**
+     * Restores a previously captured snapshot on the current thread/scope.
+     *
+     * @param snapshot the snapshot to restore (from a previous {@link #capture()} call)
+     * @return a scope handle that must be closed to restore the previous context
+     */
+    InqContextScope restore(InqContextSnapshot snapshot);
 
-  /**
-   * Enriches the current context with Inqudium-specific entries.
-   *
-   * <p>Called after {@link #restore}, before the protected call executes.
-   * The default implementation is a no-op — propagators that support enrichment
-   * override this method.
-   *
-   * @param callId      the unique call identifier (ADR-003)
-   * @param elementName the current element name
-   * @param elementType the current element type
-   */
-  default void enrich(String callId, String elementName, InqElementType elementType) {
-    // no-op by default
-  }
+    /**
+     * Enriches the current context with Inqudium-specific entries.
+     *
+     * <p>Called after {@link #restore}, before the protected call executes.
+     * The default implementation is a no-op — propagators that support enrichment
+     * override this method.
+     *
+     * @param callId      the unique call identifier (ADR-003)
+     * @param elementName the current element name
+     * @param elementType the current element type
+     */
+    default void enrich(String callId, String elementName, InqElementType elementType) {
+        // no-op by default
+    }
 }

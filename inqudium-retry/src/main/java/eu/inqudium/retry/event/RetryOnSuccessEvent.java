@@ -9,17 +9,13 @@ import java.time.Instant;
  */
 public class RetryOnSuccessEvent extends RetryEvent {
 
-  private final int attemptNumber;
+    private final int attemptNumber;
 
-  public RetryOnSuccessEvent(String callId, String elementName, int attemptNumber, Instant timestamp) {
-    super(callId, elementName, timestamp);
-    this.attemptNumber = attemptNumber;
-  }
+    public RetryOnSuccessEvent(String callId, String elementName, int attemptNumber, Instant timestamp) {
+        super(callId, elementName, timestamp);
+        this.attemptNumber = attemptNumber;
+    }
 
-  /**
-   * Returns the attempt number on which the call succeeded (1 = first attempt).
-   */
-  public int getAttemptNumber() {
-    return attemptNumber;
-  }
+    /** Returns the attempt number on which the call succeeded (1 = first attempt). */
+    public int getAttemptNumber() { return attemptNumber; }
 }

@@ -10,18 +10,16 @@ import java.time.Instant;
  */
 public class CircuitBreakerOnSuccessEvent extends CircuitBreakerEvent {
 
-  private final Duration duration;
+    private final Duration duration;
 
-  public CircuitBreakerOnSuccessEvent(String callId, String elementName,
-                                      Duration duration, Instant timestamp) {
-    super(callId, elementName, timestamp);
-    this.duration = duration;
-  }
+    public CircuitBreakerOnSuccessEvent(String callId, String elementName,
+                                        Duration duration, Instant timestamp) {
+        super(callId, elementName, timestamp);
+        this.duration = duration;
+    }
 
-  /**
-   * Returns the call duration.
-   */
-  public Duration getDuration() {
-    return duration;
-  }
+    /** Returns the call duration. */
+    public Duration getDuration() {
+        return duration;
+    }
 }

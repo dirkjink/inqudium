@@ -10,27 +10,23 @@ import java.time.Instant;
  */
 public class CircuitBreakerOnErrorEvent extends CircuitBreakerEvent {
 
-  private final Duration duration;
-  private final Throwable throwable;
+    private final Duration duration;
+    private final Throwable throwable;
 
-  public CircuitBreakerOnErrorEvent(String callId, String elementName,
-                                    Duration duration, Throwable throwable, Instant timestamp) {
-    super(callId, elementName, timestamp);
-    this.duration = duration;
-    this.throwable = throwable;
-  }
+    public CircuitBreakerOnErrorEvent(String callId, String elementName,
+                                      Duration duration, Throwable throwable, Instant timestamp) {
+        super(callId, elementName, timestamp);
+        this.duration = duration;
+        this.throwable = throwable;
+    }
 
-  /**
-   * Returns the call duration.
-   */
-  public Duration getDuration() {
-    return duration;
-  }
+    /** Returns the call duration. */
+    public Duration getDuration() {
+        return duration;
+    }
 
-  /**
-   * Returns the exception that caused the failure.
-   */
-  public Throwable getThrowable() {
-    return throwable;
-  }
+    /** Returns the exception that caused the failure. */
+    public Throwable getThrowable() {
+        return throwable;
+    }
 }

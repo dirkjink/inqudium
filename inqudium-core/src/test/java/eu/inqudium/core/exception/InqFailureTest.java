@@ -23,385 +23,385 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 @DisplayName("InqFailure")
 class InqFailureTest {
 
-  @Nested
-  @DisplayName("Finding InqException in direct exceptions")
-  class DirectExceptions {
+    @Nested
+    @DisplayName("Finding InqException in direct exceptions")
+    class DirectExceptions {
 
-    @Test
-    void should_find_a_direct_circuit_breaker_exception() {
-      // Given
-      var exception = new InqCallNotPermittedException("paymentService", CircuitBreakerState.OPEN, 75.0f);
+        @Test
+        void should_find_a_direct_circuit_breaker_exception() {
+            // Given
+            var exception = new InqCallNotPermittedException("paymentService", CircuitBreakerState.OPEN, 75.0f);
 
-      // When
-      var result = InqFailure.find(exception);
+            // When
+            var result = InqFailure.find(exception);
 
-      // Then
-      assertThat(result.isPresent()).isTrue();
-      assertThat(result.get()).isPresent().containsInstanceOf(InqCallNotPermittedException.class);
+            // Then
+            assertThat(result.isPresent()).isTrue();
+            assertThat(result.get()).isPresent().containsInstanceOf(InqCallNotPermittedException.class);
+        }
+
+        @Test
+        void should_find_a_direct_bulkhead_exception() {
+            // Given
+            var exception = new InqBulkheadFullException("orderService", 25, 25);
+
+            // When
+            var result = InqFailure.find(exception);
+
+            // Then
+            assertThat(result.isPresent()).isTrue();
+            assertThat(result.get()).isPresent().containsInstanceOf(InqBulkheadFullException.class);
+        }
+
+        @Test
+        void should_return_empty_for_non_inqudium_exceptions() {
+            // Given
+            var exception = new IllegalStateException("something went wrong");
+
+            // When
+            var result = InqFailure.find(exception);
+
+            // Then
+            assertThat(result.isPresent()).isFalse();
+            assertThat(result.get()).isEmpty();
+        }
+
+        @Test
+        void should_return_empty_for_null_input() {
+            // When
+            var result = InqFailure.find(null);
+
+            // Then
+            assertThat(result.isPresent()).isFalse();
+        }
     }
 
-    @Test
-    void should_find_a_direct_bulkhead_exception() {
-      // Given
-      var exception = new InqBulkheadFullException("orderService", 25, 25);
+    @Nested
+    @DisplayName("Finding InqException buried in cause chains")
+    class CauseChainTraversal {
 
-      // When
-      var result = InqFailure.find(exception);
+        @Test
+        void should_find_exception_wrapped_in_execution_exception() {
+            // Given — simulates Future.get() wrapping
+            var inqException = new InqCallNotPermittedException("paymentService", CircuitBreakerState.OPEN, 60.0f);
+            var wrapped = new ExecutionException(inqException);
 
-      // Then
-      assertThat(result.isPresent()).isTrue();
-      assertThat(result.get()).isPresent().containsInstanceOf(InqBulkheadFullException.class);
+            // When
+            var result = InqFailure.find(wrapped);
+
+            // Then
+            assertThat(result.isPresent()).isTrue();
+            assertThat(result.get()).containsInstanceOf(InqCallNotPermittedException.class);
+        }
+
+        @Test
+        void should_find_exception_wrapped_in_invocation_target_exception() {
+            // Given — simulates JDK proxy wrapping
+            var inqException = new InqRequestNotPermittedException("apiGateway", Duration.ofMillis(500));
+            var wrapped = new InvocationTargetException(inqException);
+
+            // When
+            var result = InqFailure.find(wrapped);
+
+            // Then
+            assertThat(result.isPresent()).isTrue();
+            assertThat(result.get()).containsInstanceOf(InqRequestNotPermittedException.class);
+        }
+
+        @Test
+        void should_find_exception_through_triple_wrapping() {
+            // Given — simulates Spring AOP → JDK Proxy → Future.get() chain
+            var inqException = new InqTimeLimitExceededException("paymentService", Duration.ofSeconds(3), Duration.ofMillis(3002));
+            var level1 = new ExecutionException(inqException);
+            var level2 = new InvocationTargetException(level1);
+            var level3 = new UndeclaredThrowableException(level2);
+
+            // When
+            var result = InqFailure.find(level3);
+
+            // Then
+            assertThat(result.isPresent()).isTrue();
+            assertThat(result.get()).containsInstanceOf(InqTimeLimitExceededException.class);
+        }
+
+        @Test
+        void should_return_empty_when_cause_chain_contains_no_inq_exception() {
+            // Given
+            var root = new IllegalStateException("root");
+            var mid = new RuntimeException("mid", root);
+            var top = new ExecutionException(mid);
+
+            // When
+            var result = InqFailure.find(top);
+
+            // Then
+            assertThat(result.isPresent()).isFalse();
+        }
     }
 
-    @Test
-    void should_return_empty_for_non_inqudium_exceptions() {
-      // Given
-      var exception = new IllegalStateException("something went wrong");
+    @Nested
+    @DisplayName("Circular cause chain handling")
+    class CircularCauseChain {
 
-      // When
-      var result = InqFailure.find(exception);
+        @Test
+        void should_not_loop_infinitely_on_circular_cause_references() {
+            // Given — a pathological cause chain with a cycle
+            var ex1 = new RuntimeException("a");
+            var ex2 = new RuntimeException("b", ex1);
+            try {
+                // Use reflection to create a circular cause chain
+                var causeField = Throwable.class.getDeclaredField("cause");
+                causeField.setAccessible(true);
+                causeField.set(ex1, ex2);
+            } catch (Exception e) {
+                // If reflection fails, skip — the test still validates the non-cycle path
+                return;
+            }
 
-      // Then
-      assertThat(result.isPresent()).isFalse();
-      assertThat(result.get()).isEmpty();
+            // When — should terminate without StackOverflowError
+            var result = InqFailure.find(ex1);
+
+            // Then
+            assertThat(result.isPresent()).isFalse();
+        }
     }
 
-    @Test
-    void should_return_empty_for_null_input() {
-      // When
-      var result = InqFailure.find(null);
+    @Nested
+    @DisplayName("Fluent handler API")
+    class FluentHandlerApi {
 
-      // Then
-      assertThat(result.isPresent()).isFalse();
-    }
-  }
+        @Test
+        void should_invoke_circuit_breaker_open_handler() {
+            // Given
+            var exception = new InqCallNotPermittedException("paymentService", CircuitBreakerState.OPEN, 80.0f);
+            var handlerCalled = new AtomicReference<String>();
 
-  @Nested
-  @DisplayName("Finding InqException buried in cause chains")
-  class CauseChainTraversal {
+            // When
+            InqFailure.find(exception)
+                    .ifCircuitBreakerOpen(ex -> handlerCalled.set(ex.getElementName()));
 
-    @Test
-    void should_find_exception_wrapped_in_execution_exception() {
-      // Given — simulates Future.get() wrapping
-      var inqException = new InqCallNotPermittedException("paymentService", CircuitBreakerState.OPEN, 60.0f);
-      var wrapped = new ExecutionException(inqException);
+            // Then
+            assertThat(handlerCalled.get()).isEqualTo("paymentService");
+        }
 
-      // When
-      var result = InqFailure.find(wrapped);
+        @Test
+        void should_invoke_retry_exhausted_handler() {
+            // Given
+            var cause = new RuntimeException("connection refused");
+            var exception = new InqRetryExhaustedException("orderService", 3, cause);
+            var attemptCount = new AtomicReference<Integer>();
 
-      // Then
-      assertThat(result.isPresent()).isTrue();
-      assertThat(result.get()).containsInstanceOf(InqCallNotPermittedException.class);
-    }
+            // When
+            InqFailure.find(exception)
+                    .ifRetryExhausted(ex -> attemptCount.set(ex.getAttempts()));
 
-    @Test
-    void should_find_exception_wrapped_in_invocation_target_exception() {
-      // Given — simulates JDK proxy wrapping
-      var inqException = new InqRequestNotPermittedException("apiGateway", Duration.ofMillis(500));
-      var wrapped = new InvocationTargetException(inqException);
+            // Then
+            assertThat(attemptCount.get()).isEqualTo(3);
+        }
 
-      // When
-      var result = InqFailure.find(wrapped);
+        @Test
+        void should_invoke_only_the_matching_handler() {
+            // Given
+            var exception = new InqBulkheadFullException("orderService", 25, 25);
+            var cbCalled = new AtomicReference<>(false);
+            var bhCalled = new AtomicReference<>(false);
 
-      // Then
-      assertThat(result.isPresent()).isTrue();
-      assertThat(result.get()).containsInstanceOf(InqRequestNotPermittedException.class);
-    }
+            // When
+            InqFailure.find(exception)
+                    .ifCircuitBreakerOpen(ex -> cbCalled.set(true))
+                    .ifBulkheadFull(ex -> bhCalled.set(true));
 
-    @Test
-    void should_find_exception_through_triple_wrapping() {
-      // Given — simulates Spring AOP → JDK Proxy → Future.get() chain
-      var inqException = new InqTimeLimitExceededException("paymentService", Duration.ofSeconds(3), Duration.ofMillis(3002));
-      var level1 = new ExecutionException(inqException);
-      var level2 = new InvocationTargetException(level1);
-      var level3 = new UndeclaredThrowableException(level2);
+            // Then
+            assertThat(cbCalled.get()).isFalse();
+            assertThat(bhCalled.get()).isTrue();
+        }
 
-      // When
-      var result = InqFailure.find(level3);
+        @Test
+        void should_invoke_time_limit_exceeded_handler_with_duration_context() {
+            // Given
+            var exception = new InqTimeLimitExceededException("paymentService",
+                    Duration.ofSeconds(3), Duration.ofMillis(3150));
+            var configuredRef = new AtomicReference<Duration>();
+            var actualRef = new AtomicReference<Duration>();
 
-      // Then
-      assertThat(result.isPresent()).isTrue();
-      assertThat(result.get()).containsInstanceOf(InqTimeLimitExceededException.class);
-    }
+            // When
+            InqFailure.find(exception)
+                    .ifTimeLimitExceeded(ex -> {
+                        configuredRef.set(ex.getConfiguredDuration());
+                        actualRef.set(ex.getActualDuration());
+                    });
 
-    @Test
-    void should_return_empty_when_cause_chain_contains_no_inq_exception() {
-      // Given
-      var root = new IllegalStateException("root");
-      var mid = new RuntimeException("mid", root);
-      var top = new ExecutionException(mid);
+            // Then
+            assertThat(configuredRef.get()).isEqualTo(Duration.ofSeconds(3));
+            assertThat(actualRef.get()).isEqualTo(Duration.ofMillis(3150));
+        }
 
-      // When
-      var result = InqFailure.find(top);
+        @Test
+        void should_invoke_rate_limited_handler_with_wait_estimate() {
+            // Given
+            var exception = new InqRequestNotPermittedException("apiService", Duration.ofMillis(250));
+            var waitRef = new AtomicReference<Duration>();
 
-      // Then
-      assertThat(result.isPresent()).isFalse();
-    }
-  }
+            // When
+            InqFailure.find(exception)
+                    .ifRateLimited(ex -> waitRef.set(ex.getWaitEstimate()));
 
-  @Nested
-  @DisplayName("Circular cause chain handling")
-  class CircularCauseChain {
-
-    @Test
-    void should_not_loop_infinitely_on_circular_cause_references() {
-      // Given — a pathological cause chain with a cycle
-      var ex1 = new RuntimeException("a");
-      var ex2 = new RuntimeException("b", ex1);
-      try {
-        // Use reflection to create a circular cause chain
-        var causeField = Throwable.class.getDeclaredField("cause");
-        causeField.setAccessible(true);
-        causeField.set(ex1, ex2);
-      } catch (Exception e) {
-        // If reflection fails, skip — the test still validates the non-cycle path
-        return;
-      }
-
-      // When — should terminate without StackOverflowError
-      var result = InqFailure.find(ex1);
-
-      // Then
-      assertThat(result.isPresent()).isFalse();
-    }
-  }
-
-  @Nested
-  @DisplayName("Fluent handler API")
-  class FluentHandlerApi {
-
-    @Test
-    void should_invoke_circuit_breaker_open_handler() {
-      // Given
-      var exception = new InqCallNotPermittedException("paymentService", CircuitBreakerState.OPEN, 80.0f);
-      var handlerCalled = new AtomicReference<String>();
-
-      // When
-      InqFailure.find(exception)
-          .ifCircuitBreakerOpen(ex -> handlerCalled.set(ex.getElementName()));
-
-      // Then
-      assertThat(handlerCalled.get()).isEqualTo("paymentService");
+            // Then
+            assertThat(waitRef.get()).isEqualTo(Duration.ofMillis(250));
+        }
     }
 
-    @Test
-    void should_invoke_retry_exhausted_handler() {
-      // Given
-      var cause = new RuntimeException("connection refused");
-      var exception = new InqRetryExhaustedException("orderService", 3, cause);
-      var attemptCount = new AtomicReference<Integer>();
+    @Nested
+    @DisplayName("orElseThrow behavior")
+    class OrElseThrow {
 
-      // When
-      InqFailure.find(exception)
-          .ifRetryExhausted(ex -> attemptCount.set(ex.getAttempts()));
+        @Test
+        void should_rethrow_original_exception_when_no_inq_exception_found() {
+            // Given
+            var original = new IllegalArgumentException("bad input");
 
-      // Then
-      assertThat(attemptCount.get()).isEqualTo(3);
+            // When / Then
+            assertThatThrownBy(() ->
+                    InqFailure.find(original).orElseThrow()
+            ).isInstanceOf(IllegalArgumentException.class)
+                    .hasMessage("bad input");
+        }
+
+        @Test
+        void should_not_rethrow_when_a_handler_matched() {
+            // Given
+            var exception = new InqCallNotPermittedException("test", CircuitBreakerState.OPEN, 50.0f);
+
+            // When / Then — should not throw
+            InqFailure.find(exception)
+                    .ifCircuitBreakerOpen(ex -> { /* handled */ })
+                    .orElseThrow();
+        }
+
+        @Test
+        void should_rethrow_when_no_handler_matched_even_if_inq_exception_present() {
+            // Given — bulkhead exception, but only circuit breaker handler registered
+            var exception = new InqBulkheadFullException("test", 10, 10);
+
+            // When / Then
+            assertThatThrownBy(() ->
+                    InqFailure.find(exception)
+                            .ifCircuitBreakerOpen(ex -> { /* not matching */ })
+                            .orElseThrow()
+            ).isInstanceOf(InqBulkheadFullException.class);
+        }
     }
 
-    @Test
-    void should_invoke_only_the_matching_handler() {
-      // Given
-      var exception = new InqBulkheadFullException("orderService", 25, 25);
-      var cbCalled = new AtomicReference<>(false);
-      var bhCalled = new AtomicReference<>(false);
+    @Nested
+    @DisplayName("Exception context fields")
+    class ExceptionContextFields {
 
-      // When
-      InqFailure.find(exception)
-          .ifCircuitBreakerOpen(ex -> cbCalled.set(true))
-          .ifBulkheadFull(ex -> bhCalled.set(true));
+        @Test
+        void should_carry_element_name_and_type_on_all_exception_types() {
+            // Given / When / Then
+            var cb = new InqCallNotPermittedException("svc1", CircuitBreakerState.OPEN, 50f);
+            assertThat(cb.getElementName()).isEqualTo("svc1");
+            assertThat(cb.getElementType()).isEqualTo(InqElementType.CIRCUIT_BREAKER);
 
-      // Then
-      assertThat(cbCalled.get()).isFalse();
-      assertThat(bhCalled.get()).isTrue();
+            var rl = new InqRequestNotPermittedException("svc2", Duration.ofMillis(100));
+            assertThat(rl.getElementName()).isEqualTo("svc2");
+            assertThat(rl.getElementType()).isEqualTo(InqElementType.RATE_LIMITER);
+
+            var bh = new InqBulkheadFullException("svc3", 10, 10);
+            assertThat(bh.getElementName()).isEqualTo("svc3");
+            assertThat(bh.getElementType()).isEqualTo(InqElementType.BULKHEAD);
+
+            var tl = new InqTimeLimitExceededException("svc4", Duration.ofSeconds(3), Duration.ofMillis(3100));
+            assertThat(tl.getElementName()).isEqualTo("svc4");
+            assertThat(tl.getElementType()).isEqualTo(InqElementType.TIME_LIMITER);
+
+            var rt = new InqRetryExhaustedException("svc5", 3, new RuntimeException("fail"));
+            assertThat(rt.getElementName()).isEqualTo("svc5");
+            assertThat(rt.getElementType()).isEqualTo(InqElementType.RETRY);
+        }
+
+        @Test
+        void should_carry_last_cause_on_retry_exhausted_exception() {
+            // Given
+            var lastCause = new java.net.ConnectException("Connection refused");
+            var exception = new InqRetryExhaustedException("paymentService", 3, lastCause);
+
+            // When / Then
+            assertThat(exception.getLastCause()).isSameAs(lastCause);
+            assertThat(exception.getCause()).isSameAs(lastCause);
+            assertThat(exception.getAttempts()).isEqualTo(3);
+        }
+
+        @Test
+        void should_produce_readable_messages() {
+            // Given / When / Then
+            assertThat(new InqCallNotPermittedException("payment", CircuitBreakerState.OPEN, 75.5f).getMessage())
+                    .contains("INQ-CB-001", "payment", "OPEN", "75.5%");
+
+            assertThat(new InqBulkheadFullException("order", 25, 25).getMessage())
+                    .contains("INQ-BH-001", "order", "25/25");
+
+            assertThat(new InqRetryExhaustedException("inventory", 3, new RuntimeException()).getMessage())
+                    .contains("INQ-RT-001", "inventory", "3 attempts");
+        }
     }
 
-    @Test
-    void should_invoke_time_limit_exceeded_handler_with_duration_context() {
-      // Given
-      var exception = new InqTimeLimitExceededException("paymentService",
-          Duration.ofSeconds(3), Duration.ofMillis(3150));
-      var configuredRef = new AtomicReference<Duration>();
-      var actualRef = new AtomicReference<Duration>();
+    @Nested
+    @DisplayName("Error codes (ADR-021)")
+    class ErrorCodes {
 
-      // When
-      InqFailure.find(exception)
-          .ifTimeLimitExceeded(ex -> {
-            configuredRef.set(ex.getConfiguredDuration());
-            actualRef.set(ex.getActualDuration());
-          });
+        @Test
+        void should_carry_the_correct_error_code_on_each_exception_type() {
+            // Given / When / Then
+            assertThat(new InqCallNotPermittedException("svc", CircuitBreakerState.OPEN, 50f).getCode())
+                    .isEqualTo("INQ-CB-001");
+            assertThat(new InqRequestNotPermittedException("svc", Duration.ofMillis(100)).getCode())
+                    .isEqualTo("INQ-RL-001");
+            assertThat(new InqBulkheadFullException("svc", 10, 10).getCode())
+                    .isEqualTo("INQ-BH-001");
+            assertThat(new InqTimeLimitExceededException("svc", Duration.ofSeconds(3), Duration.ofMillis(3100)).getCode())
+                    .isEqualTo("INQ-TL-001");
+            assertThat(new InqRetryExhaustedException("svc", 3, new RuntimeException()).getCode())
+                    .isEqualTo("INQ-RT-001");
+        }
 
-      // Then
-      assertThat(configuredRef.get()).isEqualTo(Duration.ofSeconds(3));
-      assertThat(actualRef.get()).isEqualTo(Duration.ofMillis(3150));
+        @Test
+        void should_prepend_error_code_to_message() {
+            // Given
+            var exception = new InqCallNotPermittedException("payment", CircuitBreakerState.OPEN, 80.0f);
+
+            // When
+            var message = exception.getMessage();
+
+            // Then — message starts with the code
+            assertThat(message).startsWith("INQ-CB-001: ");
+        }
+
+        @Test
+        void should_follow_the_inq_xx_nnn_format() {
+            // Given
+            var codes = new String[]{
+                    InqCallNotPermittedException.CODE,
+                    InqRequestNotPermittedException.CODE,
+                    InqBulkheadFullException.CODE,
+                    InqTimeLimitExceededException.CODE,
+                    InqRetryExhaustedException.CODE
+            };
+
+            // When / Then — all match INQ-XX-NNN pattern
+            for (var code : codes) {
+                assertThat(code).matches("INQ-[A-Z]{2}-\\d{3}");
+            }
+        }
+
+        @Test
+        void should_expose_code_as_public_static_constant() {
+            // Given / When / Then — constants accessible without instantiation
+            assertThat(InqCallNotPermittedException.CODE).isNotBlank();
+            assertThat(InqRequestNotPermittedException.CODE).isNotBlank();
+            assertThat(InqBulkheadFullException.CODE).isNotBlank();
+            assertThat(InqTimeLimitExceededException.CODE).isNotBlank();
+            assertThat(InqRetryExhaustedException.CODE).isNotBlank();
+        }
     }
-
-    @Test
-    void should_invoke_rate_limited_handler_with_wait_estimate() {
-      // Given
-      var exception = new InqRequestNotPermittedException("apiService", Duration.ofMillis(250));
-      var waitRef = new AtomicReference<Duration>();
-
-      // When
-      InqFailure.find(exception)
-          .ifRateLimited(ex -> waitRef.set(ex.getWaitEstimate()));
-
-      // Then
-      assertThat(waitRef.get()).isEqualTo(Duration.ofMillis(250));
-    }
-  }
-
-  @Nested
-  @DisplayName("orElseThrow behavior")
-  class OrElseThrow {
-
-    @Test
-    void should_rethrow_original_exception_when_no_inq_exception_found() {
-      // Given
-      var original = new IllegalArgumentException("bad input");
-
-      // When / Then
-      assertThatThrownBy(() ->
-          InqFailure.find(original).orElseThrow()
-      ).isInstanceOf(IllegalArgumentException.class)
-          .hasMessage("bad input");
-    }
-
-    @Test
-    void should_not_rethrow_when_a_handler_matched() {
-      // Given
-      var exception = new InqCallNotPermittedException("test", CircuitBreakerState.OPEN, 50.0f);
-
-      // When / Then — should not throw
-      InqFailure.find(exception)
-          .ifCircuitBreakerOpen(ex -> { /* handled */ })
-          .orElseThrow();
-    }
-
-    @Test
-    void should_rethrow_when_no_handler_matched_even_if_inq_exception_present() {
-      // Given — bulkhead exception, but only circuit breaker handler registered
-      var exception = new InqBulkheadFullException("test", 10, 10);
-
-      // When / Then
-      assertThatThrownBy(() ->
-          InqFailure.find(exception)
-              .ifCircuitBreakerOpen(ex -> { /* not matching */ })
-              .orElseThrow()
-      ).isInstanceOf(InqBulkheadFullException.class);
-    }
-  }
-
-  @Nested
-  @DisplayName("Exception context fields")
-  class ExceptionContextFields {
-
-    @Test
-    void should_carry_element_name_and_type_on_all_exception_types() {
-      // Given / When / Then
-      var cb = new InqCallNotPermittedException("svc1", CircuitBreakerState.OPEN, 50f);
-      assertThat(cb.getElementName()).isEqualTo("svc1");
-      assertThat(cb.getElementType()).isEqualTo(InqElementType.CIRCUIT_BREAKER);
-
-      var rl = new InqRequestNotPermittedException("svc2", Duration.ofMillis(100));
-      assertThat(rl.getElementName()).isEqualTo("svc2");
-      assertThat(rl.getElementType()).isEqualTo(InqElementType.RATE_LIMITER);
-
-      var bh = new InqBulkheadFullException("svc3", 10, 10);
-      assertThat(bh.getElementName()).isEqualTo("svc3");
-      assertThat(bh.getElementType()).isEqualTo(InqElementType.BULKHEAD);
-
-      var tl = new InqTimeLimitExceededException("svc4", Duration.ofSeconds(3), Duration.ofMillis(3100));
-      assertThat(tl.getElementName()).isEqualTo("svc4");
-      assertThat(tl.getElementType()).isEqualTo(InqElementType.TIME_LIMITER);
-
-      var rt = new InqRetryExhaustedException("svc5", 3, new RuntimeException("fail"));
-      assertThat(rt.getElementName()).isEqualTo("svc5");
-      assertThat(rt.getElementType()).isEqualTo(InqElementType.RETRY);
-    }
-
-    @Test
-    void should_carry_last_cause_on_retry_exhausted_exception() {
-      // Given
-      var lastCause = new java.net.ConnectException("Connection refused");
-      var exception = new InqRetryExhaustedException("paymentService", 3, lastCause);
-
-      // When / Then
-      assertThat(exception.getLastCause()).isSameAs(lastCause);
-      assertThat(exception.getCause()).isSameAs(lastCause);
-      assertThat(exception.getAttempts()).isEqualTo(3);
-    }
-
-    @Test
-    void should_produce_readable_messages() {
-      // Given / When / Then
-      assertThat(new InqCallNotPermittedException("payment", CircuitBreakerState.OPEN, 75.5f).getMessage())
-          .contains("INQ-CB-001", "payment", "OPEN", "75.5%");
-
-      assertThat(new InqBulkheadFullException("order", 25, 25).getMessage())
-          .contains("INQ-BH-001", "order", "25/25");
-
-      assertThat(new InqRetryExhaustedException("inventory", 3, new RuntimeException()).getMessage())
-          .contains("INQ-RT-001", "inventory", "3 attempts");
-    }
-  }
-
-  @Nested
-  @DisplayName("Error codes (ADR-021)")
-  class ErrorCodes {
-
-    @Test
-    void should_carry_the_correct_error_code_on_each_exception_type() {
-      // Given / When / Then
-      assertThat(new InqCallNotPermittedException("svc", CircuitBreakerState.OPEN, 50f).getCode())
-          .isEqualTo("INQ-CB-001");
-      assertThat(new InqRequestNotPermittedException("svc", Duration.ofMillis(100)).getCode())
-          .isEqualTo("INQ-RL-001");
-      assertThat(new InqBulkheadFullException("svc", 10, 10).getCode())
-          .isEqualTo("INQ-BH-001");
-      assertThat(new InqTimeLimitExceededException("svc", Duration.ofSeconds(3), Duration.ofMillis(3100)).getCode())
-          .isEqualTo("INQ-TL-001");
-      assertThat(new InqRetryExhaustedException("svc", 3, new RuntimeException()).getCode())
-          .isEqualTo("INQ-RT-001");
-    }
-
-    @Test
-    void should_prepend_error_code_to_message() {
-      // Given
-      var exception = new InqCallNotPermittedException("payment", CircuitBreakerState.OPEN, 80.0f);
-
-      // When
-      var message = exception.getMessage();
-
-      // Then — message starts with the code
-      assertThat(message).startsWith("INQ-CB-001: ");
-    }
-
-    @Test
-    void should_follow_the_inq_xx_nnn_format() {
-      // Given
-      var codes = new String[]{
-          InqCallNotPermittedException.CODE,
-          InqRequestNotPermittedException.CODE,
-          InqBulkheadFullException.CODE,
-          InqTimeLimitExceededException.CODE,
-          InqRetryExhaustedException.CODE
-      };
-
-      // When / Then — all match INQ-XX-NNN pattern
-      for (var code : codes) {
-        assertThat(code).matches("INQ-[A-Z]{2}-\\d{3}");
-      }
-    }
-
-    @Test
-    void should_expose_code_as_public_static_constant() {
-      // Given / When / Then — constants accessible without instantiation
-      assertThat(InqCallNotPermittedException.CODE).isNotBlank();
-      assertThat(InqRequestNotPermittedException.CODE).isNotBlank();
-      assertThat(InqBulkheadFullException.CODE).isNotBlank();
-      assertThat(InqTimeLimitExceededException.CODE).isNotBlank();
-      assertThat(InqRetryExhaustedException.CODE).isNotBlank();
-    }
-  }
 }

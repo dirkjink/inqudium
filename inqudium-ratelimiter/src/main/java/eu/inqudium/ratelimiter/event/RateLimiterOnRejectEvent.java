@@ -9,14 +9,12 @@ import java.time.Instant;
  * @since 0.1.0
  */
 public class RateLimiterOnRejectEvent extends RateLimiterEvent {
-  private final Duration waitEstimate;
+    private final Duration waitEstimate;
 
-  public RateLimiterOnRejectEvent(String callId, String elementName, Duration waitEstimate, Instant timestamp) {
-    super(callId, elementName, timestamp);
-    this.waitEstimate = waitEstimate;
-  }
+    public RateLimiterOnRejectEvent(String callId, String elementName, Duration waitEstimate, Instant timestamp) {
+        super(callId, elementName, timestamp);
+        this.waitEstimate = waitEstimate;
+    }
 
-  public Duration getWaitEstimate() {
-    return waitEstimate;
-  }
+    public Duration getWaitEstimate() { return waitEstimate; }
 }
