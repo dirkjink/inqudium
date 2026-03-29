@@ -207,7 +207,7 @@ class CircuitBreakerUsageTest {
     }
 
     @Test
-    void should_reject_invocation_when_circuit_is_open() {
+    void should_reject_invocation_when_circuit_is_open() throws Exception {
       // Given
       var service = new PaymentService();
       var cb = CircuitBreaker.ofDefaults("paymentService");
@@ -282,7 +282,7 @@ class CircuitBreakerUsageTest {
 
       // Then
       assertThat(info.decorators()).hasSize(1);
-      assertThat(info.decorators().getFirst()).isSameAs(cb);
+      assertThat(info.decorators().get(0)).isSameAs(cb);
       assertThat(info.interfaceType()).isNull();
       assertThat(info.target()).isNull();
       assertThat(info.toChainDescription()).contains("CIRCUIT_BREAKER", "paymentService");
@@ -490,6 +490,77 @@ class CircuitBreakerUsageTest {
             assertThat(found.getName()).isEqualTo("paymentService");
             assertThat(found.getState()).isEqualTo(CircuitBreakerState.CLOSED);
           });
+    }
+  }
+
+  // ── Event subscription ──
+
+  @Nested
+  @DisplayName("Event subscription")
+  class Events {
+
+    @Test
+    void should_receive_success_events_on_successful_calls() {
+      // Given
+      var service = new PaymentService();
+      var cb = CircuitBreaker.ofDefaults("paymentService");
+      var receivedEvents = new java.util.ArrayList<eu.inqudium.circuitbreaker.event.CircuitBreakerOnSuccessEvent>();
+
+      cb.getEventPublisher().onEvent(
+          eu.inqudium.circuitbreaker.event.CircuitBreakerOnSuccessEvent.class,
+          receivedEvents::add);
+
+      Supplier<String> resilient = cb.decorateSupplier(() -> service.charge("order-1"));
+
+      // When
+      resilient.get();
+
+      // Then
+      assertThat(receivedEvents).hasSize(1);
+      assertThat(receivedEvents.get(0).getElementName()).isEqualTo("paymentService");
+      assertThat(receivedEvents.get(0).getDuration()).isNotNull();
+    }
+
+    @Test
+    void should_receive_error_events_on_failed_calls() {
+      // Given
+      var service = new PaymentService();
+      service.setFailing(true);
+      var cb = CircuitBreaker.ofDefaults("paymentService");
+      var receivedEvents = new java.util.ArrayList<eu.inqudium.circuitbreaker.event.CircuitBreakerOnErrorEvent>();
+
+      cb.getEventPublisher().onEvent(
+          eu.inqudium.circuitbreaker.event.CircuitBreakerOnErrorEvent.class,
+          receivedEvents::add);
+
+      Supplier<String> resilient = cb.decorateSupplier(() -> service.charge("fail"));
+
+      // When
+      catchThrowable(resilient::get);
+
+      // Then
+      assertThat(receivedEvents).hasSize(1);
+      assertThat(receivedEvents.get(0).getThrowable())
+          .hasMessageContaining("Payment gateway unavailable");
+    }
+
+    @Test
+    void should_receive_state_transition_events() {
+      // Given
+      var cb = CircuitBreaker.ofDefaults("paymentService");
+      var transitions = new java.util.ArrayList<eu.inqudium.circuitbreaker.event.CircuitBreakerOnStateTransitionEvent>();
+
+      cb.getEventPublisher().onEvent(
+          eu.inqudium.circuitbreaker.event.CircuitBreakerOnStateTransitionEvent.class,
+          transitions::add);
+
+      // When
+      cb.transitionToOpenState();
+
+      // Then
+      assertThat(transitions).hasSize(1);
+      assertThat(transitions.get(0).getFromState()).isEqualTo(CircuitBreakerState.CLOSED);
+      assertThat(transitions.get(0).getToState()).isEqualTo(CircuitBreakerState.OPEN);
     }
   }
 }

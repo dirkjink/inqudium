@@ -351,4 +351,61 @@ class RetryUsageTest {
       assertThat(r2).isEqualTo("SKU-200@warehouse-B-min5-available-only");
     }
   }
+
+  // ── Event subscription ──
+
+  @Nested
+  @DisplayName("Event subscription")
+  class Events {
+
+    @Test
+    void should_receive_retry_events_on_transient_failures() {
+      // Given — fails first 2 attempts, succeeds on 3rd
+      var service = new InventoryService(3);
+      var retry = Retry.of("inventoryService", RetryConfig.builder()
+          .maxAttempts(3)
+          .initialInterval(Duration.ofMillis(10))
+          .build());
+      var retryEvents = new java.util.ArrayList<eu.inqudium.retry.event.RetryOnRetryEvent>();
+
+      retry.getEventPublisher().onEvent(
+          eu.inqudium.retry.event.RetryOnRetryEvent.class,
+          retryEvents::add);
+
+      Supplier<String> resilient = retry.decorateSupplier(() -> service.checkStock("SKU"));
+
+      // When
+      resilient.get();
+
+      // Then — 2 retries before success
+      assertThat(retryEvents).hasSize(2);
+      assertThat(retryEvents.get(0).getAttemptNumber()).isEqualTo(1);
+      assertThat(retryEvents.get(0).getWaitDuration()).isPositive();
+      assertThat(retryEvents.get(1).getAttemptNumber()).isEqualTo(2);
+    }
+
+    @Test
+    void should_receive_success_event_after_retries() {
+      // Given
+      var service = new InventoryService(2);
+      var retry = Retry.of("inventoryService", RetryConfig.builder()
+          .maxAttempts(3)
+          .initialInterval(Duration.ofMillis(10))
+          .build());
+      var successEvents = new java.util.ArrayList<eu.inqudium.retry.event.RetryOnSuccessEvent>();
+
+      retry.getEventPublisher().onEvent(
+          eu.inqudium.retry.event.RetryOnSuccessEvent.class,
+          successEvents::add);
+
+      Supplier<String> resilient = retry.decorateSupplier(() -> service.checkStock("SKU"));
+
+      // When
+      resilient.get();
+
+      // Then — success on attempt 2
+      assertThat(successEvents).hasSize(1);
+      assertThat(successEvents.get(0).getAttemptNumber()).isEqualTo(2);
+    }
+  }
 }

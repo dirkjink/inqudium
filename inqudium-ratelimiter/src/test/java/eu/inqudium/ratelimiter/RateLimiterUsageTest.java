@@ -15,8 +15,7 @@ import java.time.Duration;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.*;
 
 @DisplayName("RateLimiter — User Perspective")
 class RateLimiterUsageTest {
@@ -360,6 +359,63 @@ class RateLimiterUsageTest {
       // When / Then
       assertThatThrownBy(() -> resilient.fetchData("second"))
           .isInstanceOf(InqRequestNotPermittedException.class);
+    }
+  }
+
+  // ── Event subscription ──
+
+  @Nested
+  @DisplayName("Event subscription")
+  class Events {
+
+    @Test
+    void should_receive_permit_events_on_permitted_calls() {
+      // Given
+      var client = new ApiClient();
+      var rl = RateLimiter.of("apiGateway", RateLimiterConfig.builder()
+          .limitForPeriod(5)
+          .limitRefreshPeriod(Duration.ofSeconds(1))
+          .build());
+      var permitEvents = new java.util.ArrayList<eu.inqudium.ratelimiter.event.RateLimiterOnPermitEvent>();
+
+      rl.getEventPublisher().onEvent(
+          eu.inqudium.ratelimiter.event.RateLimiterOnPermitEvent.class,
+          permitEvents::add);
+
+      Supplier<String> resilient = rl.decorateSupplier(() -> client.fetchData("users"));
+
+      // When
+      resilient.get();
+      resilient.get();
+
+      // Then
+      assertThat(permitEvents).hasSize(2);
+      assertThat(permitEvents.get(0).getRemainingTokens()).isEqualTo(4);
+      assertThat(permitEvents.get(1).getRemainingTokens()).isEqualTo(3);
+    }
+
+    @Test
+    void should_receive_reject_events_when_rate_limit_exceeded() {
+      // Given
+      var rl = RateLimiter.of("apiGateway", RateLimiterConfig.builder()
+          .limitForPeriod(1)
+          .limitRefreshPeriod(Duration.ofSeconds(10))
+          .build());
+      var rejectEvents = new java.util.ArrayList<eu.inqudium.ratelimiter.event.RateLimiterOnRejectEvent>();
+
+      rl.getEventPublisher().onEvent(
+          eu.inqudium.ratelimiter.event.RateLimiterOnRejectEvent.class,
+          rejectEvents::add);
+
+      Supplier<String> resilient = rl.decorateSupplier(() -> "data");
+      resilient.get();
+
+      // When
+      catchThrowable(resilient::get);
+
+      // Then
+      assertThat(rejectEvents).hasSize(1);
+      assertThat(rejectEvents.get(0).getWaitEstimate()).isPositive();
     }
   }
 }

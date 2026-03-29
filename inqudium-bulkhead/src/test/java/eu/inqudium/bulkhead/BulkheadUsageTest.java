@@ -372,4 +372,76 @@ class BulkheadUsageTest {
       assertThat(bh.getAvailablePermits()).isEqualTo(5);
     }
   }
+
+  // ── Event subscription ──
+
+  @Nested
+  @DisplayName("Event subscription")
+  class Events {
+
+    @Test
+    void should_receive_acquire_and_release_events_on_successful_calls() {
+      // Given
+      var service = new OrderService();
+      var bh = Bulkhead.of("orderService", BulkheadConfig.builder()
+          .maxConcurrentCalls(5)
+          .build());
+      var acquireEvents = new java.util.ArrayList<eu.inqudium.bulkhead.event.BulkheadOnAcquireEvent>();
+      var releaseEvents = new java.util.ArrayList<eu.inqudium.bulkhead.event.BulkheadOnReleaseEvent>();
+
+      bh.getEventPublisher().onEvent(
+          eu.inqudium.bulkhead.event.BulkheadOnAcquireEvent.class,
+          acquireEvents::add);
+      bh.getEventPublisher().onEvent(
+          eu.inqudium.bulkhead.event.BulkheadOnReleaseEvent.class,
+          releaseEvents::add);
+
+      Supplier<String> resilient = bh.decorateSupplier(() -> service.processOrder("order-1"));
+
+      // When
+      resilient.get();
+
+      // Then — one acquire, one release
+      assertThat(acquireEvents).hasSize(1);
+      assertThat(releaseEvents).hasSize(1);
+    }
+
+    @Test
+    void should_receive_reject_events_when_bulkhead_is_full() throws Exception {
+      // Given
+      var holdLatch = new CountDownLatch(1);
+      var bh = Bulkhead.of("orderService", BulkheadConfig.builder()
+          .maxConcurrentCalls(1)
+          .build());
+      var rejectEvents = new java.util.ArrayList<eu.inqudium.bulkhead.event.BulkheadOnRejectEvent>();
+
+      bh.getEventPublisher().onEvent(
+          eu.inqudium.bulkhead.event.BulkheadOnRejectEvent.class,
+          rejectEvents::add);
+
+      Supplier<String> slowCall = bh.decorateSupplier(() -> {
+        try {
+          holdLatch.await();
+        } catch (InterruptedException e) {
+          Thread.currentThread().interrupt();
+        }
+        return "done";
+      });
+      Supplier<String> fastCall = bh.decorateSupplier(() -> "rejected");
+
+      ExecutorService executor = Executors.newSingleThreadExecutor();
+      executor.submit(slowCall::get);
+      Thread.sleep(50);
+
+      // When
+      catchThrowable(fastCall::get);
+
+      // Then
+      assertThat(rejectEvents).hasSize(1);
+      assertThat(rejectEvents.get(0).getConcurrentCalls()).isEqualTo(1);
+
+      holdLatch.countDown();
+      executor.shutdown();
+    }
+  }
 }

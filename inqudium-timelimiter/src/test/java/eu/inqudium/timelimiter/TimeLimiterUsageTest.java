@@ -16,8 +16,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.*;
 
 @DisplayName("TimeLimiter — User Perspective")
 class TimeLimiterUsageTest {
@@ -211,7 +210,7 @@ class TimeLimiterUsageTest {
     }
 
     @Test
-    void should_timeout_invocation_when_service_is_too_slow() {
+    void should_timeout_invocation_when_service_is_too_slow() throws Exception {
       // Given
       var service = new ShippingService(2000);
       var tl = TimeLimiter.of("shippingService", TimeLimiterConfig.builder()
@@ -382,6 +381,62 @@ class TimeLimiterUsageTest {
       // When / Then
       assertThatThrownBy(() -> resilient.calculateShipping("slow"))
           .isInstanceOf(InqTimeLimitExceededException.class);
+    }
+  }
+
+  // ── Event subscription ──
+
+  @Nested
+  @DisplayName("Event subscription")
+  class Events {
+
+    @Test
+    void should_receive_success_events_on_fast_calls() {
+      // Given
+      var service = new ShippingService(50);
+      var tl = TimeLimiter.of("shippingService", TimeLimiterConfig.builder()
+          .timeoutDuration(Duration.ofSeconds(2))
+          .build());
+      var successEvents = new java.util.ArrayList<eu.inqudium.timelimiter.event.TimeLimiterOnSuccessEvent>();
+
+      tl.getEventPublisher().onEvent(
+          eu.inqudium.timelimiter.event.TimeLimiterOnSuccessEvent.class,
+          successEvents::add);
+
+      Supplier<String> resilient = tl.decorateSupplier(
+          () -> service.calculateShipping("order-1"));
+
+      // When
+      resilient.get();
+
+      // Then
+      assertThat(successEvents).hasSize(1);
+      assertThat(successEvents.get(0).getDuration()).isPositive();
+    }
+
+    @Test
+    void should_receive_timeout_events_on_slow_calls() {
+      // Given
+      var service = new ShippingService(2000);
+      var tl = TimeLimiter.of("shippingService", TimeLimiterConfig.builder()
+          .timeoutDuration(Duration.ofMillis(100))
+          .build());
+      var timeoutEvents = new java.util.ArrayList<eu.inqudium.timelimiter.event.TimeLimiterOnTimeoutEvent>();
+
+      tl.getEventPublisher().onEvent(
+          eu.inqudium.timelimiter.event.TimeLimiterOnTimeoutEvent.class,
+          timeoutEvents::add);
+
+      Supplier<String> resilient = tl.decorateSupplier(
+          () -> service.calculateShipping("slow"));
+
+      // When
+      catchThrowable(resilient::get);
+
+      // Then
+      assertThat(timeoutEvents).hasSize(1);
+      assertThat(timeoutEvents.get(0).getConfiguredDuration())
+          .isEqualTo(Duration.ofMillis(100));
     }
   }
 }
