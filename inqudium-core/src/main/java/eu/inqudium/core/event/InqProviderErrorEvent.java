@@ -33,8 +33,6 @@ public final class InqProviderErrorEvent extends InqEvent {
   public InqProviderErrorEvent(String providerClassName, String spiInterfaceName,
                                String phase, String errorMessage, Instant timestamp) {
     super("system", "InqServiceLoader", InqElementType.NO_ELEMENT, timestamp);
-    // Derive error code lazily from phase — avoids static initializer dependency
-    // on InqElementType class loading order
     this.code = "construction".equals(phase)
         ? InqElementType.NO_ELEMENT.errorCode(1)
         : InqElementType.NO_ELEMENT.errorCode(2);

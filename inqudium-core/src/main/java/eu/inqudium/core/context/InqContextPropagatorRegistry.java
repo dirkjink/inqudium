@@ -2,6 +2,7 @@ package eu.inqudium.core.context;
 
 import java.util.*;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.locks.LockSupport;
 
 /**
  * Registry for {@link InqContextPropagator} instances.
@@ -13,20 +14,13 @@ import java.util.concurrent.atomic.AtomicReference;
  * <h2>Instance-based design</h2>
  * <p>The registry is an instance — not a static utility. A shared global instance
  * is available via {@link #getDefault()} for production use. Tests create isolated
- * instances via the constructor, avoiding cross-test pollution in parallel execution.
+ * instances via the constructor.
  *
  * <h2>Thread safety</h2>
- * <p>All state is held in a single {@link AtomicReference AtomicReference&lt;RegistryState&gt;}.
- * The state machine transitions are:
- * <pre>{@code
- * Open(programmatic=[])
- *   ──register(p)──►  Open(programmatic=[p])       (CAS: Open→Open)
- *   ──getPropagators()──►  Resolving                 (CAS: Open→Resolving, one thread wins)
- *                          ──discovery──►  Frozen(resolved=[...])
- * }</pre>
- * <p>Only the thread that successfully CAS-es from {@code Open} to {@code Resolving}
- * performs ServiceLoader I/O. All other threads seeing {@code Resolving} yield until
- * {@code Frozen} appears.
+ * <p>All state is held in a single {@link AtomicReference}. The state machine uses
+ * a {@code Resolving} intermediate state so that exactly one thread performs
+ * ServiceLoader I/O. Waiting threads park with exponential backoff. If the resolver
+ * thread dies, the state falls back to {@code Open} — no permanent livelock.
  *
  * @since 0.1.0
  */
@@ -34,29 +28,19 @@ public final class InqContextPropagatorRegistry {
 
   private static final org.slf4j.Logger LOGGER = org.slf4j.LoggerFactory.getLogger(InqContextPropagatorRegistry.class);
 
+  private static final long PARK_INITIAL_NANOS = 1_000;
+  private static final long PARK_MAX_NANOS = 1_000_000;
+
   // ── Global default instance ──
 
   private static final AtomicReference<InqContextPropagatorRegistry> DEFAULT_INSTANCE = new AtomicReference<>();
   private final AtomicReference<RegistryState> state = new AtomicReference<>(new Open());
 
-  /**
-   * Creates a new, empty registry.
-   *
-   * <p>Use for testing or when you need isolated propagator scopes.
-   * For production, use {@link #getDefault()}.
-   */
   public InqContextPropagatorRegistry() {
   }
 
   // ── State machine ──
 
-  /**
-   * Returns the shared global registry instance.
-   *
-   * <p>Created atomically on first access via CAS — no split-brain risk.
-   *
-   * @return the global default registry
-   */
   public static InqContextPropagatorRegistry getDefault() {
     var instance = DEFAULT_INSTANCE.get();
     if (instance != null) {
@@ -66,14 +50,6 @@ public final class InqContextPropagatorRegistry {
     return DEFAULT_INSTANCE.get();
   }
 
-  /**
-   * Replaces the global default registry.
-   *
-   * <p><strong>For testing only.</strong> Allows tests to install an isolated
-   * registry or reset the global state between test runs.
-   *
-   * @param registry the new default registry (or {@code null} to reset to lazy creation)
-   */
   public static void setDefault(InqContextPropagatorRegistry registry) {
     DEFAULT_INSTANCE.set(registry);
   }
@@ -110,7 +86,6 @@ public final class InqContextPropagatorRegistry {
       LOGGER.warn("ServiceLoader discovery for InqContextPropagator failed.", t);
     }
 
-    // Sort: Comparable first (ascending), then non-Comparable
     var comparable = new ArrayList<InqContextPropagator>();
     var nonComparable = new ArrayList<InqContextPropagator>();
     for (var p : serviceLoaderPropagators) {
@@ -134,15 +109,6 @@ public final class InqContextPropagatorRegistry {
     if (t instanceof LinkageError) throw (LinkageError) t;
   }
 
-  /**
-   * Registers a propagator programmatically.
-   *
-   * <p>Must be called before the first context propagation occurs.
-   * Registrations after the first access throw {@link IllegalStateException}.
-   *
-   * @param propagator the propagator to register
-   * @throws IllegalStateException if the registry is already frozen or resolving
-   */
   public void register(InqContextPropagator propagator) {
     Objects.requireNonNull(propagator, "propagator must not be null");
     while (true) {
@@ -162,15 +128,8 @@ public final class InqContextPropagatorRegistry {
     }
   }
 
-  /**
-   * Returns the ordered list of all registered propagators.
-   *
-   * <p>On first call, triggers ServiceLoader discovery and freezes the registry.
-   * Only the thread that claims the {@code Resolving} state performs I/O.
-   *
-   * @return unmodifiable list of propagators
-   */
   public List<InqContextPropagator> getPropagators() {
+    long parkNanos = PARK_INITIAL_NANOS;
     while (true) {
       var current = state.get();
 
@@ -181,15 +140,23 @@ public final class InqContextPropagatorRegistry {
       if (current instanceof Open open) {
         var resolving = new Resolving(open.programmatic);
         if (state.compareAndSet(current, resolving)) {
-          var resolved = discoverAndMerge(open.programmatic);
-          state.set(new Frozen(resolved));
-          return resolved;
+          try {
+            var resolved = discoverAndMerge(open.programmatic);
+            state.set(new Frozen(resolved));
+            return resolved;
+          } catch (Throwable t) {
+            state.set(new Open(List.copyOf(open.programmatic)));
+            rethrowIfFatal(t);
+            LOGGER.error("ServiceLoader discovery failed — registry reset to Open", t);
+            return List.of();
+          }
         }
         continue;
       }
 
-      // Resolving — another thread is doing discovery, yield and retry
-      Thread.yield();
+      // Resolving — park with exponential backoff
+      LockSupport.parkNanos(parkNanos);
+      parkNanos = Math.min(parkNanos * 2, PARK_MAX_NANOS);
     }
   }
 
