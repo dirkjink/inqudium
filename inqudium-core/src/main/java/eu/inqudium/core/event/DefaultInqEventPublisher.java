@@ -2,9 +2,9 @@ package eu.inqudium.core.event;
 
 import eu.inqudium.core.InqElementType;
 
-import java.util.List;
 import java.util.Objects;
-import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
 
 /**
@@ -18,9 +18,11 @@ import java.util.function.Consumer;
  * </ol>
  *
  * <p>Consumer and exporter exceptions are caught and do not propagate to the
- * element. This implementation is thread-safe via {@link CopyOnWriteArrayList}
- * for the consumer list — optimized for frequent reads (publish) and rare
- * writes (subscription/cancellation).
+ * element. Subscriptions are identified by UUID — cancellation removes by key,
+ * not by object identity. This avoids reliance on lambda equality semantics.
+ *
+ * <p>Thread-safe: uses {@link ConcurrentHashMap} for the consumer map — weakly
+ * consistent iteration during publish, lock-free reads and writes.
  *
  * @since 0.1.0
  */
@@ -31,11 +33,19 @@ final class DefaultInqEventPublisher implements InqEventPublisher {
 
   private final String elementName;
   private final InqElementType elementType;
-  private final List<InqEventConsumer> consumers = new CopyOnWriteArrayList<>();
+  private final ConcurrentHashMap<String, InqEventConsumer> consumers = new ConcurrentHashMap<>();
 
   DefaultInqEventPublisher(String elementName, InqElementType elementType) {
     this.elementName = Objects.requireNonNull(elementName, "elementName must not be null");
     this.elementType = Objects.requireNonNull(elementType, "elementType must not be null");
+  }
+
+  /**
+   * Rethrows errors that indicate a fatal JVM condition which must not be swallowed.
+   */
+  private static void rethrowIfFatal(Throwable t) {
+    if (t instanceof VirtualMachineError) throw (VirtualMachineError) t;
+    if (t instanceof LinkageError) throw (LinkageError) t;
   }
 
   @Override
@@ -43,15 +53,16 @@ final class DefaultInqEventPublisher implements InqEventPublisher {
     Objects.requireNonNull(event, "event must not be null");
 
     // Deliver to local consumers
-    for (var consumer : consumers) {
+    for (var consumer : consumers.values()) {
       try {
         consumer.accept(event);
-      } catch (Exception e) {
-        // Consumer exceptions are swallowed — a broken consumer must never
+      } catch (Throwable t) {
+        rethrowIfFatal(t);
+        // Non-fatal errors are swallowed — a broken consumer must never
         // affect the resilience element's operation (ADR-003, ADR-014 Convention 3)
         LOGGER.warn("[{}] Event consumer {} threw on event {}: {}",
             event.getCallId(), consumer.getClass().getName(),
-            event.getClass().getSimpleName(), e.getMessage());
+            event.getClass().getSimpleName(), t.getMessage());
       }
     }
 
@@ -62,8 +73,9 @@ final class DefaultInqEventPublisher implements InqEventPublisher {
   @Override
   public InqSubscription onEvent(InqEventConsumer consumer) {
     Objects.requireNonNull(consumer, "consumer must not be null");
-    consumers.add(consumer);
-    return () -> consumers.remove(consumer);
+    var subscriptionId = UUID.randomUUID().toString();
+    consumers.put(subscriptionId, consumer);
+    return () -> consumers.remove(subscriptionId);
   }
 
   @Override
@@ -77,8 +89,9 @@ final class DefaultInqEventPublisher implements InqEventPublisher {
         consumer.accept(eventType.cast(event));
       }
     };
-    consumers.add(wrapper);
-    return () -> consumers.remove(wrapper);
+    var subscriptionId = UUID.randomUUID().toString();
+    consumers.put(subscriptionId, wrapper);
+    return () -> consumers.remove(subscriptionId);
   }
 
   @Override

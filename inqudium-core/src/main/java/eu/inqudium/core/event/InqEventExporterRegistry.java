@@ -91,12 +91,26 @@ public final class InqEventExporterRegistry {
           exporter.export(event);
         }
       } catch (Throwable t) {
+        rethrowIfFatal(t);
         LOGGER.warn(
             "[{}] InqEventExporter {} threw on event {}: {}",
             event.getCallId(), exporter.getClass().getName(),
             event.getClass().getSimpleName(), t.getMessage());
       }
     }
+  }
+
+  /**
+   * Rethrows errors that indicate a fatal JVM condition which must not be swallowed.
+   *
+   * <ul>
+   *   <li>{@link VirtualMachineError} — OutOfMemoryError, StackOverflowError, InternalError</li>
+   *   <li>{@link LinkageError} — NoSuchMethodError, NoClassDefFoundError, class loading failures</li>
+   * </ul>
+   */
+  private static void rethrowIfFatal(Throwable t) {
+    if (t instanceof VirtualMachineError) throw (VirtualMachineError) t;
+    if (t instanceof LinkageError) throw (LinkageError) t;
   }
 
   private static boolean isSubscribed(InqEventExporter exporter, InqEvent event) {
@@ -115,26 +129,27 @@ public final class InqEventExporterRegistry {
   /**
    * Returns the resolved exporter list, triggering discovery on first access.
    *
-   * <p>Uses CAS to atomically transition from {@code Open} to {@code Frozen}.
-   * The programmatic list is read from the same {@code Open} state that is
-   * being replaced — no window for concurrent {@code register()} to slip in.
+   * <p>Uses a CAS retry loop to atomically transition from {@code Open} to
+   * {@code Frozen}. If a concurrent {@code register()} changes the {@code Open}
+   * state between our read and our CAS, we re-read and retry — the new
+   * registration is included in the next discovery attempt.
    */
   private static List<InqEventExporter> getExporters() {
-    var current = STATE.get();
-    if (current instanceof Frozen frozen) {
-      return frozen.resolved;
+    while (true) {
+      var current = STATE.get();
+      if (current instanceof Frozen frozen) {
+        return frozen.resolved;
+      }
+      // Transition from Open → Frozen via CAS
+      var open = (Open) current;
+      var resolved = discoverAndMerge(open.programmatic);
+      var frozen = new Frozen(resolved);
+      if (STATE.compareAndSet(current, frozen)) {
+        return resolved;
+      }
+      // CAS failed — either register() changed Open, or another thread froze.
+      // Loop back: re-read STATE and check again.
     }
-    // Transition from Open → Frozen via CAS
-    // Multiple threads may race here — only the CAS winner performs discovery
-    var open = (Open) current;
-    var resolved = discoverAndMerge(open.programmatic);
-    var frozen = new Frozen(resolved);
-    if (STATE.compareAndSet(current, frozen)) {
-      return resolved;
-    }
-    // CAS failed — another thread won the race and already froze
-    // Read the winner's resolved list
-    return ((Frozen) STATE.get()).resolved;
   }
 
   @SuppressWarnings("unchecked")
@@ -154,12 +169,14 @@ public final class InqEventExporterRegistry {
           }
           serviceLoaderExporters.add(iterator.next());
         } catch (Throwable t) {
+          rethrowIfFatal(t);
           LOGGER.warn("Failed to load InqEventExporter provider: {} — Provider skipped.",
               t.getMessage());
           logProviderError(t);
         }
       }
     } catch (Throwable t) {
+      rethrowIfFatal(t);
       LOGGER.warn("ServiceLoader discovery for InqEventExporter failed: {}", t.getMessage());
       logProviderError(t);
     }
