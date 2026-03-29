@@ -27,26 +27,26 @@ import java.util.function.Supplier;
  */
 public final class InqDecoratedSupplier<T> implements Supplier<T>, InqPipelineProxy {
 
-    private final Supplier<T> delegate;
-    private final InqPipelineInfo info;
+  private final Supplier<T> delegate;
+  private final InqPipelineInfo info;
 
-    InqDecoratedSupplier(Supplier<T> delegate, InqPipelineInfo info) {
-        this.delegate = delegate;
-        this.info = info;
-    }
+  InqDecoratedSupplier(Supplier<T> delegate, InqPipelineInfo info) {
+    this.delegate = delegate;
+    this.info = info;
+  }
 
-    @Override
-    public T get() {
-        return delegate.get();
-    }
+  @Override
+  public T get() {
+    return delegate.get();
+  }
 
-    @Override
-    public InqPipelineInfo getPipelineInfo() {
-        return info;
-    }
+  @Override
+  public InqPipelineInfo getPipelineInfo() {
+    return info;
+  }
 
-    @Override
-    public String toString() {
-        return "InqDecoratedSupplier[" + info.toChainDescription() + "]";
-    }
+  @Override
+  public String toString() {
+    return "InqDecoratedSupplier[" + info.toChainDescription() + "]";
+  }
 }

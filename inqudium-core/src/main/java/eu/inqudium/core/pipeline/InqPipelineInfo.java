@@ -38,70 +38,70 @@ import java.util.stream.Collectors;
  * @since 0.1.0
  */
 public record InqPipelineInfo(
-        List<InqDecorator> decorators,
-        PipelineOrder order,
-        eu.inqudium.core.InqCallIdGenerator callIdGenerator,
-        Class<?> interfaceType,
-        Object target
+    List<InqDecorator> decorators,
+    PipelineOrder order,
+    eu.inqudium.core.InqCallIdGenerator callIdGenerator,
+    Class<?> interfaceType,
+    Object target
 ) {
 
-    /**
-     * Finds the first decorator of the given type in the chain.
-     *
-     * <pre>{@code
-     * Optional<CircuitBreaker> cb = info.findDecorator(CircuitBreaker.class);
-     * cb.ifPresent(c -> log.info("State: {}", c.getState()));
-     * }</pre>
-     *
-     * @param type the decorator type to find (e.g. CircuitBreaker.class)
-     * @param <D>  the decorator type
-     * @return the first matching decorator, or empty
-     */
-    @SuppressWarnings("unchecked")
-    public <D extends InqDecorator> Optional<D> findDecorator(Class<D> type) {
-        return decorators.stream()
-                .filter(type::isInstance)
-                .map(d -> (D) d)
-                .findFirst();
-    }
+  /**
+   * Finds the first decorator of the given type in the chain.
+   *
+   * <pre>{@code
+   * Optional<CircuitBreaker> cb = info.findDecorator(CircuitBreaker.class);
+   * cb.ifPresent(c -> log.info("State: {}", c.getState()));
+   * }</pre>
+   *
+   * @param type the decorator type to find (e.g. CircuitBreaker.class)
+   * @param <D>  the decorator type
+   * @return the first matching decorator, or empty
+   */
+  @SuppressWarnings("unchecked")
+  public <D extends InqDecorator> Optional<D> findDecorator(Class<D> type) {
+    return decorators.stream()
+        .filter(type::isInstance)
+        .map(d -> (D) d)
+        .findFirst();
+  }
 
-    /**
-     * Finds all decorators of the given type in the chain.
-     *
-     * @param type the decorator type to find
-     * @param <D>  the decorator type
-     * @return all matching decorators in chain order
-     */
-    @SuppressWarnings("unchecked")
-    public <D extends InqDecorator> List<D> findDecorators(Class<D> type) {
-        return decorators.stream()
-                .filter(type::isInstance)
-                .map(d -> (D) d)
-                .toList();
-    }
+  /**
+   * Finds all decorators of the given type in the chain.
+   *
+   * @param type the decorator type to find
+   * @param <D>  the decorator type
+   * @return all matching decorators in chain order
+   */
+  @SuppressWarnings("unchecked")
+  public <D extends InqDecorator> List<D> findDecorators(Class<D> type) {
+    return decorators.stream()
+        .filter(type::isInstance)
+        .map(d -> (D) d)
+        .toList();
+  }
 
-    /**
-     * Returns a human-readable description of the decoration chain.
-     *
-     * <p>Format: {@code "RateLimiter 'apiGateway' → Retry 'orderService' → CircuitBreaker 'paymentService'"}
-     *
-     * @return the chain description
-     */
-    public String toChainDescription() {
-        if (decorators.isEmpty()) {
-            return "(empty pipeline)";
-        }
-        return decorators.stream()
-                .map(d -> String.format(Locale.ROOT, "%s '%s'", d.getElementType(), d.getName()))
-                .collect(Collectors.joining(" → "));
+  /**
+   * Returns a human-readable description of the decoration chain.
+   *
+   * <p>Format: {@code "RateLimiter 'apiGateway' → Retry 'orderService' → CircuitBreaker 'paymentService'"}
+   *
+   * @return the chain description
+   */
+  public String toChainDescription() {
+    if (decorators.isEmpty()) {
+      return "(empty pipeline)";
     }
+    return decorators.stream()
+        .map(d -> String.format(Locale.ROOT, "%s '%s'", d.getElementType(), d.getName()))
+        .collect(Collectors.joining(" → "));
+  }
 
-    @Override
-    public String toString() {
-        var chain = toChainDescription();
-        if (interfaceType != null) {
-            return "InqPipelineInfo[proxy=" + interfaceType.getSimpleName() + ", chain=" + chain + "]";
-        }
-        return "InqPipelineInfo[chain=" + chain + "]";
+  @Override
+  public String toString() {
+    var chain = toChainDescription();
+    if (interfaceType != null) {
+      return "InqPipelineInfo[proxy=" + interfaceType.getSimpleName() + ", chain=" + chain + "]";
     }
+    return "InqPipelineInfo[chain=" + chain + "]";
+  }
 }

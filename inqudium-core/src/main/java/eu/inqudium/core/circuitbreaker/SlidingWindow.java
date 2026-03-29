@@ -12,24 +12,24 @@ package eu.inqudium.core.circuitbreaker;
  */
 public interface SlidingWindow {
 
-    /**
-     * Records a call outcome and returns the updated snapshot.
-     *
-     * @param outcome the call outcome to record
-     * @return the current window state after recording
-     */
-    WindowSnapshot record(CallOutcome outcome);
+  /**
+   * Records a call outcome and returns the updated snapshot.
+   *
+   * @param outcome the call outcome to record
+   * @return the current window state after recording
+   */
+  WindowSnapshot record(CallOutcome outcome);
 
-    /**
-     * Returns the current snapshot without recording a new outcome.
-     *
-     * @return the current window state
-     */
-    WindowSnapshot snapshot();
+  /**
+   * Returns the current snapshot without recording a new outcome.
+   *
+   * @return the current window state
+   */
+  WindowSnapshot snapshot();
 
-    /**
-     * Resets the window to its initial (empty) state.
-     * Called when the circuit breaker transitions back to CLOSED.
-     */
-    void reset();
+  /**
+   * Resets the window to its initial (empty) state.
+   * Called when the circuit breaker transitions back to CLOSED.
+   */
+  void reset();
 }

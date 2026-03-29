@@ -19,23 +19,23 @@ package eu.inqudium.core;
 @FunctionalInterface
 public interface Invocation2<A1, A2, T> {
 
-    /**
-     * Invokes the operation with the given arguments.
-     *
-     * @param arg1 the first argument
-     * @param arg2 the second argument
-     * @return the result
-     * @throws Exception if the operation fails
-     */
-    T invoke(A1 arg1, A2 arg2) throws Exception;
+  /**
+   * Invokes the operation with the given arguments.
+   *
+   * @param arg1 the first argument
+   * @param arg2 the second argument
+   * @return the result
+   * @throws Exception if the operation fails
+   */
+  T invoke(A1 arg1, A2 arg2) throws Exception;
 
-    /**
-     * Converts this typed invocation to an {@link InvocationArray}.
-     *
-     * @return the equivalent array invocation
-     */
-    @SuppressWarnings("unchecked")
-    default InvocationArray<T> toArray() {
-        return args -> invoke((A1) args[0], (A2) args[1]);
-    }
+  /**
+   * Converts this typed invocation to an {@link InvocationArray}.
+   *
+   * @return the equivalent array invocation
+   */
+  @SuppressWarnings("unchecked")
+  default InvocationArray<T> toArray() {
+    return args -> invoke((A1) args[0], (A2) args[1]);
+  }
 }

@@ -22,8 +22,11 @@ import java.util.function.Consumer;
  *
  * <h2>Subscribing to events</h2>
  * <pre>{@code
- * circuitBreaker.getEventPublisher()
+ * InqSubscription sub = circuitBreaker.getEventPublisher()
  *     .onEvent(CircuitBreakerOnStateTransitionEvent.class, event -> { ... });
+ *
+ * // Later — unsubscribe to prevent memory leaks
+ * sub.cancel();
  * }</pre>
  *
  * @since 0.1.0
@@ -58,8 +61,9 @@ public interface InqEventPublisher {
    * Registers a consumer for all events from this publisher.
    *
    * @param consumer the event consumer
+   * @return a subscription handle for cancellation
    */
-  void onEvent(InqEventConsumer consumer);
+  InqSubscription onEvent(InqEventConsumer consumer);
 
   /**
    * Registers a typed consumer that only receives events of the specified type.
@@ -67,6 +71,7 @@ public interface InqEventPublisher {
    * @param eventType the event class to filter on
    * @param consumer  the typed consumer
    * @param <E>       the event type
+   * @return a subscription handle for cancellation
    */
-  <E extends InqEvent> void onEvent(Class<E> eventType, Consumer<E> consumer);
+  <E extends InqEvent> InqSubscription onEvent(Class<E> eventType, Consumer<E> consumer);
 }

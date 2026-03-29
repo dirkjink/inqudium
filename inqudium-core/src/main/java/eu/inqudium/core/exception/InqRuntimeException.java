@@ -44,61 +44,61 @@ import java.util.Locale;
  */
 public class InqRuntimeException extends InqException {
 
-    /**
-     * Wraps a checked exception with call identity and element context.
-     *
-     * <p>The cause is {@linkplain InqFailure#unwrap(Throwable) unwrapped} to strip
-     * common wrapper exceptions (ExecutionException, CompletionException, etc.)
-     * before storing. The error code is derived from the element type: {@code INQ-XX-000}.
-     *
-     * @param callId      the unique call identifier
-     * @param elementName the element instance name
-     * @param elementType the element type
-     * @param cause       the checked exception to wrap (unwrapped automatically)
-     */
-    public InqRuntimeException(String callId, String elementName, InqElementType elementType, Throwable cause) {
-        super(callId,
-                (elementType != null ? elementType : InqElementType.NO_ELEMENT).errorCode(0),
-                elementName,
-                elementType != null ? elementType : InqElementType.NO_ELEMENT,
-                formatCauseMessage(elementName, elementType, InqFailure.unwrap(cause)),
-                InqFailure.unwrap(cause));
-    }
+  /**
+   * Wraps a checked exception with call identity and element context.
+   *
+   * <p>The cause is {@linkplain InqFailure#unwrap(Throwable) unwrapped} to strip
+   * common wrapper exceptions (ExecutionException, CompletionException, etc.)
+   * before storing. The error code is derived from the element type: {@code INQ-XX-000}.
+   *
+   * @param callId      the unique call identifier
+   * @param elementName the element instance name
+   * @param elementType the element type
+   * @param cause       the checked exception to wrap (unwrapped automatically)
+   */
+  public InqRuntimeException(String callId, String elementName, InqElementType elementType, Throwable cause) {
+    super(callId,
+        (elementType != null ? elementType : InqElementType.NO_ELEMENT).errorCode(0),
+        elementName,
+        elementType != null ? elementType : InqElementType.NO_ELEMENT,
+        formatCauseMessage(elementName, elementType, InqFailure.unwrap(cause)),
+        InqFailure.unwrap(cause));
+  }
 
-    private static String formatCauseMessage(String elementName, InqElementType elementType, Throwable unwrapped) {
-        if (elementType != null && elementType != InqElementType.NO_ELEMENT) {
-            return String.format(Locale.ROOT, "Checked exception in %s '%s': %s",
-                    elementType, elementName, unwrapped.getMessage());
-        }
-        if (elementName != null) {
-            return String.format(Locale.ROOT, "Checked exception in '%s': %s",
-                    elementName, unwrapped.getMessage());
-        }
-        return unwrapped.getMessage();
-    }
+  /**
+   * Wraps a checked exception without element context.
+   *
+   * <p>Package-private — used only by {@link InqFailure} which lives in the same package.
+   * The cause is {@linkplain InqFailure#unwrap(Throwable) unwrapped} before storing.
+   * The error code is {@code "INQ-XX-000"} (no element context).
+   *
+   * @param cause the checked exception to wrap (unwrapped automatically)
+   */
+  InqRuntimeException(Throwable cause) {
+    super(InqCallIdGenerator.NONE, InqElementType.NO_ELEMENT.errorCode(0),
+        null, InqElementType.NO_ELEMENT,
+        formatCauseMessage(null, null, InqFailure.unwrap(cause)),
+        InqFailure.unwrap(cause));
+  }
 
-    /**
-     * Wraps a checked exception without element context.
-     *
-     * <p>Package-private — used only by {@link InqFailure} which lives in the same package.
-     * The cause is {@linkplain InqFailure#unwrap(Throwable) unwrapped} before storing.
-     * The error code is {@code "INQ-XX-000"} (no element context).
-     *
-     * @param cause the checked exception to wrap (unwrapped automatically)
-     */
-    InqRuntimeException(Throwable cause) {
-        super(InqCallIdGenerator.NONE, InqElementType.NO_ELEMENT.errorCode(0),
-                null, InqElementType.NO_ELEMENT,
-                formatCauseMessage(null, null, InqFailure.unwrap(cause)),
-                InqFailure.unwrap(cause));
+  private static String formatCauseMessage(String elementName, InqElementType elementType, Throwable unwrapped) {
+    if (elementType != null && elementType != InqElementType.NO_ELEMENT) {
+      return String.format(Locale.ROOT, "Checked exception in %s '%s': %s",
+          elementType, elementName, unwrapped.getMessage());
     }
+    if (elementName != null) {
+      return String.format(Locale.ROOT, "Checked exception in '%s': %s",
+          elementName, unwrapped.getMessage());
+    }
+    return unwrapped.getMessage();
+  }
 
-    /**
-     * Returns whether this exception carries element context.
-     *
-     * @return true if element name is set and element type is not {@link InqElementType#NO_ELEMENT}
-     */
-    public boolean hasElementContext() {
-        return getElementName() != null && getElementType() != InqElementType.NO_ELEMENT;
-    }
+  /**
+   * Returns whether this exception carries element context.
+   *
+   * @return true if element name is set and element type is not {@link InqElementType#NO_ELEMENT}
+   */
+  public boolean hasElementContext() {
+    return getElementName() != null && getElementType() != InqElementType.NO_ELEMENT;
+  }
 }

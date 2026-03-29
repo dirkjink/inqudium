@@ -1,9 +1,9 @@
 package eu.inqudium.bulkhead;
 
 import eu.inqudium.bulkhead.internal.SemaphoreBulkhead;
-import eu.inqudium.core.pipeline.InqDecorator;
 import eu.inqudium.core.InqElementType;
 import eu.inqudium.core.bulkhead.BulkheadConfig;
+import eu.inqudium.core.pipeline.InqDecorator;
 
 
 /**
@@ -25,24 +25,28 @@ import eu.inqudium.core.bulkhead.BulkheadConfig;
  */
 public interface Bulkhead extends InqDecorator {
 
-    static Bulkhead of(String name, BulkheadConfig config) {
-        return new SemaphoreBulkhead(name, config);
-    }
+  static Bulkhead of(String name, BulkheadConfig config) {
+    return new SemaphoreBulkhead(name, config);
+  }
 
-    static Bulkhead ofDefaults(String name) {
-        return new SemaphoreBulkhead(name, BulkheadConfig.ofDefaults());
-    }
+  static Bulkhead ofDefaults(String name) {
+    return new SemaphoreBulkhead(name, BulkheadConfig.ofDefaults());
+  }
 
-    BulkheadConfig getConfig();
+  BulkheadConfig getConfig();
 
-    /** Returns the current number of in-flight calls. */
-    int getConcurrentCalls();
+  /**
+   * Returns the current number of in-flight calls.
+   */
+  int getConcurrentCalls();
 
-    /** Returns the number of available permits. */
-    int getAvailablePermits();
+  /**
+   * Returns the number of available permits.
+   */
+  int getAvailablePermits();
 
-    @Override
-    default InqElementType getElementType() {
-        return InqElementType.BULKHEAD;
-    }
+  @Override
+  default InqElementType getElementType() {
+    return InqElementType.BULKHEAD;
+  }
 }

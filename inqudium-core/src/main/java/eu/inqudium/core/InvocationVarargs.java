@@ -21,35 +21,35 @@ package eu.inqudium.core;
 @FunctionalInterface
 public interface InvocationVarargs<T> {
 
-    /**
-     * Invokes the operation with the given arguments.
-     *
-     * @param args the arguments (varargs)
-     * @return the result
-     * @throws Exception if the operation fails
-     */
-    T invoke(Object... args) throws Exception;
+  /**
+   * Creates a varargs invocation from an {@link InvocationArray}.
+   *
+   * @param array the array invocation
+   * @param <T>   the result type
+   * @return the equivalent varargs invocation
+   */
+  static <T> InvocationVarargs<T> fromArray(InvocationArray<T> array) {
+    return array::invoke;
+  }
 
-    /**
-     * Converts this varargs invocation to an {@link InvocationArray}.
-     *
-     * <p>Since {@code Object...} is {@code Object[]} at the JVM level,
-     * this is a zero-cost conversion.
-     *
-     * @return the equivalent array invocation
-     */
-    default InvocationArray<T> asArray() {
-        return this::invoke;
-    }
+  /**
+   * Invokes the operation with the given arguments.
+   *
+   * @param args the arguments (varargs)
+   * @return the result
+   * @throws Exception if the operation fails
+   */
+  T invoke(Object... args) throws Exception;
 
-    /**
-     * Creates a varargs invocation from an {@link InvocationArray}.
-     *
-     * @param array the array invocation
-     * @param <T>   the result type
-     * @return the equivalent varargs invocation
-     */
-    static <T> InvocationVarargs<T> fromArray(InvocationArray<T> array) {
-        return array::invoke;
-    }
+  /**
+   * Converts this varargs invocation to an {@link InvocationArray}.
+   *
+   * <p>Since {@code Object...} is {@code Object[]} at the JVM level,
+   * this is a zero-cost conversion.
+   *
+   * @return the equivalent array invocation
+   */
+  default InvocationArray<T> asArray() {
+    return this::invoke;
+  }
 }

@@ -29,93 +29,93 @@ import eu.inqudium.core.InqElementType;
  */
 public abstract class InqException extends RuntimeException {
 
-    private final String callId;
-    private final String code;
-    private final String elementName;
-    private final InqElementType elementType;
+  private final String callId;
+  private final String code;
+  private final String elementName;
+  private final InqElementType elementType;
 
-    /**
-     * Creates a new exception with call identity, error code, and element context.
-     *
-     * @param callId      the unique call identifier, or {@link InqCallIdGenerator#NONE} for standalone use
-     * @param code        the structured error code (e.g. "INQ-CB-001")
-     * @param elementName the name of the element instance (e.g. "paymentService")
-     * @param elementType the type of the element
-     * @param message     the detail message (without code/callId prefix — prepended automatically)
-     */
-    protected InqException(String callId, String code, String elementName,
-                            InqElementType elementType, String message) {
-        super(formatMessage(callId, code, message));
-        this.callId = callId;
-        this.code = code;
-        this.elementName = elementName;
-        this.elementType = elementType;
-    }
+  /**
+   * Creates a new exception with call identity, error code, and element context.
+   *
+   * @param callId      the unique call identifier, or {@link InqCallIdGenerator#NONE} for standalone use
+   * @param code        the structured error code (e.g. "INQ-CB-001")
+   * @param elementName the name of the element instance (e.g. "paymentService")
+   * @param elementType the type of the element
+   * @param message     the detail message (without code/callId prefix — prepended automatically)
+   */
+  protected InqException(String callId, String code, String elementName,
+                         InqElementType elementType, String message) {
+    super(formatMessage(callId, code, message));
+    this.callId = callId;
+    this.code = code;
+    this.elementName = elementName;
+    this.elementType = elementType;
+  }
 
-    /**
-     * Creates a new exception with call identity, error code, element context, and a cause.
-     *
-     * @param callId      the unique call identifier, or {@link InqCallIdGenerator#NONE} for standalone use
-     * @param code        the structured error code
-     * @param elementName the name of the element instance
-     * @param elementType the type of the element
-     * @param message     the detail message (without code/callId prefix — prepended automatically)
-     * @param cause       the underlying cause
-     */
-    protected InqException(String callId, String code, String elementName,
-                            InqElementType elementType, String message, Throwable cause) {
-        super(formatMessage(callId, code, message), cause);
-        this.callId = callId;
-        this.code = code;
-        this.elementName = elementName;
-        this.elementType = elementType;
-    }
+  /**
+   * Creates a new exception with call identity, error code, element context, and a cause.
+   *
+   * @param callId      the unique call identifier, or {@link InqCallIdGenerator#NONE} for standalone use
+   * @param code        the structured error code
+   * @param elementName the name of the element instance
+   * @param elementType the type of the element
+   * @param message     the detail message (without code/callId prefix — prepended automatically)
+   * @param cause       the underlying cause
+   */
+  protected InqException(String callId, String code, String elementName,
+                         InqElementType elementType, String message, Throwable cause) {
+    super(formatMessage(callId, code, message), cause);
+    this.callId = callId;
+    this.code = code;
+    this.elementName = elementName;
+    this.elementType = elementType;
+  }
 
-    /**
-     * Returns the unique call identifier.
-     *
-     * <p>All events and exceptions from the same pipeline invocation share
-     * this callId (ADR-022). Returns {@link InqCallIdGenerator#NONE} for standalone calls that
-     * are not pipeline-correlated.
-     *
-     * @return the callId, or null
-     */
-    public String getCallId() {
-        return callId;
-    }
+  private static String formatMessage(String callId, String code, String message) {
+    return "[" + callId + "] " + code + ": " + message;
+  }
 
-    /**
-     * Returns the structured error code.
-     *
-     * <p>Codes follow the format {@code INQ-XX-NNN} where {@code XX} is the
-     * two-character element symbol and {@code NNN} is a three-digit number.
-     * Codes are stable across minor versions (ADR-021).
-     *
-     * @return the error code, e.g. "INQ-CB-001"
-     */
-    public String getCode() {
-        return code;
-    }
+  /**
+   * Returns the unique call identifier.
+   *
+   * <p>All events and exceptions from the same pipeline invocation share
+   * this callId (ADR-022). Returns {@link InqCallIdGenerator#NONE} for standalone calls that
+   * are not pipeline-correlated.
+   *
+   * @return the callId, or null
+   */
+  public String getCallId() {
+    return callId;
+  }
 
-    /**
-     * Returns the name of the element instance that threw this exception.
-     *
-     * @return the element name, e.g. "paymentService"
-     */
-    public String getElementName() {
-        return elementName;
-    }
+  /**
+   * Returns the structured error code.
+   *
+   * <p>Codes follow the format {@code INQ-XX-NNN} where {@code XX} is the
+   * two-character element symbol and {@code NNN} is a three-digit number.
+   * Codes are stable across minor versions (ADR-021).
+   *
+   * @return the error code, e.g. "INQ-CB-001"
+   */
+  public String getCode() {
+    return code;
+  }
 
-    /**
-     * Returns the type of the element that threw this exception.
-     *
-     * @return the element type
-     */
-    public InqElementType getElementType() {
-        return elementType;
-    }
+  /**
+   * Returns the name of the element instance that threw this exception.
+   *
+   * @return the element name, e.g. "paymentService"
+   */
+  public String getElementName() {
+    return elementName;
+  }
 
-    private static String formatMessage(String callId, String code, String message) {
-        return "[" + callId + "] " + code + ": " + message;
-    }
+  /**
+   * Returns the type of the element that threw this exception.
+   *
+   * @return the element type
+   */
+  public InqElementType getElementType() {
+    return elementType;
+  }
 }

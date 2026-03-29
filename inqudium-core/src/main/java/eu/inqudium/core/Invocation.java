@@ -23,26 +23,26 @@ package eu.inqudium.core;
 @FunctionalInterface
 public interface Invocation<A, T> {
 
-    /**
-     * Invokes the operation with the given argument.
-     *
-     * @param arg the argument
-     * @return the result
-     * @throws Exception if the operation fails
-     */
-    T invoke(A arg) throws Exception;
+  /**
+   * Invokes the operation with the given argument.
+   *
+   * @param arg the argument
+   * @return the result
+   * @throws Exception if the operation fails
+   */
+  T invoke(A arg) throws Exception;
 
-    /**
-     * Converts this typed invocation to an {@link InvocationArray}.
-     *
-     * <p>The single argument is extracted from {@code args[0]} with an
-     * unchecked cast. Used internally by decoration to delegate to the
-     * {@code InvocationArray} path when needed.
-     *
-     * @return the equivalent array invocation
-     */
-    @SuppressWarnings("unchecked")
-    default InvocationArray<T> toArray() {
-        return args -> invoke((A) args[0]);
-    }
+  /**
+   * Converts this typed invocation to an {@link InvocationArray}.
+   *
+   * <p>The single argument is extracted from {@code args[0]} with an
+   * unchecked cast. Used internally by decoration to delegate to the
+   * {@code InvocationArray} path when needed.
+   *
+   * @return the equivalent array invocation
+   */
+  @SuppressWarnings("unchecked")
+  default InvocationArray<T> toArray() {
+    return args -> invoke((A) args[0]);
+  }
 }

@@ -13,17 +13,7 @@ import java.time.Instant;
  *
  * @since 0.1.0
  */
-public class InqProviderErrorEvent extends InqEvent {
-
-  /**
-   * ServiceLoader provider failed during construction.
-   */
-  public static final String CODE_CONSTRUCTION = InqElementType.NO_ELEMENT.errorCode(1);
-
-  /**
-   * ServiceLoader provider failed during execution.
-   */
-  public static final String CODE_EXECUTION = InqElementType.NO_ELEMENT.errorCode(2);
+public final class InqProviderErrorEvent extends InqEvent {
 
   private final String code;
   private final String providerClassName;
@@ -43,7 +33,11 @@ public class InqProviderErrorEvent extends InqEvent {
   public InqProviderErrorEvent(String providerClassName, String spiInterfaceName,
                                String phase, String errorMessage, Instant timestamp) {
     super("system", "InqServiceLoader", InqElementType.NO_ELEMENT, timestamp);
-    this.code = "construction".equals(phase) ? CODE_CONSTRUCTION : CODE_EXECUTION;
+    // Derive error code lazily from phase — avoids static initializer dependency
+    // on InqElementType class loading order
+    this.code = "construction".equals(phase)
+        ? InqElementType.NO_ELEMENT.errorCode(1)
+        : InqElementType.NO_ELEMENT.errorCode(2);
     this.providerClassName = providerClassName;
     this.spiInterfaceName = spiInterfaceName;
     this.phase = phase;

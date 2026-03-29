@@ -13,21 +13,21 @@ package eu.inqudium.core.circuitbreaker;
  * @since 0.1.0
  */
 public record WindowSnapshot(
-        float failureRate,
-        float slowCallRate,
-        int totalCalls,
-        int failedCalls,
-        int slowCalls,
-        int successfulCalls,
-        int windowSize
+    float failureRate,
+    float slowCallRate,
+    int totalCalls,
+    int failedCalls,
+    int slowCalls,
+    int successfulCalls,
+    int windowSize
 ) {
-    /**
-     * Returns whether the window has accumulated enough calls for a meaningful rate.
-     *
-     * @param minimumNumberOfCalls the configured minimum
-     * @return true if totalCalls >= minimumNumberOfCalls
-     */
-    public boolean hasMinimumCalls(int minimumNumberOfCalls) {
-        return totalCalls >= minimumNumberOfCalls;
-    }
+  /**
+   * Returns whether the window has accumulated enough calls for a meaningful rate.
+   *
+   * @param minimumNumberOfCalls the configured minimum
+   * @return true if totalCalls >= minimumNumberOfCalls
+   */
+  public boolean hasMinimumCalls(int minimumNumberOfCalls) {
+    return totalCalls >= minimumNumberOfCalls;
+  }
 }

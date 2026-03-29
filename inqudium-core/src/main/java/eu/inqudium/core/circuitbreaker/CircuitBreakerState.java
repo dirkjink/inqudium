@@ -19,20 +19,22 @@ package eu.inqudium.core.circuitbreaker;
  */
 public enum CircuitBreakerState {
 
-    /** Normal operation. Calls pass through and outcomes are recorded in the sliding window. */
-    CLOSED,
+  /**
+   * Normal operation. Calls pass through and outcomes are recorded in the sliding window.
+   */
+  CLOSED,
 
-    /**
-     * Calls are rejected immediately with {@link InqCallNotPermittedException}.
-     * No call reaches the downstream service. After the configured wait duration,
-     * the breaker transitions to {@link #HALF_OPEN}.
-     */
-    OPEN,
+  /**
+   * Calls are rejected immediately with {@link InqCallNotPermittedException}.
+   * No call reaches the downstream service. After the configured wait duration,
+   * the breaker transitions to {@link #HALF_OPEN}.
+   */
+  OPEN,
 
-    /**
-     * A limited number of probe calls are permitted to test whether the downstream
-     * service has recovered. If the probes succeed, the breaker transitions to
-     * {@link #CLOSED}. If they fail, it returns to {@link #OPEN}.
-     */
-    HALF_OPEN
+  /**
+   * A limited number of probe calls are permitted to test whether the downstream
+   * service has recovered. If the probes succeed, the breaker transitions to
+   * {@link #CLOSED}. If they fail, it returns to {@link #OPEN}.
+   */
+  HALF_OPEN
 }

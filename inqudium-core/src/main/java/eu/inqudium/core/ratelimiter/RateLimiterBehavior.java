@@ -14,23 +14,23 @@ import java.time.Instant;
 @FunctionalInterface
 public interface RateLimiterBehavior {
 
-    /**
-     * Attempts to acquire a permit from the token bucket.
-     *
-     * @param state  current token bucket state
-     * @param config rate limiter configuration
-     * @return result with permit status, wait estimate, and updated state
-     */
-    PermitResult tryAcquire(TokenBucketState state, RateLimiterConfig config);
+  /**
+   * Returns the default token bucket behavior.
+   *
+   * @return the default behavior
+   */
+  static RateLimiterBehavior defaultBehavior() {
+    return DefaultRateLimiterBehavior.INSTANCE;
+  }
 
-    /**
-     * Returns the default token bucket behavior.
-     *
-     * @return the default behavior
-     */
-    static RateLimiterBehavior defaultBehavior() {
-        return DefaultRateLimiterBehavior.INSTANCE;
-    }
+  /**
+   * Attempts to acquire a permit from the token bucket.
+   *
+   * @param state  current token bucket state
+   * @param config rate limiter configuration
+   * @return result with permit status, wait estimate, and updated state
+   */
+  PermitResult tryAcquire(TokenBucketState state, RateLimiterConfig config);
 }
 
 /**
@@ -38,40 +38,41 @@ public interface RateLimiterBehavior {
  */
 final class DefaultRateLimiterBehavior implements RateLimiterBehavior {
 
-    static final DefaultRateLimiterBehavior INSTANCE = new DefaultRateLimiterBehavior();
+  static final DefaultRateLimiterBehavior INSTANCE = new DefaultRateLimiterBehavior();
 
-    private DefaultRateLimiterBehavior() {}
+  private DefaultRateLimiterBehavior() {
+  }
 
-    @Override
-    public PermitResult tryAcquire(TokenBucketState state, RateLimiterConfig config) {
-        Instant now = config.getClock().instant();
+  @Override
+  public PermitResult tryAcquire(TokenBucketState state, RateLimiterConfig config) {
+    Instant now = config.getClock().instant();
 
-        // Refill tokens based on elapsed time
-        Duration elapsed = Duration.between(state.lastRefillTimestamp(), now);
-        long periodNanos = config.getLimitRefreshPeriod().toNanos();
-        long periodsElapsed = periodNanos > 0 ? elapsed.toNanos() / periodNanos : 0;
+    // Refill tokens based on elapsed time
+    Duration elapsed = Duration.between(state.lastRefillTimestamp(), now);
+    long periodNanos = config.getLimitRefreshPeriod().toNanos();
+    long periodsElapsed = periodNanos > 0 ? elapsed.toNanos() / periodNanos : 0;
 
-        int refilled = state.availableTokens() + (int) (periodsElapsed * config.getLimitForPeriod());
-        int capped = Math.min(refilled, config.getBucketSize());
+    int refilled = state.availableTokens() + (int) (periodsElapsed * config.getLimitForPeriod());
+    int capped = Math.min(refilled, config.getBucketSize());
 
-        Instant lastRefill = periodsElapsed > 0
-                ? state.lastRefillTimestamp().plus(config.getLimitRefreshPeriod().multipliedBy(periodsElapsed))
-                : state.lastRefillTimestamp();
+    Instant lastRefill = periodsElapsed > 0
+        ? state.lastRefillTimestamp().plus(config.getLimitRefreshPeriod().multipliedBy(periodsElapsed))
+        : state.lastRefillTimestamp();
 
-        // Try to acquire a token
-        if (capped > 0) {
-            var newState = new TokenBucketState(capped - 1, lastRefill);
-            return PermitResult.permitted(newState);
-        }
-
-        // Denied — estimate wait until next token
-        Duration untilNextRefill = config.getLimitRefreshPeriod()
-                .minus(Duration.between(lastRefill, now));
-        if (untilNextRefill.isNegative() || untilNextRefill.isZero()) {
-            untilNextRefill = config.getLimitRefreshPeriod();
-        }
-
-        var unchangedState = new TokenBucketState(0, lastRefill);
-        return PermitResult.denied(untilNextRefill, unchangedState);
+    // Try to acquire a token
+    if (capped > 0) {
+      var newState = new TokenBucketState(capped - 1, lastRefill);
+      return PermitResult.permitted(newState);
     }
+
+    // Denied — estimate wait until next token
+    Duration untilNextRefill = config.getLimitRefreshPeriod()
+        .minus(Duration.between(lastRefill, now));
+    if (untilNextRefill.isNegative() || untilNextRefill.isZero()) {
+      untilNextRefill = config.getLimitRefreshPeriod();
+    }
+
+    var unchangedState = new TokenBucketState(0, lastRefill);
+    return PermitResult.denied(untilNextRefill, unchangedState);
+  }
 }

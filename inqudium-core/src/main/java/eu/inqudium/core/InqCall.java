@@ -31,58 +31,58 @@ import java.util.concurrent.Callable;
  */
 public record InqCall<T>(String callId, Callable<T> callable) {
 
-    public InqCall {
-        Objects.requireNonNull(callable, "callable must not be null");
-    }
+  public InqCall {
+    Objects.requireNonNull(callable, "callable must not be null");
+  }
 
-    /**
-     * Creates a new call with the given callId and callable.
-     *
-     * @param callId   the call identifier ({@link InqCallIdGenerator#NONE} for standalone use)
-     * @param callable the operation
-     * @param <T>      the result type
-     * @return a new InqCall
-     */
-    public static <T> InqCall<T> of(String callId, Callable<T> callable) {
-        return new InqCall<>(callId, callable);
-    }
+  /**
+   * Creates a new call with the given callId and callable.
+   *
+   * @param callId   the call identifier ({@link InqCallIdGenerator#NONE} for standalone use)
+   * @param callable the operation
+   * @param <T>      the result type
+   * @return a new InqCall
+   */
+  public static <T> InqCall<T> of(String callId, Callable<T> callable) {
+    return new InqCall<>(callId, callable);
+  }
 
-    /**
-     * Creates a new call without a callId (standalone mode).
-     *
-     * @param callable the operation
-     * @param <T>      the result type
-     * @return a new InqCall with null callId
-     */
-    public static <T> InqCall<T> standalone(Callable<T> callable) {
-        return new InqCall<>(InqCallIdGenerator.NONE, callable);
-    }
+  /**
+   * Creates a new call without a callId (standalone mode).
+   *
+   * @param callable the operation
+   * @param <T>      the result type
+   * @return a new InqCall with null callId
+   */
+  public static <T> InqCall<T> standalone(Callable<T> callable) {
+    return new InqCall<>(InqCallIdGenerator.NONE, callable);
+  }
 
-    /**
-     * Creates a new call with the same callId but a different callable.
-     *
-     * <p>Used by decorators to wrap the callable while preserving the callId:
-     * <pre>{@code
-     * return call.withCallable(() -> {
-     *     acquirePermit(call.callId());
-     *     return call.callable().call();
-     * });
-     * }</pre>
-     *
-     * @param newCallable the decorated callable
-     * @return a new InqCall with the same callId
-     */
-    public InqCall<T> withCallable(Callable<T> newCallable) {
-        return new InqCall<>(this.callId, newCallable);
-    }
+  /**
+   * Creates a new call with the same callId but a different callable.
+   *
+   * <p>Used by decorators to wrap the callable while preserving the callId:
+   * <pre>{@code
+   * return call.withCallable(() -> {
+   *     acquirePermit(call.callId());
+   *     return call.callable().call();
+   * });
+   * }</pre>
+   *
+   * @param newCallable the decorated callable
+   * @return a new InqCall with the same callId
+   */
+  public InqCall<T> withCallable(Callable<T> newCallable) {
+    return new InqCall<>(this.callId, newCallable);
+  }
 
-    /**
-     * Executes the callable and returns the result.
-     *
-     * @return the result of the call
-     * @throws Exception if the callable throws
-     */
-    public T execute() throws Exception {
-        return callable.call();
-    }
+  /**
+   * Executes the callable and returns the result.
+   *
+   * @return the result of the call
+   * @throws Exception if the callable throws
+   */
+  public T execute() throws Exception {
+    return callable.call();
+  }
 }

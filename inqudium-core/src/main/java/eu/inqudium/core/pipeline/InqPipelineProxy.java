@@ -34,10 +34,10 @@ package eu.inqudium.core.pipeline;
  */
 public interface InqPipelineProxy {
 
-    /**
-     * Returns the pipeline composition metadata.
-     *
-     * @return the immutable pipeline info
-     */
-    InqPipelineInfo getPipelineInfo();
+  /**
+   * Returns the pipeline composition metadata.
+   *
+   * @return the immutable pipeline info
+   */
+  InqPipelineInfo getPipelineInfo();
 }

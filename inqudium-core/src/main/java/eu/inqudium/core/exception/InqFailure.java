@@ -2,7 +2,6 @@ package eu.inqudium.core.exception;
 
 import eu.inqudium.core.bulkhead.InqBulkheadFullException;
 import eu.inqudium.core.bulkhead.InqBulkheadInterruptedException;
-
 import eu.inqudium.core.circuitbreaker.InqCallNotPermittedException;
 import eu.inqudium.core.ratelimiter.InqRequestNotPermittedException;
 import eu.inqudium.core.retry.InqRetryExhaustedException;
@@ -11,10 +10,10 @@ import eu.inqudium.core.timelimiter.InqTimeLimitExceededException;
 import java.io.UncheckedIOException;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.UndeclaredThrowableException;
+import java.util.Collections;
 import java.util.IdentityHashMap;
 import java.util.Optional;
 import java.util.Set;
-import java.util.Collections;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.ExecutionException;
 import java.util.function.Consumer;
@@ -49,235 +48,235 @@ import java.util.function.Consumer;
  */
 public final class InqFailure {
 
-    private final Throwable original;
-    private final InqException found;
-    private boolean handled;
+  private final Throwable original;
+  private final InqException found;
+  private boolean handled;
 
-    private InqFailure(Throwable original, InqException found) {
-        this.original = original;
-        this.found = found;
-        this.handled = false;
+  private InqFailure(Throwable original, InqException found) {
+    this.original = original;
+    this.found = found;
+    this.handled = false;
+  }
+
+  /**
+   * Searches the cause chain of the given throwable for the first {@link InqException}.
+   *
+   * <p>Traverses {@link Throwable#getCause()} recursively, handles circular cause
+   * references via identity tracking, and returns a result that can be inspected
+   * via the fluent API.
+   *
+   * @param throwable the exception to inspect (may be null)
+   * @return a result object for fluent inspection
+   */
+  public static InqFailure find(Throwable throwable) {
+    if (throwable == null) {
+      return new InqFailure(null, null);
     }
 
-    /**
-     * Searches the cause chain of the given throwable for the first {@link InqException}.
-     *
-     * <p>Traverses {@link Throwable#getCause()} recursively, handles circular cause
-     * references via identity tracking, and returns a result that can be inspected
-     * via the fluent API.
-     *
-     * @param throwable the exception to inspect (may be null)
-     * @return a result object for fluent inspection
-     */
-    public static InqFailure find(Throwable throwable) {
-        if (throwable == null) {
-            return new InqFailure(null, null);
-        }
+    // Track visited throwables to handle circular cause chains
+    Set<Throwable> visited = Collections.newSetFromMap(new IdentityHashMap<>());
+    Throwable current = throwable;
 
-        // Track visited throwables to handle circular cause chains
-        Set<Throwable> visited = Collections.newSetFromMap(new IdentityHashMap<>());
-        Throwable current = throwable;
-
-        while (current != null && visited.add(current)) {
-            if (current instanceof InqException inqException) {
-                return new InqFailure(throwable, inqException);
-            }
-            current = current.getCause();
-        }
-
-        return new InqFailure(throwable, null);
+    while (current != null && visited.add(current)) {
+      if (current instanceof InqException inqException) {
+        return new InqFailure(throwable, inqException);
+      }
+      current = current.getCause();
     }
 
-    /**
-     * Strips common wrapper exceptions to recover the original cause.
-     *
-     * <p>Many frameworks and JDK APIs wrap exceptions in generic containers during
-     * proxying, reflection, or asynchronous execution. This method peels through
-     * these layers to return the first non-wrapper exception:
-     * <pre>
-     * UncheckedIOException         → getCause()
-     * ExecutionException           → getCause()
-     * CompletionException          → getCause()
-     * InvocationTargetException    → getCause()
-     * UndeclaredThrowableException → getUndeclaredThrowable()
-     * ExceptionInInitializerError  → getException()
-     * </pre>
-     *
-     * <p>Unwrapping stops as soon as the current throwable is not one of the
-     * recognized wrapper types, or when a circular cause chain is detected.
-     * If the input is {@code null} or has no cause, it is returned as-is.
-     *
-     * <h2>Usage</h2>
-     * <pre>{@code
-     * // Inside an exception constructor — unwrap before storing the cause
-     * super(callId, code, name, type, message, InqFailure.unwrap(cause));
-     *
-     * // Standalone — recover the original exception
-     * Throwable original = InqFailure.unwrap(executionException);
-     * }</pre>
-     *
-     * @param throwable the exception to unwrap (may be null)
-     * @return the innermost non-wrapper throwable, or the input if it is not a wrapper
-     */
-    public static Throwable unwrap(Throwable throwable) {
-        if (throwable == null) {
-            return null;
-        }
+    return new InqFailure(throwable, null);
+  }
 
-        Set<Throwable> visited = Collections.newSetFromMap(new IdentityHashMap<>());
-        Throwable current = throwable;
+  /**
+   * Strips common wrapper exceptions to recover the original cause.
+   *
+   * <p>Many frameworks and JDK APIs wrap exceptions in generic containers during
+   * proxying, reflection, or asynchronous execution. This method peels through
+   * these layers to return the first non-wrapper exception:
+   * <pre>
+   * UncheckedIOException         → getCause()
+   * ExecutionException           → getCause()
+   * CompletionException          → getCause()
+   * InvocationTargetException    → getCause()
+   * UndeclaredThrowableException → getUndeclaredThrowable()
+   * ExceptionInInitializerError  → getException()
+   * </pre>
+   *
+   * <p>Unwrapping stops as soon as the current throwable is not one of the
+   * recognized wrapper types, or when a circular cause chain is detected.
+   * If the input is {@code null} or has no cause, it is returned as-is.
+   *
+   * <h2>Usage</h2>
+   * <pre>{@code
+   * // Inside an exception constructor — unwrap before storing the cause
+   * super(callId, code, name, type, message, InqFailure.unwrap(cause));
+   *
+   * // Standalone — recover the original exception
+   * Throwable original = InqFailure.unwrap(executionException);
+   * }</pre>
+   *
+   * @param throwable the exception to unwrap (may be null)
+   * @return the innermost non-wrapper throwable, or the input if it is not a wrapper
+   */
+  public static Throwable unwrap(Throwable throwable) {
+    if (throwable == null) {
+      return null;
+    }
 
-        while (visited.add(current)) {
-            Throwable cause = unwrapOnce(current);
-            if (cause == null || cause == current) {
-                return current;
-            }
-            current = cause;
-        }
+    Set<Throwable> visited = Collections.newSetFromMap(new IdentityHashMap<>());
+    Throwable current = throwable;
 
-        // Circular cause chain — return the last non-circular entry
+    while (visited.add(current)) {
+      Throwable cause = unwrapOnce(current);
+      if (cause == null || cause == current) {
         return current;
+      }
+      current = cause;
     }
 
-    private static Throwable unwrapOnce(Throwable throwable) {
-        if (throwable instanceof UncheckedIOException e) return e.getCause();
-        if (throwable instanceof ExecutionException e) return e.getCause();
-        if (throwable instanceof CompletionException e) return e.getCause();
-        if (throwable instanceof InvocationTargetException e) return e.getCause();
-        if (throwable instanceof UndeclaredThrowableException e) return e.getUndeclaredThrowable();
-        if (throwable instanceof ExceptionInInitializerError e) return e.getException();
-        return null;  // not a wrapper — stop unwrapping
-    }
+    // Circular cause chain — return the last non-circular entry
+    return current;
+  }
 
-    /**
-     * Returns {@code true} if an {@link InqException} was found in the cause chain.
-     *
-     * @return true if an Inqudium intervention was found
-     */
-    public boolean isPresent() {
-        return found != null;
-    }
+  private static Throwable unwrapOnce(Throwable throwable) {
+    if (throwable instanceof UncheckedIOException e) return e.getCause();
+    if (throwable instanceof ExecutionException e) return e.getCause();
+    if (throwable instanceof CompletionException e) return e.getCause();
+    if (throwable instanceof InvocationTargetException e) return e.getCause();
+    if (throwable instanceof UndeclaredThrowableException e) return e.getUndeclaredThrowable();
+    if (throwable instanceof ExceptionInInitializerError e) return e.getException();
+    return null;  // not a wrapper — stop unwrapping
+  }
 
-    /**
-     * Returns the found {@link InqException}, if any.
-     *
-     * @return the exception, or empty if no Inqudium intervention was found
-     */
-    public Optional<InqException> get() {
-        return Optional.ofNullable(found);
-    }
+  /**
+   * Returns {@code true} if an {@link InqException} was found in the cause chain.
+   *
+   * @return true if an Inqudium intervention was found
+   */
+  public boolean isPresent() {
+    return found != null;
+  }
 
-    /**
-     * Invokes the consumer if the found exception is a {@link InqCallNotPermittedException}.
-     *
-     * @param consumer the handler for circuit breaker open events
-     * @return this instance for chaining
-     */
-    public InqFailure ifCircuitBreakerOpen(Consumer<InqCallNotPermittedException> consumer) {
-        if (found instanceof InqCallNotPermittedException ex) {
-            consumer.accept(ex);
-            handled = true;
-        }
-        return this;
-    }
+  /**
+   * Returns the found {@link InqException}, if any.
+   *
+   * @return the exception, or empty if no Inqudium intervention was found
+   */
+  public Optional<InqException> get() {
+    return Optional.ofNullable(found);
+  }
 
-    /**
-     * Invokes the consumer if the found exception is a {@link InqRequestNotPermittedException}.
-     *
-     * @param consumer the handler for rate limiter denied events
-     * @return this instance for chaining
-     */
-    public InqFailure ifRateLimited(Consumer<InqRequestNotPermittedException> consumer) {
-        if (found instanceof InqRequestNotPermittedException ex) {
-            consumer.accept(ex);
-            handled = true;
-        }
-        return this;
+  /**
+   * Invokes the consumer if the found exception is a {@link InqCallNotPermittedException}.
+   *
+   * @param consumer the handler for circuit breaker open events
+   * @return this instance for chaining
+   */
+  public InqFailure ifCircuitBreakerOpen(Consumer<InqCallNotPermittedException> consumer) {
+    if (found instanceof InqCallNotPermittedException ex) {
+      consumer.accept(ex);
+      handled = true;
     }
+    return this;
+  }
 
-    /**
-     * Invokes the consumer if the found exception is a {@link InqBulkheadFullException}.
-     *
-     * @param consumer the handler for bulkhead full events
-     * @return this instance for chaining
-     */
-    public InqFailure ifBulkheadFull(Consumer<InqBulkheadFullException> consumer) {
-        if (found instanceof InqBulkheadFullException ex) {
-            consumer.accept(ex);
-            handled = true;
-        }
-        return this;
+  /**
+   * Invokes the consumer if the found exception is a {@link InqRequestNotPermittedException}.
+   *
+   * @param consumer the handler for rate limiter denied events
+   * @return this instance for chaining
+   */
+  public InqFailure ifRateLimited(Consumer<InqRequestNotPermittedException> consumer) {
+    if (found instanceof InqRequestNotPermittedException ex) {
+      consumer.accept(ex);
+      handled = true;
     }
+    return this;
+  }
 
-    /**
-     * Invokes the consumer if the found exception is a {@link InqBulkheadInterruptedException}.
-     *
-     * @param consumer the handler for bulkhead interrupt events
-     * @return this instance for chaining
-     */
-    public InqFailure ifBulkheadInterrupted(Consumer<InqBulkheadInterruptedException> consumer) {
-        if (found instanceof InqBulkheadInterruptedException ex) {
-            consumer.accept(ex);
-            handled = true;
-        }
-        return this;
+  /**
+   * Invokes the consumer if the found exception is a {@link InqBulkheadFullException}.
+   *
+   * @param consumer the handler for bulkhead full events
+   * @return this instance for chaining
+   */
+  public InqFailure ifBulkheadFull(Consumer<InqBulkheadFullException> consumer) {
+    if (found instanceof InqBulkheadFullException ex) {
+      consumer.accept(ex);
+      handled = true;
     }
+    return this;
+  }
 
-    /**
-     * Invokes the consumer if the found exception is a {@link InqTimeLimitExceededException}.
-     *
-     * @param consumer the handler for time limit exceeded events
-     * @return this instance for chaining
-     */
-    public InqFailure ifTimeLimitExceeded(Consumer<InqTimeLimitExceededException> consumer) {
-        if (found instanceof InqTimeLimitExceededException ex) {
-            consumer.accept(ex);
-            handled = true;
-        }
-        return this;
+  /**
+   * Invokes the consumer if the found exception is a {@link InqBulkheadInterruptedException}.
+   *
+   * @param consumer the handler for bulkhead interrupt events
+   * @return this instance for chaining
+   */
+  public InqFailure ifBulkheadInterrupted(Consumer<InqBulkheadInterruptedException> consumer) {
+    if (found instanceof InqBulkheadInterruptedException ex) {
+      consumer.accept(ex);
+      handled = true;
     }
+    return this;
+  }
 
-    /**
-     * Invokes the consumer if the found exception is a {@link InqRetryExhaustedException}.
-     *
-     * @param consumer the handler for retry exhausted events
-     * @return this instance for chaining
-     */
-    public InqFailure ifRetryExhausted(Consumer<InqRetryExhaustedException> consumer) {
-        if (found instanceof InqRetryExhaustedException ex) {
-            consumer.accept(ex);
-            handled = true;
-        }
-        return this;
+  /**
+   * Invokes the consumer if the found exception is a {@link InqTimeLimitExceededException}.
+   *
+   * @param consumer the handler for time limit exceeded events
+   * @return this instance for chaining
+   */
+  public InqFailure ifTimeLimitExceeded(Consumer<InqTimeLimitExceededException> consumer) {
+    if (found instanceof InqTimeLimitExceededException ex) {
+      consumer.accept(ex);
+      handled = true;
     }
+    return this;
+  }
 
-    /**
-     * Re-throws the original exception if no Inqudium intervention was found
-     * or if none of the {@code if*} handlers matched.
-     *
-     * @throws RuntimeException the original exception if unhandled
-     */
-    public void orElseThrow() {
-        if (!handled && original != null) {
-            if (original instanceof RuntimeException re) {
-                throw re;
-            }
-            throw new InqRuntimeException(original);
-        }
+  /**
+   * Invokes the consumer if the found exception is a {@link InqRetryExhaustedException}.
+   *
+   * @param consumer the handler for retry exhausted events
+   * @return this instance for chaining
+   */
+  public InqFailure ifRetryExhausted(Consumer<InqRetryExhaustedException> consumer) {
+    if (found instanceof InqRetryExhaustedException ex) {
+      consumer.accept(ex);
+      handled = true;
     }
+    return this;
+  }
 
-    /**
-     * Re-throws the original exception if no Inqudium intervention was found.
-     * Unlike {@link #orElseThrow()}, this re-throws even if a handler matched.
-     *
-     * @throws RuntimeException the original exception if no InqException was found
-     */
-    public void orElseThrowIfAbsent() {
-        if (found == null && original != null) {
-            if (original instanceof RuntimeException re) {
-                throw re;
-            }
-            throw new InqRuntimeException(original);
-        }
+  /**
+   * Re-throws the original exception if no Inqudium intervention was found
+   * or if none of the {@code if*} handlers matched.
+   *
+   * @throws RuntimeException the original exception if unhandled
+   */
+  public void orElseThrow() {
+    if (!handled && original != null) {
+      if (original instanceof RuntimeException re) {
+        throw re;
+      }
+      throw new InqRuntimeException(original);
     }
+  }
+
+  /**
+   * Re-throws the original exception if no Inqudium intervention was found.
+   * Unlike {@link #orElseThrow()}, this re-throws even if a handler matched.
+   *
+   * @throws RuntimeException the original exception if no InqException was found
+   */
+  public void orElseThrowIfAbsent() {
+    if (found == null && original != null) {
+      if (original instanceof RuntimeException re) {
+        throw re;
+      }
+      throw new InqRuntimeException(original);
+    }
+  }
 }

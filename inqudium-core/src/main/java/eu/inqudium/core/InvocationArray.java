@@ -31,12 +31,12 @@ package eu.inqudium.core;
 @FunctionalInterface
 public interface InvocationArray<T> {
 
-    /**
-     * Invokes the operation with the given arguments.
-     *
-     * @param args the arguments
-     * @return the result
-     * @throws Exception if the operation fails
-     */
-    T invoke(Object[] args) throws Exception;
+  /**
+   * Invokes the operation with the given arguments.
+   *
+   * @param args the arguments
+   * @return the result
+   * @throws Exception if the operation fails
+   */
+  T invoke(Object[] args) throws Exception;
 }

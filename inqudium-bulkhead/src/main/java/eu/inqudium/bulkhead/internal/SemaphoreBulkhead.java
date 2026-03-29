@@ -18,32 +18,32 @@ import java.util.concurrent.TimeUnit;
  */
 public final class SemaphoreBulkhead extends AbstractBulkhead implements Bulkhead {
 
-    private final Semaphore semaphore;
+  private final Semaphore semaphore;
 
-    public SemaphoreBulkhead(String name, BulkheadConfig config) {
-        super(name, config);
-        this.semaphore = new Semaphore(config.getMaxConcurrentCalls(), true);
-    }
+  public SemaphoreBulkhead(String name, BulkheadConfig config) {
+    super(name, config);
+    this.semaphore = new Semaphore(config.getMaxConcurrentCalls(), true);
+  }
 
-    @Override
-    protected boolean tryAcquirePermit(Duration timeout) throws InterruptedException {
-        return timeout.isZero()
-                ? semaphore.tryAcquire()
-                : semaphore.tryAcquire(timeout.toNanos(), TimeUnit.NANOSECONDS);
-    }
+  @Override
+  protected boolean tryAcquirePermit(Duration timeout) throws InterruptedException {
+    return timeout.isZero()
+        ? semaphore.tryAcquire()
+        : semaphore.tryAcquire(timeout.toNanos(), TimeUnit.NANOSECONDS);
+  }
 
-    @Override
-    protected void releasePermit() {
-        semaphore.release();
-    }
+  @Override
+  protected void releasePermit() {
+    semaphore.release();
+  }
 
-    @Override
-    public int getConcurrentCalls() {
-        return getConfig().getMaxConcurrentCalls() - semaphore.availablePermits();
-    }
+  @Override
+  public int getConcurrentCalls() {
+    return getConfig().getMaxConcurrentCalls() - semaphore.availablePermits();
+  }
 
-    @Override
-    public int getAvailablePermits() {
-        return semaphore.availablePermits();
-    }
+  @Override
+  public int getAvailablePermits() {
+    return semaphore.availablePermits();
+  }
 }
