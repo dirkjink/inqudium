@@ -39,7 +39,7 @@ public final class InqContextPropagation {
    * @return a scope that restores all contexts when closed
    */
   public static InqContextScope activateFor(String callId, String elementName, InqElementType elementType) {
-    var propagators = InqContextPropagatorRegistry.getPropagators();
+    var propagators = InqContextPropagatorRegistry.getDefault().getPropagators();
     if (propagators.isEmpty()) {
       return InqContextScope.NOOP;
     }
@@ -72,7 +72,7 @@ public final class InqContextPropagation {
    * @return a list of snapshots, one per registered propagator (same order)
    */
   public static List<InqContextSnapshot> captureAll() {
-    return captureAll(InqContextPropagatorRegistry.getPropagators());
+    return captureAll(InqContextPropagatorRegistry.getDefault().getPropagators());
   }
 
   private static List<InqContextSnapshot> captureAll(List<InqContextPropagator> propagators) {
@@ -105,7 +105,7 @@ public final class InqContextPropagation {
    */
   public static InqContextScope restoreAndEnrich(List<InqContextSnapshot> snapshots,
                                                  String callId, String elementName, InqElementType elementType) {
-    var propagators = InqContextPropagatorRegistry.getPropagators();
+    var propagators = InqContextPropagatorRegistry.getDefault().getPropagators();
     if (propagators.isEmpty()) {
       return InqContextScope.NOOP;
     }
