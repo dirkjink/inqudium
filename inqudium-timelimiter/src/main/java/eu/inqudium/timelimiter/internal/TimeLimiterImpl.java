@@ -49,12 +49,14 @@ public final class TimeLimiterImpl implements TimeLimiter {
     }
 
     @Override
-    public <T> Supplier<T> decorateSupplier(Supplier<T> supplier) {
+    public <T> Supplier<T> decorateCallable(Callable<T> callable) {
         return decorateFutureSupplier(() ->
-                CompletableFuture.supplyAsync(supplier, VIRTUAL_THREAD_EXECUTOR));
+                CompletableFuture.supplyAsync(
+                        InqRuntimeException.wrapCallable(callable, name, InqElementType.TIME_LIMITER),
+                        VIRTUAL_THREAD_EXECUTOR));
     }
 
-   @Override
+    @Override
     public <T> InqCall<T> decorate(InqCall<T> call) {
         return call.withSupplier(() ->
                 executeFuture(call.callId(), () ->

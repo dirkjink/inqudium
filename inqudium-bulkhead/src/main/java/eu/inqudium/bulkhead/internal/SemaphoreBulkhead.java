@@ -9,8 +9,10 @@ import eu.inqudium.core.InqElementType;
 import eu.inqudium.core.bulkhead.BulkheadConfig;
 import eu.inqudium.core.bulkhead.InqBulkheadFullException;
 import eu.inqudium.core.event.InqEventPublisher;
+import eu.inqudium.core.exception.InqRuntimeException;
 
 import java.time.Instant;
+import java.util.concurrent.Callable;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
@@ -41,12 +43,12 @@ public final class SemaphoreBulkhead implements Bulkhead {
     @Override public int getAvailablePermits() { return semaphore.availablePermits(); }
 
     @Override
-    public <T> Supplier<T> decorateSupplier(Supplier<T> supplier) {
+    public <T> Supplier<T> decorateCallable(Callable<T> callable) {
         return () -> {
             var callId = config.getCallIdGenerator().generate();
             acquirePermit(callId);
             try {
-                return supplier.get();
+                return InqRuntimeException.wrapCallable(callable, name, InqElementType.BULKHEAD).get();
             } finally {
                 releasePermit(callId);
             }
@@ -63,19 +65,6 @@ public final class SemaphoreBulkhead implements Bulkhead {
                 releasePermit(call.callId());
             }
         });
-    }
-
-    @Override
-    public Runnable decorateRunnable(Runnable runnable) {
-        return () -> {
-            var callId = config.getCallIdGenerator().generate();
-            acquirePermit(callId);
-            try {
-                runnable.run();
-            } finally {
-                releasePermit(callId);
-            }
-        };
     }
 
     private void acquirePermit(String callId) {

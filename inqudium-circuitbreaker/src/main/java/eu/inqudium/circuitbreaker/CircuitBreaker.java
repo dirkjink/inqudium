@@ -8,9 +8,6 @@ import eu.inqudium.core.circuitbreaker.CircuitBreakerState;
 import eu.inqudium.core.circuitbreaker.WindowSnapshot;
 import eu.inqudium.core.event.InqEventPublisher;
 
-import java.util.concurrent.Callable;
-import java.util.function.Supplier;
-
 /**
  * Imperative circuit breaker — the primary API for decorating synchronous calls
  * with cascading failure protection.
@@ -94,52 +91,6 @@ public interface CircuitBreaker extends InqDecorator {
      * Resets the circuit breaker to CLOSED state with a fresh sliding window.
      */
     void reset();
-
-    /**
-     * Decorates a supplier with circuit breaker protection.
-     *
-     * @param supplier the supplier to decorate
-     * @param <T>      the result type
-     * @return a decorated supplier that applies circuit breaker logic
-     */
-    <T> Supplier<T> decorateSupplier(Supplier<T> supplier);
-
-    /**
-     * Decorates a callable with circuit breaker protection.
-     *
-     * @param callable the callable to decorate
-     * @param <T>      the result type
-     * @return a decorated supplier (checked exceptions are wrapped in RuntimeException)
-     */
-    <T> Supplier<T> decorateCallable(Callable<T> callable);
-
-    /**
-     * Decorates a runnable with circuit breaker protection.
-     *
-     * @param runnable the runnable to decorate
-     * @return a decorated runnable
-     */
-    Runnable decorateRunnable(Runnable runnable);
-
-    /**
-     * Executes the supplier with circuit breaker protection.
-     *
-     * @param supplier the supplier to execute
-     * @param <T>      the result type
-     * @return the result
-     */
-    default <T> T executeSupplier(Supplier<T> supplier) {
-        return decorateSupplier(supplier).get();
-    }
-
-    /**
-     * Executes the runnable with circuit breaker protection.
-     *
-     * @param runnable the runnable to execute
-     */
-    default void executeRunnable(Runnable runnable) {
-        decorateRunnable(runnable).run();
-    }
 
     @Override
     default InqElementType getElementType() {

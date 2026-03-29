@@ -39,8 +39,9 @@ public final class RetryImpl implements Retry {
     @Override public InqEventPublisher getEventPublisher() { return eventPublisher; }
 
     @Override
-    public <T> Supplier<T> decorateSupplier(Supplier<T> supplier) {
+    public <T> Supplier<T> decorateCallable(Callable<T> callable) {
         return () -> {
+            var supplier = InqRuntimeException.wrapCallable(callable, name, InqElementType.RETRY);
             var call = InqCall.of(config.getCallIdGenerator().generate(), supplier);
             return executeCall(call);
         };
@@ -49,21 +50,6 @@ public final class RetryImpl implements Retry {
     @Override
     public <T> InqCall<T> decorate(InqCall<T> call) {
         return call.withSupplier(() -> executeCall(call));
-    }
-
-    @Override
-    public <T> Supplier<T> decorateCallable(Callable<T> callable) {
-        return decorateSupplier(() -> {
-            try { return callable.call(); }
-            catch (RuntimeException re) { throw re; }
-            catch (Exception e) { throw new InqRuntimeException(name, eu.inqudium.core.InqElementType.RETRY, e); }
-        });
-    }
-
-    @Override
-    public Runnable decorateRunnable(Runnable runnable) {
-        Supplier<Void> s = decorateSupplier(() -> { runnable.run(); return null; });
-        return s::get;
     }
 
     private <T> T executeCall(InqCall<T> call) {

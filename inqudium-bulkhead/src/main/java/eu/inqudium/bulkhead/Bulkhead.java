@@ -5,7 +5,6 @@ import eu.inqudium.core.pipeline.InqDecorator;
 import eu.inqudium.core.InqElementType;
 import eu.inqudium.core.bulkhead.BulkheadConfig;
 
-import java.util.function.Supplier;
 
 /**
  * Imperative bulkhead — limits concurrent calls via semaphore isolation.
@@ -41,19 +40,6 @@ public interface Bulkhead extends InqDecorator {
 
     /** Returns the number of available permits. */
     int getAvailablePermits();
-
-    <T> Supplier<T> decorateSupplier(Supplier<T> supplier);
-
-
-    Runnable decorateRunnable(Runnable runnable);
-
-    default <T> T executeSupplier(Supplier<T> supplier) {
-        return decorateSupplier(supplier).get();
-    }
-
-    default void executeRunnable(Runnable runnable) {
-        decorateRunnable(runnable).run();
-    }
 
     @Override
     default InqElementType getElementType() {

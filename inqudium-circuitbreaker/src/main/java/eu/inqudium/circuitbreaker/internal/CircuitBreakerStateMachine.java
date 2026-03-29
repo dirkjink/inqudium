@@ -87,9 +87,9 @@ public final class CircuitBreakerStateMachine implements CircuitBreaker {
     }
 
     @Override
-    public <T> Supplier<T> decorateSupplier(Supplier<T> supplier) {
+    public <T> Supplier<T> decorateCallable(Callable<T> callable) {
         return () -> {
-            // Standalone usage — generate a fresh callId
+            var supplier = InqRuntimeException.wrapCallable(callable, name, InqElementType.CIRCUIT_BREAKER);
             var call = InqCall.of(config.getCallIdGenerator().generate(), supplier);
             return executeCall(call);
         };
@@ -97,29 +97,7 @@ public final class CircuitBreakerStateMachine implements CircuitBreaker {
 
     @Override
     public <T> InqCall<T> decorate(InqCall<T> call) {
-        // Pipeline usage — callId comes from the pipeline via InqCall
         return call.withSupplier(() -> executeCall(call));
-    }
-
-    @Override
-    public <T> Supplier<T> decorateCallable(Callable<T> callable) {
-        return decorateSupplier(() -> {
-            try {
-                return callable.call();
-            } catch (RuntimeException re) {
-                throw re;
-            } catch (Exception e) {
-                throw new InqRuntimeException(name, eu.inqudium.core.InqElementType.CIRCUIT_BREAKER, e);
-            }
-        });
-    }
-
-    @Override
-    public Runnable decorateRunnable(Runnable runnable) {
-        return () -> decorateSupplier(() -> {
-            runnable.run();
-            return null;
-        }).get();
     }
 
     private <T> T executeCall(InqCall<T> call) {

@@ -5,7 +5,6 @@ import eu.inqudium.core.InqElementType;
 import eu.inqudium.core.ratelimiter.RateLimiterConfig;
 import eu.inqudium.ratelimiter.internal.TokenBucketRateLimiter;
 
-import java.util.function.Supplier;
 
 /**
  * Imperative rate limiter — controls throughput via a token bucket algorithm.
@@ -39,19 +38,6 @@ public interface RateLimiter extends InqDecorator {
      * Throws {@link eu.inqudium.core.ratelimiter.InqRequestNotPermittedException} if denied.
      */
     void acquirePermit();
-
-    <T> Supplier<T> decorateSupplier(Supplier<T> supplier);
-
-
-    Runnable decorateRunnable(Runnable runnable);
-
-    default <T> T executeSupplier(Supplier<T> supplier) {
-        return decorateSupplier(supplier).get();
-    }
-
-    default void executeRunnable(Runnable runnable) {
-        decorateRunnable(runnable).run();
-    }
 
     @Override
     default InqElementType getElementType() {

@@ -5,9 +5,6 @@ import eu.inqudium.core.InqElementType;
 import eu.inqudium.core.retry.RetryConfig;
 import eu.inqudium.retry.internal.RetryImpl;
 
-import java.util.concurrent.Callable;
-import java.util.function.Supplier;
-
 /**
  * Imperative retry element — re-executes failed operations with configurable
  * backoff. Uses {@code LockSupport.parkNanos} for waiting (virtual-thread safe).
@@ -34,20 +31,6 @@ public interface Retry extends InqDecorator {
     }
 
     RetryConfig getConfig();
-
-    <T> Supplier<T> decorateSupplier(Supplier<T> supplier);
-
-    <T> Supplier<T> decorateCallable(Callable<T> callable);
-
-    Runnable decorateRunnable(Runnable runnable);
-
-    default <T> T executeSupplier(Supplier<T> supplier) {
-        return decorateSupplier(supplier).get();
-    }
-
-    default void executeRunnable(Runnable runnable) {
-        decorateRunnable(runnable).run();
-    }
 
     @Override
     default InqElementType getElementType() {

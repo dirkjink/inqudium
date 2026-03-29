@@ -3,6 +3,8 @@ package eu.inqudium.core.exception;
 import eu.inqudium.core.InqElementType;
 
 import java.util.Locale;
+import java.util.concurrent.Callable;
+import java.util.function.Supplier;
 
 /**
  * Wraps checked exceptions that occur during element execution but are not
@@ -80,5 +82,42 @@ public class InqRuntimeException extends InqException {
      */
     public boolean hasElementContext() {
         return getElementName() != null && getElementType() != null;
+    }
+
+    /**
+     * Converts a {@link Callable} to a {@link Supplier}, wrapping checked exceptions
+     * in {@code InqRuntimeException} with the given element context.
+     *
+     * <p>This is the standard way for element implementations to handle the
+     * {@code Callable → Supplier} conversion in {@code decorateCallable}:
+     * <pre>{@code
+     * @Override
+     * public <T> Supplier<T> decorateCallable(Callable<T> callable) {
+     *     return () -> {
+     *         var supplier = InqRuntimeException.wrapCallable(callable, name, elementType);
+     *         var call = InqCall.of(callIdGenerator.generate(), supplier);
+     *         return executeCall(call);
+     *     };
+     * }
+     * }</pre>
+     *
+     * @param callable    the callable to wrap
+     * @param elementName the element instance name (for error context)
+     * @param elementType the element type (for error code derivation)
+     * @param <T>         the result type
+     * @return a supplier that invokes the callable and wraps checked exceptions
+     */
+    public static <T> Supplier<T> wrapCallable(Callable<T> callable,
+                                                String elementName,
+                                                InqElementType elementType) {
+        return () -> {
+            try {
+                return callable.call();
+            } catch (RuntimeException re) {
+                throw re;
+            } catch (Exception e) {
+                throw new InqRuntimeException(elementName, elementType, e);
+            }
+        };
     }
 }

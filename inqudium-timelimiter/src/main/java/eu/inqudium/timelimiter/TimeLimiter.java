@@ -53,17 +53,6 @@ public interface TimeLimiter extends InqDecorator {
      */
     <T> Supplier<T> decorateFutureSupplier(Supplier<CompletionStage<T>> futureSupplier);
 
-
-    /**
-     * Decorates a synchronous supplier with a timeout. The supplier runs on
-     * a virtual thread internally.
-     *
-     * @param supplier the synchronous supplier to decorate
-     * @param <T>      the result type
-     * @return a supplier that applies the timeout
-     */
-    <T> Supplier<T> decorateSupplier(Supplier<T> supplier);
-
     /**
      * Executes a future supplier with timeout protection.
      *
@@ -73,17 +62,6 @@ public interface TimeLimiter extends InqDecorator {
      */
     default <T> T executeFutureSupplier(Supplier<CompletionStage<T>> futureSupplier) {
         return decorateFutureSupplier(futureSupplier).get();
-    }
-
-    /**
-     * Executes a synchronous supplier with timeout protection.
-     *
-     * @param supplier the synchronous supplier
-     * @param <T>      the result type
-     * @return the result
-     */
-    default <T> T executeSupplier(Supplier<T> supplier) {
-        return decorateSupplier(supplier).get();
     }
 
     @Override

@@ -3,11 +3,13 @@ package eu.inqudium.ratelimiter.internal;
 import eu.inqudium.core.InqCall;
 import eu.inqudium.core.InqElementType;
 import eu.inqudium.core.event.InqEventPublisher;
+import eu.inqudium.core.exception.InqRuntimeException;
 import eu.inqudium.core.ratelimiter.*;
 import eu.inqudium.ratelimiter.RateLimiter;
 import eu.inqudium.ratelimiter.event.RateLimiterOnPermitEvent;
 import eu.inqudium.ratelimiter.event.RateLimiterOnRejectEvent;
 
+import java.util.concurrent.Callable;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.concurrent.atomic.AtomicReference;
@@ -45,10 +47,10 @@ public final class TokenBucketRateLimiter implements RateLimiter {
     }
 
     @Override
-    public <T> Supplier<T> decorateSupplier(Supplier<T> supplier) {
+    public <T> Supplier<T> decorateCallable(Callable<T> callable) {
         return () -> {
             acquirePermitWithCallId(config.getCallIdGenerator().generate());
-            return supplier.get();
+            return InqRuntimeException.wrapCallable(callable, name, InqElementType.RATE_LIMITER).get();
         };
     }
 
@@ -58,14 +60,6 @@ public final class TokenBucketRateLimiter implements RateLimiter {
             acquirePermitWithCallId(call.callId());
             return call.supplier().get();
         });
-    }
-
-    @Override
-    public Runnable decorateRunnable(Runnable runnable) {
-        return () -> {
-            acquirePermitWithCallId(config.getCallIdGenerator().generate());
-            runnable.run();
-        };
     }
 
     private void acquirePermitWithCallId(String callId) {
