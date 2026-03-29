@@ -20,15 +20,22 @@ import static org.assertj.core.api.Assertions.*;
 @DisplayName("RateLimiter — User Perspective")
 class RateLimiterUsageTest {
 
-    static class ApiClient {
+    interface ApiClientApi {
+        String fetchData(String endpoint);
+        String fetchDataFiltered(String endpoint, String filter, int limit, boolean cached);
+    }
+
+    static class ApiClient implements ApiClientApi {
         private final AtomicInteger callCount = new AtomicInteger(0);
 
-        String fetchData(String endpoint) {
+        @Override
+        public String fetchData(String endpoint) {
             callCount.incrementAndGet();
             return "response-from-" + endpoint;
         }
 
-        String fetchDataFiltered(String endpoint, String filter, int limit, boolean cached) {
+        @Override
+        public String fetchDataFiltered(String endpoint, String filter, int limit, boolean cached) {
             callCount.incrementAndGet();
             return String.format("%s?filter=%s&limit=%d&cached=%s", endpoint, filter, limit, cached);
         }
@@ -275,6 +282,80 @@ class RateLimiterUsageTest {
             // Then
             assertThat(r1).isEqualTo("users?filter=active&limit=100&cached=true");
             assertThat(r2).isEqualTo("orders?filter=pending&limit=50&cached=false");
+        }
+    }
+
+    // ── Pipeline — Proxy pattern ──
+
+    @Nested
+    @DisplayName("Pipeline proxy usage")
+    class PipelineProxy {
+
+        @Test
+        void should_create_a_typed_proxy_that_rate_limits_single_argument_calls() {
+            // Given
+            var client = new ApiClient();
+            var rl = RateLimiter.of("apiGateway", RateLimiterConfig.builder()
+                    .limitForPeriod(5)
+                    .limitRefreshPeriod(Duration.ofSeconds(1))
+                    .build());
+
+            ApiClientApi resilient = InqPipeline.of(client, ApiClientApi.class)
+                    .shield(rl)
+                    .decorate();
+
+            // When — call like a normal client with different endpoints
+            var r1 = resilient.fetchData("users");
+            var r2 = resilient.fetchData("orders");
+            var r3 = resilient.fetchData("products");
+
+            // Then
+            assertThat(r1).isEqualTo("response-from-users");
+            assertThat(r2).isEqualTo("response-from-orders");
+            assertThat(r3).isEqualTo("response-from-products");
+            assertThat(client.getCallCount()).isEqualTo(3);
+        }
+
+        @Test
+        void should_create_a_typed_proxy_that_rate_limits_four_argument_calls() {
+            // Given
+            var client = new ApiClient();
+            var rl = RateLimiter.of("apiGateway", RateLimiterConfig.builder()
+                    .limitForPeriod(5)
+                    .limitRefreshPeriod(Duration.ofSeconds(1))
+                    .build());
+
+            ApiClientApi resilient = InqPipeline.of(client, ApiClientApi.class)
+                    .shield(rl)
+                    .decorate();
+
+            // When
+            var r1 = resilient.fetchDataFiltered("users", "active", 100, true);
+            var r2 = resilient.fetchDataFiltered("orders", "pending", 50, false);
+
+            // Then
+            assertThat(r1).isEqualTo("users?filter=active&limit=100&cached=true");
+            assertThat(r2).isEqualTo("orders?filter=pending&limit=50&cached=false");
+        }
+
+        @Test
+        void should_reject_proxy_calls_when_rate_limit_exceeded() {
+            // Given
+            var client = new ApiClient();
+            var rl = RateLimiter.of("apiGateway", RateLimiterConfig.builder()
+                    .limitForPeriod(1)
+                    .limitRefreshPeriod(Duration.ofSeconds(10))
+                    .build());
+
+            ApiClientApi resilient = InqPipeline.of(client, ApiClientApi.class)
+                    .shield(rl)
+                    .decorate();
+
+            resilient.fetchData("first");
+
+            // When / Then
+            assertThatThrownBy(() -> resilient.fetchData("second"))
+                    .isInstanceOf(InqRequestNotPermittedException.class);
         }
     }
 }

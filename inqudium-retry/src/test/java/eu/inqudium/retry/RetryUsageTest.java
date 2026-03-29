@@ -21,7 +21,12 @@ import static org.assertj.core.api.Assertions.*;
 @DisplayName("Retry — User Perspective")
 class RetryUsageTest {
 
-    static class InventoryService {
+    interface InventoryApi {
+        String checkStock(String sku);
+        String checkStockDetailed(String sku, String warehouse, int minQuantity, boolean includeReserved);
+    }
+
+    static class InventoryService implements InventoryApi {
         private final AtomicInteger callCount = new AtomicInteger(0);
         private int failUntilAttempt;
 
@@ -29,7 +34,8 @@ class RetryUsageTest {
             this.failUntilAttempt = failUntilAttempt;
         }
 
-        String checkStock(String sku) {
+        @Override
+        public String checkStock(String sku) {
             int attempt = callCount.incrementAndGet();
             if (attempt < failUntilAttempt) {
                 throw new RuntimeException("Service temporarily unavailable (attempt " + attempt + ")");
@@ -37,7 +43,8 @@ class RetryUsageTest {
             return "in-stock:" + sku;
         }
 
-        String checkStockDetailed(String sku, String warehouse, int minQuantity, boolean includeReserved) {
+        @Override
+        public String checkStockDetailed(String sku, String warehouse, int minQuantity, boolean includeReserved) {
             int attempt = callCount.incrementAndGet();
             if (attempt < failUntilAttempt) {
                 throw new RuntimeException("Service temporarily unavailable (attempt " + attempt + ")");
@@ -281,6 +288,60 @@ class RetryUsageTest {
             // When
             var r1 = resilientCheck.invoke("SKU-100", "warehouse-A", 10, true);
             var r2 = resilientCheck.invoke("SKU-200", "warehouse-B", 5, false);
+
+            // Then
+            assertThat(r1).isEqualTo("SKU-100@warehouse-A-min10-incl-reserved");
+            assertThat(r2).isEqualTo("SKU-200@warehouse-B-min5-available-only");
+        }
+    }
+
+    // ── Pipeline — Proxy pattern ──
+
+    @Nested
+    @DisplayName("Pipeline proxy usage")
+    class PipelineProxy {
+
+        @Test
+        void should_create_a_typed_proxy_that_retries_single_argument_calls() {
+            // Given — service fails first attempt, succeeds second
+            var service = new InventoryService(2);
+            var retry = Retry.of("inventoryService", RetryConfig.builder()
+                    .maxAttempts(3)
+                    .initialInterval(Duration.ofMillis(10))
+                    .build());
+
+            InventoryApi resilient = InqPipeline.of(service, InventoryApi.class)
+                    .shield(retry)
+                    .decorate();
+
+            // When — call like a normal service
+            var r1 = resilient.checkStock("SKU-100");
+
+            // Then
+            assertThat(r1).isEqualTo("in-stock:SKU-100");
+            assertThat(service.getCallCount()).isEqualTo(2);
+
+            // When — second call succeeds immediately
+            var r2 = resilient.checkStock("SKU-200");
+            assertThat(r2).isEqualTo("in-stock:SKU-200");
+        }
+
+        @Test
+        void should_create_a_typed_proxy_that_retries_four_argument_calls() {
+            // Given
+            var service = new InventoryService(1);
+            var retry = Retry.of("inventoryService", RetryConfig.builder()
+                    .maxAttempts(3)
+                    .initialInterval(Duration.ofMillis(10))
+                    .build());
+
+            InventoryApi resilient = InqPipeline.of(service, InventoryApi.class)
+                    .shield(retry)
+                    .decorate();
+
+            // When
+            var r1 = resilient.checkStockDetailed("SKU-100", "warehouse-A", 10, true);
+            var r2 = resilient.checkStockDetailed("SKU-200", "warehouse-B", 5, false);
 
             // Then
             assertThat(r1).isEqualTo("SKU-100@warehouse-A-min10-incl-reserved");

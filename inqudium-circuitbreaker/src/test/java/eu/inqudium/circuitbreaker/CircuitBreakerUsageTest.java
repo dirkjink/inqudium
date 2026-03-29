@@ -22,17 +22,26 @@ import static org.assertj.core.api.Assertions.*;
 @DisplayName("CircuitBreaker — User Perspective")
 class CircuitBreakerUsageTest {
 
-    static class PaymentService {
+    // ── Service interface for proxy-based decoration ──
+
+    interface PaymentApi {
+        String charge(String orderId);
+        String chargeDetailed(String orderId, String currency, int amount, boolean express);
+    }
+
+    static class PaymentService implements PaymentApi {
         private final AtomicInteger callCount = new AtomicInteger(0);
         private boolean failing = false;
 
-        String charge(String orderId) {
+        @Override
+        public String charge(String orderId) {
             callCount.incrementAndGet();
             if (failing) throw new RuntimeException("Payment gateway unavailable");
             return "receipt-" + orderId;
         }
 
-        String chargeDetailed(String orderId, String currency, int amount, boolean express) {
+        @Override
+        public String chargeDetailed(String orderId, String currency, int amount, boolean express) {
             callCount.incrementAndGet();
             if (failing) throw new RuntimeException("Payment gateway unavailable");
             return String.format("%s-%s-%d-%s", orderId, currency, amount, express ? "express" : "standard");
@@ -301,6 +310,111 @@ class CircuitBreakerUsageTest {
             // Then
             assertThat(r1).isEqualTo("order-1-EUR-1000-express");
             assertThat(r2).isEqualTo("order-2-USD-2500-standard");
+        }
+    }
+
+    // ── Pipeline — Proxy pattern ──
+
+    @Nested
+    @DisplayName("Pipeline proxy usage")
+    class PipelineProxy {
+
+        @Test
+        void should_create_a_typed_proxy_that_protects_single_argument_calls() {
+            // Given — create a resilient proxy from the service interface
+            var service = new PaymentService();
+            var cb = CircuitBreaker.ofDefaults("paymentService");
+
+            PaymentApi resilient = InqPipeline.of(service, PaymentApi.class)
+                    .shield(cb)
+                    .decorate();
+
+            // When — call the proxy like a normal service with different arguments
+            var r1 = resilient.charge("order-1");
+            var r2 = resilient.charge("order-2");
+            var r3 = resilient.charge("order-3");
+
+            // Then
+            assertThat(r1).isEqualTo("receipt-order-1");
+            assertThat(r2).isEqualTo("receipt-order-2");
+            assertThat(r3).isEqualTo("receipt-order-3");
+            assertThat(service.getCallCount()).isEqualTo(3);
+            assertThat(cb.getState()).isEqualTo(CircuitBreakerState.CLOSED);
+        }
+
+        @Test
+        void should_create_a_typed_proxy_that_protects_four_argument_calls() {
+            // Given
+            var service = new PaymentService();
+            var cb = CircuitBreaker.ofDefaults("paymentService");
+
+            PaymentApi resilient = InqPipeline.of(service, PaymentApi.class)
+                    .shield(cb)
+                    .decorate();
+
+            // When — 4-arg method, different arguments each time
+            var r1 = resilient.chargeDetailed("order-1", "EUR", 1000, true);
+            var r2 = resilient.chargeDetailed("order-2", "USD", 2500, false);
+
+            // Then
+            assertThat(r1).isEqualTo("order-1-EUR-1000-express");
+            assertThat(r2).isEqualTo("order-2-USD-2500-standard");
+            assertThat(service.getCallCount()).isEqualTo(2);
+        }
+
+        @Test
+        void should_reject_all_proxy_methods_when_circuit_is_open() {
+            // Given
+            var service = new PaymentService();
+            var cb = CircuitBreaker.ofDefaults("paymentService");
+            cb.transitionToOpenState();
+
+            PaymentApi resilient = InqPipeline.of(service, PaymentApi.class)
+                    .shield(cb)
+                    .decorate();
+
+            // When / Then — both methods rejected, no service calls
+            assertThatThrownBy(() -> resilient.charge("order-1"))
+                    .isInstanceOf(InqCallNotPermittedException.class);
+            assertThatThrownBy(() -> resilient.chargeDetailed("order-2", "EUR", 100, false))
+                    .isInstanceOf(InqCallNotPermittedException.class);
+            assertThat(service.getCallCount()).isZero();
+        }
+
+        @Test
+        void should_carry_pipeline_call_id_on_proxy_exceptions() {
+            // Given
+            var service = new PaymentService();
+            var cb = CircuitBreaker.ofDefaults("paymentService");
+            cb.transitionToOpenState();
+
+            PaymentApi resilient = InqPipeline.of(service, PaymentApi.class)
+                    .shield(cb)
+                    .decorate();
+
+            // When / Then
+            assertThatThrownBy(() -> resilient.charge("rejected"))
+                    .isInstanceOf(InqException.class)
+                    .satisfies(ex -> {
+                        var inqEx = (InqException) ex;
+                        assertThat(inqEx.getCallId())
+                                .isNotNull()
+                                .isNotEqualTo("None");
+                    });
+        }
+
+        @Test
+        void should_delegate_to_string_to_target_with_proxy_wrapper() {
+            // Given
+            var service = new PaymentService();
+            var cb = CircuitBreaker.ofDefaults("paymentService");
+
+            PaymentApi resilient = InqPipeline.of(service, PaymentApi.class)
+                    .shield(cb)
+                    .decorate();
+
+            // When / Then
+            assertThat(resilient.toString()).contains("PaymentApi");
         }
     }
 }

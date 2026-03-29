@@ -7,6 +7,9 @@ import eu.inqudium.core.context.InqContextPropagation;
 import eu.inqudium.core.exception.InqException;
 import eu.inqudium.core.exception.InqRuntimeException;
 
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
+import java.lang.reflect.Proxy;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -92,6 +95,56 @@ public final class InqPipeline {
     public static <T> Builder<T> ofSupplier(Supplier<T> supplier) {
         Objects.requireNonNull(supplier, "supplier must not be null");
         return new Builder<>(supplier::get);
+    }
+
+    /**
+     * Starts building a pipeline proxy for the given service interface.
+     *
+     * <p>Returns a typed proxy that implements the service interface. Every method
+     * invocation on the proxy goes through the resilience pipeline — callId generation,
+     * decoration chain, context propagation, boundary wrapping.
+     *
+     * <pre>{@code
+     * // Define your service as an interface
+     * interface PaymentService {
+     *     Payment charge(String orderId);
+     *     Payment chargeDetailed(String orderId, String currency, int amount);
+     * }
+     *
+     * // Create the resilient proxy — decorate once, call like a normal service
+     * PaymentService resilient = InqPipeline.of(paymentService, PaymentService.class)
+     *     .shield(circuitBreaker)
+     *     .shield(retry)
+     *     .decorate();
+     *
+     * // Every method call is pipeline-protected with a fresh callId
+     * resilient.charge("order-1");
+     * resilient.chargeDetailed("order-2", "EUR", 1000);
+     * }</pre>
+     *
+     * <p>The target must implement the given interface. Only interface methods are
+     * decorated — {@code Object} methods ({@code toString}, {@code equals},
+     * {@code hashCode}) are delegated directly to the target.
+     *
+     * @param target        the service instance to protect
+     * @param interfaceType the service interface (must be an interface)
+     * @param <T>           the service type
+     * @return a new proxy builder
+     * @throws IllegalArgumentException if interfaceType is not an interface
+     * @throws IllegalArgumentException if target does not implement interfaceType
+     */
+    public static <T> ProxyBuilder<T> of(T target, Class<T> interfaceType) {
+        Objects.requireNonNull(target, "target must not be null");
+        Objects.requireNonNull(interfaceType, "interfaceType must not be null");
+        if (!interfaceType.isInterface()) {
+            throw new IllegalArgumentException(
+                    interfaceType.getName() + " is not an interface — InqPipeline proxy requires an interface type");
+        }
+        if (!interfaceType.isInstance(target)) {
+            throw new IllegalArgumentException(
+                    target.getClass().getName() + " does not implement " + interfaceType.getName());
+        }
+        return new ProxyBuilder<>(target, interfaceType);
     }
 
     /**
@@ -191,44 +244,202 @@ public final class InqPipeline {
         }
 
         private void validate(List<InqDecorator> sorted) {
-            int retryPos = -1;
-            int cbPos = -1;
-            int tlPos = -1;
-            int rlPos = -1;
+            validateChain(sorted);
+        }
+    }
 
-            for (int i = 0; i < sorted.size(); i++) {
-                switch (sorted.get(i).getElementType()) {
-                    case RETRY -> retryPos = i;
-                    case CIRCUIT_BREAKER -> cbPos = i;
-                    case TIME_LIMITER -> tlPos = i;
-                    case RATE_LIMITER -> rlPos = i;
-                    default -> {}
-                }
-            }
+    /**
+     * Proxy builder that creates a typed resilience proxy for a service interface.
+     *
+     * <p>The proxy implements the given interface and routes every method call
+     * through the decoration chain. {@code Object} methods ({@code toString},
+     * {@code equals}, {@code hashCode}) are delegated directly to the target.
+     *
+     * @param <T> the service interface type
+     */
+    public static final class ProxyBuilder<T> {
 
-            if (retryPos >= 0 && cbPos >= 0 && retryPos < cbPos) {
-                LOGGER.warn(
-                        "Pipeline warning: Retry '{}' is outside CircuitBreaker '{}'. " +
-                        "Retry may attempt to retry against an open circuit breaker. " +
-                        "Consider configuring Retry to not retry on InqCallNotPermittedException, " +
-                        "or move Retry inside CircuitBreaker.",
-                        sorted.get(retryPos).getName(), sorted.get(cbPos).getName());
-            }
+        private static final Method OBJECT_EQUALS;
+        private static final Method OBJECT_HASHCODE;
+        private static final Method OBJECT_TOSTRING;
 
-            if (tlPos >= 0 && retryPos >= 0 && tlPos > retryPos) {
-                LOGGER.warn(
-                        "Pipeline warning: TimeLimiter '{}' is inside Retry '{}'. " +
-                        "Each retry attempt gets a fresh timeout, but total caller wait time is unbounded.",
-                        sorted.get(tlPos).getName(), sorted.get(retryPos).getName());
+        static {
+            try {
+                OBJECT_EQUALS = Object.class.getMethod("equals", Object.class);
+                OBJECT_HASHCODE = Object.class.getMethod("hashCode");
+                OBJECT_TOSTRING = Object.class.getMethod("toString");
+            } catch (NoSuchMethodException e) {
+                throw new ExceptionInInitializerError(e);
             }
+        }
 
-            if (rlPos >= 0 && retryPos >= 0 && rlPos > retryPos) {
-                LOGGER.warn(
-                        "Pipeline warning: RateLimiter '{}' is inside Retry '{}'. " +
-                        "Each retry attempt consumes a rate limit permit. " +
-                        "Consider moving RateLimiter outside Retry.",
-                        sorted.get(rlPos).getName(), sorted.get(retryPos).getName());
+        private final T target;
+        private final Class<T> interfaceType;
+        private final List<InqDecorator> decorators = new ArrayList<>();
+        private PipelineOrder order = PipelineOrder.INQUDIUM;
+        private InqCallIdGenerator callIdGenerator = InqCallIdGenerator.uuid();
+
+        private ProxyBuilder(T target, Class<T> interfaceType) {
+            this.target = target;
+            this.interfaceType = interfaceType;
+        }
+
+        /**
+         * Adds a resilience element to the pipeline.
+         *
+         * @param decorator the element's decorator
+         * @return this builder
+         */
+        public ProxyBuilder<T> shield(InqDecorator decorator) {
+            Objects.requireNonNull(decorator, "decorator must not be null");
+            decorators.add(decorator);
+            return this;
+        }
+
+        /**
+         * Sets the pipeline ordering strategy.
+         *
+         * @param order the ordering to use (default: {@link PipelineOrder#INQUDIUM})
+         * @return this builder
+         */
+        public ProxyBuilder<T> order(PipelineOrder order) {
+            this.order = Objects.requireNonNull(order, "order must not be null");
+            return this;
+        }
+
+        /**
+         * Sets the call ID generator for this pipeline proxy.
+         *
+         * @param callIdGenerator the generator to use (default: UUID)
+         * @return this builder
+         */
+        public ProxyBuilder<T> callIdGenerator(InqCallIdGenerator callIdGenerator) {
+            this.callIdGenerator = Objects.requireNonNull(callIdGenerator, "callIdGenerator must not be null");
+            return this;
+        }
+
+        /**
+         * Creates the resilience proxy.
+         *
+         * <p>Every method call on the returned proxy goes through the decoration chain:
+         * <ol>
+         *   <li>A fresh callId is generated</li>
+         *   <li>The method call is wrapped as a {@link Callable} in an {@link InqCall}</li>
+         *   <li>All decorators are applied in the configured order</li>
+         *   <li>Context propagation is activated</li>
+         *   <li>The outermost call is executed</li>
+         *   <li>Checked exceptions are wrapped in {@link InqRuntimeException}</li>
+         * </ol>
+         *
+         * @return the resilience proxy implementing the service interface
+         */
+        @SuppressWarnings("unchecked")
+        public T decorate() {
+            var sorted = new ArrayList<>(decorators);
+            sorted.sort(Comparator.comparingInt(d -> order.positionOf(d.getElementType())));
+
+            validateChain(sorted);
+
+            // Capture for the invocation handler — immutable, shared across all calls
+            var chain = List.copyOf(sorted);
+            final InqCallIdGenerator gen = callIdGenerator;
+            final T proxyTarget = target;
+
+            return (T) Proxy.newProxyInstance(
+                    interfaceType.getClassLoader(),
+                    new Class<?>[]{interfaceType},
+                    (proxy, method, args) -> {
+
+                        // Object methods — delegate directly, no resilience overhead
+                        if (OBJECT_EQUALS.equals(method)) {
+                            return proxyTarget.equals(args[0]);
+                        }
+                        if (OBJECT_HASHCODE.equals(method)) {
+                            return proxyTarget.hashCode();
+                        }
+                        if (OBJECT_TOSTRING.equals(method)) {
+                            return "InqPipeline.proxy[" + interfaceType.getSimpleName() + "]{"
+                                    + proxyTarget.toString() + "}";
+                        }
+
+                        // Resilience path — full pipeline for every interface method
+                        var callId = gen.generate();
+
+                        Callable<Object> callable = () -> {
+                            try {
+                                return method.invoke(proxyTarget, args);
+                            } catch (InvocationTargetException ite) {
+                                // Unwrap the reflection wrapper to expose the original exception
+                                throw ite.getCause() instanceof Exception ex
+                                        ? ex : new RuntimeException(ite.getCause());
+                            }
+                        };
+
+                        InqCall<Object> call = InqCall.of(callId, callable);
+                        for (int i = chain.size() - 1; i >= 0; i--) {
+                            call = chain.get(i).decorate(call);
+                        }
+
+                        final InqCall<Object> outermost = call;
+                        try (var ctxScope = InqContextPropagation.activateFor(
+                                callId, "pipeline-proxy", InqElementType.NO_ELEMENT)) {
+                            return outermost.execute();
+                        } catch (InqException ie) {
+                            throw ie;
+                        } catch (RuntimeException re) {
+                            LOGGER.error("[{}] pipeline-proxy {}.{}: {}",
+                                    callId, interfaceType.getSimpleName(), method.getName(), re.toString());
+                            throw re;
+                        } catch (Exception e) {
+                            LOGGER.error("[{}] pipeline-proxy {}.{}: {}",
+                                    callId, interfaceType.getSimpleName(), method.getName(), e.toString());
+                            throw new InqRuntimeException(
+                                    callId, "pipeline-proxy", InqElementType.NO_ELEMENT, e);
+                        }
+                    });
+        }
+    }
+
+    // ── Shared validation logic ──
+
+    static void validateChain(List<InqDecorator> sorted) {
+        int retryPos = -1;
+        int cbPos = -1;
+        int tlPos = -1;
+        int rlPos = -1;
+
+        for (int i = 0; i < sorted.size(); i++) {
+            switch (sorted.get(i).getElementType()) {
+                case RETRY -> retryPos = i;
+                case CIRCUIT_BREAKER -> cbPos = i;
+                case TIME_LIMITER -> tlPos = i;
+                case RATE_LIMITER -> rlPos = i;
+                default -> {}
             }
+        }
+
+        if (retryPos >= 0 && cbPos >= 0 && retryPos < cbPos) {
+            LOGGER.warn(
+                    "Pipeline warning: Retry '{}' is outside CircuitBreaker '{}'. " +
+                    "Retry may attempt to retry against an open circuit breaker. " +
+                    "Consider configuring Retry to not retry on InqCallNotPermittedException, " +
+                    "or move Retry inside CircuitBreaker.",
+                    sorted.get(retryPos).getName(), sorted.get(cbPos).getName());
+        }
+
+        if (tlPos >= 0 && retryPos >= 0 && tlPos > retryPos) {
+            LOGGER.warn(
+                    "Pipeline warning: TimeLimiter '{}' is inside Retry '{}'. " +
+                    "Each retry attempt gets a fresh timeout, but total caller wait time is unbounded.",
+                    sorted.get(tlPos).getName(), sorted.get(retryPos).getName());
+        }
+
+        if (rlPos >= 0 && retryPos >= 0 && rlPos > retryPos) {
+            LOGGER.warn(
+                    "Pipeline warning: RateLimiter '{}' is inside Retry '{}'. " +
+                    "Each retry attempt consumes a rate limit permit. " +
+                    "Consider moving RateLimiter outside Retry.",
+                    sorted.get(rlPos).getName(), sorted.get(retryPos).getName());
         }
     }
 }

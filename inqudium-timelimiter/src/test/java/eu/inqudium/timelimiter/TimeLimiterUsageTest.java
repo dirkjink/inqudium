@@ -21,7 +21,12 @@ import static org.assertj.core.api.Assertions.*;
 @DisplayName("TimeLimiter — User Perspective")
 class TimeLimiterUsageTest {
 
-    static class ShippingService {
+    interface ShippingApi {
+        String calculateShipping(String orderId);
+        String calculateShippingDetailed(String orderId, String destination, int weight, boolean insured);
+    }
+
+    static class ShippingService implements ShippingApi {
         private final AtomicInteger callCount = new AtomicInteger(0);
         private final long latencyMs;
 
@@ -29,13 +34,15 @@ class TimeLimiterUsageTest {
             this.latencyMs = latencyMs;
         }
 
-        String calculateShipping(String orderId) {
+        @Override
+        public String calculateShipping(String orderId) {
             callCount.incrementAndGet();
             sleep(latencyMs);
             return "shipping-" + orderId;
         }
 
-        String calculateShippingDetailed(String orderId, String destination, int weight, boolean insured) {
+        @Override
+        public String calculateShippingDetailed(String orderId, String destination, int weight, boolean insured) {
             callCount.incrementAndGet();
             sleep(latencyMs);
             return String.format("%s→%s-%dkg-%s", orderId, destination, weight,
@@ -300,6 +307,73 @@ class TimeLimiterUsageTest {
             // Then
             assertThat(r1).isEqualTo("order-1→Berlin-5kg-insured");
             assertThat(r2).isEqualTo("order-2→Munich-12kg-uninsured");
+        }
+    }
+
+    // ── Pipeline — Proxy pattern ──
+
+    @Nested
+    @DisplayName("Pipeline proxy usage")
+    class PipelineProxy {
+
+        @Test
+        void should_create_a_typed_proxy_that_time_limits_single_argument_calls() {
+            // Given
+            var service = new ShippingService(50);
+            var tl = TimeLimiter.of("shippingService", TimeLimiterConfig.builder()
+                    .timeoutDuration(Duration.ofSeconds(2))
+                    .build());
+
+            ShippingApi resilient = InqPipeline.of(service, ShippingApi.class)
+                    .shield(tl)
+                    .decorate();
+
+            // When
+            var r1 = resilient.calculateShipping("order-1");
+            var r2 = resilient.calculateShipping("order-2");
+
+            // Then
+            assertThat(r1).isEqualTo("shipping-order-1");
+            assertThat(r2).isEqualTo("shipping-order-2");
+            assertThat(service.getCallCount()).isEqualTo(2);
+        }
+
+        @Test
+        void should_create_a_typed_proxy_that_time_limits_four_argument_calls() {
+            // Given
+            var service = new ShippingService(50);
+            var tl = TimeLimiter.of("shippingService", TimeLimiterConfig.builder()
+                    .timeoutDuration(Duration.ofSeconds(2))
+                    .build());
+
+            ShippingApi resilient = InqPipeline.of(service, ShippingApi.class)
+                    .shield(tl)
+                    .decorate();
+
+            // When
+            var r1 = resilient.calculateShippingDetailed("order-1", "Berlin", 5, true);
+            var r2 = resilient.calculateShippingDetailed("order-2", "Munich", 12, false);
+
+            // Then
+            assertThat(r1).isEqualTo("order-1→Berlin-5kg-insured");
+            assertThat(r2).isEqualTo("order-2→Munich-12kg-uninsured");
+        }
+
+        @Test
+        void should_timeout_proxy_calls_when_service_is_too_slow() {
+            // Given
+            var service = new ShippingService(2000);
+            var tl = TimeLimiter.of("shippingService", TimeLimiterConfig.builder()
+                    .timeoutDuration(Duration.ofMillis(100))
+                    .build());
+
+            ShippingApi resilient = InqPipeline.of(service, ShippingApi.class)
+                    .shield(tl)
+                    .decorate();
+
+            // When / Then
+            assertThatThrownBy(() -> resilient.calculateShipping("slow"))
+                    .isInstanceOf(InqTimeLimitExceededException.class);
         }
     }
 }

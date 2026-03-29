@@ -22,15 +22,22 @@ import static org.assertj.core.api.Assertions.*;
 @DisplayName("Bulkhead — User Perspective")
 class BulkheadUsageTest {
 
-    static class OrderService {
+    interface OrderApi {
+        String processOrder(String orderId);
+        String processOrderDetailed(String orderId, String region, int priority, boolean expedited);
+    }
+
+    static class OrderService implements OrderApi {
         private final AtomicInteger callCount = new AtomicInteger(0);
 
-        String processOrder(String orderId) {
+        @Override
+        public String processOrder(String orderId) {
             callCount.incrementAndGet();
             return "processed-" + orderId;
         }
 
-        String processOrderDetailed(String orderId, String region, int priority, boolean expedited) {
+        @Override
+        public String processOrderDetailed(String orderId, String region, int priority, boolean expedited) {
             callCount.incrementAndGet();
             return String.format("%s@%s-p%d-%s", orderId, region, priority,
                     expedited ? "expedited" : "normal");
@@ -294,6 +301,58 @@ class BulkheadUsageTest {
             // Then
             assertThat(r1).isEqualTo("order-1@EU-p1-expedited");
             assertThat(r2).isEqualTo("order-2@US-p3-normal");
+        }
+    }
+
+    // ── Pipeline — Proxy pattern ──
+
+    @Nested
+    @DisplayName("Pipeline proxy usage")
+    class PipelineProxy {
+
+        @Test
+        void should_create_a_typed_proxy_that_isolates_single_argument_calls() {
+            // Given
+            var service = new OrderService();
+            var bh = Bulkhead.of("orderService", BulkheadConfig.builder()
+                    .maxConcurrentCalls(5)
+                    .build());
+
+            OrderApi resilient = InqPipeline.of(service, OrderApi.class)
+                    .shield(bh)
+                    .decorate();
+
+            // When
+            var r1 = resilient.processOrder("order-1");
+            var r2 = resilient.processOrder("order-2");
+
+            // Then
+            assertThat(r1).isEqualTo("processed-order-1");
+            assertThat(r2).isEqualTo("processed-order-2");
+            assertThat(bh.getAvailablePermits()).isEqualTo(5);
+            assertThat(service.getCallCount()).isEqualTo(2);
+        }
+
+        @Test
+        void should_create_a_typed_proxy_that_isolates_four_argument_calls() {
+            // Given
+            var service = new OrderService();
+            var bh = Bulkhead.of("orderService", BulkheadConfig.builder()
+                    .maxConcurrentCalls(5)
+                    .build());
+
+            OrderApi resilient = InqPipeline.of(service, OrderApi.class)
+                    .shield(bh)
+                    .decorate();
+
+            // When
+            var r1 = resilient.processOrderDetailed("order-1", "EU", 1, true);
+            var r2 = resilient.processOrderDetailed("order-2", "US", 3, false);
+
+            // Then
+            assertThat(r1).isEqualTo("order-1@EU-p1-expedited");
+            assertThat(r2).isEqualTo("order-2@US-p3-normal");
+            assertThat(bh.getAvailablePermits()).isEqualTo(5);
         }
     }
 }
