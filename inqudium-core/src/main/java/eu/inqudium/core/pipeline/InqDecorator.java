@@ -4,6 +4,11 @@ import eu.inqudium.core.InqCall;
 import eu.inqudium.core.InqCallIdGenerator;
 import eu.inqudium.core.InqConfig;
 import eu.inqudium.core.InqElement;
+import eu.inqudium.core.Invocation;
+import eu.inqudium.core.Invocation2;
+import eu.inqudium.core.Invocation3;
+import eu.inqudium.core.InvocationArray;
+import eu.inqudium.core.InvocationVarargs;
 import eu.inqudium.core.exception.InqException;
 import eu.inqudium.core.exception.InqRuntimeException;
 
@@ -150,6 +155,107 @@ public interface InqDecorator extends InqElement {
             return null;
         });
         return decorated::get;
+    }
+
+    // ── Invocation methods — decorate once, call with different arguments ──
+
+    /**
+     * Decorates a single-argument invocation for standalone use.
+     *
+     * <p>This is the <strong>recommended pattern</strong> for operations that take
+     * arguments at runtime. Decorate once, then call with different arguments:
+     * <pre>{@code
+     * Invocation<String, Payment> resilientCharge =
+     *     cb.decorateInvocation(paymentService::charge);
+     *
+     * Payment p1 = resilientCharge.invoke("order-1");
+     * Payment p2 = resilientCharge.invoke("order-2");
+     * }</pre>
+     *
+     * <p>Optimized path — no array allocation per call.
+     *
+     * <p><strong>Composition of multiple elements is not supported via this method.</strong>
+     * Use {@link InqPipeline} to compose elements.
+     *
+     * @param invocation the operation to decorate
+     * @param <A>        the argument type
+     * @param <T>        the result type
+     * @return a decorated invocation
+     */
+    default <A, T> Invocation<A, T> decorateInvocation(Invocation<A, T> invocation) {
+        return arg -> decorateCallable(() -> invocation.invoke(arg)).get();
+    }
+
+    /**
+     * Decorates a two-argument invocation for standalone use.
+     *
+     * <p>Optimized path — no array allocation per call.
+     *
+     * <p><strong>Composition of multiple elements is not supported via this method.</strong>
+     * Use {@link InqPipeline} to compose elements.
+     *
+     * @param invocation the operation to decorate
+     * @param <A1>       the first argument type
+     * @param <A2>       the second argument type
+     * @param <T>        the result type
+     * @return a decorated invocation
+     */
+    default <A1, A2, T> Invocation2<A1, A2, T> decorateInvocation(Invocation2<A1, A2, T> invocation) {
+        return (arg1, arg2) -> decorateCallable(() -> invocation.invoke(arg1, arg2)).get();
+    }
+
+    /**
+     * Decorates a three-argument invocation for standalone use.
+     *
+     * <p>Optimized path — no array allocation per call.
+     *
+     * <p><strong>Composition of multiple elements is not supported via this method.</strong>
+     * Use {@link InqPipeline} to compose elements.
+     *
+     * @param invocation the operation to decorate
+     * @param <A1>       the first argument type
+     * @param <A2>       the second argument type
+     * @param <A3>       the third argument type
+     * @param <T>        the result type
+     * @return a decorated invocation
+     */
+    default <A1, A2, A3, T> Invocation3<A1, A2, A3, T> decorateInvocation(Invocation3<A1, A2, A3, T> invocation) {
+        return (arg1, arg2, arg3) -> decorateCallable(() -> invocation.invoke(arg1, arg2, arg3)).get();
+    }
+
+    /**
+     * Decorates an array-based invocation for standalone use.
+     *
+     * <p>This is the base decoration — all other invocation types can delegate
+     * to this via their {@code toArray()} / {@code asArray()} conversion methods.
+     *
+     * <p><strong>Composition of multiple elements is not supported via this method.</strong>
+     * Use {@link InqPipeline} to compose elements.
+     *
+     * @param invocation the operation to decorate
+     * @param <T>        the result type
+     * @return a decorated invocation
+     */
+    default <T> InvocationArray<T> decorateInvocation(InvocationArray<T> invocation) {
+        return args -> decorateCallable(() -> invocation.invoke(args)).get();
+    }
+
+    /**
+     * Decorates a varargs invocation for standalone use.
+     *
+     * <p>Delegates to {@link #decorateInvocation(InvocationArray)} via
+     * {@link InvocationVarargs#asArray()}.
+     *
+     * <p><strong>Composition of multiple elements is not supported via this method.</strong>
+     * Use {@link InqPipeline} to compose elements.
+     *
+     * @param invocation the operation to decorate
+     * @param <T>        the result type
+     * @return a decorated invocation
+     */
+    default <T> InvocationVarargs<T> decorateInvocation(InvocationVarargs<T> invocation) {
+        InvocationArray<T> decorated = decorateInvocation(invocation.asArray());
+        return InvocationVarargs.fromArray(decorated);
     }
 
     // ── Execute methods — decorate and immediately invoke ──
