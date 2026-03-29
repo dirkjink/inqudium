@@ -18,7 +18,7 @@ import java.util.Locale;
 public class InqRetryExhaustedException extends InqException {
 
     /** All retry attempts exhausted. */
-    public static final String CODE = "INQ-RT-001";
+    public static final String CODE = InqElementType.RETRY.errorCode(1);
 
     private final int attempts;
 

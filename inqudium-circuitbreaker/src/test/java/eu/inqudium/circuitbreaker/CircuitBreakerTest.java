@@ -400,6 +400,7 @@ class CircuitBreakerTest {
                         assertThat(ire.hasElementContext()).isTrue();
                         assertThat(ire.getElementName()).isEqualTo("paymentService");
                         assertThat(ire.getElementType()).isEqualTo(InqElementType.CIRCUIT_BREAKER);
+                        assertThat(ire.getCode()).isEqualTo("INQ-CB-000");
                         assertThat(ire.getMessage()).contains("CIRCUIT_BREAKER", "paymentService", "checked");
                     });
         }

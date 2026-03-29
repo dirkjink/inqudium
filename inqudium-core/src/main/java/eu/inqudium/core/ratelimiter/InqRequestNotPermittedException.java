@@ -19,7 +19,7 @@ import java.util.Locale;
 public class InqRequestNotPermittedException extends InqException {
 
     /** Request denied — no permits available. */
-    public static final String CODE = "INQ-RL-001";
+    public static final String CODE = InqElementType.RATE_LIMITER.errorCode(1);
 
     private final Duration waitEstimate;
 

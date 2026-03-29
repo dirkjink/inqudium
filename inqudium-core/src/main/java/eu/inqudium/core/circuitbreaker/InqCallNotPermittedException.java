@@ -20,7 +20,7 @@ import java.util.Locale;
 public class InqCallNotPermittedException extends InqException {
 
     /** Call rejected — circuit breaker is OPEN. */
-    public static final String CODE = "INQ-CB-001";
+    public static final String CODE = InqElementType.CIRCUIT_BREAKER.errorCode(1);
 
     private final CircuitBreakerState state;
     private final float failureRate;

@@ -20,7 +20,7 @@ import java.util.Locale;
 public class InqTimeLimitExceededException extends InqException {
 
     /** Caller wait time exceeded configured timeout. */
-    public static final String CODE = "INQ-TL-001";
+    public static final String CODE = InqElementType.TIME_LIMITER.errorCode(1);
 
     private final Duration configuredDuration;
     private final Duration actualDuration;

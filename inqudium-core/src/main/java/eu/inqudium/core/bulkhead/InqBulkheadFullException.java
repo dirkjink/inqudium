@@ -18,7 +18,7 @@ import java.util.Locale;
 public class InqBulkheadFullException extends InqException {
 
     /** Call rejected — max concurrent calls reached. */
-    public static final String CODE = "INQ-BH-001";
+    public static final String CODE = InqElementType.BULKHEAD.errorCode(1);
 
     private final int concurrentCalls;
     private final int maxConcurrentCalls;

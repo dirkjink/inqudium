@@ -88,12 +88,12 @@ try {
 }
 ```
 
-`InqRuntimeException` is distinct from `InqException`:
+`InqRuntimeException` extends `InqException` but carries a distinct error code suffix (`000`) that distinguishes it from active interventions (`001+`):
 
-- `InqException` = "the element actively intervened" (circuit breaker opened, retries exhausted)
-- `InqRuntimeException` = "the downstream call threw a checked exception, and the element wrapped it for API convenience"
+- `InqException` subclasses with codes `001+` = "the element actively intervened" (circuit breaker opened, retries exhausted)
+- `InqRuntimeException` with code `000` = "the downstream call threw a checked exception, and the element wrapped it for API convenience"
 
-This distinction matters because `InqRuntimeException` is not an intervention — it is a transparent wrapping. The original cause is always accessible via `getCause()`. The element context (`getElementName()`, `getElementType()`) tells the catch-site where the wrapping occurred.
+This means `catch (InqException e)` catches both interventions and wrappings. The catch-site can distinguish them via `e.getCode()` (suffix `000` vs. `001+`) or via `instanceof InqRuntimeException`. Sharing the `InqException` base ensures that all Inqudium exceptions carry the same context fields (`code`, `elementName`, `elementType`) and work with `InqFailure.find()` uniformly.
 
 `InqRuntimeException` is also used by `InqFailure.orElseThrow()` and `InqFailure.orElseThrowIfAbsent()` when the original exception is a checked exception that must be rethrown as unchecked. In this case, no element context is available (the utility operates outside an element), and the contextless constructor is used.
 
@@ -139,20 +139,19 @@ The same rationale as Category 3 applies: these are programming errors detected 
 
 ```
 RuntimeException
-├── InqRuntimeException                                    — checked exception wrapper (Category 2)
-│   ├── InqRuntimeException(name, type, cause)             — inside an element (has context)
-│   └── InqRuntimeException(cause)                         — outside an element (no context)
-│
-├── InqException (abstract)                                — active intervention (Category 1)
-│   ├── InqCallNotPermittedException      INQ-CB-001/002   — circuit breaker rejected
-│   ├── InqRequestNotPermittedException   INQ-RL-001       — rate limiter denied
-│   ├── InqBulkheadFullException          INQ-BH-001       — no concurrency permits
-│   ├── InqTimeLimitExceededException     INQ-TL-001       — caller wait time exceeded
-│   └── InqRetryExhaustedException        INQ-RT-001       — all retry attempts failed
+├── InqException (abstract)                                — Inqudium exception base (Categories 1+2)
+│   ├── InqRuntimeException            INQ-XX-000          — checked exception wrapper (Category 2)
+│   ├── InqCallNotPermittedException   INQ-CB-001/002      — circuit breaker rejected
+│   ├── InqRequestNotPermittedException INQ-RL-001         — rate limiter denied
+│   ├── InqBulkheadFullException       INQ-BH-001          — no concurrency permits
+│   ├── InqTimeLimitExceededException  INQ-TL-001          — caller wait time exceeded
+│   └── InqRetryExhaustedException     INQ-RT-001          — all retry attempts failed
 │
 ├── IllegalArgumentException                               — precondition violation (Category 3)
 └── IllegalStateException                                  — state violation (Category 4)
 ```
+
+All Inqudium exceptions share `InqException` as their common base, including `InqRuntimeException`. This means `catch (InqException e)` catches both active interventions and wrapped checked exceptions. The error code suffix distinguishes them: `000` = wrapping, `001+` = intervention (ADR-021).
 
 All Inqudium exceptions extend `RuntimeException` (unchecked). This is non-negotiable for the functional decoration API (ADR-002) — `Supplier.get()`, `Runnable.run()`, and `Function.apply()` do not declare checked exceptions.
 
@@ -215,9 +214,9 @@ InqFailure.find(exception)
 **Negative:**
 - `InqRetryExhaustedException` wrapping the last cause is a deviation from the "no wrapping" principle. Justified because the application needs to know retries were attempted — the retry count is not available on the original exception.
 - `InqFailure.find()` is an opt-in utility. Developers who don't know about it will fall back to `catch (InqException e)` — which works but doesn't solve the cause-chain wrapping problem.
-- Two unchecked exception base types (`InqException` for interventions, `InqRuntimeException` for wrapping) require developers to understand the distinction. The Javadoc makes this clear, and `InqRuntimeException.hasElementContext()` helps at the catch-site.
+- Two error code ranges within `InqException` (`000` for wrappings, `001+` for interventions) require developers to understand the distinction. The error code suffix makes this unambiguous, and `instanceof InqRuntimeException` provides type-safe discrimination at the catch-site.
 
 **Neutral:**
 - The exception hierarchy lives in `inqudium-core`. All paradigm implementations throw the same exception types.
 - The Retry element ignores all `InqException` subtypes by default (ADR-017) — retrying against an open Circuit Breaker or an exhausted Rate Limiter is pointless and would worsen the situation.
-- `InqRuntimeException` does not carry an error code. It is not an intervention — it is a transparent wrapping. The original cause carries its own identity.
+- `InqRuntimeException` carries the error code `INQ-XX-000` (ADR-021). The `000` suffix is permanently reserved for wrapped checked exceptions and will never be reassigned to an active intervention.

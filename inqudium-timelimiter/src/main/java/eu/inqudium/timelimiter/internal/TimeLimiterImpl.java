@@ -54,7 +54,7 @@ public final class TimeLimiterImpl implements TimeLimiter {
                 CompletableFuture.supplyAsync(supplier, VIRTUAL_THREAD_EXECUTOR));
     }
 
-    @Override
+   @Override
     public <T> InqCall<T> decorate(InqCall<T> call) {
         return call.withSupplier(() ->
                 executeFuture(call.callId(), () ->
