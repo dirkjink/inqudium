@@ -367,6 +367,7 @@ public final class InqPipeline {
 
                         Callable<Object> callable = () -> {
                             try {
+                                method.setAccessible(true);
                                 return method.invoke(proxyTarget, args);
                             } catch (InvocationTargetException ite) {
                                 // Unwrap the reflection wrapper to expose the original exception
