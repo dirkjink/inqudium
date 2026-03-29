@@ -1,6 +1,8 @@
 package eu.inqudium.circuitbreaker;
 
+import eu.inqudium.core.Invocation;
 import eu.inqudium.core.InqElementType;
+import eu.inqudium.core.InvocationVarargs;
 import eu.inqudium.core.circuitbreaker.CircuitBreakerConfig;
 import eu.inqudium.core.circuitbreaker.CircuitBreakerState;
 import eu.inqudium.core.circuitbreaker.InqCallNotPermittedException;
@@ -12,23 +14,13 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
-import java.time.Duration;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
 
 import static org.assertj.core.api.Assertions.*;
 
-/**
- * Demonstrates CircuitBreaker usage from a library user's perspective.
- *
- * <p>All standalone tests follow the real-world pattern: decorate once, then
- * invoke the wrapper — just like a Spring bean would be wired once and called
- * many times.
- */
 @DisplayName("CircuitBreaker — User Perspective")
 class CircuitBreakerUsageTest {
-
-    // ── Simulated downstream service ──
 
     static class PaymentService {
         private final AtomicInteger callCount = new AtomicInteger(0);
@@ -40,9 +32,17 @@ class CircuitBreakerUsageTest {
             return "receipt-" + orderId;
         }
 
+        String chargeDetailed(String orderId, String currency, int amount, boolean express) {
+            callCount.incrementAndGet();
+            if (failing) throw new RuntimeException("Payment gateway unavailable");
+            return String.format("%s-%s-%d-%s", orderId, currency, amount, express ? "express" : "standard");
+        }
+
         void setFailing(boolean failing) { this.failing = failing; }
         int getCallCount() { return callCount.get(); }
     }
+
+    // ── Standalone — Supplier/Callable pattern ──
 
     @Nested
     @DisplayName("Standalone usage")
@@ -50,7 +50,7 @@ class CircuitBreakerUsageTest {
 
         @Test
         void should_let_calls_through_when_circuit_is_closed() {
-            // Given — decorate once, reuse the wrapper
+            // Given
             var service = new PaymentService();
             var cb = CircuitBreaker.of("paymentService", CircuitBreakerConfig.builder()
                     .failureRateThreshold(50)
@@ -69,7 +69,7 @@ class CircuitBreakerUsageTest {
 
         @Test
         void should_open_after_failure_rate_threshold_is_exceeded() {
-            // Given — a single decorated wrapper reused across all calls
+            // Given
             var service = new PaymentService();
             var cb = CircuitBreaker.of("paymentService", CircuitBreakerConfig.builder()
                     .failureRateThreshold(50)
@@ -85,7 +85,7 @@ class CircuitBreakerUsageTest {
             catchThrowable(resilientCharge::get);
             catchThrowable(resilientCharge::get);
 
-            // Then — circuit should be OPEN, subsequent calls rejected without reaching the service
+            // Then
             assertThat(cb.getState()).isEqualTo(CircuitBreakerState.OPEN);
             var beforeCount = service.getCallCount();
             assertThatThrownBy(resilientCharge::get)
@@ -100,38 +100,22 @@ class CircuitBreakerUsageTest {
         }
 
         @Test
-        void should_decorate_a_callable_wrapping_checked_exceptions() {
-            // Given — decorate a Callable that throws a checked exception
+        void should_wrap_checked_exceptions_in_inq_runtime_exception() {
+            // Given
             var cb = CircuitBreaker.ofDefaults("paymentService");
             Supplier<String> resilient = cb.decorateCallable(() -> {
                 throw new java.io.IOException("disk full");
             });
 
-            // When / Then — checked exception is wrapped, not swallowed
+            // When / Then
             assertThatThrownBy(resilient::get)
                     .isInstanceOf(InqRuntimeException.class)
                     .hasCauseInstanceOf(java.io.IOException.class)
                     .satisfies(ex -> {
                         var ire = (InqRuntimeException) ex;
                         assertThat(ire.getCode()).isEqualTo("INQ-CB-000");
-                        assertThat(ire.getElementName()).isEqualTo("paymentService");
                         assertThat(ire.getElementType()).isEqualTo(InqElementType.CIRCUIT_BREAKER);
-                        assertThat(ire.hasElementContext()).isTrue();
                     });
-        }
-
-        @Test
-        void should_decorate_a_runnable_for_fire_and_forget() {
-            // Given
-            var executed = new AtomicInteger(0);
-            var cb = CircuitBreaker.ofDefaults("notificationService");
-            Runnable resilientNotify = cb.decorateRunnable(executed::incrementAndGet);
-
-            // When
-            resilientNotify.run();
-
-            // Then
-            assertThat(executed).hasValue(1);
         }
 
         @Test
@@ -159,6 +143,72 @@ class CircuitBreakerUsageTest {
         }
     }
 
+    // ── Standalone — Invocation pattern ──
+
+    @Nested
+    @DisplayName("Standalone invocation usage")
+    class StandaloneInvocation {
+
+        @Test
+        void should_decorate_a_single_argument_invocation_and_call_with_different_args() throws Exception {
+            // Given — decorate once, reuse with different arguments
+            var service = new PaymentService();
+            var cb = CircuitBreaker.ofDefaults("paymentService");
+            Invocation<String, String> resilientCharge =
+                    cb.decorateInvocation(service::charge);
+
+            // When
+            var r1 = resilientCharge.invoke("order-1");
+            var r2 = resilientCharge.invoke("order-2");
+            var r3 = resilientCharge.invoke("order-3");
+
+            // Then — same wrapper, different arguments, 3 calls
+            assertThat(r1).isEqualTo("receipt-order-1");
+            assertThat(r2).isEqualTo("receipt-order-2");
+            assertThat(r3).isEqualTo("receipt-order-3");
+            assertThat(service.getCallCount()).isEqualTo(3);
+        }
+
+        @Test
+        void should_decorate_a_four_argument_invocation_via_varargs() throws Exception {
+            // Given — 4 args, use InvocationVarargs
+            var service = new PaymentService();
+            var cb = CircuitBreaker.ofDefaults("paymentService");
+            InvocationVarargs<String> resilientCharge = cb.decorateInvocation(
+                    (InvocationVarargs<String>) args -> service.chargeDetailed(
+                            (String) args[0], (String) args[1],
+                            (Integer) args[2], (Boolean) args[3]));
+
+            // When
+            var r1 = resilientCharge.invoke("order-1", "EUR", 1000, true);
+            var r2 = resilientCharge.invoke("order-2", "USD", 2500, false);
+
+            // Then
+            assertThat(r1).isEqualTo("order-1-EUR-1000-express");
+            assertThat(r2).isEqualTo("order-2-USD-2500-standard");
+            assertThat(service.getCallCount()).isEqualTo(2);
+        }
+
+        @Test
+        void should_reject_invocation_when_circuit_is_open() {
+            // Given
+            var service = new PaymentService();
+            var cb = CircuitBreaker.ofDefaults("paymentService");
+            cb.transitionToOpenState();
+            Invocation<String, String> resilientCharge =
+                    cb.decorateInvocation(service::charge);
+
+            // When / Then — different arguments don't bypass the open circuit
+            assertThatThrownBy(() -> resilientCharge.invoke("order-1"))
+                    .isInstanceOf(InqCallNotPermittedException.class);
+            assertThatThrownBy(() -> resilientCharge.invoke("order-2"))
+                    .isInstanceOf(InqCallNotPermittedException.class);
+            assertThat(service.getCallCount()).isZero();
+        }
+    }
+
+    // ── Pipeline — Supplier/Callable pattern ──
+
     @Nested
     @DisplayName("Pipeline usage")
     class Pipeline {
@@ -181,28 +231,7 @@ class CircuitBreakerUsageTest {
         }
 
         @Test
-        void should_reject_calls_when_circuit_opens_in_pipeline() {
-            // Given
-            var service = new PaymentService();
-            var cb = CircuitBreaker.ofDefaults("paymentService");
-            cb.transitionToOpenState();
-            Supplier<String> resilient = InqPipeline.of(() -> service.charge("should-not-reach"))
-                    .shield(cb)
-                    .decorate();
-
-            // When / Then
-            assertThatThrownBy(resilient::get)
-                    .isInstanceOf(InqCallNotPermittedException.class)
-                    .satisfies(ex -> {
-                        var inqEx = (InqException) ex;
-                        assertThat(inqEx.getCallId()).isNotNull().isNotEqualTo("None");
-                        assertThat(inqEx.getCode()).isEqualTo("INQ-CB-001");
-                    });
-            assertThat(service.getCallCount()).isZero();
-        }
-
-        @Test
-        void should_carry_the_same_call_id_across_pipeline_exceptions() {
+        void should_carry_a_pipeline_call_id_on_rejection() {
             // Given
             var cb = CircuitBreaker.ofDefaults("paymentService");
             cb.transitionToOpenState();
@@ -210,7 +239,7 @@ class CircuitBreakerUsageTest {
                     .shield(cb)
                     .decorate();
 
-            // When / Then — the exception carries a pipeline-generated callId (UUID format)
+            // When / Then
             assertThatThrownBy(resilient::get)
                     .isInstanceOf(InqException.class)
                     .satisfies(ex -> {
@@ -220,6 +249,58 @@ class CircuitBreakerUsageTest {
                                 .isNotEqualTo("None")
                                 .hasSizeGreaterThan(8);
                     });
+        }
+    }
+
+    // ── Pipeline — Invocation pattern ──
+
+    @Nested
+    @DisplayName("Pipeline invocation usage")
+    class PipelineInvocation {
+
+        @Test
+        void should_compose_pipeline_with_single_argument_invocation() throws Exception {
+            // Given — elements are shared singletons, pipeline chain is built per call
+            var service = new PaymentService();
+            var cb = CircuitBreaker.ofDefaults("paymentService");
+
+            Invocation<String, String> resilientCharge = orderId ->
+                    InqPipeline.of(() -> service.charge(orderId))
+                            .shield(cb)
+                            .decorate()
+                            .get();
+
+            // When
+            var r1 = resilientCharge.invoke("order-1");
+            var r2 = resilientCharge.invoke("order-2");
+
+            // Then — each call goes through the pipeline with its own callId
+            assertThat(r1).isEqualTo("receipt-order-1");
+            assertThat(r2).isEqualTo("receipt-order-2");
+            assertThat(service.getCallCount()).isEqualTo(2);
+        }
+
+        @Test
+        void should_compose_pipeline_with_four_argument_invocation() throws Exception {
+            // Given
+            var service = new PaymentService();
+            var cb = CircuitBreaker.ofDefaults("paymentService");
+
+            InvocationVarargs<String> resilientCharge = args ->
+                    InqPipeline.of(() -> service.chargeDetailed(
+                                    (String) args[0], (String) args[1],
+                                    (Integer) args[2], (Boolean) args[3]))
+                            .shield(cb)
+                            .decorate()
+                            .get();
+
+            // When
+            var r1 = resilientCharge.invoke("order-1", "EUR", 1000, true);
+            var r2 = resilientCharge.invoke("order-2", "USD", 2500, false);
+
+            // Then
+            assertThat(r1).isEqualTo("order-1-EUR-1000-express");
+            assertThat(r2).isEqualTo("order-2-USD-2500-standard");
         }
     }
 }

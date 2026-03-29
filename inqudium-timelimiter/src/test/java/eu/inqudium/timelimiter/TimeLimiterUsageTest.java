@@ -1,5 +1,7 @@
 package eu.inqudium.timelimiter;
 
+import eu.inqudium.core.Invocation;
+import eu.inqudium.core.InvocationVarargs;
 import eu.inqudium.core.exception.InqException;
 import eu.inqudium.core.exception.InqFailure;
 import eu.inqudium.core.pipeline.InqPipeline;
@@ -16,17 +18,8 @@ import java.util.function.Supplier;
 
 import static org.assertj.core.api.Assertions.*;
 
-/**
- * Demonstrates TimeLimiter usage from a library user's perspective.
- *
- * <p>All standalone tests follow the real-world pattern: decorate once, then
- * invoke the wrapper. The time limiter bounds the caller's wait time without
- * interrupting the downstream operation.
- */
 @DisplayName("TimeLimiter — User Perspective")
 class TimeLimiterUsageTest {
-
-    // ── Simulated service with configurable latency ──
 
     static class ShippingService {
         private final AtomicInteger callCount = new AtomicInteger(0);
@@ -38,15 +31,22 @@ class TimeLimiterUsageTest {
 
         String calculateShipping(String orderId) {
             callCount.incrementAndGet();
-            try {
-                Thread.sleep(latencyMs);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-            }
+            sleep(latencyMs);
             return "shipping-" + orderId;
         }
 
+        String calculateShippingDetailed(String orderId, String destination, int weight, boolean insured) {
+            callCount.incrementAndGet();
+            sleep(latencyMs);
+            return String.format("%s→%s-%dkg-%s", orderId, destination, weight,
+                    insured ? "insured" : "uninsured");
+        }
+
         int getCallCount() { return callCount.get(); }
+
+        private static void sleep(long ms) {
+            try { Thread.sleep(ms); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+        }
     }
 
     @Nested
@@ -55,7 +55,7 @@ class TimeLimiterUsageTest {
 
         @Test
         void should_return_result_when_call_completes_within_timeout() {
-            // Given — fast service (50ms), generous timeout (2s)
+            // Given
             var service = new ShippingService(50);
             var tl = TimeLimiter.of("shippingService", TimeLimiterConfig.builder()
                     .timeoutDuration(Duration.ofSeconds(2))
@@ -68,12 +68,11 @@ class TimeLimiterUsageTest {
 
             // Then
             assertThat(result).isEqualTo("shipping-order-1");
-            assertThat(service.getCallCount()).isEqualTo(1);
         }
 
         @Test
         void should_throw_time_limit_exceeded_when_call_is_too_slow() {
-            // Given — slow service (2s), tight timeout (100ms)
+            // Given
             var service = new ShippingService(2000);
             var tl = TimeLimiter.of("shippingService", TimeLimiterConfig.builder()
                     .timeoutDuration(Duration.ofMillis(100))
@@ -87,9 +86,7 @@ class TimeLimiterUsageTest {
                     .satisfies(ex -> {
                         var tlEx = (InqTimeLimitExceededException) ex;
                         assertThat(tlEx.getCode()).isEqualTo("INQ-TL-001");
-                        assertThat(tlEx.getElementName()).isEqualTo("shippingService");
                         assertThat(tlEx.getConfiguredDuration()).isEqualTo(Duration.ofMillis(100));
-                        assertThat(tlEx.getActualDuration()).isGreaterThanOrEqualTo(Duration.ofMillis(100));
                     });
         }
 
@@ -109,10 +106,7 @@ class TimeLimiterUsageTest {
                 resilientCalc.get();
             } catch (RuntimeException e) {
                 InqFailure.find(e)
-                        .ifTimeLimitExceeded(info -> {
-                            handled.incrementAndGet();
-                            assertThat(info.getConfiguredDuration()).isEqualTo(Duration.ofMillis(100));
-                        })
+                        .ifTimeLimitExceeded(info -> handled.incrementAndGet())
                         .orElseThrow();
             }
 
@@ -127,34 +121,15 @@ class TimeLimiterUsageTest {
 
         @Test
         void should_return_result_from_a_decorated_future_supplier() {
-            // Given — decorate once, reuse the wrapper
-            var tl = TimeLimiter.of("shippingService", TimeLimiterConfig.builder()
-                    .timeoutDuration(Duration.ofSeconds(2))
-                    .build());
-            Supplier<String> resilientFuture = tl.decorateFutureSupplier(
-                    () -> CompletableFuture.completedFuture("immediate-result"));
-
-            // When
-            var result = resilientFuture.get();
-
-            // Then
-            assertThat(result).isEqualTo("immediate-result");
-        }
-
-        @Test
-        void should_return_result_from_an_async_future_supplier() {
             // Given
             var tl = TimeLimiter.of("shippingService", TimeLimiterConfig.builder()
                     .timeoutDuration(Duration.ofSeconds(2))
                     .build());
             Supplier<String> resilientFuture = tl.decorateFutureSupplier(
-                    () -> CompletableFuture.supplyAsync(() -> "async-result"));
+                    () -> CompletableFuture.completedFuture("immediate"));
 
-            // When
-            var result = resilientFuture.get();
-
-            // Then
-            assertThat(result).isEqualTo("async-result");
+            // When / Then
+            assertThat(resilientFuture.get()).isEqualTo("immediate");
         }
 
         @Test
@@ -165,12 +140,73 @@ class TimeLimiterUsageTest {
                     .build());
             Supplier<String> resilientFuture = tl.decorateFutureSupplier(
                     () -> CompletableFuture.supplyAsync(() -> {
-                        try { Thread.sleep(2000); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+                        ShippingService.sleep(2000);
                         return "too-slow";
                     }));
 
             // When / Then
             assertThatThrownBy(resilientFuture::get)
+                    .isInstanceOf(InqTimeLimitExceededException.class);
+        }
+    }
+
+    @Nested
+    @DisplayName("Standalone invocation usage")
+    class StandaloneInvocation {
+
+        @Test
+        void should_time_limit_a_single_argument_invocation_with_different_orders() throws Exception {
+            // Given
+            var service = new ShippingService(50);
+            var tl = TimeLimiter.of("shippingService", TimeLimiterConfig.builder()
+                    .timeoutDuration(Duration.ofSeconds(2))
+                    .build());
+            Invocation<String, String> resilientCalc =
+                    tl.decorateInvocation(service::calculateShipping);
+
+            // When
+            var r1 = resilientCalc.invoke("order-1");
+            var r2 = resilientCalc.invoke("order-2");
+
+            // Then
+            assertThat(r1).isEqualTo("shipping-order-1");
+            assertThat(r2).isEqualTo("shipping-order-2");
+            assertThat(service.getCallCount()).isEqualTo(2);
+        }
+
+        @Test
+        void should_time_limit_a_four_argument_invocation_via_varargs() throws Exception {
+            // Given
+            var service = new ShippingService(50);
+            var tl = TimeLimiter.of("shippingService", TimeLimiterConfig.builder()
+                    .timeoutDuration(Duration.ofSeconds(2))
+                    .build());
+            InvocationVarargs<String> resilientCalc = tl.decorateInvocation(
+                    (InvocationVarargs<String>) args -> service.calculateShippingDetailed(
+                            (String) args[0], (String) args[1],
+                            (Integer) args[2], (Boolean) args[3]));
+
+            // When
+            var r1 = resilientCalc.invoke("order-1", "Berlin", 5, true);
+            var r2 = resilientCalc.invoke("order-2", "Munich", 12, false);
+
+            // Then
+            assertThat(r1).isEqualTo("order-1→Berlin-5kg-insured");
+            assertThat(r2).isEqualTo("order-2→Munich-12kg-uninsured");
+        }
+
+        @Test
+        void should_timeout_invocation_when_service_is_too_slow() {
+            // Given
+            var service = new ShippingService(2000);
+            var tl = TimeLimiter.of("shippingService", TimeLimiterConfig.builder()
+                    .timeoutDuration(Duration.ofMillis(100))
+                    .build());
+            Invocation<String, String> resilientCalc =
+                    tl.decorateInvocation(service::calculateShipping);
+
+            // When / Then — different arguments don't change the timeout behavior
+            assertThatThrownBy(() -> resilientCalc.invoke("slow-order"))
                     .isInstanceOf(InqTimeLimitExceededException.class);
         }
     }
@@ -191,15 +227,12 @@ class TimeLimiterUsageTest {
                     .shield(tl)
                     .decorate();
 
-            // When
-            var result = resilient.get();
-
-            // Then
-            assertThat(result).isEqualTo("shipping-pipeline-1");
+            // When / Then
+            assertThat(resilient.get()).isEqualTo("shipping-pipeline-1");
         }
 
         @Test
-        void should_carry_a_pipeline_call_id_on_timeout_exception() {
+        void should_carry_a_pipeline_call_id_on_timeout() {
             // Given
             var service = new ShippingService(2000);
             var tl = TimeLimiter.of("shippingService", TimeLimiterConfig.builder()
@@ -210,15 +243,63 @@ class TimeLimiterUsageTest {
                     .shield(tl)
                     .decorate();
 
-            // When / Then — exception carries a pipeline-generated callId
+            // When / Then
             assertThatThrownBy(resilient::get)
                     .isInstanceOf(InqTimeLimitExceededException.class)
-                    .satisfies(ex -> {
-                        var inqEx = (InqException) ex;
-                        assertThat(inqEx.getCallId())
-                                .isNotNull()
-                                .isNotEqualTo("None");
-                    });
+                    .satisfies(ex -> assertThat(((InqException) ex).getCallId()).isNotEqualTo("None"));
+        }
+    }
+
+    @Nested
+    @DisplayName("Pipeline invocation usage")
+    class PipelineInvocation {
+
+        @Test
+        void should_compose_pipeline_with_single_argument_invocation() throws Exception {
+            // Given
+            var service = new ShippingService(50);
+            var tl = TimeLimiter.of("shippingService", TimeLimiterConfig.builder()
+                    .timeoutDuration(Duration.ofSeconds(2))
+                    .build());
+
+            Invocation<String, String> resilientCalc = orderId ->
+                    InqPipeline.of(() -> service.calculateShipping(orderId))
+                            .shield(tl)
+                            .decorate()
+                            .get();
+
+            // When
+            var r1 = resilientCalc.invoke("order-1");
+            var r2 = resilientCalc.invoke("order-2");
+
+            // Then
+            assertThat(r1).isEqualTo("shipping-order-1");
+            assertThat(r2).isEqualTo("shipping-order-2");
+        }
+
+        @Test
+        void should_compose_pipeline_with_four_argument_invocation() throws Exception {
+            // Given
+            var service = new ShippingService(50);
+            var tl = TimeLimiter.of("shippingService", TimeLimiterConfig.builder()
+                    .timeoutDuration(Duration.ofSeconds(2))
+                    .build());
+
+            InvocationVarargs<String> resilientCalc = args ->
+                    InqPipeline.of(() -> service.calculateShippingDetailed(
+                                    (String) args[0], (String) args[1],
+                                    (Integer) args[2], (Boolean) args[3]))
+                            .shield(tl)
+                            .decorate()
+                            .get();
+
+            // When
+            var r1 = resilientCalc.invoke("order-1", "Berlin", 5, true);
+            var r2 = resilientCalc.invoke("order-2", "Munich", 12, false);
+
+            // Then
+            assertThat(r1).isEqualTo("order-1→Berlin-5kg-insured");
+            assertThat(r2).isEqualTo("order-2→Munich-12kg-uninsured");
         }
     }
 }

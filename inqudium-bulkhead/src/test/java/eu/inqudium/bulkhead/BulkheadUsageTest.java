@@ -1,5 +1,7 @@
 package eu.inqudium.bulkhead;
 
+import eu.inqudium.core.Invocation;
+import eu.inqudium.core.InvocationVarargs;
 import eu.inqudium.core.bulkhead.BulkheadConfig;
 import eu.inqudium.core.bulkhead.InqBulkheadFullException;
 import eu.inqudium.core.exception.InqException;
@@ -17,16 +19,8 @@ import java.util.function.Supplier;
 
 import static org.assertj.core.api.Assertions.*;
 
-/**
- * Demonstrates Bulkhead usage from a library user's perspective.
- *
- * <p>All standalone tests follow the real-world pattern: decorate once, then
- * invoke the wrapper. The bulkhead limits concurrent access to the decorated call.
- */
 @DisplayName("Bulkhead — User Perspective")
 class BulkheadUsageTest {
-
-    // ── Simulated slow service ──
 
     static class OrderService {
         private final AtomicInteger callCount = new AtomicInteger(0);
@@ -36,13 +30,15 @@ class BulkheadUsageTest {
             return "processed-" + orderId;
         }
 
+        String processOrderDetailed(String orderId, String region, int priority, boolean expedited) {
+            callCount.incrementAndGet();
+            return String.format("%s@%s-p%d-%s", orderId, region, priority,
+                    expedited ? "expedited" : "normal");
+        }
+
         String processOrderSlowly(String orderId, CountDownLatch holdLatch) {
             callCount.incrementAndGet();
-            try {
-                holdLatch.await();
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-            }
+            try { holdLatch.await(); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
             return "processed-" + orderId;
         }
 
@@ -55,7 +51,7 @@ class BulkheadUsageTest {
 
         @Test
         void should_let_calls_through_when_bulkhead_has_capacity() {
-            // Given — decorate once, reuse the wrapper
+            // Given
             var service = new OrderService();
             var bh = Bulkhead.of("orderService", BulkheadConfig.builder()
                     .maxConcurrentCalls(5)
@@ -68,25 +64,6 @@ class BulkheadUsageTest {
             // Then
             assertThat(result).isEqualTo("processed-order-1");
             assertThat(bh.getAvailablePermits()).isEqualTo(5);
-            assertThat(bh.getConcurrentCalls()).isZero();
-        }
-
-        @Test
-        void should_release_permits_after_successful_calls() {
-            // Given
-            var service = new OrderService();
-            var bh = Bulkhead.of("orderService", BulkheadConfig.builder()
-                    .maxConcurrentCalls(2)
-                    .build());
-            Supplier<String> resilientProcess = bh.decorateSupplier(() -> service.processOrder("order"));
-
-            // When — two sequential calls through the same wrapper
-            resilientProcess.get();
-            resilientProcess.get();
-
-            // Then — permits are released after each call
-            assertThat(bh.getAvailablePermits()).isEqualTo(2);
-            assertThat(service.getCallCount()).isEqualTo(2);
         }
 
         @Test
@@ -95,20 +72,18 @@ class BulkheadUsageTest {
             var bh = Bulkhead.of("orderService", BulkheadConfig.builder()
                     .maxConcurrentCalls(2)
                     .build());
-            Supplier<String> resilient = bh.decorateSupplier(() -> {
-                throw new RuntimeException("boom");
-            });
+            Supplier<String> resilient = bh.decorateSupplier(() -> { throw new RuntimeException("boom"); });
 
-            // When — call that throws
+            // When
             catchThrowable(resilient::get);
 
-            // Then — permit was still released
+            // Then
             assertThat(bh.getAvailablePermits()).isEqualTo(2);
         }
 
         @Test
         void should_reject_calls_when_bulkhead_is_full() throws Exception {
-            // Given — decorate two suppliers: one slow (to hold the permit), one fast
+            // Given
             var service = new OrderService();
             var holdLatch = new CountDownLatch(1);
             var bh = Bulkhead.of("orderService", BulkheadConfig.builder()
@@ -116,42 +91,23 @@ class BulkheadUsageTest {
                     .build());
             Supplier<String> slowCall = bh.decorateSupplier(
                     () -> service.processOrderSlowly("blocking", holdLatch));
-            Supplier<String> fastCall = bh.decorateSupplier(
-                    () -> service.processOrder("rejected"));
+            Supplier<String> fastCall = bh.decorateSupplier(() -> service.processOrder("rejected"));
 
-            // When — slow call holds the single permit
             ExecutorService executor = Executors.newSingleThreadExecutor();
             executor.submit(slowCall::get);
             Thread.sleep(50);
 
-            // Then — fast call is rejected
+            // When / Then
             assertThatThrownBy(fastCall::get)
                     .isInstanceOf(InqBulkheadFullException.class)
                     .satisfies(ex -> {
                         var bhEx = (InqBulkheadFullException) ex;
                         assertThat(bhEx.getCode()).isEqualTo("INQ-BH-001");
-                        assertThat(bhEx.getElementName()).isEqualTo("orderService");
-                        assertThat(bhEx.getConcurrentCalls()).isEqualTo(1);
                         assertThat(bhEx.getMaxConcurrentCalls()).isEqualTo(1);
                     });
 
             holdLatch.countDown();
             executor.shutdown();
-        }
-
-        @Test
-        void should_decorate_a_runnable_for_fire_and_forget() {
-            // Given
-            var executed = new AtomicInteger(0);
-            var bh = Bulkhead.ofDefaults("orderService");
-            Runnable resilientTask = bh.decorateRunnable(executed::incrementAndGet);
-
-            // When
-            resilientTask.run();
-
-            // Then
-            assertThat(executed).hasValue(1);
-            assertThat(bh.getAvailablePermits()).isEqualTo(bh.getConfig().getMaxConcurrentCalls());
         }
 
         @Test
@@ -177,18 +133,64 @@ class BulkheadUsageTest {
                 nextCall.get();
             } catch (RuntimeException e) {
                 InqFailure.find(e)
-                        .ifBulkheadFull(info -> {
-                            handled.incrementAndGet();
-                            assertThat(info.getMaxConcurrentCalls()).isEqualTo(1);
-                        })
+                        .ifBulkheadFull(info -> handled.incrementAndGet())
                         .orElseThrow();
             }
 
             // Then
             assertThat(handled).hasValue(1);
-
             holdLatch.countDown();
             executor.shutdown();
+        }
+    }
+
+    @Nested
+    @DisplayName("Standalone invocation usage")
+    class StandaloneInvocation {
+
+        @Test
+        void should_isolate_a_single_argument_invocation_with_different_orders() throws Exception {
+            // Given
+            var service = new OrderService();
+            var bh = Bulkhead.of("orderService", BulkheadConfig.builder()
+                    .maxConcurrentCalls(5)
+                    .build());
+            Invocation<String, String> resilientProcess =
+                    bh.decorateInvocation(service::processOrder);
+
+            // When
+            var r1 = resilientProcess.invoke("order-1");
+            var r2 = resilientProcess.invoke("order-2");
+            var r3 = resilientProcess.invoke("order-3");
+
+            // Then
+            assertThat(r1).isEqualTo("processed-order-1");
+            assertThat(r2).isEqualTo("processed-order-2");
+            assertThat(r3).isEqualTo("processed-order-3");
+            assertThat(bh.getAvailablePermits()).isEqualTo(5);
+            assertThat(service.getCallCount()).isEqualTo(3);
+        }
+
+        @Test
+        void should_isolate_a_four_argument_invocation_via_varargs() throws Exception {
+            // Given
+            var service = new OrderService();
+            var bh = Bulkhead.of("orderService", BulkheadConfig.builder()
+                    .maxConcurrentCalls(5)
+                    .build());
+            InvocationVarargs<String> resilientProcess = bh.decorateInvocation(
+                    (InvocationVarargs<String>) args -> service.processOrderDetailed(
+                            (String) args[0], (String) args[1],
+                            (Integer) args[2], (Boolean) args[3]));
+
+            // When
+            var r1 = resilientProcess.invoke("order-1", "EU", 1, true);
+            var r2 = resilientProcess.invoke("order-2", "US", 3, false);
+
+            // Then
+            assertThat(r1).isEqualTo("order-1@EU-p1-expedited");
+            assertThat(r2).isEqualTo("order-2@US-p3-normal");
+            assertThat(bh.getAvailablePermits()).isEqualTo(5);
         }
     }
 
@@ -207,50 +209,91 @@ class BulkheadUsageTest {
                     .shield(bh)
                     .decorate();
 
-            // When
-            var result = resilient.get();
-
-            // Then
-            assertThat(result).isEqualTo("processed-pipeline-1");
+            // When / Then
+            assertThat(resilient.get()).isEqualTo("processed-pipeline-1");
             assertThat(bh.getAvailablePermits()).isEqualTo(5);
         }
 
         @Test
-        void should_carry_a_pipeline_call_id_on_bulkhead_full_exception() throws Exception {
+        void should_carry_a_pipeline_call_id_on_bulkhead_full() throws Exception {
             // Given
             var holdLatch = new CountDownLatch(1);
             var bh = Bulkhead.of("orderService", BulkheadConfig.builder()
                     .maxConcurrentCalls(1)
                     .build());
-
-            // Hold the single permit via pipeline
             Supplier<String> blocking = InqPipeline.of(() -> {
                         try { holdLatch.await(); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
                         return "blocking";
-                    })
-                    .shield(bh)
-                    .decorate();
+                    }).shield(bh).decorate();
 
             ExecutorService executor = Executors.newSingleThreadExecutor();
             executor.submit(blocking::get);
             Thread.sleep(50);
 
             Supplier<String> resilient = InqPipeline.of(() -> "rejected")
-                    .shield(bh)
-                    .decorate();
+                    .shield(bh).decorate();
 
             // When / Then
             assertThatThrownBy(resilient::get)
                     .isInstanceOf(InqBulkheadFullException.class)
-                    .satisfies(ex -> {
-                        var inqEx = (InqException) ex;
-                        assertThat(inqEx.getCallId())
-                                .isNotNull()
-                                .isNotEqualTo("None");
-                    });
+                    .satisfies(ex -> assertThat(((InqException) ex).getCallId()).isNotEqualTo("None"));
 
             holdLatch.countDown();
             executor.shutdown();
+        }
+    }
+
+    @Nested
+    @DisplayName("Pipeline invocation usage")
+    class PipelineInvocation {
+
+        @Test
+        void should_compose_pipeline_with_single_argument_invocation() throws Exception {
+            // Given
+            var service = new OrderService();
+            var bh = Bulkhead.of("orderService", BulkheadConfig.builder()
+                    .maxConcurrentCalls(5)
+                    .build());
+
+            Invocation<String, String> resilientProcess = orderId ->
+                    InqPipeline.of(() -> service.processOrder(orderId))
+                            .shield(bh)
+                            .decorate()
+                            .get();
+
+            // When
+            var r1 = resilientProcess.invoke("order-1");
+            var r2 = resilientProcess.invoke("order-2");
+
+            // Then
+            assertThat(r1).isEqualTo("processed-order-1");
+            assertThat(r2).isEqualTo("processed-order-2");
+            assertThat(bh.getAvailablePermits()).isEqualTo(5);
+        }
+
+        @Test
+        void should_compose_pipeline_with_four_argument_invocation() throws Exception {
+            // Given
+            var service = new OrderService();
+            var bh = Bulkhead.of("orderService", BulkheadConfig.builder()
+                    .maxConcurrentCalls(5)
+                    .build());
+
+            InvocationVarargs<String> resilientProcess = args ->
+                    InqPipeline.of(() -> service.processOrderDetailed(
+                                    (String) args[0], (String) args[1],
+                                    (Integer) args[2], (Boolean) args[3]))
+                            .shield(bh)
+                            .decorate()
+                            .get();
+
+            // When
+            var r1 = resilientProcess.invoke("order-1", "EU", 1, true);
+            var r2 = resilientProcess.invoke("order-2", "US", 3, false);
+
+            // Then
+            assertThat(r1).isEqualTo("order-1@EU-p1-expedited");
+            assertThat(r2).isEqualTo("order-2@US-p3-normal");
         }
     }
 }

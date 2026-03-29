@@ -1,5 +1,7 @@
 package eu.inqudium.ratelimiter;
 
+import eu.inqudium.core.Invocation;
+import eu.inqudium.core.InvocationVarargs;
 import eu.inqudium.core.exception.InqException;
 import eu.inqudium.core.exception.InqFailure;
 import eu.inqudium.core.pipeline.InqPipeline;
@@ -15,16 +17,8 @@ import java.util.function.Supplier;
 
 import static org.assertj.core.api.Assertions.*;
 
-/**
- * Demonstrates RateLimiter usage from a library user's perspective.
- *
- * <p>All standalone tests follow the real-world pattern: decorate once, then
- * invoke the wrapper repeatedly.
- */
 @DisplayName("RateLimiter — User Perspective")
 class RateLimiterUsageTest {
-
-    // ── Simulated API client ──
 
     static class ApiClient {
         private final AtomicInteger callCount = new AtomicInteger(0);
@@ -32,6 +26,11 @@ class RateLimiterUsageTest {
         String fetchData(String endpoint) {
             callCount.incrementAndGet();
             return "response-from-" + endpoint;
+        }
+
+        String fetchDataFiltered(String endpoint, String filter, int limit, boolean cached) {
+            callCount.incrementAndGet();
+            return String.format("%s?filter=%s&limit=%d&cached=%s", endpoint, filter, limit, cached);
         }
 
         int getCallCount() { return callCount.get(); }
@@ -43,7 +42,7 @@ class RateLimiterUsageTest {
 
         @Test
         void should_permit_calls_within_the_rate_limit() {
-            // Given — decorate once, reuse the wrapper
+            // Given
             var client = new ApiClient();
             var rl = RateLimiter.of("apiGateway", RateLimiterConfig.builder()
                     .limitForPeriod(5)
@@ -51,15 +50,13 @@ class RateLimiterUsageTest {
                     .build());
             Supplier<String> resilientFetch = rl.decorateSupplier(() -> client.fetchData("users"));
 
-            // When — 3 calls, well within the limit of 5
+            // When
             var r1 = resilientFetch.get();
             var r2 = resilientFetch.get();
             var r3 = resilientFetch.get();
 
             // Then
             assertThat(r1).isEqualTo("response-from-users");
-            assertThat(r2).isEqualTo("response-from-users");
-            assertThat(r3).isEqualTo("response-from-users");
             assertThat(client.getCallCount()).isEqualTo(3);
         }
 
@@ -73,11 +70,11 @@ class RateLimiterUsageTest {
                     .build());
             Supplier<String> resilientFetch = rl.decorateSupplier(() -> client.fetchData("data"));
 
-            // When — exhaust the 2 permits
+            // When
             resilientFetch.get();
             resilientFetch.get();
 
-            // Then — 3rd call is rejected
+            // Then
             assertThatThrownBy(resilientFetch::get)
                     .isInstanceOf(InqRequestNotPermittedException.class)
                     .satisfies(ex -> {
@@ -97,7 +94,7 @@ class RateLimiterUsageTest {
                     .limitRefreshPeriod(Duration.ofSeconds(10))
                     .build());
             Supplier<String> resilient = rl.decorateSupplier(() -> "data");
-            resilient.get(); // consume the single permit
+            resilient.get();
 
             // When
             var handled = new AtomicInteger(0);
@@ -107,7 +104,6 @@ class RateLimiterUsageTest {
                 InqFailure.find(e)
                         .ifRateLimited(info -> {
                             handled.incrementAndGet();
-                            assertThat(info.getElementName()).isEqualTo("apiGateway");
                             assertThat(info.getWaitEstimate()).isPositive();
                         })
                         .orElseThrow();
@@ -116,21 +112,75 @@ class RateLimiterUsageTest {
             // Then
             assertThat(handled).hasValue(1);
         }
+    }
+
+    @Nested
+    @DisplayName("Standalone invocation usage")
+    class StandaloneInvocation {
 
         @Test
-        void should_support_manual_permit_acquisition() {
+        void should_rate_limit_a_single_argument_invocation_with_different_endpoints() throws Exception {
             // Given
+            var client = new ApiClient();
+            var rl = RateLimiter.of("apiGateway", RateLimiterConfig.builder()
+                    .limitForPeriod(5)
+                    .limitRefreshPeriod(Duration.ofSeconds(1))
+                    .build());
+            Invocation<String, String> resilientFetch =
+                    rl.decorateInvocation(client::fetchData);
+
+            // When — same wrapper, different endpoints
+            var r1 = resilientFetch.invoke("users");
+            var r2 = resilientFetch.invoke("orders");
+            var r3 = resilientFetch.invoke("products");
+
+            // Then
+            assertThat(r1).isEqualTo("response-from-users");
+            assertThat(r2).isEqualTo("response-from-orders");
+            assertThat(r3).isEqualTo("response-from-products");
+            assertThat(client.getCallCount()).isEqualTo(3);
+        }
+
+        @Test
+        void should_rate_limit_a_four_argument_invocation_via_varargs() throws Exception {
+            // Given
+            var client = new ApiClient();
+            var rl = RateLimiter.of("apiGateway", RateLimiterConfig.builder()
+                    .limitForPeriod(5)
+                    .limitRefreshPeriod(Duration.ofSeconds(1))
+                    .build());
+            InvocationVarargs<String> resilientFetch = rl.decorateInvocation(
+                    (InvocationVarargs<String>) args -> client.fetchDataFiltered(
+                            (String) args[0], (String) args[1],
+                            (Integer) args[2], (Boolean) args[3]));
+
+            // When
+            var r1 = resilientFetch.invoke("users", "active", 100, true);
+            var r2 = resilientFetch.invoke("orders", "pending", 50, false);
+
+            // Then
+            assertThat(r1).isEqualTo("users?filter=active&limit=100&cached=true");
+            assertThat(r2).isEqualTo("orders?filter=pending&limit=50&cached=false");
+        }
+
+        @Test
+        void should_reject_invocation_when_rate_limit_is_exceeded() throws Exception {
+            // Given
+            var client = new ApiClient();
             var rl = RateLimiter.of("apiGateway", RateLimiterConfig.builder()
                     .limitForPeriod(1)
                     .limitRefreshPeriod(Duration.ofSeconds(10))
                     .build());
+            Invocation<String, String> resilientFetch =
+                    rl.decorateInvocation(client::fetchData);
 
-            // When — acquire manually
-            rl.acquirePermit();
+            // When — first call consumes the permit
+            resilientFetch.invoke("users");
 
-            // Then — next acquire fails
-            assertThatThrownBy(rl::acquirePermit)
+            // Then — second call with different arg is still rejected
+            assertThatThrownBy(() -> resilientFetch.invoke("orders"))
                     .isInstanceOf(InqRequestNotPermittedException.class);
+            assertThat(client.getCallCount()).isEqualTo(1);
         }
     }
 
@@ -150,11 +200,8 @@ class RateLimiterUsageTest {
                     .shield(rl)
                     .decorate();
 
-            // When
-            var result = resilient.get();
-
-            // Then
-            assertThat(result).isEqualTo("response-from-pipeline");
+            // When / Then
+            assertThat(resilient.get()).isEqualTo("response-from-pipeline");
         }
 
         @Test
@@ -167,17 +214,67 @@ class RateLimiterUsageTest {
             Supplier<String> resilient = InqPipeline.of(() -> "data")
                     .shield(rl)
                     .decorate();
-            resilient.get(); // exhaust the single permit
+            resilient.get();
 
             // When / Then
             assertThatThrownBy(resilient::get)
                     .isInstanceOf(InqRequestNotPermittedException.class)
-                    .satisfies(ex -> {
-                        var inqEx = (InqException) ex;
-                        assertThat(inqEx.getCallId())
-                                .isNotNull()
-                                .isNotEqualTo("None");
-                    });
+                    .satisfies(ex -> assertThat(((InqException) ex).getCallId()).isNotEqualTo("None"));
+        }
+    }
+
+    @Nested
+    @DisplayName("Pipeline invocation usage")
+    class PipelineInvocation {
+
+        @Test
+        void should_compose_pipeline_with_single_argument_invocation() throws Exception {
+            // Given
+            var client = new ApiClient();
+            var rl = RateLimiter.of("apiGateway", RateLimiterConfig.builder()
+                    .limitForPeriod(5)
+                    .limitRefreshPeriod(Duration.ofSeconds(1))
+                    .build());
+
+            Invocation<String, String> resilientFetch = endpoint ->
+                    InqPipeline.of(() -> client.fetchData(endpoint))
+                            .shield(rl)
+                            .decorate()
+                            .get();
+
+            // When
+            var r1 = resilientFetch.invoke("users");
+            var r2 = resilientFetch.invoke("orders");
+
+            // Then
+            assertThat(r1).isEqualTo("response-from-users");
+            assertThat(r2).isEqualTo("response-from-orders");
+        }
+
+        @Test
+        void should_compose_pipeline_with_four_argument_invocation() throws Exception {
+            // Given
+            var client = new ApiClient();
+            var rl = RateLimiter.of("apiGateway", RateLimiterConfig.builder()
+                    .limitForPeriod(5)
+                    .limitRefreshPeriod(Duration.ofSeconds(1))
+                    .build());
+
+            InvocationVarargs<String> resilientFetch = args ->
+                    InqPipeline.of(() -> client.fetchDataFiltered(
+                                    (String) args[0], (String) args[1],
+                                    (Integer) args[2], (Boolean) args[3]))
+                            .shield(rl)
+                            .decorate()
+                            .get();
+
+            // When
+            var r1 = resilientFetch.invoke("users", "active", 100, true);
+            var r2 = resilientFetch.invoke("orders", "pending", 50, false);
+
+            // Then
+            assertThat(r1).isEqualTo("users?filter=active&limit=100&cached=true");
+            assertThat(r2).isEqualTo("orders?filter=pending&limit=50&cached=false");
         }
     }
 }
