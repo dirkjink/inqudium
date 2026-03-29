@@ -94,13 +94,53 @@ TimeLimiterConfig.builder()
 
 ### InqTimeoutProfile
 
+
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `connectTimeout` | `Duration` | — | HTTP connect timeout (first component). |
-| `responseTimeout` | `Duration` | — | HTTP response timeout (second component). |
+| Network Timeout | `Duration` | — | Agnostic Network Timeout Configuration Set. See below |
 | `additionalTimeout` | `Duration` | — | Extra components (TLS handshake, DNS, etc.). Repeatable. |
 | `method` | `TimeoutCalculation` | `RSS` | `RSS` (statistical) or `WORST_CASE` (sum). |
 | `safetyMarginFactor` | `double` | `1.2` | Factor applied to computed timeout. `1.2` = 20% headroom. |
+
+#### Agnostic HTTP Timeout Configuration Set
+
+| Timeout Type | Agnostic Parameter Name | Monitored Time Span | Equivalent in Common Clients |
+| :--- | :--- | :--- | :--- |
+| **Pool Wait Time** | `connectionAcquireTimeout` | The maximum time waiting for a free TCP connection from an internal pool. | Apache: `ConnectionRequestTimeout`<br>Spring: `ConnectionProvider` |
+| **Connection Establishment** | `connectionEstablishmentTimeout` | The time for the actual TCP connection (and TLS handshake). | OkHttp/Java 11+: `connectTimeout`<br>Apache: `ConnectTimeout` |
+| **Server Response Time** | `serverResponseTimeout` | Maximum time waited for the server to start responding (TTFB) after the request is sent. | Spring: `responseTimeout` |
+| **Read Inactivity** | `readInactivityTimeout` | Maximum wait time between two received data packets during download. | OkHttp: `readTimeout`<br>Apache: `ResponseTimeout` |
+| **Write Operation** | `writeOperationTimeout` | Maximum time a single write operation to the network socket is allowed to block. | OkHttp: `writeTimeout`<br>Spring: `WriteTimeoutHandler` |
+
+#### Mapping: Agnostic Configuration to JVM Clients
+
+| Agnostic Parameter | Apache HttpClient (v5) | OkHttp | Java 11+ HttpClient | Spring WebClient *(Reactor Netty)* |
+| :--- | :--- | :--- | :--- | :--- |
+| **`connectionAcquireTimeout`** | `ConnectionRequestTimeout` | Implicitly covered by `callTimeout`. If unset: infinite block. | Implicitly covered by total `timeout`. If unset: infinite block. | `pendingAcquireTimeout` |
+| **`connectionEstablishmentTimeout`**| `ConnectTimeout` | `connectTimeout` | `connectTimeout` | `ChannelOption.CONNECT_TIMEOUT_MILLIS` |
+| **`serverResponseTimeout`** | Implicitly covered by `ResponseTimeout`. | Implicitly covered by `readTimeout`. | Implicitly covered by total `timeout`. | `responseTimeout` |
+| **`readInactivityTimeout`** | `ResponseTimeout` | `readTimeout` | Implicitly covered by total `timeout`. If unset: infinite block. | `ReadTimeoutHandler` |
+| **`writeOperationTimeout`** | No native limit. Relies on OS-level TCP socket timeouts. | `writeTimeout` | Implicitly covered by total `timeout`. If unset: infinite block. | `WriteTimeoutHandler` |
+| **`totalExecutionTimeout`** | No native limit. Requires external wrapper (e.g., timed `Future`). | `callTimeout` | `timeout` | `.timeout(Duration)` |
+
+#### Timeout Configuration incl. Data Types & Units (JVM)
+
+| HTTP Client (JVM) | Timeout Parameter | Data Type & Unit | Monitored Time Span |
+| :--- | :--- | :--- | :--- |
+| **Apache HttpClient** | `ConnectTimeout` | **v5:** `Timeout`<br>**v4:** `int` (ms) | Time limit for the initial TCP handshake. |
+| | `ResponseTimeout` (v5) / `SocketTimeout` (v4) | **v5:** `Timeout`<br>**v4:** `int` (ms) | Maximum inactivity time between two received data packets. |
+| | `ConnectionRequestTimeout`| **v5:** `Timeout`<br>**v4:** `int` (ms) | Maximum wait time for a free connection from the connection pool. |
+| **OkHttp** | `connectTimeout` | `long` + `TimeUnit` or `Duration` | Time for establishing the TCP connection and TLS handshake. |
+| | `readTimeout` | `long` + `TimeUnit` or `Duration` | Maximum inactivity between two successful read operations. |
+| | `writeTimeout` | `long` + `TimeUnit` or `Duration` | Maximum time a single write operation is allowed to block on the network socket. |
+| | `callTimeout` | `long` + `TimeUnit` or `Duration` | Hard upper limit for the entire call. |
+| **Java 11+ HttpClient**| `connectTimeout` | `java.time.Duration` | Maximum time allowed for establishing the connection. |
+| | `timeout` | `java.time.Duration` | Maximum total time for the specific request. |
+| **Spring WebClient** *(Reactor Netty)* | `CONNECT_TIMEOUT_MILLIS` | `Integer` (strictly **ms**) | Configured in Netty `ChannelOption`. Monitors purely the TCP establishment. |
+| | `ReadTimeoutHandler` | `int` + `TimeUnit` or `Duration` | Netty level: Time span without new received data. |
+| | `WriteTimeoutHandler` | `int` + `TimeUnit` or `Duration` | Netty level: Maximum time a single write operation to the socket is allowed to block. |
+| | `responseTimeout` | `java.time.Duration` | HttpClient level: Wait time for the response (headers) after sending the request. |
+| | `.timeout()` | `java.time.Duration` | Reactive operator: Hard upper limit for the asynchronous pipeline. |
 
 **Output methods:**
 
