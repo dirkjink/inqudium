@@ -56,9 +56,14 @@ public class InqRuntimeException extends InqException {
      * @param cause       the checked exception to wrap
      */
     public InqRuntimeException(String callId, String elementName, InqElementType elementType, Throwable cause) {
-        super(callId, elementType.errorCode(0), elementName, elementType,
-                String.format(Locale.ROOT, "Checked exception in %s '%s': %s",
-                        elementType, elementName, cause.getMessage()),
+        super(callId,
+                elementType != null ? elementType.errorCode(0) : "INQ-SY-000",
+                elementName, elementType,
+                elementType != null
+                        ? String.format(Locale.ROOT, "Checked exception in %s '%s': %s",
+                                elementType, elementName, cause.getMessage())
+                        : String.format(Locale.ROOT, "Checked exception in '%s': %s",
+                                elementName, cause.getMessage()),
                 cause);
     }
 

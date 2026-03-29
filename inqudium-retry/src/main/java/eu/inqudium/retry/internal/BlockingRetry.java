@@ -20,14 +20,14 @@ import java.util.function.Supplier;
  *
  * @since 0.1.0
  */
-public final class RetryImpl implements Retry {
+public final class BlockingRetry implements Retry {
 
     private final String name;
     private final RetryConfig config;
     private final RetryBehavior behavior;
     private final InqEventPublisher eventPublisher;
 
-    public RetryImpl(String name, RetryConfig config) {
+    public BlockingRetry(String name, RetryConfig config) {
         this.name = name;
         this.config = config;
         this.behavior = RetryBehavior.defaultBehavior();
@@ -42,24 +42,29 @@ public final class RetryImpl implements Retry {
     public <T> Supplier<T> decorateCallable(Callable<T> callable) {
         return () -> {
             var callId = config.getCallIdGenerator().generate();
-            var supplier = InqRuntimeException.wrapCallable(callable, callId, name, InqElementType.RETRY);
-            var call = InqCall.of(callId, supplier);
-            return executeCall(call);
+            var call = InqCall.of(callId, callable);
+            try {
+                return executeCall(call);
+            } catch (RuntimeException re) {
+                throw re;
+            } catch (Exception e) {
+                throw new InqRuntimeException(callId, name, InqElementType.RETRY, e);
+            }
         };
     }
 
     @Override
     public <T> InqCall<T> decorate(InqCall<T> call) {
-        return call.withSupplier(() -> executeCall(call));
+        return call.withCallable(() -> executeCall(call));
     }
 
-    private <T> T executeCall(InqCall<T> call) {
+    private <T> T executeCall(InqCall<T> call) throws Exception {
         var callId = call.callId();
         Throwable lastException = null;
 
         for (int attempt = 1; attempt <= config.getMaxAttempts(); attempt++) {
             try {
-                T result = call.supplier().get();
+                T result = call.callable().call();
                 eventPublisher.publish(new RetryOnSuccessEvent(
                         callId, name, attempt, config.getClock().instant()));
                 return result;

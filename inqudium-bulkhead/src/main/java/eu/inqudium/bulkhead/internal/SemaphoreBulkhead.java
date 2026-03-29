@@ -48,7 +48,11 @@ public final class SemaphoreBulkhead implements Bulkhead {
             var callId = config.getCallIdGenerator().generate();
             acquirePermit(callId);
             try {
-                return InqRuntimeException.wrapCallable(callable, callId, name, InqElementType.BULKHEAD).get();
+                return callable.call();
+            } catch (RuntimeException re) {
+                throw re;
+            } catch (Exception e) {
+                throw new InqRuntimeException(callId, name, InqElementType.BULKHEAD, e);
             } finally {
                 releasePermit(callId);
             }
@@ -57,10 +61,10 @@ public final class SemaphoreBulkhead implements Bulkhead {
 
     @Override
     public <T> InqCall<T> decorate(InqCall<T> call) {
-        return call.withSupplier(() -> {
+        return call.withCallable(() -> {
             acquirePermit(call.callId());
             try {
-                return call.supplier().get();
+                return call.callable().call();
             } finally {
                 releasePermit(call.callId());
             }

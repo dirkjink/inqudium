@@ -4,11 +4,13 @@ import eu.inqudium.core.InqCall;
 import eu.inqudium.core.InqCallIdGenerator;
 import eu.inqudium.core.InqElementType;
 import eu.inqudium.core.context.InqContextPropagation;
+import eu.inqudium.core.exception.InqRuntimeException;
 
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
+import java.util.concurrent.Callable;
 import java.util.function.Supplier;
 
 /**
@@ -47,7 +49,23 @@ public final class InqPipeline {
      * @return a new pipeline builder
      */
     public static <T> Builder<T> of(Supplier<T> supplier) {
-        return new Builder<>(Objects.requireNonNull(supplier, "supplier must not be null"));
+        Objects.requireNonNull(supplier, "supplier must not be null");
+        return new Builder<>(supplier::get);
+    }
+
+    /**
+     * Starts building a pipeline for the given callable.
+     *
+     * <p>Checked exceptions from the callable flow naturally through the
+     * pipeline's decoration chain and are wrapped in {@link InqRuntimeException}
+     * at the {@code Supplier} boundary when {@link Builder#decorate()} is invoked.
+     *
+     * @param callable the operation to protect
+     * @param <T>      the result type
+     * @return a new pipeline builder
+     */
+    public static <T> Builder<T> of(Callable<T> callable) {
+        return new Builder<>(Objects.requireNonNull(callable, "callable must not be null"));
     }
 
     /**
@@ -57,13 +75,13 @@ public final class InqPipeline {
      */
     public static final class Builder<T> {
 
-        private final Supplier<T> supplier;
+        private final Callable<T> callable;
         private final List<InqDecorator> decorators = new ArrayList<>();
         private PipelineOrder order = PipelineOrder.INQUDIUM;
         private InqCallIdGenerator callIdGenerator = InqCallIdGenerator.uuid();
 
-        private Builder(Supplier<T> supplier) {
-            this.supplier = supplier;
+        private Builder(Callable<T> callable) {
+            this.callable = callable;
         }
 
         /**
@@ -116,26 +134,28 @@ public final class InqPipeline {
 
             validate(sorted);
 
-            // Capture sorted decorators for the lambda
             var chain = List.copyOf(sorted);
             final InqCallIdGenerator gen = callIdGenerator;
-            final Supplier<T> originalSupplier = supplier;
+            final Callable<T> originalCallable = callable;
 
             return () -> {
                 var callId = gen.generate();
 
-                // Build the InqCall chain: innermost decorator wraps the original supplier,
-                // outermost decorator wraps everything.
-                InqCall<T> call = InqCall.of(callId, originalSupplier);
+                // Build the InqCall chain: Callable flows through all decorators
+                InqCall<T> call = InqCall.of(callId, originalCallable);
                 for (int i = chain.size() - 1; i >= 0; i--) {
                     call = chain.get(i).decorate(call);
                 }
 
-                // Activate context propagation around the entire chain
+                // Execute with context propagation — Supplier boundary wraps checked exceptions
                 final InqCall<T> outermost = call;
                 try (var ctxScope = InqContextPropagation.activateFor(
                         callId, "pipeline", InqElementType.CACHE)) {
                     return outermost.execute();
+                } catch (RuntimeException re) {
+                    throw re;
+                } catch (Exception e) {
+                    throw new InqRuntimeException(callId, "pipeline", null, e);
                 }
             };
         }

@@ -1,82 +1,86 @@
 package eu.inqudium.core;
 
 import java.util.Objects;
-import java.util.function.Supplier;
+import java.util.concurrent.Callable;
 
 /**
  * Context-carrying wrapper for a call through the resilience pipeline.
  *
- * <p>Instead of using thread-local state to propagate the call identity,
- * {@code InqCall} carries the context as part of the data flow. Every element
- * in the pipeline reads the {@code callId} from this object — no hidden state,
- * no thread-local, works identically across imperative, reactive, and coroutine
- * paradigms.
+ * <p>Wraps a {@link Callable} rather than a {@code Supplier} so that checked
+ * exceptions flow naturally through the decoration chain without intermediate
+ * wrapping. The conversion to unchecked exceptions happens exactly once — at the
+ * boundary where the pipeline returns a {@code Supplier} to the caller.
  *
- * <h2>Pipeline usage</h2>
- * <p>The pipeline creates an {@code InqCall} with a generated callId and passes
- * it through the decoration chain. Each element reads {@code call.callId()} for
- * event correlation:
- * <pre>{@code
- * // Pipeline generates:
- * var call = InqCall.of(callIdGenerator.generate(), () -> service.call());
+ * <h2>Pipeline flow</h2>
+ * <pre>
+ * Callable (checked exceptions ok)
+ *   → InqCall(callId, callable)
+ *     → decorator.decorate(call) → call.withCallable(newCallable)
+ *       → decorator.decorate(call) → call.withCallable(newCallable)
+ *         → call.execute()  — throws Exception (natural for Callable)
+ *   → Supplier boundary: checked exceptions wrapped in InqRuntimeException
+ * </pre>
  *
- * // Each element decorates:
- * var decorated = decorator.decorate(call);
- * }</pre>
- *
- * <h2>Standalone usage</h2>
- * <p>When an element is used outside a pipeline, the public API
- * ({@code cb.decorateSupplier(supplier)}) creates an {@code InqCall}
- * internally with a fresh callId.
+ * <h2>Why Callable, not Supplier</h2>
+ * <p>A {@code Supplier.get()} cannot declare checked exceptions. When the
+ * downstream call throws a checked exception (e.g. {@code IOException}), each
+ * element would need to wrap it individually. With {@code Callable.call()},
+ * checked exceptions propagate naturally until the single wrapping point at
+ * the {@code Supplier} boundary.
  *
  * @param callId   the unique call identifier shared across all elements (ADR-003)
- * @param supplier the operation to execute
+ * @param callable the operation to execute
  * @param <T>      the result type
  * @since 0.1.0
  */
-public record InqCall<T>(String callId, Supplier<T> supplier) {
+public record InqCall<T>(String callId, Callable<T> callable) {
 
     public InqCall {
         Objects.requireNonNull(callId, "callId must not be null");
-        Objects.requireNonNull(supplier, "supplier must not be null");
+        Objects.requireNonNull(callable, "callable must not be null");
     }
 
     /**
-     * Creates a new call with the given callId and supplier.
+     * Creates a new call with the given callId and callable.
      *
      * @param callId   the call identifier
-     * @param supplier the operation
+     * @param callable the operation
      * @param <T>      the result type
      * @return a new InqCall
      */
-    public static <T> InqCall<T> of(String callId, Supplier<T> supplier) {
-        return new InqCall<>(callId, supplier);
+    public static <T> InqCall<T> of(String callId, Callable<T> callable) {
+        return new InqCall<>(callId, callable);
     }
 
     /**
-     * Creates a new call with the same callId but a different supplier.
+     * Creates a new call with the same callId but a different callable.
      *
-     * <p>Used by decorators to wrap the supplier while preserving the callId:
+     * <p>Used by decorators to wrap the callable while preserving the callId:
      * <pre>{@code
-     * return call.withSupplier(() -> {
+     * return call.withCallable(() -> {
      *     acquirePermit(call.callId());
-     *     return call.supplier().get();
+     *     return call.callable().call(); // checked exceptions flow naturally
      * });
      * }</pre>
      *
-     * @param newSupplier the decorated supplier
+     * @param newCallable the decorated callable
      * @return a new InqCall with the same callId
      */
-    public InqCall<T> withSupplier(Supplier<T> newSupplier) {
-        return new InqCall<>(this.callId, newSupplier);
+    public InqCall<T> withCallable(Callable<T> newCallable) {
+        return new InqCall<>(this.callId, newCallable);
     }
 
     /**
-     * Executes the supplier and returns the result.
+     * Executes the callable and returns the result.
+     *
+     * <p>Throws the callable's checked exception directly — no wrapping.
+     * The caller is responsible for handling or wrapping checked exceptions
+     * at the {@code Supplier} boundary.
      *
      * @return the result of the call
+     * @throws Exception if the callable throws
      */
-    public T execute() {
-        return supplier.get();
+    public T execute() throws Exception {
+        return callable.call();
     }
 }

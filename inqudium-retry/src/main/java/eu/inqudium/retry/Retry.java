@@ -3,7 +3,7 @@ package eu.inqudium.retry;
 import eu.inqudium.core.pipeline.InqDecorator;
 import eu.inqudium.core.InqElementType;
 import eu.inqudium.core.retry.RetryConfig;
-import eu.inqudium.retry.internal.RetryImpl;
+import eu.inqudium.retry.internal.BlockingRetry;
 
 /**
  * Imperative retry element — re-executes failed operations with configurable
@@ -23,11 +23,11 @@ import eu.inqudium.retry.internal.RetryImpl;
 public interface Retry extends InqDecorator {
 
     static Retry of(String name, RetryConfig config) {
-        return new RetryImpl(name, config);
+        return new BlockingRetry(name, config);
     }
 
     static Retry ofDefaults(String name) {
-        return new RetryImpl(name, RetryConfig.ofDefaults());
+        return new BlockingRetry(name, RetryConfig.ofDefaults());
     }
 
     RetryConfig getConfig();

@@ -90,23 +90,28 @@ public final class CircuitBreakerStateMachine implements CircuitBreaker {
     public <T> Supplier<T> decorateCallable(Callable<T> callable) {
         return () -> {
             var callId = config.getCallIdGenerator().generate();
-            var supplier = InqRuntimeException.wrapCallable(callable, callId, name, InqElementType.CIRCUIT_BREAKER);
-            var call = InqCall.of(callId, supplier);
-            return executeCall(call);
+            var call = InqCall.of(callId, callable);
+            try {
+                return executeCall(call);
+            } catch (RuntimeException re) {
+                throw re;
+            } catch (Exception e) {
+                throw new InqRuntimeException(callId, name, InqElementType.CIRCUIT_BREAKER, e);
+            }
         };
     }
 
     @Override
     public <T> InqCall<T> decorate(InqCall<T> call) {
-        return call.withSupplier(() -> executeCall(call));
+        return call.withCallable(() -> executeCall(call));
     }
 
-    private <T> T executeCall(InqCall<T> call) {
+    private <T> T executeCall(InqCall<T> call) throws Exception {
         var callId = call.callId();
         acquirePermission(callId);
         var start = config.getClock().instant();
         try {
-            T result = call.supplier().get();
+            T result = call.callable().call();
             onSuccess(callId, start);
             return result;
         } catch (Exception e) {

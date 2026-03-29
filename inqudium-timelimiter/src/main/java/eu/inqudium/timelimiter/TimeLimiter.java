@@ -3,7 +3,7 @@ package eu.inqudium.timelimiter;
 import eu.inqudium.core.pipeline.InqDecorator;
 import eu.inqudium.core.InqElementType;
 import eu.inqudium.core.timelimiter.TimeLimiterConfig;
-import eu.inqudium.timelimiter.internal.TimeLimiterImpl;
+import eu.inqudium.timelimiter.internal.FutureTimeLimiter;
 
 import java.util.concurrent.CompletionStage;
 import java.util.function.Supplier;
@@ -35,11 +35,11 @@ import java.util.function.Supplier;
 public interface TimeLimiter extends InqDecorator {
 
     static TimeLimiter of(String name, TimeLimiterConfig config) {
-        return new TimeLimiterImpl(name, config);
+        return new FutureTimeLimiter(name, config);
     }
 
     static TimeLimiter ofDefaults(String name) {
-        return new TimeLimiterImpl(name, TimeLimiterConfig.ofDefaults());
+        return new FutureTimeLimiter(name, TimeLimiterConfig.ofDefaults());
     }
 
     TimeLimiterConfig getConfig();

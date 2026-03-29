@@ -51,15 +51,21 @@ public final class TokenBucketRateLimiter implements RateLimiter {
         return () -> {
             var callId = config.getCallIdGenerator().generate();
             acquirePermitWithCallId(callId);
-            return InqRuntimeException.wrapCallable(callable, callId, name, InqElementType.RATE_LIMITER).get();
+            try {
+                return callable.call();
+            } catch (RuntimeException re) {
+                throw re;
+            } catch (Exception e) {
+                throw new InqRuntimeException(callId, name, InqElementType.RATE_LIMITER, e);
+            }
         };
     }
 
     @Override
     public <T> InqCall<T> decorate(InqCall<T> call) {
-        return call.withSupplier(() -> {
+        return call.withCallable(() -> {
             acquirePermitWithCallId(call.callId());
-            return call.supplier().get();
+            return call.callable().call();
         });
     }
 

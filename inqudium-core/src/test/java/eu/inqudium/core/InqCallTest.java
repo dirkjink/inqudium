@@ -4,9 +4,8 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
+import java.io.IOException;
 import java.util.ArrayList;
-import java.util.List;
-import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -19,7 +18,7 @@ class InqCallTest {
     class Creation {
 
         @Test
-        void should_carry_call_id_and_supplier() {
+        void should_carry_call_id_and_callable() throws Exception {
             // Given
             var call = InqCall.of("call-1", () -> "hello");
 
@@ -35,38 +34,38 @@ class InqCallTest {
         }
 
         @Test
-        void should_reject_null_supplier() {
+        void should_reject_null_callable() {
             assertThatThrownBy(() -> InqCall.of("id", null))
                     .isInstanceOf(NullPointerException.class);
         }
     }
 
     @Nested
-    @DisplayName("withSupplier — decoration pattern")
-    class WithSupplier {
+    @DisplayName("withCallable — decoration pattern")
+    class WithCallable {
 
         @Test
-        void should_preserve_call_id_when_replacing_supplier() {
+        void should_preserve_call_id_when_replacing_callable() throws Exception {
             // Given
             var original = InqCall.of("call-42", () -> "original");
 
             // When
-            var decorated = original.withSupplier(() -> "decorated-" + original.supplier().get());
+            var decorated = original.withCallable(() -> "decorated-" + original.callable().call());
 
-            // Then — same callId, different supplier
+            // Then — same callId, different callable
             assertThat(decorated.callId()).isEqualTo("call-42");
             assertThat(decorated.execute()).isEqualTo("decorated-original");
         }
 
         @Test
-        void should_support_chaining_multiple_decorations() {
+        void should_support_chaining_multiple_decorations() throws Exception {
             // Given
             var call = InqCall.of("call-1", () -> "base");
 
             // When — three decoration layers
-            var layer1 = call.withSupplier(() -> "[1:" + call.supplier().get() + "]");
-            var layer2 = layer1.withSupplier(() -> "[2:" + layer1.supplier().get() + "]");
-            var layer3 = layer2.withSupplier(() -> "[3:" + layer2.supplier().get() + "]");
+            var layer1 = call.withCallable(() -> "[1:" + call.callable().call() + "]");
+            var layer2 = layer1.withCallable(() -> "[2:" + layer1.callable().call() + "]");
+            var layer3 = layer2.withCallable(() -> "[3:" + layer2.callable().call() + "]");
 
             // Then — all layers share the same callId
             assertThat(layer3.callId()).isEqualTo("call-1");
@@ -79,26 +78,26 @@ class InqCallTest {
     class PipelineSimulation {
 
         @Test
-        void should_share_call_id_across_all_decorators_in_a_pipeline() {
+        void should_share_call_id_across_all_decorators_in_a_pipeline() throws Exception {
             // Given — simulate three elements recording the callId they see
             var observedCallIds = new ArrayList<String>();
 
             var original = InqCall.of("pipeline-call-99", () -> "result");
 
-            // When — each "element" reads the callId and decorates the supplier
-            var afterCb = original.withSupplier(() -> {
-                observedCallIds.add(original.callId());  // CB sees callId
-                return original.supplier().get();
+            // When — each "element" reads the callId and decorates the callable
+            var afterCb = original.withCallable(() -> {
+                observedCallIds.add(original.callId());
+                return original.callable().call();
             });
 
-            var afterRetry = afterCb.withSupplier(() -> {
-                observedCallIds.add(afterCb.callId());   // Retry sees callId
-                return afterCb.supplier().get();
+            var afterRetry = afterCb.withCallable(() -> {
+                observedCallIds.add(afterCb.callId());
+                return afterCb.callable().call();
             });
 
-            var afterRl = afterRetry.withSupplier(() -> {
-                observedCallIds.add(afterRetry.callId()); // RL sees callId
-                return afterRetry.supplier().get();
+            var afterRl = afterRetry.withCallable(() -> {
+                observedCallIds.add(afterRetry.callId());
+                return afterRetry.callable().call();
             });
 
             // Execute the outermost
@@ -126,7 +125,7 @@ class InqCallTest {
     class ExceptionPropagation {
 
         @Test
-        void should_propagate_exceptions_from_supplier() {
+        void should_propagate_runtime_exceptions_from_callable() {
             // Given
             var call = InqCall.of("call-err", () -> { throw new RuntimeException("boom"); });
 
@@ -134,6 +133,17 @@ class InqCallTest {
             assertThatThrownBy(call::execute)
                     .isInstanceOf(RuntimeException.class)
                     .hasMessage("boom");
+        }
+
+        @Test
+        void should_propagate_checked_exceptions_from_callable() {
+            // Given — Callable allows checked exceptions naturally
+            var call = InqCall.<String>of("call-checked", () -> { throw new IOException("disk full"); });
+
+            // When / Then — checked exception propagates without wrapping
+            assertThatThrownBy(call::execute)
+                    .isInstanceOf(IOException.class)
+                    .hasMessage("disk full");
         }
     }
 }
