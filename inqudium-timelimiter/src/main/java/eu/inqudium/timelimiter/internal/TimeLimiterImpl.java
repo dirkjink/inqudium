@@ -1,6 +1,7 @@
 package eu.inqudium.timelimiter.internal;
 
 import eu.inqudium.core.InqCall;
+import eu.inqudium.core.exception.InqRuntimeException;
 import eu.inqudium.core.InqElementType;
 import eu.inqudium.core.event.InqEventPublisher;
 import eu.inqudium.core.timelimiter.InqTimeLimitExceededException;
@@ -88,7 +89,7 @@ public final class TimeLimiterImpl implements TimeLimiter {
             var cause = ee.getCause() != null ? ee.getCause() : ee;
             eventPublisher.publish(new TimeLimiterOnErrorEvent(callId, name, duration, cause, config.getClock().instant()));
             if (cause instanceof RuntimeException re) throw re;
-            throw new RuntimeException(cause);
+            throw new InqRuntimeException(name, eu.inqudium.core.InqElementType.TIME_LIMITER, cause);
         } catch (InterruptedException ie) {
             Thread.currentThread().interrupt();
             var actualDuration = Duration.between(start, config.getClock().instant());

@@ -4,6 +4,7 @@ import eu.inqudium.circuitbreaker.event.CircuitBreakerOnErrorEvent;
 import eu.inqudium.circuitbreaker.event.CircuitBreakerOnStateTransitionEvent;
 import eu.inqudium.circuitbreaker.event.CircuitBreakerOnSuccessEvent;
 import eu.inqudium.core.InqClock;
+import eu.inqudium.core.InqElementType;
 import eu.inqudium.core.circuitbreaker.CircuitBreakerConfig;
 import eu.inqudium.core.circuitbreaker.CircuitBreakerState;
 import eu.inqudium.core.circuitbreaker.InqCallNotPermittedException;
@@ -385,15 +386,22 @@ class CircuitBreakerTest {
         }
 
         @Test
-        void should_decorate_callable_wrapping_checked_exceptions() {
+        void should_decorate_callable_wrapping_checked_exceptions_in_inq_runtime_exception() {
             // Given
-            var cb = CircuitBreaker.ofDefaults("test");
+            var cb = CircuitBreaker.ofDefaults("paymentService");
 
-            // When / Then — checked exception wrapped in RuntimeException
+            // When / Then — checked exception wrapped in InqRuntimeException with element context
             assertThatThrownBy(() ->
                     cb.decorateCallable(() -> { throw new Exception("checked"); }).get()
-            ).isInstanceOf(RuntimeException.class)
-                    .hasCauseInstanceOf(Exception.class);
+            ).isInstanceOf(eu.inqudium.core.exception.InqRuntimeException.class)
+                    .hasCauseInstanceOf(Exception.class)
+                    .satisfies(ex -> {
+                        var ire = (eu.inqudium.core.exception.InqRuntimeException) ex;
+                        assertThat(ire.hasElementContext()).isTrue();
+                        assertThat(ire.getElementName()).isEqualTo("paymentService");
+                        assertThat(ire.getElementType()).isEqualTo(InqElementType.CIRCUIT_BREAKER);
+                        assertThat(ire.getMessage()).contains("CIRCUIT_BREAKER", "paymentService", "checked");
+                    });
         }
     }
 

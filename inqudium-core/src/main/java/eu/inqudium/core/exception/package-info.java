@@ -16,7 +16,8 @@
  * <p>Concrete exception subclasses live in their respective element packages:
  * <pre>
  * RuntimeException
- * └── InqException (abstract)                                — this package
+ * ├── InqRuntimeException                                    — this package (checked exception wrapper)
+ * └── InqException (abstract)                                — this package (active intervention)
  *     ├── InqCallNotPermittedException   (INQ-CB-001)        — eu.inqudium.core.circuitbreaker
  *     ├── InqRequestNotPermittedException (INQ-RL-001)       — eu.inqudium.core.ratelimiter
  *     ├── InqBulkheadFullException       (INQ-BH-001)        — eu.inqudium.core.bulkhead

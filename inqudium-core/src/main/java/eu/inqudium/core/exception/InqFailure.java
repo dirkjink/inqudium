@@ -1,6 +1,7 @@
 package eu.inqudium.core.exception;
 
 import eu.inqudium.core.bulkhead.InqBulkheadFullException;
+
 import eu.inqudium.core.circuitbreaker.InqCallNotPermittedException;
 import eu.inqudium.core.ratelimiter.InqRequestNotPermittedException;
 import eu.inqudium.core.retry.InqRetryExhaustedException;
@@ -180,7 +181,7 @@ public final class InqFailure {
             if (original instanceof RuntimeException re) {
                 throw re;
             }
-            throw new RuntimeException(original);
+            throw new InqRuntimeException(original);
         }
     }
 
@@ -195,7 +196,7 @@ public final class InqFailure {
             if (original instanceof RuntimeException re) {
                 throw re;
             }
-            throw new RuntimeException(original);
+            throw new InqRuntimeException(original);
         }
     }
 }

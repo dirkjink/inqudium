@@ -5,6 +5,7 @@ import eu.inqudium.circuitbreaker.event.CircuitBreakerOnErrorEvent;
 import eu.inqudium.circuitbreaker.event.CircuitBreakerOnStateTransitionEvent;
 import eu.inqudium.circuitbreaker.event.CircuitBreakerOnSuccessEvent;
 import eu.inqudium.core.InqCall;
+import eu.inqudium.core.exception.InqRuntimeException;
 import eu.inqudium.core.InqElementType;
 import eu.inqudium.core.circuitbreaker.*;
 import eu.inqudium.core.event.InqEventPublisher;
@@ -108,7 +109,7 @@ public final class CircuitBreakerStateMachine implements CircuitBreaker {
             } catch (RuntimeException re) {
                 throw re;
             } catch (Exception e) {
-                throw new RuntimeException(e);
+                throw new InqRuntimeException(name, eu.inqudium.core.InqElementType.CIRCUIT_BREAKER, e);
             }
         });
     }

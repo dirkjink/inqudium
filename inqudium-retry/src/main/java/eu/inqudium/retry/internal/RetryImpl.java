@@ -1,6 +1,7 @@
 package eu.inqudium.retry.internal;
 
 import eu.inqudium.core.InqCall;
+import eu.inqudium.core.exception.InqRuntimeException;
 import eu.inqudium.core.InqElementType;
 import eu.inqudium.core.event.InqEventPublisher;
 import eu.inqudium.core.retry.RetryBehavior;
@@ -55,7 +56,7 @@ public final class RetryImpl implements Retry {
         return decorateSupplier(() -> {
             try { return callable.call(); }
             catch (RuntimeException re) { throw re; }
-            catch (Exception e) { throw new RuntimeException(e); }
+            catch (Exception e) { throw new InqRuntimeException(name, eu.inqudium.core.InqElementType.RETRY, e); }
         });
     }
 
