@@ -10,13 +10,17 @@ import eu.inqudium.core.InqElementType;
  * time limit exceeded, retries exhausted). When the downstream call fails, the
  * original exception propagates unchanged (ADR-009).
  *
- * <p>Every {@code InqException} carries a structured error code (ADR-021), the name
- * and type of the element that threw it, enabling identification without type-level
- * coupling at the catch-site:
+ * <p>Every {@code InqException} carries:
+ * <ul>
+ *   <li>{@code callId} — the unique call identifier for correlation (ADR-022)</li>
+ *   <li>{@code code} — structured error code in {@code INQ-XX-NNN} format (ADR-021)</li>
+ *   <li>{@code elementName} — the instance name (e.g. "paymentService")</li>
+ *   <li>{@code elementType} — the element kind (e.g. CIRCUIT_BREAKER)</li>
+ * </ul>
+ *
  * <pre>{@code
  * catch (InqException e) {
- *     metrics.increment("inqudium.error." + e.getCode());
- *     log.warn("{}: {}", e.getCode(), e.getMessage());
+ *     log.warn("[{}] {}: {}", e.getCallId(), e.getCode(), e.getMessage());
  * }
  * }</pre>
  *
@@ -24,39 +28,59 @@ import eu.inqudium.core.InqElementType;
  */
 public abstract class InqException extends RuntimeException {
 
+    private final String callId;
     private final String code;
     private final String elementName;
     private final InqElementType elementType;
 
     /**
-     * Creates a new exception with error code and element context.
+     * Creates a new exception with call identity, error code, and element context.
      *
+     * @param callId      the unique call identifier (may be null for system-level exceptions)
      * @param code        the structured error code (e.g. "INQ-CB-001")
      * @param elementName the name of the element instance (e.g. "paymentService")
      * @param elementType the type of the element
-     * @param message     the detail message (without code prefix — prepended automatically)
+     * @param message     the detail message (without code/callId prefix — prepended automatically)
      */
-    protected InqException(String code, String elementName, InqElementType elementType, String message) {
-        super(code + ": " + message);
+    protected InqException(String callId, String code, String elementName,
+                            InqElementType elementType, String message) {
+        super(formatMessage(callId, code, message));
+        this.callId = callId;
         this.code = code;
         this.elementName = elementName;
         this.elementType = elementType;
     }
 
     /**
-     * Creates a new exception with error code, element context, and a cause.
+     * Creates a new exception with call identity, error code, element context, and a cause.
      *
+     * @param callId      the unique call identifier (may be null for system-level exceptions)
      * @param code        the structured error code
      * @param elementName the name of the element instance
      * @param elementType the type of the element
-     * @param message     the detail message (without code prefix — prepended automatically)
+     * @param message     the detail message (without code/callId prefix — prepended automatically)
      * @param cause       the underlying cause
      */
-    protected InqException(String code, String elementName, InqElementType elementType, String message, Throwable cause) {
-        super(code + ": " + message, cause);
+    protected InqException(String callId, String code, String elementName,
+                            InqElementType elementType, String message, Throwable cause) {
+        super(formatMessage(callId, code, message), cause);
+        this.callId = callId;
         this.code = code;
         this.elementName = elementName;
         this.elementType = elementType;
+    }
+
+    /**
+     * Returns the unique call identifier.
+     *
+     * <p>All events and exceptions from the same pipeline invocation share
+     * this callId (ADR-022). May be null for system-level exceptions that
+     * occur outside a call context.
+     *
+     * @return the callId, or null
+     */
+    public String getCallId() {
+        return callId;
     }
 
     /**
@@ -88,5 +112,12 @@ public abstract class InqException extends RuntimeException {
      */
     public InqElementType getElementType() {
         return elementType;
+    }
+
+    private static String formatMessage(String callId, String code, String message) {
+        if (callId != null) {
+            return "[" + callId + "] " + code + ": " + message;
+        }
+        return code + ": " + message;
     }
 }

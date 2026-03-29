@@ -32,8 +32,8 @@ public class InqTimeLimitExceededException extends InqException {
      * @param configuredDuration the configured timeout
      * @param actualDuration     how long the caller actually waited
      */
-    public InqTimeLimitExceededException(String elementName, Duration configuredDuration, Duration actualDuration) {
-        super(CODE, elementName, InqElementType.TIME_LIMITER,
+    public InqTimeLimitExceededException(String callId, String elementName, Duration configuredDuration, Duration actualDuration) {
+        super(callId, CODE, elementName, InqElementType.TIME_LIMITER,
                 String.format(Locale.ROOT, "TimeLimiter '%s' timed out after %dms (configured: %dms)",
                         elementName, actualDuration.toMillis(), configuredDuration.toMillis()));
         this.configuredDuration = configuredDuration;

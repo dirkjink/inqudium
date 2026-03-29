@@ -71,8 +71,9 @@ public final class InqEventExporterRegistry {
                 }
             } catch (Exception e) {
                 LOGGER.warn(
-                        "InqEventExporter {} threw on event {}: {}",
-                        exporter.getClass().getName(), event.getClass().getSimpleName(), e.getMessage());
+                        "[{}] InqEventExporter {} threw on event {}: {}",
+                        event.getCallId(), exporter.getClass().getName(),
+                        event.getClass().getSimpleName(), e.getMessage());
             }
         }
     }

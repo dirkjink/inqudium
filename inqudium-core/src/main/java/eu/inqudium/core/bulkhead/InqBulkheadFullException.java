@@ -30,8 +30,8 @@ public class InqBulkheadFullException extends InqException {
      * @param concurrentCalls  the current number of in-flight calls
      * @param maxConcurrentCalls the configured maximum
      */
-    public InqBulkheadFullException(String elementName, int concurrentCalls, int maxConcurrentCalls) {
-        super(CODE, elementName, InqElementType.BULKHEAD,
+    public InqBulkheadFullException(String callId, String elementName, int concurrentCalls, int maxConcurrentCalls) {
+        super(callId, CODE, elementName, InqElementType.BULKHEAD,
                 String.format(Locale.ROOT, "Bulkhead '%s' is full (%d/%d concurrent calls)", elementName, concurrentCalls, maxConcurrentCalls));
         this.concurrentCalls = concurrentCalls;
         this.maxConcurrentCalls = maxConcurrentCalls;

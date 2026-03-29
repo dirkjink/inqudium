@@ -89,8 +89,9 @@ public final class CircuitBreakerStateMachine implements CircuitBreaker {
     @Override
     public <T> Supplier<T> decorateCallable(Callable<T> callable) {
         return () -> {
-            var supplier = InqRuntimeException.wrapCallable(callable, name, InqElementType.CIRCUIT_BREAKER);
-            var call = InqCall.of(config.getCallIdGenerator().generate(), supplier);
+            var callId = config.getCallIdGenerator().generate();
+            var supplier = InqRuntimeException.wrapCallable(callable, callId, name, InqElementType.CIRCUIT_BREAKER);
+            var call = InqCall.of(callId, supplier);
             return executeCall(call);
         };
     }
@@ -169,13 +170,13 @@ public final class CircuitBreakerStateMachine implements CircuitBreaker {
             if (state == CircuitBreakerState.OPEN) {
                 var snapshot = slidingWindow.snapshot();
                 throw new InqCallNotPermittedException(
-                        name, CircuitBreakerState.OPEN, snapshot.failureRate());
+                        callId, name, CircuitBreakerState.OPEN, snapshot.failureRate());
             }
 
             if (state == CircuitBreakerState.HALF_OPEN) {
                 if (halfOpenCallCount >= config.getPermittedNumberOfCallsInHalfOpenState()) {
                     throw new InqCallNotPermittedException(
-                            name, CircuitBreakerState.HALF_OPEN, slidingWindow.snapshot().failureRate());
+                            callId, name, CircuitBreakerState.HALF_OPEN, slidingWindow.snapshot().failureRate());
                 }
                 halfOpenCallCount++;
             }

@@ -29,8 +29,8 @@ public class InqRequestNotPermittedException extends InqException {
      * @param elementName  the rate limiter instance name
      * @param waitEstimate estimated duration until the next permit becomes available
      */
-    public InqRequestNotPermittedException(String elementName, Duration waitEstimate) {
-        super(CODE, elementName, InqElementType.RATE_LIMITER,
+    public InqRequestNotPermittedException(String callId, String elementName, Duration waitEstimate) {
+        super(callId, CODE, elementName, InqElementType.RATE_LIMITER,
                 String.format(Locale.ROOT, "RateLimiter '%s' denied request (next permit in ~%dms)", elementName, waitEstimate.toMillis()));
         this.waitEstimate = waitEstimate;
     }

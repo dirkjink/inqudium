@@ -31,13 +31,13 @@ import java.util.function.Supplier;
  * } catch (RuntimeException re) {
  *     throw re;
  * } catch (Exception e) {
- *     throw new InqRuntimeException(elementName, elementType, e);
+ *     throw new InqRuntimeException(callId, elementName, elementType, e);
  * }
  *
- * // Catch-site — getCode() returns "INQ-CB-000"
+ * // Catch-site — getCode() returns "INQ-CB-000", getCallId() returns the call identity
  * catch (InqRuntimeException e) {
- *     log.error("{}: checked exception in '{}': {}",
- *         e.getCode(), e.getElementName(), e.getCause().getMessage());
+ *     log.error("[{}] {}: checked exception in '{}': {}",
+ *         e.getCallId(), e.getCode(), e.getElementName(), e.getCause().getMessage());
  * }
  * }</pre>
  *
@@ -46,16 +46,17 @@ import java.util.function.Supplier;
 public class InqRuntimeException extends InqException {
 
     /**
-     * Wraps a checked exception with element context.
+     * Wraps a checked exception with call identity and element context.
      *
      * <p>The error code is derived from the element type: {@code INQ-XX-000}.
      *
+     * @param callId      the unique call identifier
      * @param elementName the element instance name
      * @param elementType the element type
      * @param cause       the checked exception to wrap
      */
-    public InqRuntimeException(String elementName, InqElementType elementType, Throwable cause) {
-        super(elementType.errorCode(0), elementName, elementType,
+    public InqRuntimeException(String callId, String elementName, InqElementType elementType, Throwable cause) {
+        super(callId, elementType.errorCode(0), elementName, elementType,
                 String.format(Locale.ROOT, "Checked exception in %s '%s': %s",
                         elementType, elementName, cause.getMessage()),
                 cause);
@@ -64,13 +65,13 @@ public class InqRuntimeException extends InqException {
     /**
      * Wraps a checked exception without element context.
      *
-     * <p>Used by utilities (e.g. {@link InqFailure}) that are not part of an element.
+     * <p>Package-private — used only by {@link InqFailure} which lives in the same package.
      * The error code is {@code "INQ-SY-000"} (system-level wrapping).
      *
      * @param cause the checked exception to wrap
      */
-    public InqRuntimeException(Throwable cause) {
-        super("INQ-SY-000", null, null,
+    InqRuntimeException(Throwable cause) {
+        super(null, "INQ-SY-000", null, null,
                 cause.getMessage(),
                 cause);
     }
@@ -86,28 +87,17 @@ public class InqRuntimeException extends InqException {
 
     /**
      * Converts a {@link Callable} to a {@link Supplier}, wrapping checked exceptions
-     * in {@code InqRuntimeException} with the given element context.
-     *
-     * <p>This is the standard way for element implementations to handle the
-     * {@code Callable → Supplier} conversion in {@code decorateCallable}:
-     * <pre>{@code
-     * @Override
-     * public <T> Supplier<T> decorateCallable(Callable<T> callable) {
-     *     return () -> {
-     *         var supplier = InqRuntimeException.wrapCallable(callable, name, elementType);
-     *         var call = InqCall.of(callIdGenerator.generate(), supplier);
-     *         return executeCall(call);
-     *     };
-     * }
-     * }</pre>
+     * in {@code InqRuntimeException} with the given call identity and element context.
      *
      * @param callable    the callable to wrap
+     * @param callId      the unique call identifier
      * @param elementName the element instance name (for error context)
      * @param elementType the element type (for error code derivation)
      * @param <T>         the result type
      * @return a supplier that invokes the callable and wraps checked exceptions
      */
     public static <T> Supplier<T> wrapCallable(Callable<T> callable,
+                                                String callId,
                                                 String elementName,
                                                 InqElementType elementType) {
         return () -> {
@@ -116,7 +106,7 @@ public class InqRuntimeException extends InqException {
             } catch (RuntimeException re) {
                 throw re;
             } catch (Exception e) {
-                throw new InqRuntimeException(elementName, elementType, e);
+                throw new InqRuntimeException(callId, elementName, elementType, e);
             }
         };
     }

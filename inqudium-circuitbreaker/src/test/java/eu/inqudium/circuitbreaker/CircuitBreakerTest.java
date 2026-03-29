@@ -165,6 +165,7 @@ class CircuitBreakerTest {
                     .isInstanceOf(InqCallNotPermittedException.class)
                     .satisfies(ex -> {
                         var inqEx = (InqCallNotPermittedException) ex;
+                        assertThat(inqEx.getCallId()).isNotNull().isNotBlank();
                         assertThat(inqEx.getCode()).isEqualTo("INQ-CB-001");
                         assertThat(inqEx.getElementName()).isEqualTo("test");
                         assertThat(inqEx.getState()).isEqualTo(CircuitBreakerState.OPEN);
@@ -398,6 +399,7 @@ class CircuitBreakerTest {
                     .satisfies(ex -> {
                         var ire = (eu.inqudium.core.exception.InqRuntimeException) ex;
                         assertThat(ire.hasElementContext()).isTrue();
+                        assertThat(ire.getCallId()).isNotNull().isNotBlank();
                         assertThat(ire.getElementName()).isEqualTo("paymentService");
                         assertThat(ire.getElementType()).isEqualTo(InqElementType.CIRCUIT_BREAKER);
                         assertThat(ire.getCode()).isEqualTo("INQ-CB-000");

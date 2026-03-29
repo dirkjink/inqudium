@@ -74,12 +74,10 @@ final class DefaultInqEventPublisher implements InqEventPublisher {
     }
 
     private void logConsumerError(InqEventConsumer consumer, InqEvent event, Exception e) {
-        
         org.slf4j.LoggerFactory.getLogger(DefaultInqEventPublisher.class)
-                .warn(
-                        "Event consumer {0} threw on event {1}: {2}",
-                        "Event consumer {} threw on event {}: {}",
-                        consumer.getClass().getName(), event.getClass().getSimpleName(), e.getMessage());
+                .warn("[{}] Event consumer {} threw on event {}: {}",
+                        event.getCallId(), consumer.getClass().getName(),
+                        event.getClass().getSimpleName(), e.getMessage());
     }
 
     @Override

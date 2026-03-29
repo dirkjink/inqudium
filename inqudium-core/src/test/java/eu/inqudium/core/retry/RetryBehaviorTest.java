@@ -53,7 +53,7 @@ class RetryBehaviorTest {
         void should_not_retry_on_inqudium_exceptions_by_default() {
             // Given
             var config = RetryConfig.builder().build(); // retryOnInqExceptions = false
-            var inqException = new InqCallNotPermittedException("test", CircuitBreakerState.OPEN, 80f);
+            var inqException = new InqCallNotPermittedException("test-call", "test", CircuitBreakerState.OPEN, 80f);
 
             // When
             var result = behavior.shouldRetry(1, inqException, config);
@@ -69,7 +69,7 @@ class RetryBehaviorTest {
                     .retryOnInqExceptions(true)
                     .backoffStrategy(BackoffStrategy.fixed())
                     .build();
-            var inqException = new InqCallNotPermittedException("test", CircuitBreakerState.OPEN, 80f);
+            var inqException = new InqCallNotPermittedException("test-call", "test", CircuitBreakerState.OPEN, 80f);
 
             // When
             var result = behavior.shouldRetry(1, inqException, config);

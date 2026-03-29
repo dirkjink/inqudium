@@ -54,9 +54,8 @@ public final class InqContextPropagation {
                 scopes.add(scope);
             } catch (Exception e) {
                 org.slf4j.LoggerFactory.getLogger(InqContextPropagation.class)
-                        .warn(
-                                "Context propagator {} failed during restore/enrich: {}",
-                                propagator.getClass().getName(), e.getMessage());
+                        .warn("[{}] Context propagator {} failed during restore/enrich: {}",
+                                callId, propagator.getClass().getName(), e.getMessage());
             }
         }
 
@@ -119,9 +118,8 @@ public final class InqContextPropagation {
                 scopes.add(scope);
             } catch (Exception e) {
                 org.slf4j.LoggerFactory.getLogger(InqContextPropagation.class)
-                        .warn(
-                                "Context propagator {} failed during restore/enrich: {}",
-                                propagator.getClass().getName(), e.getMessage());
+                        .warn("[{}] Context propagator {} failed during restore/enrich: {}",
+                                callId, propagator.getClass().getName(), e.getMessage());
             }
         }
 

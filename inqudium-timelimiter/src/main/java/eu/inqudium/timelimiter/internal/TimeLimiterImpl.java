@@ -50,10 +50,13 @@ public final class TimeLimiterImpl implements TimeLimiter {
 
     @Override
     public <T> Supplier<T> decorateCallable(Callable<T> callable) {
-        return decorateFutureSupplier(() ->
-                CompletableFuture.supplyAsync(
-                        InqRuntimeException.wrapCallable(callable, name, InqElementType.TIME_LIMITER),
-                        VIRTUAL_THREAD_EXECUTOR));
+        return () -> {
+            var callId = config.getCallIdGenerator().generate();
+            return executeFuture(callId, () ->
+                    CompletableFuture.supplyAsync(
+                            InqRuntimeException.wrapCallable(callable, callId, name, InqElementType.TIME_LIMITER),
+                            VIRTUAL_THREAD_EXECUTOR));
+        };
     }
 
     @Override
@@ -85,17 +88,17 @@ public final class TimeLimiterImpl implements TimeLimiter {
             var actualDuration = Duration.between(start, config.getClock().instant());
             eventPublisher.publish(new TimeLimiterOnTimeoutEvent(callId, name, timeout, config.getClock().instant()));
             installOrphanedHandlers(future, callId, start);
-            throw new InqTimeLimitExceededException(name, timeout, actualDuration);
+            throw new InqTimeLimitExceededException(callId, name, timeout, actualDuration);
         } catch (ExecutionException ee) {
             var duration = Duration.between(start, config.getClock().instant());
             var cause = ee.getCause() != null ? ee.getCause() : ee;
             eventPublisher.publish(new TimeLimiterOnErrorEvent(callId, name, duration, cause, config.getClock().instant()));
             if (cause instanceof RuntimeException re) throw re;
-            throw new InqRuntimeException(name, eu.inqudium.core.InqElementType.TIME_LIMITER, cause);
+            throw new InqRuntimeException(callId, name, InqElementType.TIME_LIMITER, cause);
         } catch (InterruptedException ie) {
             Thread.currentThread().interrupt();
             var actualDuration = Duration.between(start, config.getClock().instant());
-            throw new InqTimeLimitExceededException(name, timeout, actualDuration);
+            throw new InqTimeLimitExceededException(callId, name, timeout, actualDuration);
         }
     }
 
@@ -120,7 +123,7 @@ public final class TimeLimiterImpl implements TimeLimiter {
                 }
             } catch (Exception e) {
                 org.slf4j.LoggerFactory.getLogger(TimeLimiterImpl.class)
-                        .warn("Orphaned call handler threw: {}", e.getMessage());
+                        .warn("[{}] Orphaned call handler threw: {}", callId, e.getMessage());
             }
         });
     }

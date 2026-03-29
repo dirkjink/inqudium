@@ -49,8 +49,9 @@ public final class TokenBucketRateLimiter implements RateLimiter {
     @Override
     public <T> Supplier<T> decorateCallable(Callable<T> callable) {
         return () -> {
-            acquirePermitWithCallId(config.getCallIdGenerator().generate());
-            return InqRuntimeException.wrapCallable(callable, name, InqElementType.RATE_LIMITER).get();
+            var callId = config.getCallIdGenerator().generate();
+            acquirePermitWithCallId(callId);
+            return InqRuntimeException.wrapCallable(callable, callId, name, InqElementType.RATE_LIMITER).get();
         };
     }
 
@@ -84,14 +85,14 @@ public final class TokenBucketRateLimiter implements RateLimiter {
             if (config.getTimeoutDuration().isZero()) {
                 eventPublisher.publish(new RateLimiterOnRejectEvent(
                         callId, name, result.waitDuration(), config.getClock().instant()));
-                throw new InqRequestNotPermittedException(name, result.waitDuration());
+                throw new InqRequestNotPermittedException(callId, name, result.waitDuration());
             }
 
             var now = config.getClock().instant();
             if (now.isAfter(deadline)) {
                 eventPublisher.publish(new RateLimiterOnRejectEvent(
                         callId, name, result.waitDuration(), now));
-                throw new InqRequestNotPermittedException(name, result.waitDuration());
+                throw new InqRequestNotPermittedException(callId, name, result.waitDuration());
             }
 
             var remaining = Duration.between(now, deadline);

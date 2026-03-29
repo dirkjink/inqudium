@@ -25,12 +25,13 @@ public class InqRetryExhaustedException extends InqException {
     /**
      * Creates a new exception indicating that all retry attempts have failed.
      *
+     * @param callId      the unique call identifier
      * @param elementName the retry instance name
      * @param attempts    total number of attempts made (including the initial call)
      * @param lastCause   the exception from the final attempt
      */
-    public InqRetryExhaustedException(String elementName, int attempts, Throwable lastCause) {
-        super(CODE, elementName, InqElementType.RETRY,
+    public InqRetryExhaustedException(String callId, String elementName, int attempts, Throwable lastCause) {
+        super(callId, CODE, elementName, InqElementType.RETRY,
                 String.format(Locale.ROOT, "Retry '%s' exhausted after %d attempts", elementName, attempts),
                 lastCause);
         this.attempts = attempts;

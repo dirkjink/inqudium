@@ -41,8 +41,9 @@ public final class RetryImpl implements Retry {
     @Override
     public <T> Supplier<T> decorateCallable(Callable<T> callable) {
         return () -> {
-            var supplier = InqRuntimeException.wrapCallable(callable, name, InqElementType.RETRY);
-            var call = InqCall.of(config.getCallIdGenerator().generate(), supplier);
+            var callId = config.getCallIdGenerator().generate();
+            var supplier = InqRuntimeException.wrapCallable(callable, callId, name, InqElementType.RETRY);
+            var call = InqCall.of(callId, supplier);
             return executeCall(call);
         };
     }
@@ -73,6 +74,6 @@ public final class RetryImpl implements Retry {
                 LockSupport.parkNanos(delay.toNanos());
             }
         }
-        throw new InqRetryExhaustedException(name, config.getMaxAttempts(), lastException);
+        throw new InqRetryExhaustedException(call.callId(), name, config.getMaxAttempts(), lastException);
     }
 }

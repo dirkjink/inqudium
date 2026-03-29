@@ -48,7 +48,7 @@ public final class SemaphoreBulkhead implements Bulkhead {
             var callId = config.getCallIdGenerator().generate();
             acquirePermit(callId);
             try {
-                return InqRuntimeException.wrapCallable(callable, name, InqElementType.BULKHEAD).get();
+                return InqRuntimeException.wrapCallable(callable, callId, name, InqElementType.BULKHEAD).get();
             } finally {
                 releasePermit(callId);
             }
@@ -85,7 +85,7 @@ public final class SemaphoreBulkhead implements Bulkhead {
             int concurrent = getConcurrentCalls();
             eventPublisher.publish(new BulkheadOnRejectEvent(
                     callId, name, concurrent, config.getClock().instant()));
-            throw new InqBulkheadFullException(name, concurrent, config.getMaxConcurrentCalls());
+            throw new InqBulkheadFullException(callId, name, concurrent, config.getMaxConcurrentCalls());
         }
 
         eventPublisher.publish(new BulkheadOnAcquireEvent(
