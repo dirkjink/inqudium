@@ -4,6 +4,7 @@ import eu.inqudium.core.InqCall;
 import eu.inqudium.core.InqCallIdGenerator;
 import eu.inqudium.core.InqElementType;
 import eu.inqudium.core.context.InqContextPropagation;
+import eu.inqudium.core.exception.InqException;
 import eu.inqudium.core.exception.InqRuntimeException;
 
 import java.util.ArrayList;
@@ -152,9 +153,13 @@ public final class InqPipeline {
                 try (var ctxScope = InqContextPropagation.activateFor(
                         callId, "pipeline", InqElementType.CACHE)) {
                     return outermost.execute();
+                } catch (InqException ie) {
+                    throw ie;
                 } catch (RuntimeException re) {
+                    LOGGER.error("[{}] pipeline: {}", callId, re.toString());
                     throw re;
                 } catch (Exception e) {
+                    LOGGER.error("[{}] pipeline: {}", callId, e.toString());
                     throw new InqRuntimeException(callId, "pipeline", null, e);
                 }
             };

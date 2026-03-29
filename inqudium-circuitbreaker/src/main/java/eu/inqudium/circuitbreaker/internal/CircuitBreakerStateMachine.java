@@ -5,16 +5,13 @@ import eu.inqudium.circuitbreaker.event.CircuitBreakerOnErrorEvent;
 import eu.inqudium.circuitbreaker.event.CircuitBreakerOnStateTransitionEvent;
 import eu.inqudium.circuitbreaker.event.CircuitBreakerOnSuccessEvent;
 import eu.inqudium.core.InqCall;
-import eu.inqudium.core.exception.InqRuntimeException;
 import eu.inqudium.core.InqElementType;
 import eu.inqudium.core.circuitbreaker.*;
 import eu.inqudium.core.event.InqEventPublisher;
 
 import java.time.Duration;
 import java.time.Instant;
-import java.util.concurrent.Callable;
 import java.util.concurrent.locks.ReentrantLock;
-import java.util.function.Supplier;
 
 /**
  * Imperative circuit breaker implementation using {@link ReentrantLock}.
@@ -84,21 +81,6 @@ public final class CircuitBreakerStateMachine implements CircuitBreaker {
     @Override
     public CircuitBreakerConfig getConfig() {
         return config;
-    }
-
-    @Override
-    public <T> Supplier<T> decorateCallable(Callable<T> callable) {
-        return () -> {
-            var callId = config.getCallIdGenerator().generate();
-            var call = InqCall.of(callId, callable);
-            try {
-                return executeCall(call);
-            } catch (RuntimeException re) {
-                throw re;
-            } catch (Exception e) {
-                throw new InqRuntimeException(callId, name, InqElementType.CIRCUIT_BREAKER, e);
-            }
-        };
     }
 
     @Override

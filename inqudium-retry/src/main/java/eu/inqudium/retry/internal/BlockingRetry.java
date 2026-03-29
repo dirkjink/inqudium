@@ -1,7 +1,6 @@
 package eu.inqudium.retry.internal;
 
 import eu.inqudium.core.InqCall;
-import eu.inqudium.core.exception.InqRuntimeException;
 import eu.inqudium.core.InqElementType;
 import eu.inqudium.core.event.InqEventPublisher;
 import eu.inqudium.core.retry.RetryBehavior;
@@ -11,9 +10,7 @@ import eu.inqudium.retry.Retry;
 import eu.inqudium.retry.event.RetryOnRetryEvent;
 import eu.inqudium.retry.event.RetryOnSuccessEvent;
 
-import java.util.concurrent.Callable;
 import java.util.concurrent.locks.LockSupport;
-import java.util.function.Supplier;
 
 /**
  * Imperative retry implementation using {@link LockSupport#parkNanos} (ADR-008).
@@ -37,21 +34,6 @@ public final class BlockingRetry implements Retry {
     @Override public String getName() { return name; }
     @Override public RetryConfig getConfig() { return config; }
     @Override public InqEventPublisher getEventPublisher() { return eventPublisher; }
-
-    @Override
-    public <T> Supplier<T> decorateCallable(Callable<T> callable) {
-        return () -> {
-            var callId = config.getCallIdGenerator().generate();
-            var call = InqCall.of(callId, callable);
-            try {
-                return executeCall(call);
-            } catch (RuntimeException re) {
-                throw re;
-            } catch (Exception e) {
-                throw new InqRuntimeException(callId, name, InqElementType.RETRY, e);
-            }
-        };
-    }
 
     @Override
     public <T> InqCall<T> decorate(InqCall<T> call) {

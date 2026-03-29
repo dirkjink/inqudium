@@ -9,13 +9,10 @@ import eu.inqudium.core.InqElementType;
 import eu.inqudium.core.bulkhead.BulkheadConfig;
 import eu.inqudium.core.bulkhead.InqBulkheadFullException;
 import eu.inqudium.core.event.InqEventPublisher;
-import eu.inqudium.core.exception.InqRuntimeException;
 
 import java.time.Instant;
-import java.util.concurrent.Callable;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
-import java.util.function.Supplier;
 
 /**
  * Semaphore-based bulkhead using fair {@link Semaphore} (ADR-008, ADR-020).
@@ -41,23 +38,6 @@ public final class SemaphoreBulkhead implements Bulkhead {
     @Override public InqEventPublisher getEventPublisher() { return eventPublisher; }
     @Override public int getConcurrentCalls() { return config.getMaxConcurrentCalls() - semaphore.availablePermits(); }
     @Override public int getAvailablePermits() { return semaphore.availablePermits(); }
-
-    @Override
-    public <T> Supplier<T> decorateCallable(Callable<T> callable) {
-        return () -> {
-            var callId = config.getCallIdGenerator().generate();
-            acquirePermit(callId);
-            try {
-                return callable.call();
-            } catch (RuntimeException re) {
-                throw re;
-            } catch (Exception e) {
-                throw new InqRuntimeException(callId, name, InqElementType.BULKHEAD, e);
-            } finally {
-                releasePermit(callId);
-            }
-        };
-    }
 
     @Override
     public <T> InqCall<T> decorate(InqCall<T> call) {

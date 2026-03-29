@@ -3,6 +3,7 @@ package eu.inqudium.timelimiter.internal;
 import eu.inqudium.core.InqCall;
 import eu.inqudium.core.InqElementType;
 import eu.inqudium.core.event.InqEventPublisher;
+import eu.inqudium.core.exception.InqException;
 import eu.inqudium.core.exception.InqRuntimeException;
 import eu.inqudium.core.timelimiter.InqTimeLimitExceededException;
 import eu.inqudium.core.timelimiter.TimeLimiterConfig;
@@ -51,25 +52,15 @@ public final class FutureTimeLimiter implements TimeLimiter {
             var callId = config.getCallIdGenerator().generate();
             try {
                 return executeFuture(callId, futureSupplier);
+            } catch (InqException ie) {
+                throw ie;
             } catch (RuntimeException re) {
+                config.getLogger().error("[{}] {} '{}': {}",
+                        callId, InqElementType.TIME_LIMITER, name, re.toString());
                 throw re;
             } catch (Exception e) {
-                throw new InqRuntimeException(callId, name, InqElementType.TIME_LIMITER, e);
-            }
-        };
-    }
-
-    @Override
-    public <T> Supplier<T> decorateCallable(Callable<T> callable) {
-        return () -> {
-            var callId = config.getCallIdGenerator().generate();
-            try {
-                return executeFuture(callId, () ->
-                        CompletableFuture.supplyAsync(
-                                toSupplier(callable), VIRTUAL_THREAD_EXECUTOR));
-            } catch (RuntimeException re) {
-                throw re;
-            } catch (Exception e) {
+                config.getLogger().error("[{}] {} '{}': {}",
+                        callId, InqElementType.TIME_LIMITER, name, e.toString());
                 throw new InqRuntimeException(callId, name, InqElementType.TIME_LIMITER, e);
             }
         };
