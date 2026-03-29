@@ -10,6 +10,8 @@ import eu.inqudium.core.exception.InqException;
 import eu.inqudium.core.exception.InqFailure;
 import eu.inqudium.core.exception.InqRuntimeException;
 import eu.inqudium.core.pipeline.InqPipeline;
+import eu.inqudium.core.pipeline.InqPipelineProxy;
+import eu.inqudium.core.pipeline.PipelineOrder;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -259,6 +261,26 @@ class CircuitBreakerUsageTest {
                                 .hasSizeGreaterThan(8);
                     });
         }
+
+        @Test
+        void should_expose_pipeline_info_on_supplier_based_pipeline() {
+            // Given
+            var cb = CircuitBreaker.ofDefaults("paymentService");
+            Supplier<String> resilient = InqPipeline.of(() -> "ok")
+                    .shield(cb)
+                    .decorate();
+
+            // When — supplier also implements InqPipelineProxy
+            assertThat(resilient).isInstanceOf(InqPipelineProxy.class);
+            var info = ((InqPipelineProxy) resilient).getPipelineInfo();
+
+            // Then
+            assertThat(info.decorators()).hasSize(1);
+            assertThat(info.decorators().getFirst()).isSameAs(cb);
+            assertThat(info.interfaceType()).isNull();
+            assertThat(info.target()).isNull();
+            assertThat(info.toChainDescription()).contains("CIRCUIT_BREAKER", "paymentService");
+        }
     }
 
     // ── Pipeline — Invocation pattern ──
@@ -415,6 +437,53 @@ class CircuitBreakerUsageTest {
 
             // When / Then
             assertThat(resilient.toString()).contains("PaymentApi");
+        }
+
+        @Test
+        void should_expose_pipeline_info_via_inq_pipeline_proxy() {
+            // Given
+            var service = new PaymentService();
+            var cb = CircuitBreaker.of("paymentService", CircuitBreakerConfig.builder()
+                    .failureRateThreshold(50)
+                    .slidingWindowSize(10)
+                    .build());
+
+            PaymentApi resilient = InqPipeline.of(service, PaymentApi.class)
+                    .shield(cb)
+                    .decorate();
+
+            // When — proxy implements InqPipelineProxy
+            assertThat(resilient).isInstanceOf(InqPipelineProxy.class);
+            var info = ((InqPipelineProxy) resilient).getPipelineInfo();
+
+            // Then — full introspection of the pipeline composition
+            assertThat(info.decorators()).hasSize(1);
+            assertThat(info.decorators().get(0)).isSameAs(cb);
+            assertThat(info.order()).isEqualTo(PipelineOrder.INQUDIUM);
+            assertThat(info.interfaceType()).isEqualTo(PaymentApi.class);
+            assertThat(info.target()).isSameAs(service);
+            assertThat(info.toChainDescription()).contains("CIRCUIT_BREAKER", "paymentService");
+        }
+
+        @Test
+        void should_find_specific_decorator_by_type_in_pipeline_info() {
+            // Given
+            var service = new PaymentService();
+            var cb = CircuitBreaker.ofDefaults("paymentService");
+
+            PaymentApi resilient = InqPipeline.of(service, PaymentApi.class)
+                    .shield(cb)
+                    .decorate();
+
+            var info = ((InqPipelineProxy) resilient).getPipelineInfo();
+
+            // When / Then — find by type
+            assertThat(info.findDecorator(CircuitBreaker.class))
+                    .isPresent()
+                    .hasValueSatisfying(found -> {
+                        assertThat(found.getName()).isEqualTo("paymentService");
+                        assertThat(found.getState()).isEqualTo(CircuitBreakerState.CLOSED);
+                    });
         }
     }
 }

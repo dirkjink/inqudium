@@ -205,7 +205,18 @@ public final class InqPipeline {
          * and passes it through the decoration chain. Context propagation is activated
          * around the outermost call.
          *
-         * @return the decorated supplier
+         * <p>The returned supplier also implements {@link InqPipelineProxy} for
+         * runtime introspection of the pipeline composition:
+         * <pre>{@code
+         * Supplier<r> resilient = InqPipeline.of(() -> service.call())
+         *     .shield(cb).decorate();
+         *
+         * if (resilient instanceof InqPipelineProxy proxy) {
+         *     proxy.getPipelineInfo().toChainDescription();
+         * }
+         * }</pre>
+         *
+         * @return the decorated supplier (also implements {@link InqPipelineProxy})
          */
         public Supplier<T> decorate() {
             var sorted = new ArrayList<>(decorators);
@@ -217,16 +228,14 @@ public final class InqPipeline {
             final InqCallIdGenerator gen = callIdGenerator;
             final Callable<T> originalCallable = callable;
 
-            return () -> {
+            Supplier<T> delegate = () -> {
                 var callId = gen.generate();
 
-                // Build the InqCall chain: Callable flows through all decorators
                 InqCall<T> call = InqCall.of(callId, originalCallable);
                 for (int i = chain.size() - 1; i >= 0; i--) {
                     call = chain.get(i).decorate(call);
                 }
 
-                // Execute with context propagation — Supplier boundary wraps checked exceptions
                 final InqCall<T> outermost = call;
                 try (var ctxScope = InqContextPropagation.activateFor(
                         callId, "pipeline", InqElementType.NO_ELEMENT)) {
@@ -241,6 +250,9 @@ public final class InqPipeline {
                     throw new InqRuntimeException(callId, "pipeline", InqElementType.NO_ELEMENT, e);
                 }
             };
+
+            var info = new InqPipelineInfo(chain, order, gen, null, null);
+            return new InqDecoratedSupplier<>(delegate, info);
         }
 
         private void validate(List<InqDecorator> sorted) {
@@ -262,12 +274,14 @@ public final class InqPipeline {
         private static final Method OBJECT_EQUALS;
         private static final Method OBJECT_HASHCODE;
         private static final Method OBJECT_TOSTRING;
+        private static final Method GET_PIPELINE_INFO;
 
         static {
             try {
                 OBJECT_EQUALS = Object.class.getMethod("equals", Object.class);
                 OBJECT_HASHCODE = Object.class.getMethod("hashCode");
                 OBJECT_TOSTRING = Object.class.getMethod("toString");
+                GET_PIPELINE_INFO = InqPipelineProxy.class.getMethod("getPipelineInfo");
             } catch (NoSuchMethodException e) {
                 throw new ExceptionInInitializerError(e);
             }
@@ -321,7 +335,9 @@ public final class InqPipeline {
         /**
          * Creates the resilience proxy.
          *
-         * <p>Every method call on the returned proxy goes through the decoration chain:
+         * <p>The returned proxy implements both the service interface and
+         * {@link InqPipelineProxy} for runtime introspection. Every method
+         * call on the proxy goes through the decoration chain:
          * <ol>
          *   <li>A fresh callId is generated</li>
          *   <li>The method call is wrapped as a {@link Callable} in an {@link InqCall}</li>
@@ -331,7 +347,7 @@ public final class InqPipeline {
          *   <li>Checked exceptions are wrapped in {@link InqRuntimeException}</li>
          * </ol>
          *
-         * @return the resilience proxy implementing the service interface
+         * @return the resilience proxy (also implements {@link InqPipelineProxy})
          */
         @SuppressWarnings("unchecked")
         public T decorate() {
@@ -340,15 +356,20 @@ public final class InqPipeline {
 
             validateChain(sorted);
 
-            // Capture for the invocation handler — immutable, shared across all calls
             var chain = List.copyOf(sorted);
             final InqCallIdGenerator gen = callIdGenerator;
             final T proxyTarget = target;
+            final var info = new InqPipelineInfo(chain, order, gen, interfaceType, proxyTarget);
 
             return (T) Proxy.newProxyInstance(
                     interfaceType.getClassLoader(),
-                    new Class<?>[]{interfaceType},
+                    new Class<?>[]{interfaceType, InqPipelineProxy.class},
                     (proxy, method, args) -> {
+
+                        // InqPipelineProxy.getPipelineInfo() — return metadata
+                        if (GET_PIPELINE_INFO.equals(method)) {
+                            return info;
+                        }
 
                         // Object methods — delegate directly, no resilience overhead
                         if (OBJECT_EQUALS.equals(method)) {
@@ -370,7 +391,6 @@ public final class InqPipeline {
                                 method.setAccessible(true);
                                 return method.invoke(proxyTarget, args);
                             } catch (InvocationTargetException ite) {
-                                // Unwrap the reflection wrapper to expose the original exception
                                 throw ite.getCause() instanceof Exception ex
                                         ? ex : new RuntimeException(ite.getCause());
                             }
