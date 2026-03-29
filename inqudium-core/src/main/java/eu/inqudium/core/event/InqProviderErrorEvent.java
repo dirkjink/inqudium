@@ -16,10 +16,10 @@ import java.time.Instant;
 public class InqProviderErrorEvent extends InqEvent {
 
     /** ServiceLoader provider failed during construction. */
-    public static final String CODE_CONSTRUCTION = "INQ-SY-001";
+    public static final String CODE_CONSTRUCTION = InqElementType.NO_ELEMENT.errorCode(1);
 
     /** ServiceLoader provider failed during execution. */
-    public static final String CODE_EXECUTION = "INQ-SY-002";
+    public static final String CODE_EXECUTION = InqElementType.NO_ELEMENT.errorCode(2);
 
     private final String code;
     private final String providerClassName;
@@ -38,7 +38,7 @@ public class InqProviderErrorEvent extends InqEvent {
      */
     public InqProviderErrorEvent(String providerClassName, String spiInterfaceName,
                                  String phase, String errorMessage, Instant timestamp) {
-        super("system", "InqServiceLoader", InqElementType.CACHE, timestamp);
+        super("system", "InqServiceLoader", InqElementType.NO_ELEMENT, timestamp);
         this.code = "construction".equals(phase) ? CODE_CONSTRUCTION : CODE_EXECUTION;
         this.providerClassName = providerClassName;
         this.spiInterfaceName = spiInterfaceName;

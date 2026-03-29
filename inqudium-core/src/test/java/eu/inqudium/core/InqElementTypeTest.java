@@ -15,16 +15,16 @@ class InqElementTypeTest {
     class EnumValues {
 
         @Test
-        void should_contain_exactly_six_element_types() {
+        void should_contain_exactly_seven_element_types() {
             // Given
             var values = InqElementType.values();
 
             // Then
-            assertThat(values).hasSize(6);
+            assertThat(values).hasSize(7);
         }
 
         @Test
-        void should_contain_all_resilience_element_types() {
+        void should_contain_all_resilience_element_types_and_no_element() {
             // Given
             var values = InqElementType.values();
 
@@ -35,7 +35,8 @@ class InqElementTypeTest {
                     InqElementType.RATE_LIMITER,
                     InqElementType.BULKHEAD,
                     InqElementType.TIME_LIMITER,
-                    InqElementType.CACHE
+                    InqElementType.CACHE,
+                    InqElementType.NO_ELEMENT
             );
         }
     }
@@ -53,6 +54,7 @@ class InqElementTypeTest {
             assertThat(InqElementType.BULKHEAD.symbol()).isEqualTo("BH");
             assertThat(InqElementType.TIME_LIMITER.symbol()).isEqualTo("TL");
             assertThat(InqElementType.CACHE.symbol()).isEqualTo("CA");
+            assertThat(InqElementType.NO_ELEMENT.symbol()).isEqualTo("XX");
         }
 
         @Test
@@ -77,6 +79,7 @@ class InqElementTypeTest {
             assertThat(InqElementType.BULKHEAD.errorCode(1)).isEqualTo("INQ-BH-001");
             assertThat(InqElementType.TIME_LIMITER.errorCode(1)).isEqualTo("INQ-TL-001");
             assertThat(InqElementType.CACHE.errorCode(1)).isEqualTo("INQ-CA-001");
+            assertThat(InqElementType.NO_ELEMENT.errorCode(0)).isEqualTo("INQ-XX-000");
         }
 
         @Test
@@ -127,6 +130,7 @@ class InqElementTypeTest {
             assertThat(InqElementType.BULKHEAD.name()).isEqualTo("BULKHEAD");
             assertThat(InqElementType.TIME_LIMITER.name()).isEqualTo("TIME_LIMITER");
             assertThat(InqElementType.CACHE.name()).isEqualTo("CACHE");
+            assertThat(InqElementType.NO_ELEMENT.name()).isEqualTo("NO_ELEMENT");
         }
 
         @Test

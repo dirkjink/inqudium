@@ -151,7 +151,7 @@ public final class InqPipeline {
                 // Execute with context propagation — Supplier boundary wraps checked exceptions
                 final InqCall<T> outermost = call;
                 try (var ctxScope = InqContextPropagation.activateFor(
-                        callId, "pipeline", InqElementType.CACHE)) {
+                        callId, "pipeline", InqElementType.NO_ELEMENT)) {
                     return outermost.execute();
                 } catch (InqException ie) {
                     throw ie;
@@ -160,7 +160,7 @@ public final class InqPipeline {
                     throw re;
                 } catch (Exception e) {
                     LOGGER.error("[{}] pipeline: {}", callId, e.toString());
-                    throw new InqRuntimeException(callId, "pipeline", null, e);
+                    throw new InqRuntimeException(callId, "pipeline", InqElementType.NO_ELEMENT, e);
                 }
             };
         }

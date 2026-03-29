@@ -45,13 +45,13 @@ Error codes ending in `000` indicate that a downstream call threw a **checked ex
 ```
 INQ-CB-000: Checked exception in CIRCUIT_BREAKER 'paymentService': java.io.IOException: connection refused
 INQ-RT-000: Checked exception in RETRY 'orderService': javax.naming.NamingException: lookup failed
-INQ-SY-000: connection refused   (InqFailure.orElseThrow — no element context)
+INQ-XX-000: connection refused   (InqFailure.orElseThrow — no element context)
 ```
 
 The `000` code is never manually assigned. It is generated automatically by `InqRuntimeException`:
 
 - **Inside an element:** `InqRuntimeException(name, elementType, cause)` → code is `elementType.errorCode(0)`, e.g. `INQ-CB-000`
-- **Outside an element:** `InqRuntimeException(cause)` → code is `INQ-SY-000` (system-level wrapping, no element context)
+- **Outside an element:** `InqRuntimeException(cause)` → code is `INQ-XX-000` (system-level wrapping, no element context)
 
 This design ensures that:
 1. Every `InqException` — including `InqRuntimeException` — has a structured error code.
@@ -70,7 +70,7 @@ Symbols are fields on the `InqElementType` enum, accessible via `symbol()`:
 | `BH` | Bulkhead | `BULKHEAD` |
 | `TL` | Time Limiter | `TIME_LIMITER` |
 | `CA` | Cache | `CACHE` |
-| `SY` | System (pipeline, registry, ServiceLoader, context) | — (not an element type) |
+| `XX` | No element (pipeline, registry, ServiceLoader, context) | `NO_ELEMENT` |
 
 ### Error code catalog
 
@@ -83,7 +83,7 @@ Symbols are fields on the `InqElementType` enum, accessible via `symbol()`:
 | `INQ-RL-000` | `InqRuntimeException` | Checked exception wrapped inside Rate Limiter |
 | `INQ-BH-000` | `InqRuntimeException` | Checked exception wrapped inside Bulkhead |
 | `INQ-TL-000` | `InqRuntimeException` | Checked exception wrapped inside Time Limiter |
-| `INQ-SY-000` | `InqRuntimeException` | Checked exception wrapped outside any element (e.g. `InqFailure.orElseThrow`) |
+| `INQ-XX-000` | `InqRuntimeException` | Checked exception wrapped outside any element (e.g. `InqFailure.orElseThrow`) |
 
 #### Circuit Breaker (CB)
 
@@ -116,16 +116,16 @@ Symbols are fields on the `InqElementType` enum, accessible via `symbol()`:
 |------|-------------------|-------------|
 | `INQ-TL-001` | `InqTimeLimitExceededException` | Caller wait time exceeded configured timeout |
 
-#### System (SY)
+#### No Element (XX)
 
 | Code | Exception / Event | Description |
 |------|-------------------|-------------|
-| `INQ-SY-000` | `InqRuntimeException` | Checked exception wrapped outside any element |
-| `INQ-SY-001` | `InqProviderErrorEvent` | ServiceLoader provider failed during construction |
-| `INQ-SY-002` | `InqProviderErrorEvent` | ServiceLoader provider failed during execution |
-| `INQ-SY-003` | log warning | Registry name collision (first-registration-wins) |
-| `INQ-SY-004` | log warning | Pipeline anti-pattern detected |
-| `INQ-SY-005` | `IllegalStateException` | Registry frozen — late registration rejected |
+| `INQ-XX-000` | `InqRuntimeException` | Checked exception wrapped outside any element |
+| `INQ-XX-001` | `InqProviderErrorEvent` | ServiceLoader provider failed during construction |
+| `INQ-XX-002` | `InqProviderErrorEvent` | ServiceLoader provider failed during execution |
+| `INQ-XX-003` | log warning | Registry name collision (first-registration-wins) |
+| `INQ-XX-004` | log warning | Pipeline anti-pattern detected |
+| `INQ-XX-005` | `IllegalStateException` | Registry frozen — late registration rejected |
 
 ### Message format
 
@@ -138,8 +138,8 @@ INQ-BH-001: Bulkhead 'inventoryService' is full (25/25 concurrent calls)
 INQ-TL-001: TimeLimiter 'paymentService' timed out after 3002ms (configured: 3000ms)
 INQ-RL-001: RateLimiter 'apiGateway' denied request (next permit in ~250ms)
 INQ-CB-000: Checked exception in CIRCUIT_BREAKER 'paymentService': java.io.IOException: connection refused
-INQ-SY-000: connection refused
-INQ-SY-001: ServiceLoader provider 'com.example.MyExporter' failed during construction: NullPointerException
+INQ-XX-000: connection refused
+INQ-XX-001: ServiceLoader provider 'com.example.MyExporter' failed during construction: NullPointerException
 ```
 
 ### Implementation
@@ -192,7 +192,7 @@ public class InqRuntimeException extends InqException {
 
     // Outside an element (InqFailure):
     public InqRuntimeException(Throwable cause) {
-        super("INQ-SY-000", null, null, ...);
+        super("INQ-XX-000", null, null, ...);
     }
 }
 ```
@@ -229,5 +229,4 @@ public class InqRuntimeException extends InqException {
 - Maintenance discipline required — every new exception or warning needs a code assignment. Mitigated by co-locating the code constant on the exception class and deriving it from `InqElementType`.
 
 **Neutral:**
-- The `SY` prefix is not an `InqElementType` enum constant — it is used only for system-level codes. This is intentional: system-level codes are infrastructure, not resilience elements. The `INQ-SY-000` code in `InqRuntimeException`'s no-context constructor is hardcoded as a string since there is no corresponding enum constant.
 - The three-digit number allows 999 codes per element. If an element needs more than 999 distinct error codes, the element is doing too much.

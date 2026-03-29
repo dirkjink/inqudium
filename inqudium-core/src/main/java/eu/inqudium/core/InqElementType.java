@@ -33,7 +33,10 @@ public enum InqElementType {
     TIME_LIMITER("TL"),
 
     /** Cache — response caching to reduce load. */
-    CACHE("CA");
+    CACHE("CA"),
+
+    /** No element — used for system-level codes outside any specific element (pipeline, ServiceLoader, registry). */
+    NO_ELEMENT("XX");
 
     private final String symbol;
 

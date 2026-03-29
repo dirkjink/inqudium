@@ -58,14 +58,15 @@ public class InqRuntimeException extends InqException {
      */
     public InqRuntimeException(String callId, String elementName, InqElementType elementType, Throwable cause) {
         super(callId,
-                elementType != null ? elementType.errorCode(0) : "INQ-SY-000",
-                elementName, elementType,
+                (elementType != null ? elementType : InqElementType.NO_ELEMENT).errorCode(0),
+                elementName,
+                elementType != null ? elementType : InqElementType.NO_ELEMENT,
                 formatCauseMessage(elementName, elementType, InqFailure.unwrap(cause)),
                 InqFailure.unwrap(cause));
     }
 
     private static String formatCauseMessage(String elementName, InqElementType elementType, Throwable unwrapped) {
-        if (elementType != null) {
+        if (elementType != null && elementType != InqElementType.NO_ELEMENT) {
             return String.format(Locale.ROOT, "Checked exception in %s '%s': %s",
                     elementType, elementName, unwrapped.getMessage());
         }
@@ -81,12 +82,13 @@ public class InqRuntimeException extends InqException {
      *
      * <p>Package-private — used only by {@link InqFailure} which lives in the same package.
      * The cause is {@linkplain InqFailure#unwrap(Throwable) unwrapped} before storing.
-     * The error code is {@code "INQ-SY-000"} (system-level wrapping).
+     * The error code is {@code "INQ-XX-000"} (no element context).
      *
      * @param cause the checked exception to wrap (unwrapped automatically)
      */
     InqRuntimeException(Throwable cause) {
-        super(InqCallIdGenerator.NONE, "INQ-SY-000", null, null,
+        super(InqCallIdGenerator.NONE, InqElementType.NO_ELEMENT.errorCode(0),
+                null, InqElementType.NO_ELEMENT,
                 formatCauseMessage(null, null, InqFailure.unwrap(cause)),
                 InqFailure.unwrap(cause));
     }
@@ -94,9 +96,9 @@ public class InqRuntimeException extends InqException {
     /**
      * Returns whether this exception carries element context.
      *
-     * @return true if element name and type are set
+     * @return true if element name is set and element type is not {@link InqElementType#NO_ELEMENT}
      */
     public boolean hasElementContext() {
-        return getElementName() != null && getElementType() != null;
+        return getElementName() != null && getElementType() != InqElementType.NO_ELEMENT;
     }
 }
