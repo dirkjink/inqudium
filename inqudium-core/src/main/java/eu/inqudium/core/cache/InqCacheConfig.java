@@ -13,16 +13,20 @@ import eu.inqudium.core.compatibility.InqCompatibility;
  */
 public final class InqCacheConfig implements InqConfig {
 
-    private static final InqCacheConfig DEFAULTS = new InqCacheConfig(InqCompatibility.ofDefaults());
+  private static final InqCacheConfig DEFAULTS = new InqCacheConfig(InqCompatibility.ofDefaults());
 
-    private final InqCompatibility compatibility;
+  private final InqCompatibility compatibility;
 
-    private InqCacheConfig(InqCompatibility compatibility) {
-        this.compatibility = compatibility;
-    }
+  private InqCacheConfig(InqCompatibility compatibility) {
+    this.compatibility = compatibility;
+  }
 
-    public static InqCacheConfig ofDefaults() { return DEFAULTS; }
+  public static InqCacheConfig ofDefaults() {
+    return DEFAULTS;
+  }
 
-    @Override
-    public InqCompatibility getCompatibility() { return compatibility; }
+  @Override
+  public InqCompatibility getCompatibility() {
+    return compatibility;
+  }
 }
