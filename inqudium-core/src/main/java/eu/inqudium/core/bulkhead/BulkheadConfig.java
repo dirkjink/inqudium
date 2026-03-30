@@ -16,9 +16,7 @@ import java.util.Objects;
  * @since 0.1.0
  */
 public final class BulkheadConfig implements InqConfig {
-
   private static final BulkheadConfig DEFAULTS = BulkheadConfig.builder().build();
-
   private final int maxConcurrentCalls;
   private final Duration maxWaitDuration;
   private final InqCompatibility compatibility;
@@ -69,6 +67,20 @@ public final class BulkheadConfig implements InqConfig {
   @Override
   public InqCallIdGenerator getCallIdGenerator() {
     return callIdGenerator;
+  }
+
+  @Override
+  public boolean equals(Object o) {
+    if (o == null || getClass() != o.getClass()) return false;
+    BulkheadConfig that = (BulkheadConfig) o;
+    return maxConcurrentCalls == that.maxConcurrentCalls &&
+        Objects.equals(maxWaitDuration, that.maxWaitDuration) &&
+        Objects.equals(compatibility, that.compatibility);
+  }
+
+  @Override
+  public int hashCode() {
+    return Objects.hash(maxConcurrentCalls, maxWaitDuration, compatibility);
   }
 
   public static final class Builder {

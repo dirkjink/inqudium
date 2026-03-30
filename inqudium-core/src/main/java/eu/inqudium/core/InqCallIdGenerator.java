@@ -1,5 +1,7 @@
 package eu.inqudium.core;
 
+import eu.inqudium.core.callid.FastUUID;
+
 import java.util.UUID;
 
 /**
@@ -55,7 +57,7 @@ public interface InqCallIdGenerator {
    * @return the UUID-based generator
    */
   static InqCallIdGenerator uuid() {
-    return () -> UUID.randomUUID().toString();
+    return FastUUID::randomUUIDString;
   }
 
   /**
