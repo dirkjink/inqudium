@@ -1,7 +1,7 @@
 package eu.inqudium.timelimiter;
 
-import eu.inqudium.core.pipeline.InqDecorator;
 import eu.inqudium.core.InqElementType;
+import eu.inqudium.core.pipeline.InqDecorator;
 import eu.inqudium.core.timelimiter.TimeLimiterConfig;
 import eu.inqudium.timelimiter.internal.FutureTimeLimiter;
 
@@ -34,38 +34,38 @@ import java.util.function.Supplier;
  */
 public interface TimeLimiter extends InqDecorator {
 
-    static TimeLimiter of(String name, TimeLimiterConfig config) {
-        return new FutureTimeLimiter(name, config);
-    }
+  static TimeLimiter of(String name, TimeLimiterConfig config) {
+    return new FutureTimeLimiter(name, config);
+  }
 
-    static TimeLimiter ofDefaults(String name) {
-        return new FutureTimeLimiter(name, TimeLimiterConfig.ofDefaults());
-    }
+  static TimeLimiter ofDefaults(String name) {
+    return new FutureTimeLimiter(name, TimeLimiterConfig.ofDefaults());
+  }
 
-    TimeLimiterConfig getConfig();
+  TimeLimiterConfig getConfig();
 
-    /**
-     * Decorates a future supplier with a timeout.
-     *
-     * @param futureSupplier a supplier that returns a CompletionStage
-     * @param <T>            the result type
-     * @return a supplier that applies the timeout to the future
-     */
-    <T> Supplier<T> decorateFutureSupplier(Supplier<CompletionStage<T>> futureSupplier);
+  /**
+   * Decorates a future supplier with a timeout.
+   *
+   * @param futureSupplier a supplier that returns a CompletionStage
+   * @param <T>            the result type
+   * @return a supplier that applies the timeout to the future
+   */
+  <T> Supplier<T> decorateFutureSupplier(Supplier<CompletionStage<T>> futureSupplier);
 
-    /**
-     * Executes a future supplier with timeout protection.
-     *
-     * @param futureSupplier a supplier that returns a CompletionStage
-     * @param <T>            the result type
-     * @return the result
-     */
-    default <T> T executeFutureSupplier(Supplier<CompletionStage<T>> futureSupplier) {
-        return decorateFutureSupplier(futureSupplier).get();
-    }
+  /**
+   * Executes a future supplier with timeout protection.
+   *
+   * @param futureSupplier a supplier that returns a CompletionStage
+   * @param <T>            the result type
+   * @return the result
+   */
+  default <T> T executeFutureSupplier(Supplier<CompletionStage<T>> futureSupplier) {
+    return decorateFutureSupplier(futureSupplier).get();
+  }
 
-    @Override
-    default InqElementType getElementType() {
-        return InqElementType.TIME_LIMITER;
-    }
+  @Override
+  default InqElementType getElementType() {
+    return InqElementType.TIME_LIMITER;
+  }
 }
