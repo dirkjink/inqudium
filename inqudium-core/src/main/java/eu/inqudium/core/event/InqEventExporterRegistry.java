@@ -1,5 +1,6 @@
 package eu.inqudium.core.event;
 
+import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.LockSupport;
@@ -19,6 +20,12 @@ import java.util.concurrent.locks.LockSupport;
  *       the first {@link #export(InqEvent)} call.</li>
  * </ul>
  *
+ * <h2>Provider error audit trail</h2>
+ * <p>When a ServiceLoader provider fails during discovery, the error is logged
+ * <strong>and</strong> an {@link InqProviderErrorEvent} is collected. After the
+ * registry freezes, these events are replayed to all successfully resolved exporters
+ * — providing a full audit trail even for the bootstrap phase.
+ *
  * <h2>Instance-based design</h2>
  * <p>The registry is an instance — not a static utility. A shared global instance
  * is available via {@link #getDefault()} for production use. Tests create isolated
@@ -31,26 +38,16 @@ import java.util.concurrent.locks.LockSupport;
  * and a bounded total timeout measured via {@link System#nanoTime()} (immune to
  * spurious wakeups). If the resolver thread dies, state resets to {@code Open}.
  *
- * <h2>Registration during resolution</h2>
- * <p>{@link #register(InqEventExporter)} waits briefly if the registry is in
- * {@code Resolving} state, since resolution may complete quickly. Only if the
- * registry reaches {@code Frozen} is the registration rejected with an
- * {@link IllegalStateException}.
- *
  * @since 0.1.0
  */
 public final class InqEventExporterRegistry {
 
   private static final org.slf4j.Logger LOGGER = org.slf4j.LoggerFactory.getLogger(InqEventExporterRegistry.class);
 
-  private static final long PARK_INITIAL_NANOS = 1_000;              // 1 μs
-  private static final long PARK_MAX_NANOS = 1_000_000;          // 1 ms per park
-  private static final long RESOLVE_TIMEOUT_NANOS = 30_000_000_000L; // 30 seconds total
-  private static final long REGISTER_WAIT_NANOS = 5_000_000_000L;  // 5 seconds for register() during Resolving
-
-  /**
-   * Max consecutive hasNext() failures before giving up on remaining providers.
-   */
+  private static final long PARK_INITIAL_NANOS = 1_000;
+  private static final long PARK_MAX_NANOS = 1_000_000;
+  private static final long RESOLVE_TIMEOUT_NANOS = 30_000_000_000L;
+  private static final long REGISTER_WAIT_NANOS = 5_000_000_000L;
   private static final int MAX_CONSECUTIVE_HAS_NEXT_FAILURES = 10;
 
   // ── Global default instance ──
@@ -61,26 +58,11 @@ public final class InqEventExporterRegistry {
 
   // ── State machine ──
 
-  /**
-   * Creates a new, empty registry.
-   *
-   * <p>Captures the {@link Thread#getContextClassLoader() Thread Context ClassLoader}
-   * of the creating thread at construction time. This ClassLoader is used later for
-   * ServiceLoader discovery — even if the first event is published by a worker thread
-   * whose TCCL may be restricted.
-   */
   public InqEventExporterRegistry() {
     var tccl = Thread.currentThread().getContextClassLoader();
     this.spiClassLoader = tccl != null ? tccl : InqEventExporter.class.getClassLoader();
   }
 
-  /**
-   * Returns the shared global registry instance.
-   *
-   * <p>Created atomically on first access via CAS — no split-brain risk.
-   *
-   * @return the global default registry
-   */
   public static InqEventExporterRegistry getDefault() {
     var instance = DEFAULT_INSTANCE.get();
     if (instance != null) {
@@ -90,22 +72,15 @@ public final class InqEventExporterRegistry {
     return DEFAULT_INSTANCE.get();
   }
 
-  /**
-   * Replaces the global default registry.
-   *
-   * <p><strong>For testing only.</strong> Allows tests to install an isolated
-   * registry or reset the global state between test runs.
-   *
-   * @param registry the new default registry (or {@code null} to reset to lazy creation)
-   */
   public static void setDefault(InqEventExporterRegistry registry) {
     DEFAULT_INSTANCE.set(registry);
   }
 
   @SuppressWarnings("unchecked")
-  private static List<CachedExporter> discoverAndMerge(List<InqEventExporter> programmatic,
-                                                       ClassLoader classLoader) {
+  private static DiscoveryResult discoverAndMerge(List<InqEventExporter> programmatic,
+                                                  ClassLoader classLoader) {
     var serviceLoaderExporters = new ArrayList<InqEventExporter>();
+    var providerErrors = new ArrayList<InqProviderErrorEvent>();
 
     try {
       var loader = ServiceLoader.load(InqEventExporter.class, classLoader);
@@ -121,6 +96,9 @@ public final class InqEventExporterRegistry {
           consecutiveHasNextFailures++;
           LOGGER.warn("ServiceLoader iterator.hasNext() failed for InqEventExporter " +
               "(consecutive failure #{}) — retrying.", consecutiveHasNextFailures, t);
+          providerErrors.add(new InqProviderErrorEvent(
+              "(unknown)", InqEventExporter.class.getName(),
+              "construction", t.toString(), Instant.now()));
           if (consecutiveHasNextFailures >= MAX_CONSECUTIVE_HAS_NEXT_FAILURES) {
             LOGGER.warn("Giving up after {} consecutive hasNext() failures " +
                 "— remaining providers skipped.", MAX_CONSECUTIVE_HAS_NEXT_FAILURES);
@@ -136,11 +114,17 @@ public final class InqEventExporterRegistry {
         } catch (Throwable t) {
           rethrowIfFatal(t);
           LOGGER.warn("Failed to load InqEventExporter provider — provider skipped.", t);
+          providerErrors.add(new InqProviderErrorEvent(
+              "(unknown)", InqEventExporter.class.getName(),
+              "construction", t.toString(), Instant.now()));
         }
       }
     } catch (Throwable t) {
       rethrowIfFatal(t);
       LOGGER.warn("ServiceLoader discovery for InqEventExporter failed.", t);
+      providerErrors.add(new InqProviderErrorEvent(
+          "(unknown)", InqEventExporter.class.getName(),
+          "construction", t.toString(), Instant.now()));
     }
 
     // Sort: Comparable first (ascending), then non-Comparable
@@ -160,7 +144,7 @@ public final class InqEventExporterRegistry {
     all.addAll(nonComparable);
     all.addAll(programmatic);
 
-    // Cache each exporter's subscribed event types at freeze time
+    // Cache each exporter's subscribed event types at freeze time (stable contract)
     var cached = new ArrayList<CachedExporter>(all.size());
     for (var exporter : all) {
       Set<Class<? extends InqEvent>> types = null;
@@ -175,7 +159,7 @@ public final class InqEventExporterRegistry {
       }
       cached.add(new CachedExporter(exporter, types));
     }
-    return List.copyOf(cached);
+    return new DiscoveryResult(List.copyOf(cached), List.copyOf(providerErrors));
   }
 
   private static void rethrowIfFatal(Throwable t) {
@@ -187,16 +171,11 @@ public final class InqEventExporterRegistry {
   /**
    * Registers an exporter programmatically.
    *
-   * <p>Must be called before the first event is exported. If the registry is
-   * currently resolving (another thread triggered discovery), this method waits
-   * briefly for resolution to complete — if it transitions back to {@code Open},
-   * the registration proceeds. Only {@code Frozen} state causes an immediate
-   * {@link IllegalStateException}.
+   * <p>If the registry is currently resolving, waits briefly for resolution
+   * to complete. Only {@code Frozen} state causes an immediate rejection.
    *
    * @param exporter the exporter to register
-   * @throws IllegalStateException if the registry is already frozen
-   * @throws IllegalStateException if the registry remains in Resolving longer
-   *                               than the registration timeout
+   * @throws IllegalStateException if the registry is frozen or registration times out
    */
   public void register(InqEventExporter exporter) {
     Objects.requireNonNull(exporter, "exporter must not be null");
@@ -218,7 +197,7 @@ public final class InqEventExporterRegistry {
             "InqEventExporterRegistry is frozen — " +
                 "exporters must be registered before the first event is exported.");
       }
-      // Resolving — wait briefly, resolution may complete and reset to Open or Frozen
+      // Resolving — wait briefly
       long elapsed = System.nanoTime() - waitStart;
       if (elapsed >= REGISTER_WAIT_NANOS) {
         throw new IllegalStateException(
@@ -254,9 +233,8 @@ public final class InqEventExporterRegistry {
   /**
    * Returns the resolved exporter list, triggering discovery on first access.
    *
-   * <p>Only the thread that CAS-es {@code Open → Resolving} performs I/O.
-   * Waiting threads park with exponential backoff. Elapsed time is measured
-   * via {@link System#nanoTime()} — immune to spurious wakeups.
+   * <p>After freezing, replays any {@link InqProviderErrorEvent}s collected
+   * during discovery to all resolved exporters — providing a full audit trail.
    */
   private List<CachedExporter> getExporters() {
     long parkNanos = PARK_INITIAL_NANOS;
@@ -272,11 +250,12 @@ public final class InqEventExporterRegistry {
         var resolving = new Resolving(open.programmatic);
         if (state.compareAndSet(current, resolving)) {
           try {
-            var resolved = discoverAndMerge(open.programmatic, spiClassLoader);
-            state.set(new Frozen(resolved));
-            return resolved;
+            var result = discoverAndMerge(open.programmatic, spiClassLoader);
+            state.set(new Frozen(result.exporters));
+            // Replay provider errors to the now-frozen exporters
+            replayProviderErrors(result.exporters, result.providerErrors);
+            return result.exporters;
           } catch (Throwable t) {
-            // Reset so another thread can retry
             state.set(new Open(List.copyOf(open.programmatic)));
             rethrowIfFatal(t);
             LOGGER.error("ServiceLoader discovery failed — registry reset to Open", t);
@@ -286,7 +265,7 @@ public final class InqEventExporterRegistry {
         continue;
       }
 
-      // Resolving — park with exponential backoff, bounded by real elapsed time
+      // Resolving — park with real elapsed time tracking
       long elapsed = System.nanoTime() - waitStart;
       if (elapsed >= RESOLVE_TIMEOUT_NANOS) {
         var resolving = (Resolving) current;
@@ -301,6 +280,29 @@ public final class InqEventExporterRegistry {
 
       LockSupport.parkNanos(parkNanos);
       parkNanos = Math.min(parkNanos * 2, PARK_MAX_NANOS);
+    }
+  }
+
+  /**
+   * Replays provider error events collected during discovery to all resolved exporters.
+   * Best-effort — exporter failures during replay are logged but never propagated.
+   */
+  private void replayProviderErrors(List<CachedExporter> exporters, List<InqProviderErrorEvent> errors) {
+    if (errors.isEmpty()) {
+      return;
+    }
+    for (var error : errors) {
+      for (var cached : exporters) {
+        try {
+          if (cached.isSubscribed(error)) {
+            cached.exporter.export(error);
+          }
+        } catch (Throwable t) {
+          rethrowIfFatal(t);
+          LOGGER.debug("Exporter {} failed during provider error replay — skipped",
+              cached.exporter.getClass().getName(), t);
+        }
+      }
     }
   }
 
@@ -321,8 +323,7 @@ public final class InqEventExporterRegistry {
 
   /**
    * Pairs an exporter with its pre-resolved event type filter.
-   * {@code subscribedEventTypes()} is called once at freeze time — not on every event.
-   * The set is captured as-is for type-safe {@link Set#contains} lookups.
+   * {@code subscribedEventTypes()} is called once at freeze time (stable contract).
    */
   private record CachedExporter(InqEventExporter exporter, Set<Class<? extends InqEvent>> eventTypes) {
     boolean isSubscribed(InqEvent event) {
@@ -336,5 +337,14 @@ public final class InqEventExporterRegistry {
       }
       return false;
     }
+  }
+
+  /**
+   * Result of ServiceLoader discovery — exporters + collected provider errors.
+   */
+  private record DiscoveryResult(
+      List<CachedExporter> exporters,
+      List<InqProviderErrorEvent> providerErrors
+  ) {
   }
 }
