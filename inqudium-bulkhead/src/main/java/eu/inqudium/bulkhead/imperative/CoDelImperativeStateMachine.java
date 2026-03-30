@@ -8,6 +8,7 @@ import java.time.Duration;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
+import java.util.function.LongSupplier;
 
 /**
  * An imperative state machine utilizing a simplified Controlled Delay (CoDel) mechanism.
@@ -60,6 +61,7 @@ public final class CoDelImperativeStateMachine extends AbstractBulkheadStateMach
 
   private final long targetDelayNanos;
   private final long intervalNanos;
+  private final LongSupplier nanoTimeSource;
 
   private final ReentrantLock lock = new ReentrantLock();
   private final Condition permitAvailable = lock.newCondition();
@@ -81,6 +83,8 @@ public final class CoDelImperativeStateMachine extends AbstractBulkheadStateMach
     super(name, config);
     this.targetDelayNanos = targetDelay.toNanos();
     this.intervalNanos = interval.toNanos();
+    // FIX #5: Use configurable time source for testability instead of System.nanoTime()
+    this.nanoTimeSource = config.getNanoTimeSource();
   }
 
   @Override
@@ -104,8 +108,8 @@ public final class CoDelImperativeStateMachine extends AbstractBulkheadStateMach
   public boolean tryAcquireBlocking(String callId, Duration timeout) throws InterruptedException {
     long remainingNanos = timeout.toNanos();
 
-    // Record the exact moment this request entered the queue
-    long waitStartNanos = System.nanoTime();
+    // FIX #5: Use injectable time source for deterministic testing
+    long waitStartNanos = nanoTimeSource.getAsLong();
 
     lock.lockInterruptibly();
     try {
@@ -120,8 +124,8 @@ public final class CoDelImperativeStateMachine extends AbstractBulkheadStateMach
 
       // 2. CoDel Wait Time Evaluation (Sojourn Time)
       // Calculate how long this thread actually spent sleeping/waiting for the permit.
-      long waitTimeNanos = System.nanoTime() - waitStartNanos;
-      long now = System.nanoTime();
+      long now = nanoTimeSource.getAsLong();
+      long waitTimeNanos = now - waitStartNanos;
 
       if (waitTimeNanos > targetDelayNanos) {
         // The wait time was unacceptable.
@@ -135,6 +139,12 @@ public final class CoDelImperativeStateMachine extends AbstractBulkheadStateMach
           // We have been consistently above the target delay for longer than the interval.
           // The system is suffering from bufferbloat.
           // Enter dropping state: reject this request immediately to shed load and drain the queue.
+
+          // FIX #3: Signal the next waiting thread before rejecting.
+          // Without this, the wakeup signal consumed by this thread would be lost,
+          // starving other threads even though a permit slot is available.
+          permitAvailable.signal();
+
           handleAcquireFailure(callId);
           return false;
         }
@@ -150,6 +160,8 @@ public final class CoDelImperativeStateMachine extends AbstractBulkheadStateMach
 
     } catch (InterruptedException e) {
       Thread.currentThread().interrupt();
+      // FIX #3: Also signal on interrupt to prevent lost wakeups
+      permitAvailable.signal();
       handleAcquireFailure(callId);
       throw new InqBulkheadInterruptedException(callId, name, getConcurrentCalls(), maxConcurrentCalls);
     } finally {

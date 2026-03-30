@@ -6,6 +6,7 @@ import eu.inqudium.core.bulkhead.BulkheadStateMachine;
 import eu.inqudium.core.bulkhead.InqBulkheadFullException;
 
 import java.time.Duration;
+import java.util.function.LongSupplier;
 
 /**
  * The imperative (synchronous/thread-blocking) implementation of the bulkhead strategy.
@@ -14,10 +15,16 @@ public class ImperativeBulkheadStrategy<T> implements BulkheadParadigmStrategy<I
 
   private final Duration configuredTimeout;
   private final String bulkheadName;
+  private final LongSupplier nanoTimeSource;
 
-  ImperativeBulkheadStrategy(String bulkheadName, Duration configuredTimeout) {
+  /**
+   * FIX #5: Added nanoTimeSource parameter for injectable time measurement.
+   * This allows deterministic testing of RTT calculations.
+   */
+  ImperativeBulkheadStrategy(String bulkheadName, Duration configuredTimeout, LongSupplier nanoTimeSource) {
     this.bulkheadName = bulkheadName;
     this.configuredTimeout = configuredTimeout;
+    this.nanoTimeSource = nanoTimeSource;
   }
 
   @Override
@@ -28,11 +35,10 @@ public class ImperativeBulkheadStrategy<T> implements BulkheadParadigmStrategy<I
       if (!stateMachine.tryAcquireBlocking(call.callId(), configuredTimeout)) {
         throw new InqBulkheadFullException(
             call.callId(), bulkheadName, stateMachine.getConcurrentCalls(), stateMachine.getMaxConcurrentCalls());
-        // Note: max limit tracking moved to StateMachine
       }
 
-      // Duty 3 (Start): Measurement (Imperative clock)
-      long startNanos = System.nanoTime();
+      // Duty 3 (Start): Measurement (using injectable time source)
+      long startNanos = nanoTimeSource.getAsLong();
       Throwable businessError = null;
 
       try {
@@ -43,7 +49,7 @@ public class ImperativeBulkheadStrategy<T> implements BulkheadParadigmStrategy<I
         throw t;
       } finally {
         // Duty 3 (End): Measurement calculation
-        Duration rtt = Duration.ofNanos(System.nanoTime() - startNanos);
+        Duration rtt = Duration.ofNanos(nanoTimeSource.getAsLong() - startNanos);
 
         // Duty 2: Guaranteed Release via try-finally
         stateMachine.releaseAndReport(call.callId(), rtt, businessError);

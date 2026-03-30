@@ -12,6 +12,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class ImperativeBulkheadFactoryTest {
 
+  private Object extractStateMachine(ImperativeBulkhead bulkhead) throws Exception {
+    Field stateMachineField = ImperativeBulkhead.class.getDeclaredField("stateMachine");
+    stateMachineField.setAccessible(true);
+    return stateMachineField.get(bulkhead);
+  }
+
   @Nested
   class StaticBulkheadCreation {
 
@@ -32,6 +38,8 @@ class ImperativeBulkheadFactoryTest {
       assertThat(bulkhead.getName()).isEqualTo("static-test");
     }
   }
+
+  // ── Helper methods ──
 
   @Nested
   class AdaptiveBulkheadCreation {
@@ -55,13 +63,5 @@ class ImperativeBulkheadFactoryTest {
       assertThat(internalStateMachine).isInstanceOf(AdaptiveImperativeStateMachine.class);
       assertThat(bulkhead.getName()).isEqualTo("adaptive-test");
     }
-  }
-
-  // ── Helper methods ──
-
-  private Object extractStateMachine(ImperativeBulkhead bulkhead) throws Exception {
-    Field stateMachineField = ImperativeBulkhead.class.getDeclaredField("stateMachine");
-    stateMachineField.setAccessible(true);
-    return stateMachineField.get(bulkhead);
   }
 }

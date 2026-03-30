@@ -8,11 +8,14 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
+import java.util.function.LongSupplier;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
 
 class ImperativeBulkheadStrategyTest {
+
+  final LongSupplier nanoTimeSource = System::nanoTime;
 
   // A fake state machine acting as a test spy
   private static class FakeStateMachine implements BulkheadStateMachine {
@@ -74,7 +77,7 @@ class ImperativeBulkheadStrategyTest {
     void executes_the_business_logic_and_reports_the_metrics_on_success() throws Exception {
       // Given
       Duration timeout = Duration.ofMillis(100);
-      ImperativeBulkheadStrategy<String> strategy = new ImperativeBulkheadStrategy<>("test-bulkhead", timeout);
+      ImperativeBulkheadStrategy<String> strategy = new ImperativeBulkheadStrategy<>("test-bulkhead", timeout, nanoTimeSource);
 
       // We use a fake state machine that grants permits and records reports
       FakeStateMachine stateMachine = new FakeStateMachine(true);
@@ -106,7 +109,7 @@ class ImperativeBulkheadStrategyTest {
     void executes_the_business_logic_and_reports_the_business_error_to_the_state_machine() {
       // Given
       Duration timeout = Duration.ZERO;
-      ImperativeBulkheadStrategy<String> strategy = new ImperativeBulkheadStrategy<>("test-bulkhead", timeout);
+      ImperativeBulkheadStrategy<String> strategy = new ImperativeBulkheadStrategy<>("test-bulkhead", timeout, nanoTimeSource);
 
       FakeStateMachine stateMachine = new FakeStateMachine(true);
       RuntimeException businessError = new RuntimeException("Database offline");
@@ -136,7 +139,7 @@ class ImperativeBulkheadStrategyTest {
     void throws_a_bulkhead_full_exception_if_no_permit_can_be_acquired_and_does_not_execute_logic() {
       // Given
       Duration timeout = Duration.ofSeconds(1);
-      ImperativeBulkheadStrategy<String> strategy = new ImperativeBulkheadStrategy<>("test-bulkhead", timeout);
+      ImperativeBulkheadStrategy<String> strategy = new ImperativeBulkheadStrategy<>("test-bulkhead", timeout, nanoTimeSource);
 
       // A fake state machine that denies all permits (simulating a full bulkhead)
       FakeStateMachine stateMachine = new FakeStateMachine(false);

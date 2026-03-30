@@ -1,6 +1,5 @@
 package eu.inqudium.bulkhead;
 
-import eu.inqudium.bulkhead.imperative.ImperativeBulkhead;
 import eu.inqudium.bulkhead.imperative.ImperativeBulkheadFactory;
 import eu.inqudium.core.InqElementType;
 import eu.inqudium.core.bulkhead.BulkheadConfig;

@@ -1,7 +1,6 @@
 package eu.inqudium.core.bulkhead;
 
 import java.time.Duration;
-import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
@@ -11,7 +10,8 @@ import java.util.concurrent.atomic.AtomicReference;
  * <p>Unlike AIMD, which is reactive and waits for errors (like timeouts) to reduce the limit,
  * the Vegas algorithm is <b>proactive</b>. It continuously measures the Round-Trip-Time (RTT)
  * and attempts to detect queuing delay in the downstream service before failures occur.
- * * <p>It does this by calculating a "gradient":
+ *
+ * <p>It does this by calculating a "gradient":
  * <ul>
  * <li><b>No-Load RTT (Baseline):</b> The algorithm remembers the absolute fastest response
  * time it has ever seen. This is assumed to be the physical minimum time required when
@@ -54,9 +54,23 @@ public final class VegasLimitAlgorithm implements InqLimitAlgorithm {
   private final int maxLimit;
   private final double smoothingFactor;
 
-  private final AtomicLong noLoadRttNanos = new AtomicLong(Long.MAX_VALUE);
-  private final AtomicLong smoothedRttNanos = new AtomicLong(0);
-  private final AtomicReference<Double> currentLimit;
+  /**
+   * All mutable algorithm state is bundled into a single immutable record and managed
+   * via {@link AtomicReference#compareAndSet}.
+   * This guarantees that every {@link #update} reads and writes a consistent snapshot
+   * of (noLoadRtt, smoothedRtt, currentLimit) without any blocking — purely through
+   * a CAS retry loop.
+   *
+   * <p>The original implementation used three independent atomic variables. Concurrent
+   * threads could interleave between individual reads, causing the gradient calculation
+   * to mix a noLoadRtt from one thread with a smoothedRtt from another — producing
+   * inconsistent and potentially erratic limit adjustments.
+   *
+   * <p>Using {@code synchronized} was rejected because core implementations must never
+   * block. The CAS loop is wait-free in practice (contention is bounded by the number
+   * of concurrent callers, and the compute step is pure arithmetic with no I/O).
+   */
+  private final AtomicReference<VegasState> state;
 
   /**
    * Creates a new Vegas limit algorithm instance.
@@ -72,54 +86,69 @@ public final class VegasLimitAlgorithm implements InqLimitAlgorithm {
     this.minLimit = Math.max(1, minLimit);
     this.maxLimit = Math.max(this.minLimit, maxLimit);
     this.smoothingFactor = Math.max(0.01, Math.min(1.0, smoothingFactor));
-    this.currentLimit = new AtomicReference<>((double) Math.max(this.minLimit, Math.min(initialLimit, this.maxLimit)));
+
+    double bounded = Math.max(this.minLimit, Math.min(initialLimit, this.maxLimit));
+    this.state = new AtomicReference<>(new VegasState(Long.MAX_VALUE, 0, bounded));
   }
 
   @Override
   public int getLimit() {
-    return currentLimit.get().intValue();
+    return (int) state.get().currentLimit();
   }
 
+  /**
+   * Updates the algorithm state using a lock-free CAS loop.
+   *
+   * <p>The loop reads the current immutable state, computes a new state from it
+   * (pure arithmetic, no side effects), and attempts an atomic swap. On contention
+   * (another thread updated between read and CAS), it simply re-reads and recomputes
+   * with the latest state — no thread ever blocks or parks.
+   */
   @Override
   public void update(Duration rtt, boolean isSuccess) {
     long rttNanos = rtt.toNanos();
     if (rttNanos <= 0) return;
 
-    // 1. Maintain the Baseline
-    // Constantly track the fastest execution time. This is our "zero congestion" metric.
-    noLoadRttNanos.updateAndGet(currentMin -> Math.min(currentMin, rttNanos));
+    VegasState current;
+    VegasState next;
+    do {
+      current = state.get();
 
-    // 2. Calculate Smoothed Current Latency
-    // We use EWMA (Exponential Weighted Moving Average) to avoid overreacting to garbage
-    // collection pauses or single network hiccups.
-    long currentSmoothed = smoothedRttNanos.updateAndGet(current ->
-        current == 0 ? rttNanos : (long) (current * (1 - smoothingFactor) + rttNanos * smoothingFactor)
-    );
+      // 1. Maintain the Baseline
+      // Constantly track the fastest execution time — our "zero congestion" metric.
+      long newNoLoad = Math.min(current.noLoadRttNanos(), rttNanos);
 
-    // 3. Compute the Gradient
-    // A gradient of 1.0 means perfect performance. A gradient of 0.5 means the system
-    // is twice as slow as the baseline.
-    double noLoad = noLoadRttNanos.get();
-    double gradient = noLoad / (double) currentSmoothed;
+      // 2. Calculate Smoothed Current Latency (EWMA)
+      // Filters out GC pauses and single network hiccups.
+      long newSmoothed = current.smoothedRttNanos() == 0
+          ? rttNanos
+          : (long) (current.smoothedRttNanos() * (1 - smoothingFactor) + rttNanos * smoothingFactor);
 
-    // We constrain the gradient to prevent extreme, violent adjustments in a single update step.
-    gradient = Math.max(0.5, Math.min(1.2, gradient));
+      // 3. Compute the Gradient
+      // 1.0 = perfect performance, 0.5 = system is twice as slow as baseline.
+      double gradient = (double) newNoLoad / (double) newSmoothed;
+      gradient = Math.max(0.5, Math.min(1.2, gradient));
 
-    if (isSuccess) {
-      // 4a. Proactive Adjustment (Success)
-      // We scale the limit by the gradient. If the system is slow (gradient < 1), the limit
-      // shrinks. We add 0.5 as an additive probing factor to slowly grow the limit if the
-      // gradient is exactly 1.0.
-      double finalGradient = gradient;
-      currentLimit.updateAndGet(limit -> {
-        double newLimit = limit * finalGradient + 0.5;
-        return Math.max(minLimit, Math.min(maxLimit, newLimit));
-      });
-    } else {
-      // 4b. Reactive Adjustment (Failure)
-      // If an actual error or timeout occurs, Vegas acts like AIMD and performs a
-      // multiplicative decrease (cutting capacity by 20%) to aggressively protect the backend.
-      currentLimit.updateAndGet(limit -> Math.max(minLimit, limit * 0.8));
-    }
+      // 4. Calculate the new limit
+      double newLimit;
+      if (isSuccess) {
+        // Proactive Adjustment: scale by gradient + additive probing factor
+        newLimit = current.currentLimit() * gradient + 0.5;
+      } else {
+        // Reactive Adjustment: multiplicative decrease (cut by 20%)
+        newLimit = current.currentLimit() * 0.8;
+      }
+      newLimit = Math.max(minLimit, Math.min(maxLimit, newLimit));
+
+      next = new VegasState(newNoLoad, newSmoothed, newLimit);
+
+    } while (!state.compareAndSet(current, next));
+  }
+
+  /**
+   * Immutable snapshot of the algorithm's internal state.
+   * Bundling all fields into a single record enables atomic CAS transitions.
+   */
+  private record VegasState(long noLoadRttNanos, long smoothedRttNanos, double currentLimit) {
   }
 }

@@ -25,17 +25,42 @@ public final class AdaptiveImperativeStateMachine extends AbstractBulkheadStateM
     this.limitAlgorithm = limitAlgorithm;
   }
 
+  /**
+   * FIX #7: Return the dynamic limit from the algorithm, not the static config value.
+   *
+   * <p>Without this override, callers (including {@code InqBulkheadFullException}) would
+   * see the initial config value, which becomes misleading once the algorithm has
+   * adjusted the limit up or down.
+   */
+  @Override
+  public int getMaxConcurrentCalls() {
+    return limitAlgorithm.getLimit();
+  }
+
+  /**
+   * FIX #4: Changed from {@code lock.tryLock()} to {@code lock.lock()} to prevent
+   * false rejection events caused by lock contention.
+   *
+   * <p>The original implementation would treat a failed {@code tryLock()} (another thread
+   * momentarily holding the lock) as a bulkhead-full rejection, publishing a spurious
+   * {@code BulkheadOnRejectEvent} and returning false — even when plenty of permits
+   * were available. This corrupted metrics and caused false monitoring alerts.
+   *
+   * <p>Using {@code lock.lock()} is acceptable for a "non-blocking" acquire because the
+   * lock is only held for the brief duration of the counter check, not for the downstream
+   * call execution. The worst-case wait is microseconds, not the milliseconds/seconds
+   * of a true blocking acquire.
+   */
   @Override
   public boolean tryAcquireNonBlocking(String callId) {
-    if (lock.tryLock()) {
-      try {
-        if (activeCalls < limitAlgorithm.getLimit()) {
-          activeCalls++;
-          return handleAcquireSuccess(callId);
-        }
-      } finally {
-        lock.unlock();
+    lock.lock();
+    try {
+      if (activeCalls < limitAlgorithm.getLimit()) {
+        activeCalls++;
+        return handleAcquireSuccess(callId);
       }
+    } finally {
+      lock.unlock();
     }
     handleAcquireFailure(callId);
     return false;

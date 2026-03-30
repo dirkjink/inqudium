@@ -5,6 +5,8 @@ import eu.inqudium.core.bulkhead.event.BulkheadOnAcquireEvent;
 import eu.inqudium.core.bulkhead.event.BulkheadOnRejectEvent;
 import eu.inqudium.core.bulkhead.event.BulkheadOnReleaseEvent;
 import eu.inqudium.core.event.InqEventPublisher;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -19,6 +21,8 @@ import java.time.Instant;
  * @since 0.2.0
  */
 public abstract class AbstractBulkheadStateMachine implements BulkheadStateMachine {
+
+  private static final Logger LOG = LoggerFactory.getLogger(AbstractBulkheadStateMachine.class);
 
   protected final String name;
   protected final BulkheadConfig config;
@@ -47,18 +51,36 @@ public abstract class AbstractBulkheadStateMachine implements BulkheadStateMachi
   public abstract int getConcurrentCalls();
 
   // ── Implemented Telemetry & State Logic ──
+
+  /**
+   * Returns the effective maximum concurrent calls.
+   *
+   * <p>Subclasses with adaptive limits (e.g., AIMD, Vegas) should override this
+   * to return the current dynamic limit instead of the static config value.
+   */
   @Override
   public int getMaxConcurrentCalls() {
     return maxConcurrentCalls;
   }
 
+  /**
+   * FIX #1: Wrapped onCallComplete + releasePermitInternal in try-finally to guarantee
+   * permit release even when the adaptive algorithm hook throws an exception.
+   * Without this, a failing onCallComplete() would permanently leak the permit.
+   */
   @Override
   public final void releaseAndReport(String callId, Duration rtt, Throwable error) {
-    // 0. Feed the adaptive telemetry hook
-    onCallComplete(rtt, error);
-
-    // 1. Paradigm-specific release logic
-    releasePermitInternal();
+    try {
+      // 0. Feed the adaptive telemetry hook (may throw)
+      onCallComplete(rtt, error);
+    } catch (RuntimeException algorithmError) {
+      // Log but do NOT propagate — the permit MUST be released below
+      LOG.error("Adaptive algorithm hook failed for bulkhead '{}', callId='{}'. "
+          + "Permit will still be released.", name, callId, algorithmError);
+    } finally {
+      // 1. Paradigm-specific release logic — ALWAYS executes
+      releasePermitInternal();
+    }
 
     // 2. Telemetry and safe exception handling
     try {
@@ -83,6 +105,14 @@ public abstract class AbstractBulkheadStateMachine implements BulkheadStateMachi
     // No-op by default
   }
 
+  /**
+   * Publishes an acquire event and returns true. If event publishing crashes,
+   * the permit is rolled back to prevent leaks and the exception is propagated.
+   *
+   * <p>This fail-safe rollback is critical: without it, a crashing event publisher
+   * would leave a permit permanently acquired with no corresponding release call,
+   * since the caller never receives the decorated callable.
+   */
   protected final boolean handleAcquireSuccess(String callId) {
     try {
       var snap = snapshot();
