@@ -54,6 +54,9 @@ public abstract class AbstractBulkheadStateMachine implements BulkheadStateMachi
 
   @Override
   public final void releaseAndReport(String callId, Duration rtt, Throwable error) {
+    // 0. Feed the adaptive telemetry hook
+    onCallComplete(rtt, error);
+
     // 1. Paradigm-specific release logic
     releasePermitInternal();
 
@@ -71,6 +74,13 @@ public abstract class AbstractBulkheadStateMachine implements BulkheadStateMachi
         throw publisherError;
       }
     }
+  }
+
+  /**
+   * Hook for adaptive implementations to analyze call latency and success.
+   */
+  protected void onCallComplete(Duration rtt, Throwable error) {
+    // No-op by default
   }
 
   protected final boolean handleAcquireSuccess(String callId) {

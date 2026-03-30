@@ -19,6 +19,104 @@ import static org.assertj.core.api.Assertions.catchThrowable;
 
 class AbstractBulkheadStateMachineTest {
 
+  private void injectFakePublisher(AbstractBulkheadStateMachine stateMachine, InqEventPublisher publisher) throws Exception {
+    Field publisherField = AbstractBulkheadStateMachine.class.getDeclaredField("eventPublisher");
+    publisherField.setAccessible(true);
+    publisherField.set(stateMachine, publisher);
+  }
+
+  // A minimal concrete implementation to test the abstract base class
+  private static class TestStateMachine extends AbstractBulkheadStateMachine {
+    boolean releaseCalled = false;
+    boolean rollbackCalled = false;
+
+    TestStateMachine(String name, BulkheadConfig config) {
+      super(name, config);
+    }
+
+    // Expose the protected methods for testing
+    public boolean triggerAcquireSuccess(String callId) {
+      return handleAcquireSuccess(callId);
+    }
+
+    public void triggerAcquireFailure(String callId) {
+      handleAcquireFailure(callId);
+    }
+
+    @Override
+    public boolean tryAcquireNonBlocking(String callId) {
+      return false;
+    }
+
+    @Override
+    public boolean tryAcquireBlocking(String callId, Duration timeout) {
+      return false;
+    }
+
+    @Override
+    public int getAvailablePermits() {
+      return 1;
+    }
+
+    @Override
+    public int getConcurrentCalls() {
+      return 0;
+    }
+
+    @Override
+    protected void releasePermitInternal() {
+      releaseCalled = true;
+    }
+
+    @Override
+    protected void rollbackPermit() {
+      rollbackCalled = true;
+    }
+  }
+
+  // ── Helper methods and fake classes ──
+
+  // A fake publisher that just stores the last event
+  private static class FakeEventPublisher implements InqEventPublisher {
+    Object lastPublishedEvent;
+
+    @Override
+    public void publish(InqEvent event) {
+      this.lastPublishedEvent = event;
+    }
+
+    @Override
+    public InqSubscription onEvent(InqEventConsumer consumer) {
+      return null;
+    }
+
+    @Override
+    public <E extends InqEvent> InqSubscription onEvent(Class<E> eventType, Consumer<E> consumer) {
+      return null;
+    }
+  }
+
+  // A fake publisher that crashes on specific event types
+  private record CrashingPublisher(RuntimeException exceptionToThrow,
+                                   Class<?> failingEventType) implements InqEventPublisher {
+    @Override
+    public void publish(InqEvent event) {
+      if (failingEventType.isInstance(event)) {
+        throw exceptionToThrow;
+      }
+    }
+
+    @Override
+    public InqSubscription onEvent(InqEventConsumer consumer) {
+      return null;
+    }
+
+    @Override
+    public <E extends InqEvent> InqSubscription onEvent(Class<E> eventType, Consumer<E> consumer) {
+      return null;
+    }
+  }
+
   @Nested
   class EventPublishingAndRollback {
 
@@ -130,76 +228,6 @@ class AbstractBulkheadStateMachineTest {
       // Then
       assertThat(thrown).isSameAs(publisherCrash);
       assertThat(stateMachine.releaseCalled).isTrue();
-    }
-  }
-
-  // ── Helper methods and fake classes ──
-
-  private void injectFakePublisher(AbstractBulkheadStateMachine stateMachine, InqEventPublisher publisher) throws Exception {
-    Field publisherField = AbstractBulkheadStateMachine.class.getDeclaredField("eventPublisher");
-    publisherField.setAccessible(true);
-    publisherField.set(stateMachine, publisher);
-  }
-
-  // A minimal concrete implementation to test the abstract base class
-  private static class TestStateMachine extends AbstractBulkheadStateMachine {
-    boolean releaseCalled = false;
-    boolean rollbackCalled = false;
-
-    TestStateMachine(String name, BulkheadConfig config) {
-      super(name, config);
-    }
-
-    // Expose the protected methods for testing
-    public boolean triggerAcquireSuccess(String callId) { return handleAcquireSuccess(callId); }
-    public void triggerAcquireFailure(String callId) { handleAcquireFailure(callId); }
-
-    @Override public boolean tryAcquireNonBlocking(String callId) { return false; }
-    @Override public boolean tryAcquireBlocking(String callId, Duration timeout) { return false; }
-    @Override public int getAvailablePermits() { return 1; }
-    @Override public int getConcurrentCalls() { return 0; }
-
-    @Override protected void releasePermitInternal() { releaseCalled = true; }
-    @Override protected void rollbackPermit() { rollbackCalled = true; }
-  }
-
-  // A fake publisher that just stores the last event
-  private static class FakeEventPublisher implements InqEventPublisher {
-    Object lastPublishedEvent;
-
-    @Override
-    public void publish(InqEvent event) {
-      this.lastPublishedEvent = event;
-    }
-
-    @Override
-    public InqSubscription onEvent(InqEventConsumer consumer) {
-      return null;
-    }
-
-    @Override
-    public <E extends InqEvent> InqSubscription onEvent(Class<E> eventType, Consumer<E> consumer) {
-      return null;
-    }
-  }
-
-  // A fake publisher that crashes on specific event types
-  private record CrashingPublisher(RuntimeException exceptionToThrow, Class<?> failingEventType) implements InqEventPublisher {
-    @Override
-    public void publish(InqEvent event) {
-      if (failingEventType.isInstance(event)) {
-        throw exceptionToThrow;
-      }
-    }
-
-    @Override
-    public InqSubscription onEvent(InqEventConsumer consumer) {
-      return null;
-    }
-
-    @Override
-    public <E extends InqEvent> InqSubscription onEvent(Class<E> eventType, Consumer<E> consumer) {
-      return null;
     }
   }
 }
