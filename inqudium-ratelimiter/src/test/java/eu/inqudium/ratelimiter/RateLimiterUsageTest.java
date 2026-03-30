@@ -376,10 +376,10 @@ class RateLimiterUsageTest {
           .limitForPeriod(5)
           .limitRefreshPeriod(Duration.ofSeconds(1))
           .build());
-      var permitEvents = new java.util.ArrayList<eu.inqudium.ratelimiter.event.RateLimiterOnPermitEvent>();
+      var permitEvents = new java.util.ArrayList<eu.inqudium.core.ratelimiter.event.RateLimiterOnPermitEvent>();
 
       rl.getEventPublisher().onEvent(
-          eu.inqudium.ratelimiter.event.RateLimiterOnPermitEvent.class,
+          eu.inqudium.core.ratelimiter.event.RateLimiterOnPermitEvent.class,
           permitEvents::add);
 
       Supplier<String> resilient = rl.decorateSupplier(() -> client.fetchData("users"));
@@ -401,10 +401,10 @@ class RateLimiterUsageTest {
           .limitForPeriod(1)
           .limitRefreshPeriod(Duration.ofSeconds(10))
           .build());
-      var rejectEvents = new java.util.ArrayList<eu.inqudium.ratelimiter.event.RateLimiterOnRejectEvent>();
+      var rejectEvents = new java.util.ArrayList<eu.inqudium.core.ratelimiter.event.RateLimiterOnRejectEvent>();
 
       rl.getEventPublisher().onEvent(
-          eu.inqudium.ratelimiter.event.RateLimiterOnRejectEvent.class,
+          eu.inqudium.core.ratelimiter.event.RateLimiterOnRejectEvent.class,
           rejectEvents::add);
 
       Supplier<String> resilient = rl.decorateSupplier(() -> "data");
