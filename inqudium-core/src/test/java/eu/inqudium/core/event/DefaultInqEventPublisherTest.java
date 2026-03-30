@@ -186,7 +186,7 @@ class DefaultInqEventPublisherTest {
   class ErrorHandling {
 
     @Test
-    void should_defer_fatal_errors_until_all_consumers_processed_event() {
+    void should_fail_fast_fatal_errors_until_all_consumers_processed_event() {
       // Given
       DefaultInqEventPublisher publisher = new DefaultInqEventPublisher(
           "test", InqElementType.NO_ELEMENT, new InqEventExporterRegistry()
@@ -210,9 +210,7 @@ class DefaultInqEventPublisherTest {
           .hasMessageContaining("Fatal system failure");
 
       // Verify the second consumer still ran
-      assertThat(processedAfterError)
-          .hasSize(1)
-          .containsExactly(testEvent);
+      assertThat(processedAfterError).hasSize(0);
     }
 
     @Test

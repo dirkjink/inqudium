@@ -75,6 +75,12 @@ public abstract class InqException extends RuntimeException {
     return "[" + callId + "] " + code + ": " + message;
   }
 
+  public static void rethrowIfFatal(Throwable t) {
+    if (t instanceof VirtualMachineError) throw (VirtualMachineError) t;
+    if (t instanceof ThreadDeath) throw (ThreadDeath) t;
+    if (t instanceof LinkageError) throw (LinkageError) t;
+  }
+
   /**
    * Returns the unique call identifier.
    *
@@ -118,4 +124,5 @@ public abstract class InqException extends RuntimeException {
   public InqElementType getElementType() {
     return elementType;
   }
+
 }

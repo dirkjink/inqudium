@@ -1,5 +1,7 @@
 package eu.inqudium.core.compatibility;
 
+import eu.inqudium.core.exception.InqException;
+
 import java.util.*;
 
 /**
@@ -111,12 +113,6 @@ public final class InqCompatibility {
       this.spiClassLoader = tccl != null ? tccl : InqCompatibilityOptions.class.getClassLoader();
     }
 
-    private static void rethrowIfFatal(Throwable t) {
-      if (t instanceof VirtualMachineError) throw (VirtualMachineError) t;
-      if (t instanceof ThreadDeath) throw (ThreadDeath) t;
-      if (t instanceof LinkageError) throw (LinkageError) t;
-    }
-
     /**
      * Sets a specific flag value.
      *
@@ -177,7 +173,7 @@ public final class InqCompatibility {
           try {
             hasNext = iterator.hasNext();
           } catch (Throwable t) {
-            rethrowIfFatal(t);
+            InqException.rethrowIfFatal(t);
             LOGGER.warn("ServiceLoader iterator.hasNext() failed for InqCompatibilityOptions " +
                 "— remaining providers skipped.", t);
             break;
@@ -188,12 +184,12 @@ public final class InqCompatibility {
           try {
             providers.add(iterator.next());
           } catch (Throwable t) {
-            rethrowIfFatal(t);
+            InqException.rethrowIfFatal(t);
             LOGGER.warn("Failed to load InqCompatibilityOptions provider — provider skipped.", t);
           }
         }
       } catch (Throwable t) {
-        rethrowIfFatal(t);
+        InqException.rethrowIfFatal(t);
         LOGGER.warn("ServiceLoader discovery for InqCompatibilityOptions failed.", t);
       }
 
@@ -227,7 +223,7 @@ public final class InqCompatibility {
           target.putAll(flags);
         }
       } catch (Throwable t) {
-        rethrowIfFatal(t);
+        InqException.rethrowIfFatal(t);
         LOGGER.warn("InqCompatibilityOptions.flags() threw", t);
       }
     }

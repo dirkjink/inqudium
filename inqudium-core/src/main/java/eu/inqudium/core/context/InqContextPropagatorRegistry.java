@@ -1,5 +1,7 @@
 package eu.inqudium.core.context;
 
+import eu.inqudium.core.exception.InqException;
+
 import java.util.*;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.LockSupport;
@@ -75,7 +77,7 @@ public final class InqContextPropagatorRegistry {
           hasNext = iterator.hasNext();
           consecutiveHasNextFailures = 0;
         } catch (Throwable t) {
-          rethrowIfFatal(t);
+          InqException.rethrowIfFatal(t);
           consecutiveHasNextFailures++;
           LOGGER.warn("ServiceLoader iterator.hasNext() failed for InqContextPropagator " +
               "(consecutive failure #{}) — retrying.", consecutiveHasNextFailures, t);
@@ -92,12 +94,12 @@ public final class InqContextPropagatorRegistry {
         try {
           serviceLoaderPropagators.add(iterator.next());
         } catch (Throwable t) {
-          rethrowIfFatal(t);
+          InqException.rethrowIfFatal(t);
           LOGGER.warn("Failed to load InqContextPropagator provider — provider skipped.", t);
         }
       }
     } catch (Throwable t) {
-      rethrowIfFatal(t);
+      InqException.rethrowIfFatal(t);
       LOGGER.warn("ServiceLoader discovery for InqContextPropagator failed.", t);
     }
 
@@ -117,12 +119,6 @@ public final class InqContextPropagatorRegistry {
     result.addAll(nonComparable);
     result.addAll(programmatic);
     return List.copyOf(result);
-  }
-
-  private static void rethrowIfFatal(Throwable t) {
-    if (t instanceof VirtualMachineError) throw (VirtualMachineError) t;
-    if (t instanceof ThreadDeath) throw (ThreadDeath) t;
-    if (t instanceof LinkageError) throw (LinkageError) t;
   }
 
   /**
@@ -194,7 +190,7 @@ public final class InqContextPropagatorRegistry {
             return resolved;
           } catch (Throwable t) {
             state.set(new Open(List.copyOf(open.programmatic)));
-            rethrowIfFatal(t);
+            InqException.rethrowIfFatal(t);
             LOGGER.error("ServiceLoader discovery failed — registry reset to Open", t);
             return List.of();
           }

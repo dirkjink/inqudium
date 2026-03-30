@@ -1,6 +1,7 @@
 package eu.inqudium.core.event;
 
 import eu.inqudium.core.InqElementType;
+import eu.inqudium.core.exception.InqException;
 
 import java.util.Arrays;
 import java.util.Objects;
@@ -48,53 +49,31 @@ final class DefaultInqEventPublisher implements InqEventPublisher {
     this.registry = Objects.requireNonNull(registry, "registry must not be null");
   }
 
-  private static boolean isFatal(Throwable t) {
-    return t instanceof VirtualMachineError
-        || t instanceof ThreadDeath
-        || t instanceof LinkageError;
-  }
-
-  @SuppressWarnings("unchecked")
-  private static <T extends Throwable> void rethrowFatal(Throwable t) throws T {
-    throw (T) t;
-  }
-
   @Override
   public void publish(InqEvent event) {
     Objects.requireNonNull(event, "event must not be null");
 
-    Throwable deferred = null;
-
     // Deliver to local consumers using a cache-friendly array iteration
     ConsumerEntry[] currentConsumers = consumers.get();
+// In DefaultInqEventPublisher.publish()
     for (int i = 0; i < currentConsumers.length; i++) {
       InqEventConsumer consumer = currentConsumers[i].consumer();
       try {
         consumer.accept(event);
       } catch (Throwable t) {
-        if (isFatal(t) && deferred == null) {
-          deferred = t;
-        }
+        InqException.rethrowIfFatal(t);
         LOGGER.warn("[{}] Event consumer {} threw on event {}",
             event.getCallId(), consumer.getClass().getName(),
             event.getClass().getSimpleName(), t);
       }
     }
-
     // Forward to exporters
     try {
       registry.export(event);
     } catch (Throwable t) {
-      if (isFatal(t) && deferred == null) {
-        deferred = t;
-      }
+      InqException.rethrowIfFatal(t);
       LOGGER.warn("[{}] Exporter registry threw on event {}",
           event.getCallId(), event.getClass().getSimpleName(), t);
-    }
-
-    // Rethrow the first fatal error after the entire publish cycle
-    if (deferred != null) {
-      rethrowFatal(deferred);
     }
   }
 

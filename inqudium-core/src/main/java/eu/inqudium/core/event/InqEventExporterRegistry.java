@@ -1,5 +1,7 @@
 package eu.inqudium.core.event;
 
+import eu.inqudium.core.exception.InqException;
+
 import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicReference;
@@ -92,7 +94,7 @@ public final class InqEventExporterRegistry {
           hasNext = iterator.hasNext();
           consecutiveHasNextFailures = 0;
         } catch (Throwable t) {
-          rethrowIfFatal(t);
+          InqException.rethrowIfFatal(t);
           consecutiveHasNextFailures++;
           LOGGER.warn("ServiceLoader iterator.hasNext() failed for InqEventExporter " +
               "(consecutive failure #{}) — retrying.", consecutiveHasNextFailures, t);
@@ -112,7 +114,7 @@ public final class InqEventExporterRegistry {
         try {
           serviceLoaderExporters.add(iterator.next());
         } catch (Throwable t) {
-          rethrowIfFatal(t);
+          InqException.rethrowIfFatal(t);
           LOGGER.warn("Failed to load InqEventExporter provider — provider skipped.", t);
           providerErrors.add(new InqProviderErrorEvent(
               "(unknown)", InqEventExporter.class.getName(),
@@ -120,7 +122,7 @@ public final class InqEventExporterRegistry {
         }
       }
     } catch (Throwable t) {
-      rethrowIfFatal(t);
+      InqException.rethrowIfFatal(t);
       LOGGER.warn("ServiceLoader discovery for InqEventExporter failed.", t);
       providerErrors.add(new InqProviderErrorEvent(
           "(unknown)", InqEventExporter.class.getName(),
@@ -154,18 +156,12 @@ public final class InqEventExporterRegistry {
           types = Set.copyOf(typeSet);
         }
       } catch (Throwable t) {
-        rethrowIfFatal(t);
+        InqException.rethrowIfFatal(t);
         LOGGER.warn("InqEventExporter.subscribedEventTypes() threw — exporter will receive all events.", t);
       }
       cached.add(new CachedExporter(exporter, types));
     }
     return new DiscoveryResult(List.copyOf(cached), List.copyOf(providerErrors));
-  }
-
-  private static void rethrowIfFatal(Throwable t) {
-    if (t instanceof VirtualMachineError) throw (VirtualMachineError) t;
-    if (t instanceof ThreadDeath) throw (ThreadDeath) t;
-    if (t instanceof LinkageError) throw (LinkageError) t;
   }
 
   /**
@@ -222,7 +218,7 @@ public final class InqEventExporterRegistry {
           cached.exporter.export(event);
         }
       } catch (Throwable t) {
-        rethrowIfFatal(t);
+        InqException.rethrowIfFatal(t);
         LOGGER.warn("[{}] InqEventExporter {} threw on event {}",
             event.getCallId(), cached.exporter.getClass().getName(),
             event.getClass().getSimpleName(), t);
@@ -257,7 +253,7 @@ public final class InqEventExporterRegistry {
             return result.exporters;
           } catch (Throwable t) {
             state.set(new Open(List.copyOf(open.programmatic)));
-            rethrowIfFatal(t);
+            InqException.rethrowIfFatal(t);
             LOGGER.error("ServiceLoader discovery failed — registry reset to Open", t);
             return List.of();
           }
@@ -298,7 +294,7 @@ public final class InqEventExporterRegistry {
             cached.exporter.export(error);
           }
         } catch (Throwable t) {
-          rethrowIfFatal(t);
+          InqException.rethrowIfFatal(t);
           LOGGER.debug("Exporter {} failed during provider error replay — skipped",
               cached.exporter.getClass().getName(), t);
         }
