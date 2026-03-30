@@ -32,13 +32,6 @@ public final class AdaptiveImperativeStateMachine
     this.clock = config.getClock();
   }
 
-  /**
-   * FIX #7: Return the dynamic limit from the algorithm, not the static config value.
-   *
-   * <p>Without this override, callers (including {@code InqBulkheadFullException}) would
-   * see the initial config value, which becomes misleading once the algorithm has
-   * adjusted the limit up or down.
-   */
   @Override
   public int getMaxConcurrentCalls() {
     return limitAlgorithm.getLimit();
@@ -52,6 +45,9 @@ public final class AdaptiveImperativeStateMachine
     try {
       while (activeCalls >= limitAlgorithm.getLimit()) {
         if (nanos <= 0L) {
+          // Pass the baton: ensure we don't drop a signal if a permit was freed
+          // exactly when this thread timed out.
+          notFull.signal();
           handleAcquireFailure(callId, startWait);
           return false;
         }
@@ -61,6 +57,8 @@ public final class AdaptiveImperativeStateMachine
 
       return handleAcquireSuccess(callId, startWait);
     } catch (InterruptedException e) {
+      // Pass the baton: ensure we don't drop a signal when interrupted
+      notFull.signal();
       Thread.currentThread().interrupt();
       handleAcquireFailure(callId, startWait);
       throw new InqBulkheadInterruptedException(callId, name, getConcurrentCalls(), limitAlgorithm.getLimit());
@@ -83,6 +81,16 @@ public final class AdaptiveImperativeStateMachine
           rtt.toNanos(),
           clock.instant()
       ));
+
+      // If the capacity increased, wake up waiting threads to utilize the new slots
+      if (newLimit > oldLimit) {
+        lock.lock();
+        try {
+          notFull.signalAll();
+        } finally {
+          lock.unlock();
+        }
+      }
     }
     oldLimit = newLimit;
   }
@@ -93,7 +101,7 @@ public final class AdaptiveImperativeStateMachine
     try {
       if (activeCalls > 0) {
         activeCalls--;
-        notFull.signal(); // Wake up one waiting thread since a permit freed up
+        notFull.signal(); // Wake up one waiting thread since a single permit freed up
       }
     } finally {
       lock.unlock();
