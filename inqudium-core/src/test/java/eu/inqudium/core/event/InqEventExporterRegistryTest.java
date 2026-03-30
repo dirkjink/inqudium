@@ -21,6 +21,86 @@ class InqEventExporterRegistryTest {
   }
 
   @Nested
+  class ExporterEdgeCases {
+
+    @Test
+    void should_throw_exception_when_registering_null_exporter() {
+      // Given
+      InqEventExporterRegistry registry = new InqEventExporterRegistry();
+
+      // When & Then
+      assertThatThrownBy(() -> registry.register(null))
+          .isInstanceOf(NullPointerException.class)
+          .hasMessageContaining("exporter must not be null");
+    }
+
+    @Test
+    void should_treat_exporter_as_subscribed_to_all_if_subscribed_event_types_returns_null() {
+      // Given
+      InqEventExporterRegistry registry = new InqEventExporterRegistry();
+      List<InqEvent> receivedEvents = new ArrayList<>();
+
+      InqEventExporter badExporter = new InqEventExporter() {
+        @Override
+        public void export(InqEvent event) {
+          receivedEvents.add(event);
+        }
+
+        @Override
+        public Set<Class<? extends InqEvent>> subscribedEventTypes() {
+          // Edge case: explicitly returning null instead of empty set
+          return null;
+        }
+      };
+
+      registry.register(badExporter);
+      TestEvent event = new TestEvent();
+
+      // When
+      // Forcing the registry to freeze and cache the event types (which evaluates the null return)
+      registry.export(event);
+
+      // Then
+      // If it returns null, it falls back to receiving all events
+      assertThat(receivedEvents)
+          .hasSize(1)
+          .containsExactly(event);
+    }
+
+    @Test
+    void should_treat_exporter_as_subscribed_to_all_if_subscribed_event_types_throws_non_fatal_exception() {
+      // Given
+      InqEventExporterRegistry registry = new InqEventExporterRegistry();
+      List<InqEvent> receivedEvents = new ArrayList<>();
+
+      InqEventExporter throwingExporter = new InqEventExporter() {
+        @Override
+        public void export(InqEvent event) {
+          receivedEvents.add(event);
+        }
+
+        @Override
+        public Set<Class<? extends InqEvent>> subscribedEventTypes() {
+          // Edge case: exporter throws an exception during resolution
+          throw new RuntimeException("Unexpected error computing event types");
+        }
+      };
+
+      registry.register(throwingExporter);
+      TestEvent event = new TestEvent();
+
+      // When
+      registry.export(event);
+
+      // Then
+      // The registry catches the non-fatal error and falls back to passing all events to this exporter
+      assertThat(receivedEvents)
+          .hasSize(1)
+          .containsExactly(event);
+    }
+  }
+
+  @Nested
   class ExporterRegistration {
 
     @Test

@@ -27,6 +27,104 @@ class DefaultInqEventPublisherTest {
   }
 
   @Nested
+  class NullArguments {
+
+    @Test
+    void should_throw_exception_when_publishing_null_event() {
+      // Given
+      DefaultInqEventPublisher publisher = new DefaultInqEventPublisher(
+          "test", InqElementType.NO_ELEMENT, new InqEventExporterRegistry()
+      );
+
+      // When & Then
+      assertThatThrownBy(() -> publisher.publish(null))
+          .isInstanceOf(NullPointerException.class)
+          .hasMessageContaining("event must not be null");
+    }
+
+    @Test
+    void should_throw_exception_when_registering_null_consumer() {
+      // Given
+      DefaultInqEventPublisher publisher = new DefaultInqEventPublisher(
+          "test", InqElementType.NO_ELEMENT, new InqEventExporterRegistry()
+      );
+
+      // When & Then
+      assertThatThrownBy(() -> publisher.onEvent(null))
+          .isInstanceOf(NullPointerException.class)
+          .hasMessageContaining("consumer must not be null");
+    }
+
+    @Test
+    void should_throw_exception_when_registering_null_event_type_for_typed_consumer() {
+      // Given
+      DefaultInqEventPublisher publisher = new DefaultInqEventPublisher(
+          "test", InqElementType.NO_ELEMENT, new InqEventExporterRegistry()
+      );
+
+      // When & Then
+      assertThatThrownBy(() -> publisher.onEvent(null, event -> {
+      }))
+          .isInstanceOf(NullPointerException.class)
+          .hasMessageContaining("eventType must not be null");
+    }
+  }
+
+  @Nested
+  class MultipleFatalErrors {
+
+    @Test
+    void should_collect_and_rethrow_only_the_first_fatal_error() {
+      // Given
+      DefaultInqEventPublisher publisher = new DefaultInqEventPublisher(
+          "test", InqElementType.NO_ELEMENT, new InqEventExporterRegistry()
+      );
+
+      VirtualMachineError firstFatalError = new OutOfMemoryError("First fatal");
+      LinkageError secondFatalError = new LinkageError("Second fatal");
+
+      // Register first failing consumer
+      publisher.onEvent(event -> {
+        throw firstFatalError;
+      });
+
+      // Register second failing consumer
+      publisher.onEvent(event -> {
+        throw secondFatalError;
+      });
+
+      TestEvent event = new TestEvent();
+
+      // When & Then
+      // The publisher must throw the very first fatal error it encountered
+      assertThatThrownBy(() -> publisher.publish(event))
+          .isSameAs(firstFatalError);
+    }
+
+    @Test
+    void should_handle_fatal_error_in_registry_export() {
+      // Given
+      InqEventExporterRegistry throwingRegistry = new InqEventExporterRegistry();
+      ThreadDeath registryError = new ThreadDeath();
+
+      throwingRegistry.register(event -> {
+        throw registryError;
+      });
+
+      DefaultInqEventPublisher publisher = new DefaultInqEventPublisher(
+          "test", InqElementType.NO_ELEMENT, throwingRegistry
+      );
+
+      TestEvent event = new TestEvent();
+
+      // When & Then
+      // The publisher forwards to the registry, catches the fatal error, and rethrows it at the end
+      assertThatThrownBy(() -> publisher.publish(event))
+          .isSameAs(registryError);
+    }
+  }
+
+  @Nested
   class EventPublishing {
 
     @Test
