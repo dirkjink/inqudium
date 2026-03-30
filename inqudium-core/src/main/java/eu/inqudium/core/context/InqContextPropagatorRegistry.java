@@ -19,8 +19,8 @@ import java.util.concurrent.locks.LockSupport;
  * <h2>Thread safety</h2>
  * <p>All state is held in a single {@link AtomicReference}. The state machine uses
  * a {@code Resolving} intermediate state so that exactly one thread performs
- * ServiceLoader I/O. Waiting threads park with exponential backoff up to a bounded
- * total timeout. If the resolver dies, state resets to {@code Open}.
+ * ServiceLoader I/O. Waiting threads park with exponential backoff and bounded
+ * total timeout measured via {@link System#nanoTime()}.
  *
  * @since 0.1.0
  */
@@ -31,6 +31,7 @@ public final class InqContextPropagatorRegistry {
   private static final long PARK_INITIAL_NANOS = 1_000;
   private static final long PARK_MAX_NANOS = 1_000_000;
   private static final long RESOLVE_TIMEOUT_NANOS = 30_000_000_000L;
+  private static final long REGISTER_WAIT_NANOS = 5_000_000_000L;
   private static final int MAX_CONSECUTIVE_HAS_NEXT_FAILURES = 10;
 
   // ── Global default instance ──
@@ -120,17 +121,23 @@ public final class InqContextPropagatorRegistry {
 
   private static void rethrowIfFatal(Throwable t) {
     if (t instanceof VirtualMachineError) throw (VirtualMachineError) t;
+    if (t instanceof ThreadDeath) throw (ThreadDeath) t;
     if (t instanceof LinkageError) throw (LinkageError) t;
   }
 
   /**
    * Registers a propagator programmatically.
    *
+   * <p>If the registry is currently resolving, waits briefly for resolution
+   * to complete. Only {@code Frozen} state causes an immediate rejection.
+   *
    * @param propagator the propagator to register
-   * @throws IllegalStateException if the registry is resolving or already frozen
+   * @throws IllegalStateException if the registry is frozen or registration times out
    */
   public void register(InqContextPropagator propagator) {
     Objects.requireNonNull(propagator, "propagator must not be null");
+    long waitStart = System.nanoTime();
+    long parkNanos = PARK_INITIAL_NANOS;
     while (true) {
       var current = state.get();
       if (current instanceof Open open) {
@@ -142,14 +149,21 @@ public final class InqContextPropagatorRegistry {
         }
         continue;
       }
-      if (current instanceof Resolving) {
+      if (current instanceof Frozen) {
         throw new IllegalStateException(
-            "InqContextPropagatorRegistry is currently resolving — " +
+            "InqContextPropagatorRegistry is frozen — " +
                 "propagators must be registered before the first context propagation.");
       }
-      throw new IllegalStateException(
-          "InqContextPropagatorRegistry is frozen — " +
-              "propagators must be registered before the first context propagation.");
+      // Resolving — wait briefly
+      long elapsed = System.nanoTime() - waitStart;
+      if (elapsed >= REGISTER_WAIT_NANOS) {
+        throw new IllegalStateException(
+            "InqContextPropagatorRegistry has been resolving for " +
+                (elapsed / 1_000_000) + "ms — registration timed out. " +
+                "Propagators must be registered before the first context propagation.");
+      }
+      LockSupport.parkNanos(parkNanos);
+      parkNanos = Math.min(parkNanos * 2, PARK_MAX_NANOS);
     }
   }
 
@@ -157,13 +171,13 @@ public final class InqContextPropagatorRegistry {
    * Returns the ordered list of all registered propagators.
    *
    * <p>On first call, triggers ServiceLoader discovery and freezes the registry.
-   * Waiting threads park with bounded total timeout.
+   * Elapsed time measured via {@link System#nanoTime()} — immune to spurious wakeups.
    *
    * @return unmodifiable list of propagators
    */
   public List<InqContextPropagator> getPropagators() {
     long parkNanos = PARK_INITIAL_NANOS;
-    long totalParked = 0;
+    long waitStart = System.nanoTime();
     while (true) {
       var current = state.get();
 
@@ -188,20 +202,20 @@ public final class InqContextPropagatorRegistry {
         continue;
       }
 
-      // Resolving — park with bounded total timeout
-      if (totalParked >= RESOLVE_TIMEOUT_NANOS) {
+      // Resolving — park with real elapsed time tracking
+      long elapsed = System.nanoTime() - waitStart;
+      if (elapsed >= RESOLVE_TIMEOUT_NANOS) {
         var resolving = (Resolving) current;
         if (state.compareAndSet(current, new Open(List.copyOf(resolving.programmatic)))) {
           LOGGER.warn("Resolver thread appears stuck after {}ms — forced reset to Open",
-              totalParked / 1_000_000);
+              elapsed / 1_000_000);
         }
         parkNanos = PARK_INITIAL_NANOS;
-        totalParked = 0;
+        waitStart = System.nanoTime();
         continue;
       }
 
       LockSupport.parkNanos(parkNanos);
-      totalParked += parkNanos;
       parkNanos = Math.min(parkNanos * 2, PARK_MAX_NANOS);
     }
   }

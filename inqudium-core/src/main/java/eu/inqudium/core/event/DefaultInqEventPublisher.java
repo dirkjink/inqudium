@@ -53,6 +53,7 @@ final class DefaultInqEventPublisher implements InqEventPublisher {
 
   private static boolean isFatal(Throwable t) {
     return t instanceof VirtualMachineError
+        || t instanceof ThreadDeath
         || t instanceof LinkageError;
   }
 
