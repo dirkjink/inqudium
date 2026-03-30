@@ -20,10 +20,10 @@ import java.util.concurrent.locks.LockSupport;
  */
 public final class CachedInqClock implements InqClock, AutoCloseable {
 
+  private final Thread updaterThread;
   private volatile Instant cachedTime;
   private volatile boolean running;
   private volatile boolean active;
-  private final Thread updaterThread;
 
   /**
    * Creates a new cached clock with a default 1-millisecond update interval.

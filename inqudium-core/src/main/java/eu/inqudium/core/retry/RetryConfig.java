@@ -122,7 +122,7 @@ public final class RetryConfig implements InqConfig {
     private boolean retryOnInqExceptions = false;
     private Predicate<Throwable> retryOnPredicate = null;
     private InqCompatibility compatibility = InqCompatibility.ofDefaults();
-    private InqClock clock = InqClock.system();
+    private InqClock clock = InqConfig.defaultClock();
     private Logger logger = LoggerFactory.getLogger(RetryConfig.class);
     private InqCallIdGenerator callIdGenerator = InqCallIdGenerator.uuid();
 

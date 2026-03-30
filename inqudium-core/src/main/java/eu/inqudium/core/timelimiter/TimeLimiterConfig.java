@@ -103,7 +103,7 @@ public final class TimeLimiterConfig implements InqConfig {
     private BiConsumer<OrphanedCallContext, Object> onOrphanedResult = null;
     private BiConsumer<OrphanedCallContext, Throwable> onOrphanedError = null;
     private InqCompatibility compatibility = InqCompatibility.ofDefaults();
-    private InqClock clock = InqClock.system();
+    private InqClock clock = InqConfig.defaultClock();
     private Logger logger = LoggerFactory.getLogger(TimeLimiterConfig.class);
     private InqCallIdGenerator callIdGenerator = InqCallIdGenerator.uuid();
 

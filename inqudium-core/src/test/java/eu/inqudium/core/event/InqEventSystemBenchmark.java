@@ -1,7 +1,6 @@
 package eu.inqudium.core.event;
 
 import eu.inqudium.core.InqElementType;
-import eu.inqudium.core.callid.IdGenerationBenchmark;
 import org.openjdk.jmh.annotations.*;
 import org.openjdk.jmh.infra.Blackhole;
 import org.openjdk.jmh.runner.Runner;
@@ -26,25 +25,25 @@ import java.util.concurrent.TimeUnit;
 @State(Scope.Benchmark) // State is shared across all benchmark threads
 public class InqEventSystemBenchmark {
 
-  public static void main(String[] args) throws RunnerException {
-    Options opt = new OptionsBuilder().addProfiler("gc").include(InqEventSystemBenchmark.class.getSimpleName()).build();
-    new Runner(opt).run();
-  }
-
-  // ─── Benchmark State Setup ───────────────────────────────────────────────
-
   private InqEvent preAllocatedEvent;
 
+  // ─── Benchmark State Setup ───────────────────────────────────────────────
   // Different publishers for different scenarios
   private InqEventPublisher emptyPublisher;
   private InqEventPublisher localOnlyPublisher;
   private InqEventPublisher globalOnlyPublisher;
   private InqEventPublisher mixedPublisher;
 
+  public static void main(String[] args) throws RunnerException {
+    Options opt = new OptionsBuilder().addProfiler("gc").include(InqEventSystemBenchmark.class.getSimpleName()).build();
+    new Runner(opt).run();
+  }
+
   @Setup(Level.Trial)
   public void setup(Blackhole blackhole) {
     // Pre-allocate the event to measure routing overhead, not GC/allocation overhead
-    preAllocatedEvent = new InqEvent("bench-call", "bench-element", InqElementType.NO_ELEMENT, Instant.now()) {};
+    preAllocatedEvent = new InqEvent("bench-call", "bench-element", InqElementType.NO_ELEMENT, Instant.now()) {
+    };
 
     // 1. Empty Publisher (Baseline overhead)
     InqEventExporterRegistry emptyRegistry = new InqEventExporterRegistry();
@@ -112,7 +111,8 @@ public class InqEventSystemBenchmark {
    */
   @Benchmark
   public void publish_with_allocation_to_mixed_targets() {
-    InqEvent freshEvent = new InqEvent("bench-call", "bench-element", InqElementType.NO_ELEMENT, Instant.now()) {};
+    InqEvent freshEvent = new InqEvent("bench-call", "bench-element", InqElementType.NO_ELEMENT, Instant.now()) {
+    };
     mixedPublisher.publish(freshEvent);
   }
 }

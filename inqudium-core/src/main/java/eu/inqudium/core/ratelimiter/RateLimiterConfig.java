@@ -87,7 +87,7 @@ public final class RateLimiterConfig implements InqConfig {
     private Duration limitRefreshPeriod = Duration.ofMillis(500);
     private int bucketSize = -1; // sentinel: defaults to limitForPeriod
     private Duration timeoutDuration = Duration.ZERO;
-    private InqClock clock = InqClock.system();
+    private InqClock clock = InqConfig.defaultClock();
     private InqCompatibility compatibility = InqCompatibility.ofDefaults();
     private Logger logger = LoggerFactory.getLogger(RateLimiterConfig.class);
     private InqCallIdGenerator callIdGenerator = InqCallIdGenerator.uuid();

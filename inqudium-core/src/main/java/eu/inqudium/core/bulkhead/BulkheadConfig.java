@@ -75,7 +75,7 @@ public final class BulkheadConfig implements InqConfig {
     private int maxConcurrentCalls = 25;
     private Duration maxWaitDuration = Duration.ZERO;
     private InqCompatibility compatibility = InqCompatibility.ofDefaults();
-    private InqClock clock = InqClock.system();
+    private InqClock clock = InqConfig.defaultClock();
     private Logger logger = LoggerFactory.getLogger(BulkheadConfig.class);
     private InqCallIdGenerator callIdGenerator = InqCallIdGenerator.uuid();
 

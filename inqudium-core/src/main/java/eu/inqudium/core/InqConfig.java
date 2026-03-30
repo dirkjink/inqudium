@@ -4,6 +4,8 @@ import eu.inqudium.core.compatibility.InqCompatibility;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.time.Instant;
+
 /**
  * Base interface for all element configurations.
  *
@@ -17,6 +19,15 @@ import org.slf4j.LoggerFactory;
  * @since 0.1.0
  */
 public interface InqConfig {
+
+  /**
+   * Returns a clock backed by {@link Instant#now()}.
+   *
+   * @return the system clock
+   */
+  static InqClock defaultClock() {
+    return new CachedInqClock();
+  }
 
   /**
    * Returns the compatibility flags for this configuration.
@@ -45,7 +56,7 @@ public interface InqConfig {
    * @return the clock
    */
   default InqClock getClock() {
-    return InqClock.system();
+    return InqConfig.defaultClock();
   }
 
   /**
