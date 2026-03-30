@@ -248,8 +248,6 @@ final class DefaultInqEventPublisher implements InqEventPublisher {
    * @throws IllegalStateException if the hard consumer limit is reached
    */
   private void addConsumer(ConsumerEntry entry) {
-    boolean softLimitCrossed = false;
-
     final Instant now = Instant.now();
     while (true) {
       ConsumerEntry[] current = consumers.get();
@@ -259,6 +257,8 @@ final class DefaultInqEventPublisher implements InqEventPublisher {
       // Sweep expired entries before limit evaluation — expired consumers
       // must not count towards either threshold.
       int activeCount = cleaned.length;
+      // Evaluate soft limit inside the loop so it resets on retry
+      boolean softLimitCrossed = activeCount >= config.softLimit();
 
       // Hard limit check — reject before adding
       if (activeCount >= config.hardLimit()) {
@@ -267,12 +267,6 @@ final class DefaultInqEventPublisher implements InqEventPublisher {
                 "consumer limit of " + config.hardLimit() + ". Ensure InqSubscription.cancel() " +
                 "is called when consumers are no longer needed, or increase the limit via " +
                 "InqPublisherConfig.");
-      }
-
-      // Soft limit check — detect threshold crossing (log outside CAS to avoid
-      // duplicate logs on retries, but accept that concurrent adds may both log)
-      if (activeCount >= config.softLimit() && !softLimitCrossed) {
-        softLimitCrossed = true;
       }
 
       // Build new array from cleaned base + new entry
@@ -361,10 +355,11 @@ final class DefaultInqEventPublisher implements InqEventPublisher {
 
     // Do not start the thread in the constructor of InqConsumerExpiryWatchdog anymore.
     // Add a separate start() method to the watchdog class.
-    var newWatchdog = new InqConsumerExpiryWatchdog(
+    var newWatchdog = new InqConsumerExpiryWatchdog<>(
         elementName,
+        this,
         config.expiryCheckInterval(),
-        this::performExpirySweep);
+        DefaultInqEventPublisher::performExpirySweep);
 
     if (watchdog.compareAndSet(null, newWatchdog)) {
       // Only start the thread if this thread successfully registered the watchdog

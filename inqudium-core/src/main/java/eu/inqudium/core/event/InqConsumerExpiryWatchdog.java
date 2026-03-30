@@ -3,8 +3,10 @@ package eu.inqudium.core.event;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.lang.ref.WeakReference;
 import java.time.Duration;
 import java.util.Objects;
+import java.util.function.Consumer;
 
 /**
  * Background watchdog that periodically sweeps expired TTL-based consumers
@@ -28,15 +30,16 @@ import java.util.Objects;
  *
  * @since 0.2.0
  */
-final class InqConsumerExpiryWatchdog implements AutoCloseable {
+final class InqConsumerExpiryWatchdog<T> implements AutoCloseable {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(InqConsumerExpiryWatchdog.class);
 
   private final Duration interval;
-  private final Runnable sweepAction;
-  private volatile Thread watchdogThread;
+  private final Consumer<T> sweepAction;
   private final String ownerName;
-
+  // Holds a weak reference so the owner can be garbage collected
+  private final WeakReference<T> ownerRef;
+  private volatile Thread watchdogThread;
   /**
    * Flag to signal the watchdog to stop. Volatile ensures visibility across
    * the owning thread and the virtual thread without additional synchronization.
@@ -52,7 +55,7 @@ final class InqConsumerExpiryWatchdog implements AutoCloseable {
    *                    reference to the publisher's internal sweep logic
    * @throws IllegalArgumentException if interval is zero or negative
    */
-  InqConsumerExpiryWatchdog(String ownerName, Duration interval, Runnable sweepAction) {
+  InqConsumerExpiryWatchdog(String ownerName, T owner, Duration interval, Consumer<T> sweepAction) {
     Objects.requireNonNull(ownerName, "ownerName must not be null");
     Objects.requireNonNull(interval, "interval must not be null");
     Objects.requireNonNull(sweepAction, "sweepAction must not be null");
@@ -63,6 +66,7 @@ final class InqConsumerExpiryWatchdog implements AutoCloseable {
     this.interval = interval;
     this.sweepAction = sweepAction;
     this.ownerName = ownerName;
+    this.ownerRef = new WeakReference<>(owner);
   }
 
   /**
@@ -103,8 +107,15 @@ final class InqConsumerExpiryWatchdog implements AutoCloseable {
         return;
       }
 
+      T owner = ownerRef.get();
+      if (owner == null) {
+        LOGGER.debug("Owner of expiry watchdog '{}' was garbage collected. Stopping virtual thread.", ownerName);
+        running = false;
+        return;
+      }
+
       try {
-        sweepAction.run();
+        sweepAction.accept(owner);
       } catch (Throwable t) {
         // Never let a sweep failure kill the watchdog — log and continue
         LOGGER.warn("Expiry sweep failed — watchdog continues", t);
@@ -145,4 +156,5 @@ final class InqConsumerExpiryWatchdog implements AutoCloseable {
       // Thread was never started (e.g. due to discarded CAS)
       LOGGER.debug("Expiry watchdog closed before thread was started");
     }
-  }}
+  }
+}

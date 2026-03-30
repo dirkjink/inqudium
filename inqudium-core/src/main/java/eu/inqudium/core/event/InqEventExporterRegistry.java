@@ -50,7 +50,7 @@ public final class InqEventExporterRegistry {
   private static final org.slf4j.Logger LOGGER = org.slf4j.LoggerFactory.getLogger(InqEventExporterRegistry.class);
 
   private static final long PARK_INITIAL_NANOS = 1_000;
-  private static final long PARK_MAX_NANOS = 1_000_000;
+  private static final long PARK_MAX_NANOS = 100_000_000;
   private static final long RESOLVE_TIMEOUT_NANOS = 30_000_000_000L;
   private static final long REGISTER_WAIT_NANOS = 5_000_000_000L;
   private static final int MAX_CONSECUTIVE_HAS_NEXT_FAILURES = 10;
