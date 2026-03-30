@@ -30,7 +30,6 @@ public final class CircuitBreakerConfig implements InqConfig {
   private final InqCallIdGenerator callIdGenerator;
   private final InqCompatibility compatibility;
   private final Logger logger;
-
   private CircuitBreakerConfig(Builder b) {
     this.failureRateThreshold = b.failureRateThreshold;
     this.slowCallRateThreshold = b.slowCallRateThreshold;
@@ -132,7 +131,7 @@ public final class CircuitBreakerConfig implements InqConfig {
     private int minimumNumberOfCalls = 100;
     private Duration waitDurationInOpenState = Duration.ofSeconds(60);
     private int permittedNumberOfCallsInHalfOpenState = 10;
-    private InqClock clock = InqConfig.defaultClock();
+    private InqClock clock = InqClock.system();
     private InqCallIdGenerator callIdGenerator = InqCallIdGenerator.uuid();
     private InqCompatibility compatibility = InqCompatibility.ofDefaults();
     private Logger logger = LoggerFactory.getLogger(CircuitBreakerConfig.class);

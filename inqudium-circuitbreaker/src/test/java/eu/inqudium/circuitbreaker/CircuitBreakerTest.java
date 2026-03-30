@@ -1,13 +1,13 @@
 package eu.inqudium.circuitbreaker;
 
-import eu.inqudium.circuitbreaker.event.CircuitBreakerOnErrorEvent;
-import eu.inqudium.circuitbreaker.event.CircuitBreakerOnStateTransitionEvent;
-import eu.inqudium.circuitbreaker.event.CircuitBreakerOnSuccessEvent;
 import eu.inqudium.core.InqClock;
 import eu.inqudium.core.InqElementType;
 import eu.inqudium.core.circuitbreaker.CircuitBreakerConfig;
 import eu.inqudium.core.circuitbreaker.CircuitBreakerState;
 import eu.inqudium.core.circuitbreaker.InqCallNotPermittedException;
+import eu.inqudium.core.circuitbreaker.event.CircuitBreakerOnErrorEvent;
+import eu.inqudium.core.circuitbreaker.event.CircuitBreakerOnStateTransitionEvent;
+import eu.inqudium.core.circuitbreaker.event.CircuitBreakerOnSuccessEvent;
 import eu.inqudium.core.event.InqEvent;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;

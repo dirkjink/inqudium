@@ -1,4 +1,4 @@
-package eu.inqudium.circuitbreaker.event;
+package eu.inqudium.core.circuitbreaker.event;
 
 import eu.inqudium.core.circuitbreaker.CircuitBreakerState;
 

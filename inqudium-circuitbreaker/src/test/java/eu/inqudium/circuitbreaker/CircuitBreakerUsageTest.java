@@ -504,10 +504,10 @@ class CircuitBreakerUsageTest {
       // Given
       var service = new PaymentService();
       var cb = CircuitBreaker.ofDefaults("paymentService");
-      var receivedEvents = new java.util.ArrayList<eu.inqudium.circuitbreaker.event.CircuitBreakerOnSuccessEvent>();
+      var receivedEvents = new java.util.ArrayList<eu.inqudium.core.circuitbreaker.event.CircuitBreakerOnSuccessEvent>();
 
       cb.getEventPublisher().onEvent(
-          eu.inqudium.circuitbreaker.event.CircuitBreakerOnSuccessEvent.class,
+          eu.inqudium.core.circuitbreaker.event.CircuitBreakerOnSuccessEvent.class,
           receivedEvents::add);
 
       Supplier<String> resilient = cb.decorateSupplier(() -> service.charge("order-1"));
@@ -527,10 +527,10 @@ class CircuitBreakerUsageTest {
       var service = new PaymentService();
       service.setFailing(true);
       var cb = CircuitBreaker.ofDefaults("paymentService");
-      var receivedEvents = new java.util.ArrayList<eu.inqudium.circuitbreaker.event.CircuitBreakerOnErrorEvent>();
+      var receivedEvents = new java.util.ArrayList<eu.inqudium.core.circuitbreaker.event.CircuitBreakerOnErrorEvent>();
 
       cb.getEventPublisher().onEvent(
-          eu.inqudium.circuitbreaker.event.CircuitBreakerOnErrorEvent.class,
+          eu.inqudium.core.circuitbreaker.event.CircuitBreakerOnErrorEvent.class,
           receivedEvents::add);
 
       Supplier<String> resilient = cb.decorateSupplier(() -> service.charge("fail"));
@@ -548,10 +548,10 @@ class CircuitBreakerUsageTest {
     void should_receive_state_transition_events() {
       // Given
       var cb = CircuitBreaker.ofDefaults("paymentService");
-      var transitions = new java.util.ArrayList<eu.inqudium.circuitbreaker.event.CircuitBreakerOnStateTransitionEvent>();
+      var transitions = new java.util.ArrayList<eu.inqudium.core.circuitbreaker.event.CircuitBreakerOnStateTransitionEvent>();
 
       cb.getEventPublisher().onEvent(
-          eu.inqudium.circuitbreaker.event.CircuitBreakerOnStateTransitionEvent.class,
+          eu.inqudium.core.circuitbreaker.event.CircuitBreakerOnStateTransitionEvent.class,
           transitions::add);
 
       // When

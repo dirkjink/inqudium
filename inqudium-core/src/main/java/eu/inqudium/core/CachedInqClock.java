@@ -24,28 +24,10 @@ import java.util.concurrent.locks.LockSupport;
  */
 public final class CachedInqClock implements InqClock, AutoCloseable {
 
+  private final Thread updaterThread;
   private volatile Instant cachedTime;
   private volatile boolean running;
   private volatile boolean active;
-  private final Thread updaterThread;
-
-  /**
-   * Lazy initialization holder class idiom for thread-safe singleton instantiation.
-   * The background thread is only started when {@link #getDefault()} is called
-   * for the very first time.
-   */
-  private static final class InstanceHolder {
-    static final CachedInqClock INSTANCE = new CachedInqClock(1);
-  }
-
-  /**
-   * Returns the global default singleton instance of the cached clock.
-   *
-   * @return the shared cached clock
-   */
-  public static CachedInqClock getDefault() {
-    return InstanceHolder.INSTANCE;
-  }
 
   /**
    * Creates a new cached clock with a default 1-millisecond update interval.
@@ -82,6 +64,15 @@ public final class CachedInqClock implements InqClock, AutoCloseable {
         });
   }
 
+  /**
+   * Returns the global default singleton instance of the cached clock.
+   *
+   * @return the shared cached clock
+   */
+  public static CachedInqClock getDefault() {
+    return InstanceHolder.INSTANCE;
+  }
+
   @Override
   public Instant instant() {
     if (this.active) {
@@ -94,5 +85,14 @@ public final class CachedInqClock implements InqClock, AutoCloseable {
   public void close() {
     this.running = false;
     this.updaterThread.interrupt();
+  }
+
+  /**
+   * Lazy initialization holder class idiom for thread-safe singleton instantiation.
+   * The background thread is only started when {@link #getDefault()} is called
+   * for the very first time.
+   */
+  private static final class InstanceHolder {
+    static final CachedInqClock INSTANCE = new CachedInqClock(1);
   }
 }

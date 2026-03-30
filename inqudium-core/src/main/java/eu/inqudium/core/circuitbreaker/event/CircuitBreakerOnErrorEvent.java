@@ -1,4 +1,4 @@
-package eu.inqudium.circuitbreaker.event;
+package eu.inqudium.core.circuitbreaker.event;
 
 import java.time.Duration;
 import java.time.Instant;
