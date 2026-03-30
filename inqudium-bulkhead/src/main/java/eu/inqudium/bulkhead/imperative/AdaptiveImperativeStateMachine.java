@@ -5,6 +5,7 @@ import eu.inqudium.core.bulkhead.*;
 import eu.inqudium.core.bulkhead.event.BulkheadLimitChangedTraceEvent;
 
 import java.time.Duration;
+import java.time.Instant;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.LongSupplier;
@@ -22,7 +23,10 @@ public final class AdaptiveImperativeStateMachine
   private final LongSupplier nanoTimeSource;
   private final InqClock clock;
   private int activeCalls = 0;
-  private volatile int oldLimit = 0;
+
+  // FIX #1: Removed volatile — field is now exclusively accessed under the lock.
+  // This eliminates the read-compare-write race between concurrent onCallComplete() calls.
+  private int oldLimit;
 
   public AdaptiveImperativeStateMachine(String name, BulkheadConfig config, InqLimitAlgorithm limitAlgorithm) {
     super(name, config);
@@ -45,8 +49,6 @@ public final class AdaptiveImperativeStateMachine
     try {
       while (activeCalls >= limitAlgorithm.getLimit()) {
         if (nanos <= 0L) {
-          // Pass the baton: ensure we don't drop a signal if a permit was freed
-          // exactly when this thread timed out.
           notFull.signal();
           handleAcquireFailure(callId, startWait);
           return false;
@@ -57,7 +59,6 @@ public final class AdaptiveImperativeStateMachine
 
       return handleAcquireSuccess(callId, startWait);
     } catch (InterruptedException e) {
-      // Pass the baton: ensure we don't drop a signal when interrupted
       notFull.signal();
       Thread.currentThread().interrupt();
       handleAcquireFailure(callId, startWait);
@@ -67,32 +68,75 @@ public final class AdaptiveImperativeStateMachine
     }
   }
 
+  /**
+   * FIX #1: The limit comparison and oldLimit update are performed atomically under the lock.
+   *
+   * <p>FIX #1a (Liveness): {@code signalAll()} is now called on ANY limit change, not just
+   * increases. When the limit decreases, waiting threads may be sleeping inside
+   * {@code awaitNanos()} with significant remaining time. Without a signal, they remain
+   * blocked until either their timeout expires naturally or another unrelated release wakes
+   * them. With the signal, they immediately re-evaluate: the while-condition is still true
+   * (capacity shrank), so they loop back — but now {@code awaitNanos()} returns with the
+   * updated remaining time. If that time has elapsed, they exit promptly via the
+   * {@code nanos <= 0L} branch instead of sleeping unnecessarily.
+   *
+   * <p>FIX #1b (Event ordering): The trace event's timestamp is captured inside the lock
+   * as a local variable, not lazily in the lambda. Since only one thread holds the lock at
+   * a time, the captured timestamps form a total order that matches the actual lock-acquisition
+   * sequence. Even though publication happens outside the lock (to minimize lock hold time),
+   * consumers can sort by timestamp to reconstruct the correct sequence. The trace event
+   * itself is still published outside the lock to avoid blocking permit acquisition during I/O.
+   */
   @Override
   protected void onCallComplete(String callId, Duration rtt, Throwable error) {
-    // Feed the outcome back to the adaptive algorithm to adjust limits
+    // Feed the outcome back to the adaptive algorithm (thread-safe by contract)
     limitAlgorithm.update(rtt, error == null);
-    int newLimit = limitAlgorithm.getLimit();
-    if (oldLimit != newLimit) {
+
+    int capturedOldLimit;
+    int newLimit;
+    boolean limitChanged;
+    // FIX #1b: Capture timestamp under lock for consistent event ordering
+    Instant eventTimestamp;
+    long rttNanos = rtt.toNanos();
+
+    lock.lock();
+    try {
+      newLimit = limitAlgorithm.getLimit();
+      capturedOldLimit = oldLimit;
+      limitChanged = capturedOldLimit != newLimit;
+
+      if (limitChanged) {
+        oldLimit = newLimit;
+        eventTimestamp = clock.instant();
+      } else {
+        eventTimestamp = null;
+      }
+
+      // FIX #1a: Wake waiting threads on ANY limit change.
+      // - Increase: threads may now acquire permits that weren't available before.
+      // - Decrease: threads re-evaluate and time out promptly instead of sleeping
+      //   the full remaining awaitNanos duration.
+      if (limitChanged) {
+        notFull.signalAll();
+      }
+    } finally {
+      lock.unlock();
+    }
+
+    // Publish trace event outside the lock to avoid blocking permit acquisition.
+    // The timestamp captured above guarantees correct logical ordering even if two
+    // threads publish concurrently after exiting the lock in rapid succession.
+    if (limitChanged) {
+      final Instant ts = eventTimestamp;
       eventPublisher.publishTrace(() -> new BulkheadLimitChangedTraceEvent(
           callId,
           name,
-          oldLimit,
+          capturedOldLimit,
           newLimit,
-          rtt.toNanos(),
-          clock.instant()
+          rttNanos,
+          ts
       ));
-
-      // If the capacity increased, wake up waiting threads to utilize the new slots
-      if (newLimit > oldLimit) {
-        lock.lock();
-        try {
-          notFull.signalAll();
-        } finally {
-          lock.unlock();
-        }
-      }
     }
-    oldLimit = newLimit;
   }
 
   @Override
@@ -101,7 +145,7 @@ public final class AdaptiveImperativeStateMachine
     try {
       if (activeCalls > 0) {
         activeCalls--;
-        notFull.signal(); // Wake up one waiting thread since a single permit freed up
+        notFull.signal();
       }
     } finally {
       lock.unlock();

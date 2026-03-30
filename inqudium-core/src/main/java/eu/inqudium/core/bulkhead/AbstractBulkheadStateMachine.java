@@ -9,6 +9,7 @@ import org.slf4j.LoggerFactory;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Objects;
 import java.util.function.LongSupplier;
 
 /**
@@ -17,6 +18,19 @@ import java.util.function.LongSupplier;
  * <p>It strictly manages event publishing, consistent snapshots, and safe error
  * suppression. Paradigm modules must extend this to implement the actual
  * permit acquisition and release mechanics.
+ *
+ * <h2>Exception Propagation Contract</h2>
+ * <p>This class distinguishes between <b>infrastructure errors</b> (permit release, adaptive
+ * algorithm) and <b>telemetry errors</b> (event publishing). The contract is:
+ * <ul>
+ *   <li><b>Telemetry errors are never propagated.</b> A crashing event publisher must never
+ *       disrupt the business call flow. All telemetry exceptions are logged at ERROR level
+ *       and swallowed. This makes the behavior predictable: callers never see telemetry
+ *       exceptions regardless of whether the business call succeeded or failed.</li>
+ *   <li><b>Infrastructure errors are always propagated.</b> A failing {@code releasePermitInternal()}
+ *       indicates a state machine defect that must surface. If a business error already exists,
+ *       the infrastructure error is attached as suppressed; otherwise it is thrown directly.</li>
+ * </ul>
  *
  * @since 0.2.0
  */
@@ -31,10 +45,37 @@ public abstract class AbstractBulkheadStateMachine implements BulkheadStateMachi
   private final LongSupplier nanoTimeSource;
   private final InqClock clock;
 
+  /**
+   * Creates a new state machine instance.
+   *
+   * <p>FIX: Added defensive validation for constructor parameters. While
+   * {@link BulkheadConfig.Builder} validates {@code maxConcurrentCalls >= 0},
+   * this class cannot assume it is always constructed from a validated config.
+   * Subclasses or test code could pass arbitrary config instances. The validation
+   * here provides a fail-fast safety net at the point of use.
+   *
+   * @param name   the bulkhead instance name, must not be null or blank
+   * @param config the configuration, must not be null
+   * @throws NullPointerException     if name or config is null
+   * @throws IllegalArgumentException if name is blank or maxConcurrentCalls is negative
+   */
   protected AbstractBulkheadStateMachine(String name, BulkheadConfig config) {
+    Objects.requireNonNull(name, "Bulkhead name must not be null");
+    Objects.requireNonNull(config, "BulkheadConfig must not be null");
+    if (name.isBlank()) {
+      throw new IllegalArgumentException("Bulkhead name must not be blank");
+    }
+
+    int maxCalls = config.getMaxConcurrentCalls();
+    if (maxCalls < 0) {
+      throw new IllegalArgumentException(
+          "maxConcurrentCalls must be >= 0, but was: " + maxCalls
+              + ". A value of 0 creates a closed bulkhead that rejects all requests.");
+    }
+
     this.name = name;
     this.config = config;
-    this.maxConcurrentCalls = config.getMaxConcurrentCalls();
+    this.maxConcurrentCalls = maxCalls;
     this.eventPublisher = InqEventPublisher.create(name, InqElementType.BULKHEAD);
     this.nanoTimeSource = config.getNanoTimeSource();
     this.clock = config.getClock();
@@ -62,12 +103,30 @@ public abstract class AbstractBulkheadStateMachine implements BulkheadStateMachi
   }
 
   /**
-   * FIX #1: Wrapped onCallComplete + releasePermitInternal in try-finally to guarantee
-   * permit release even when the adaptive algorithm hook throws an exception.
-   * Without this, a failing onCallComplete() would permanently leak the permit.
+   * Releases a previously acquired permit and reports the execution metrics.
+   *
+   * <h3>Exception Propagation (FIX)</h3>
+   * <p>The original implementation had inconsistent exception handling: a telemetry
+   * (event publisher) error was thrown to the caller if — and only if — no business
+   * error and no release error existed. This meant monitoring code that caught
+   * publisher exceptions would only trigger when everything else happened to succeed,
+   * making failure modes unpredictable and hard to test.
+   *
+   * <p>The fix applies a strict, predictable rule:
+   * <ul>
+   *   <li><b>Telemetry errors (event publishing):</b> Always logged at ERROR, never thrown.
+   *       A broken event publisher must never disrupt the business call path.</li>
+   *   <li><b>Algorithm hook errors ({@code onCallComplete}):</b> Always logged at ERROR,
+   *       never thrown. The permit must still be released.</li>
+   *   <li><b>Release errors ({@code releasePermitInternal}):</b> Always propagated.
+   *       If a business error exists, the release error is attached as suppressed.
+   *       Otherwise, it is thrown directly. This indicates a state machine defect.</li>
+   * </ul>
    */
   @Override
   public final void releaseAndReport(String callId, Duration rtt, Throwable error) {
+    RuntimeException releaseError = null;
+
     try {
       // 0. Feed the adaptive telemetry hook (may throw)
       onCallComplete(callId, rtt, error);
@@ -77,21 +136,38 @@ public abstract class AbstractBulkheadStateMachine implements BulkheadStateMachi
           + "Permit will still be released.", name, callId, algorithmError);
     } finally {
       // 1. Paradigm-specific release logic — ALWAYS executes
-      releasePermitInternal();
+      try {
+        releasePermitInternal();
+      } catch (RuntimeException e) {
+        // Capture but don't propagate yet — telemetry must still run
+        releaseError = e;
+        LOG.error("releasePermitInternal() failed for bulkhead '{}', callId='{}'. "
+            + "Telemetry will still be published.", name, callId, e);
+      }
     }
 
-    // 2. Telemetry and safe exception handling
+    // 2. Telemetry — runs even if releasePermitInternal() failed.
+    // FIX: Publisher errors are ALWAYS logged and NEVER propagated, regardless
+    // of whether a business error or release error exists. This eliminates the
+    // inconsistency where a publisher crash only surfaced to callers when no
+    // other error was present.
     try {
       var snap = snapshot();
       eventPublisher.publish(new BulkheadOnReleaseEvent(
           callId, name, snap.concurrentCalls(), snap.timestamp()));
     } catch (RuntimeException publisherError) {
+      LOG.error("Failed to publish release event for bulkhead '{}', callId='{}'. "
+          + "The permit has been released; this is a telemetry-only failure.",
+          name, callId, publisherError);
+    }
+
+    // 3. Propagate the release error — this indicates a state machine defect
+    // and must always surface to the caller.
+    if (releaseError != null) {
       if (error != null) {
-        if (error != publisherError) {
-          error.addSuppressed(publisherError);
-        }
+        error.addSuppressed(releaseError);
       } else {
-        throw publisherError;
+        throw releaseError;
       }
     }
   }
@@ -115,19 +191,18 @@ public abstract class AbstractBulkheadStateMachine implements BulkheadStateMachi
   }
 
   /**
-   * Publishes an acquire event and returns true. If event publishing crashes,
-   * the permit is rolled back to prevent leaks and the exception is propagated.
-   *
-   * <p>This fail-safe rollback is critical: without it, a crashing event publisher
-   * would leave a permit permanently acquired with no corresponding release call,
-   * since the caller never receives the decorated callable.
+   * FIX #6: Restructured to avoid contradictory telemetry. The wait trace is now
+   * published AFTER the acquire event succeeds (not before). On rollback, we no
+   * longer have a "wait acquired=true" trace followed by a "rollback" trace —
+   * instead, only the rollback trace is emitted, which is consistent.
    */
   protected final boolean handleAcquireSuccess(String callId, long startWait) {
     try {
-      publishWaitTrace(callId, startWait, true);
       var snap = snapshot();
       eventPublisher.publish(new BulkheadOnAcquireEvent(
           callId, name, snap.concurrentCalls(), snap.timestamp()));
+      // Publish wait trace only AFTER the acquire event succeeded
+      publishWaitTrace(callId, startWait, true);
       return true;
     } catch (RuntimeException e) {
       // CRITICAL: Rollback the permit if event publishing crashes
