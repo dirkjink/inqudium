@@ -1,7 +1,7 @@
 package eu.inqudium.core.event;
 
-import eu.inqudium.core.exception.InqException;
-
+import java.lang.reflect.ParameterizedType;
+import java.lang.reflect.Type;
 import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicReference;
@@ -80,6 +80,32 @@ public final class InqEventExporterRegistry {
     DEFAULT_INSTANCE.set(registry);
   }
 
+  private static boolean isCorrectlyComparable(InqEventExporter exporter) {
+    if (!(exporter instanceof Comparable)) {
+      return false; // Implementiert Comparable gar nicht
+    }
+
+    // Get all directly implemented interfaces of the class
+    Type[] interfaces = exporter.getClass().getGenericInterfaces();
+
+    for (Type type : interfaces) {
+      // Check if the interface has generic parameters (ParameterizedType)
+      if (type instanceof ParameterizedType pType) {
+        // Is the raw interface comparable?
+        if (pType.getRawType() == Comparable.class) {
+          Type[] typeArgs = pType.getActualTypeArguments();
+          // Check if the parameter is exactly InqEventExporter
+          return typeArgs.length == 1 && typeArgs[0] == InqEventExporter.class;
+        }
+      }
+    }
+
+    // Fallback: If we get here, it's Comparable, but not with the correct type
+    // (Note: This doesn't apply if Comparable was defined in a superclass,
+    // but for SPI providers, it's best practice to define interfaces directly on the provider class).
+    return false;
+  }
+
   @SuppressWarnings("unchecked")
   private static DiscoveryResult discoverAndMerge(List<InqEventExporter> programmatic,
                                                   ClassLoader classLoader) {
@@ -136,7 +162,23 @@ public final class InqEventExporterRegistry {
     var nonComparable = new ArrayList<InqEventExporter>();
     for (var exporter : serviceLoaderExporters) {
       if (exporter instanceof Comparable) {
-        comparable.add(exporter);
+        if (isCorrectlyComparable(exporter)) {
+          comparable.add(exporter);
+        } else {
+          // Incorrectly implemented! We log this and downgrade it to "nonComparable"
+          String errorMsg = "Provider implements Comparable incorrectly. Expected Comparable<InqEventExporter>. Sorting ignored.";
+          LOGGER.warn("[{}] {}", exporter.getClass().getName(), errorMsg);
+
+          providerErrors.add(new InqProviderErrorEvent(
+              exporter.getClass().getName(),
+              InqEventExporter.class.getName(),
+              "construction",
+              errorMsg,
+              Instant.now()
+          ));
+
+          nonComparable.add(exporter);
+        }
       } else {
         nonComparable.add(exporter);
       }

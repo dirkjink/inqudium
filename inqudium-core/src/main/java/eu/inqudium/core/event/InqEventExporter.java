@@ -19,6 +19,18 @@ import java.util.Set;
  *       do not affect other exporters or the resilience element.</li>
  * </ul>
  *
+ * <h2>Optional Ordering</h2>
+ * <p>If you need to control the execution order of multiple exporters, your
+ * implementation can optionally implement the {@link Comparable} interface.
+ * Exporters that implement {@code Comparable} are always executed before
+ * non-comparable exporters.
+ *
+ * <p><strong>Important:</strong> You must strictly implement
+ * {@code Comparable<InqEventExporter>}. Do not implement a concrete or
+ * type-specific version like {@code Comparable<MyCustomExporter>}. The registry
+ * sorts all discovered exporters generically, and a type-specific implementation
+ * will result in a {@link ClassCastException} at runtime.
+ *
  * @since 0.1.0
  */
 public interface InqEventExporter {
