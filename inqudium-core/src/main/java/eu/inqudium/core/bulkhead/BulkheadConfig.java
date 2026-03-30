@@ -17,12 +17,16 @@ import java.util.Objects;
  */
 public final class BulkheadConfig implements InqConfig {
   private static final BulkheadConfig DEFAULTS = BulkheadConfig.builder().build();
+
   private final int maxConcurrentCalls;
   private final Duration maxWaitDuration;
   private final InqCompatibility compatibility;
   private final InqClock clock;
   private final Logger logger;
   private final InqCallIdGenerator callIdGenerator;
+
+  // New property for adaptive concurrency limits
+  private final InqLimitAlgorithm limitAlgorithm;
 
   private BulkheadConfig(Builder b) {
     this.maxConcurrentCalls = b.maxConcurrentCalls;
@@ -31,6 +35,7 @@ public final class BulkheadConfig implements InqConfig {
     this.clock = b.clock;
     this.logger = b.logger;
     this.callIdGenerator = b.callIdGenerator;
+    this.limitAlgorithm = b.limitAlgorithm;
   }
 
   public static BulkheadConfig ofDefaults() {
@@ -69,18 +74,29 @@ public final class BulkheadConfig implements InqConfig {
     return callIdGenerator;
   }
 
+  /**
+   * Returns the algorithm used for adaptive concurrency limits.
+   * If null, the bulkhead uses a static limit based on {@link #getMaxConcurrentCalls()}.
+   *
+   * @return the limit algorithm or null
+   */
+  public InqLimitAlgorithm getLimitAlgorithm() {
+    return limitAlgorithm;
+  }
+
   @Override
   public boolean equals(Object o) {
     if (o == null || getClass() != o.getClass()) return false;
     BulkheadConfig that = (BulkheadConfig) o;
     return maxConcurrentCalls == that.maxConcurrentCalls &&
         Objects.equals(maxWaitDuration, that.maxWaitDuration) &&
-        Objects.equals(compatibility, that.compatibility);
+        Objects.equals(compatibility, that.compatibility) &&
+        Objects.equals(limitAlgorithm, that.limitAlgorithm);
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(maxConcurrentCalls, maxWaitDuration, compatibility);
+    return Objects.hash(maxConcurrentCalls, maxWaitDuration, compatibility, limitAlgorithm);
   }
 
   public static final class Builder {
@@ -90,6 +106,7 @@ public final class BulkheadConfig implements InqConfig {
     private InqClock clock = InqConfig.defaultClock();
     private Logger logger = LoggerFactory.getLogger(BulkheadConfig.class);
     private InqCallIdGenerator callIdGenerator = InqCallIdGenerator.uuid();
+    private InqLimitAlgorithm limitAlgorithm = null; // Default is static (no adaptive algorithm)
 
     private Builder() {
     }
@@ -102,13 +119,9 @@ public final class BulkheadConfig implements InqConfig {
     public Builder maxWaitDuration(Duration duration) {
       Objects.requireNonNull(duration);
       try {
-        // We test if the duration can be safely converted to nanoseconds.
-        // If it throws an ArithmeticException, it exceeds Long.MAX_VALUE nanos.
         duration.toNanos();
         this.maxWaitDuration = duration;
       } catch (ArithmeticException e) {
-        // Cap the duration to the maximum safe value (approx. 292 years)
-        // This ensures the runtime hot-path never encounters an overflow.
         this.maxWaitDuration = Duration.ofNanos(Long.MAX_VALUE);
         logger.warn("Bulkhead configuration with extremely large wait duration. " +
                 "Will safely fall back to {} DAYS during permit acquisition to prevent arithmetic overflow.",
@@ -134,6 +147,19 @@ public final class BulkheadConfig implements InqConfig {
 
     public Builder callIdGenerator(InqCallIdGenerator gen) {
       this.callIdGenerator = Objects.requireNonNull(gen);
+      return this;
+    }
+
+    /**
+     * Sets the adaptive limit algorithm (e.g., AIMD or Vegas).
+     * If set, the bulkhead will dynamically adjust its concurrency limits.
+     *
+     * @param limitAlgorithm the algorithm to use, or null for static limits
+     * @return the builder instance
+     */
+    public Builder limitAlgorithm(InqLimitAlgorithm limitAlgorithm) {
+      // Null is explicitly allowed here to disable adaptive limits and revert to static
+      this.limitAlgorithm = limitAlgorithm;
       return this;
     }
 

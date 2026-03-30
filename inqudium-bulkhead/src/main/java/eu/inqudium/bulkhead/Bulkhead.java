@@ -1,6 +1,7 @@
 package eu.inqudium.bulkhead;
 
 import eu.inqudium.bulkhead.imperative.ImperativeBulkhead;
+import eu.inqudium.bulkhead.imperative.ImperativeBulkheadFactory;
 import eu.inqudium.core.InqElementType;
 import eu.inqudium.core.bulkhead.BulkheadConfig;
 import eu.inqudium.core.pipeline.InqDecorator;
@@ -26,11 +27,11 @@ import eu.inqudium.core.pipeline.InqDecorator;
 public interface Bulkhead extends InqDecorator {
 
   static Bulkhead of(String name, BulkheadConfig config) {
-    return new ImperativeBulkhead(name, config);
+    return ImperativeBulkheadFactory.create(name, config);
   }
 
   static Bulkhead ofDefaults(String name) {
-    return new ImperativeBulkhead(name, BulkheadConfig.ofDefaults());
+    return of(name, BulkheadConfig.ofDefaults());
   }
 
   BulkheadConfig getConfig();
