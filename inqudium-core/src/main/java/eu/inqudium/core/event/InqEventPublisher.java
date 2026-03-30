@@ -4,6 +4,7 @@ import eu.inqudium.core.InqElementType;
 
 import java.time.Duration;
 import java.util.function.Consumer;
+import java.util.function.Supplier;
 
 /**
  * Per-element event publisher contract.
@@ -129,6 +130,15 @@ public interface InqEventPublisher extends AutoCloseable {
    * @param event the event to publish
    */
   void publish(InqEvent event);
+
+  /**
+   * Publishes a trace event only if tracing is enabled.
+   * The supplier is only executed (and the event object only created)
+   * if isTraceEnabled() returns true.
+   *
+   * @param eventSupplier Supplier for the trace event
+   */
+  default void publishTrace(Supplier<? extends InqEvent> eventSupplier) {}
 
   /**
    * Registers a consumer for all events from this publisher.

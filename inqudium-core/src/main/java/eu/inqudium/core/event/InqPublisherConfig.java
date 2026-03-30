@@ -42,7 +42,12 @@ import java.time.Duration;
  *                            by the background watchdog (must be positive)
  * @since 0.2.0
  */
-public record InqPublisherConfig(int softLimit, int hardLimit, Duration expiryCheckInterval) {
+public record InqPublisherConfig(
+    int softLimit,
+    int hardLimit,
+    Duration expiryCheckInterval,
+    boolean traceEnabled
+) {
 
   /**
    * Default soft limit threshold.
@@ -58,7 +63,10 @@ public record InqPublisherConfig(int softLimit, int hardLimit, Duration expiryCh
    * Default configuration — warns at 256 consumers, no hard limit, 60s expiry check.
    */
   private static final InqPublisherConfig DEFAULT =
-      new InqPublisherConfig(DEFAULT_SOFT_LIMIT, Integer.MAX_VALUE, DEFAULT_EXPIRY_CHECK_INTERVAL);
+      new InqPublisherConfig(DEFAULT_SOFT_LIMIT,
+          Integer.MAX_VALUE,
+          DEFAULT_EXPIRY_CHECK_INTERVAL,
+          false);
 
   /**
    * Validates all parameters on construction.
@@ -97,8 +105,31 @@ public record InqPublisherConfig(int softLimit, int hardLimit, Duration expiryCh
    * @param expiryCheckInterval the interval between expiry sweeps
    * @return a new configuration
    */
-  public static InqPublisherConfig of(int softLimit, int hardLimit, Duration expiryCheckInterval) {
-    return new InqPublisherConfig(softLimit, hardLimit, expiryCheckInterval);
+  public static InqPublisherConfig of(int softLimit,
+                                      int hardLimit,
+                                      Duration expiryCheckInterval,
+                                      boolean traceEnabled) {
+    return new InqPublisherConfig(softLimit,
+        hardLimit,
+        expiryCheckInterval,
+        traceEnabled);
+  }
+
+  /**
+   * Creates a configuration with soft limit, hard limit, and custom expiry interval.
+   *
+   * @param softLimit           the consumer count at which a warning is logged
+   * @param hardLimit           the consumer count at which new registrations are rejected
+   * @param expiryCheckInterval the interval between expiry sweeps
+   * @return a new configuration
+   */
+  public static InqPublisherConfig of(int softLimit,
+                                      int hardLimit,
+                                      Duration expiryCheckInterval) {
+    return new InqPublisherConfig(softLimit,
+        hardLimit,
+        expiryCheckInterval,
+        false);
   }
 
   /**
@@ -109,7 +140,10 @@ public record InqPublisherConfig(int softLimit, int hardLimit, Duration expiryCh
    * @return a new configuration
    */
   public static InqPublisherConfig of(int softLimit, int hardLimit) {
-    return new InqPublisherConfig(softLimit, hardLimit, DEFAULT_EXPIRY_CHECK_INTERVAL);
+    return new InqPublisherConfig(softLimit,
+        hardLimit,
+        DEFAULT_EXPIRY_CHECK_INTERVAL,
+        false);
   }
 
   /**
@@ -120,7 +154,10 @@ public record InqPublisherConfig(int softLimit, int hardLimit, Duration expiryCh
    * @return a new configuration with {@code hardLimit = Integer.MAX_VALUE}
    */
   public static InqPublisherConfig withSoftLimit(int softLimit) {
-    return new InqPublisherConfig(softLimit, Integer.MAX_VALUE, DEFAULT_EXPIRY_CHECK_INTERVAL);
+    return new InqPublisherConfig(softLimit,
+        Integer.MAX_VALUE,
+        DEFAULT_EXPIRY_CHECK_INTERVAL,
+        false);
   }
 
   /**
@@ -131,7 +168,10 @@ public record InqPublisherConfig(int softLimit, int hardLimit, Duration expiryCh
    * @return a new configuration
    */
   public static InqPublisherConfig withHardLimit(int limit) {
-    return new InqPublisherConfig(limit, limit, DEFAULT_EXPIRY_CHECK_INTERVAL);
+    return new InqPublisherConfig(limit,
+        limit,
+        DEFAULT_EXPIRY_CHECK_INTERVAL,
+        false);
   }
 
   /**

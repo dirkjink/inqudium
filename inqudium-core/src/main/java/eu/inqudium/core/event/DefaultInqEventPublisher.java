@@ -12,6 +12,7 @@ import java.util.Objects;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
+import java.util.function.Supplier;
 
 /**
  * Default implementation of {@link InqEventPublisher} that bridges per-element
@@ -56,6 +57,7 @@ final class DefaultInqEventPublisher implements InqEventPublisher {
   private final InqElementType elementType;
   private final InqEventExporterRegistry registry;
   private final InqPublisherConfig config;
+  private final boolean traceEnabled;
 
   /**
    * Copy-on-write array holding the local consumers. Array iteration is significantly
@@ -72,14 +74,17 @@ final class DefaultInqEventPublisher implements InqEventPublisher {
    * Lazily initialized watchdog for sweeping expired TTL consumers.
    * Null until the first TTL subscription is registered.
    */
-  private final AtomicReference<InqConsumerExpiryWatchdog> watchdog = new AtomicReference<>();
+  private final AtomicReference<InqConsumerExpiryWatchdog<?>> watchdog = new AtomicReference<>();
 
-  DefaultInqEventPublisher(String elementName, InqElementType elementType,
-                           InqEventExporterRegistry registry, InqPublisherConfig config) {
+  DefaultInqEventPublisher(String elementName,
+                           InqElementType elementType,
+                           InqEventExporterRegistry registry,
+                           InqPublisherConfig config) {
     this.elementName = Objects.requireNonNull(elementName, "elementName must not be null");
     this.elementType = Objects.requireNonNull(elementType, "elementType must not be null");
     this.registry = Objects.requireNonNull(registry, "registry must not be null");
     this.config = Objects.requireNonNull(config, "config must not be null");
+    this.traceEnabled = config.traceEnabled();
   }
 
   // ── Publishing (hot path — no expiry logic) ──
@@ -161,6 +166,19 @@ final class DefaultInqEventPublisher implements InqEventPublisher {
     }
   }
 
+  @Override
+  public void publishTrace(Supplier<? extends InqEvent> eventSupplier) {
+    // ZERO OVERHEAD CHECK:
+    // Wenn false, kehrt die Methode sofort zurück.
+    // Der Supplier wird nicht aufgerufen, es entsteht kein Event-Objekt!
+    if (!this.traceEnabled) {
+      return;
+    }
+
+    // Nur wenn aktiviert, Objekt bauen und normal publizieren
+    publish(eventSupplier.get());
+  }
+
   // ── TTL-based subscriptions ──
 
   @Override
@@ -207,7 +225,7 @@ final class DefaultInqEventPublisher implements InqEventPublisher {
 
   @Override
   public void close() {
-    InqConsumerExpiryWatchdog current = watchdog.getAndSet(null);
+    InqConsumerExpiryWatchdog<?> current = watchdog.getAndSet(null);
     if (current != null) {
       current.close();
     }
@@ -379,7 +397,7 @@ final class DefaultInqEventPublisher implements InqEventPublisher {
         activeCount++;
       }
     }
-    InqConsumerExpiryWatchdog wd = watchdog.get();
+    InqConsumerExpiryWatchdog<?> wd = watchdog.get();
     return "InqEventPublisher{" +
         "elementName='" + elementName + '\'' +
         ", elementType=" + elementType +
