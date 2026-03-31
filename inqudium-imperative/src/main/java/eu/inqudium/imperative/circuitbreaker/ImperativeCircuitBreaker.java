@@ -9,6 +9,7 @@ import java.util.Objects;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
@@ -16,31 +17,8 @@ import java.util.function.Supplier;
  * Thread-safe, imperative circuit breaker implementation.
  *
  * <p>Designed for use with virtual threads (Project Loom) or traditional
- * platform threads. Uses lock-free CAS operations on an
- * {@link AtomicReference} to manage state, avoiding pinning of virtual threads
- * on monitors.
- *
- * <p>Delegates all state-machine logic to the functional
- * {@link CircuitBreakerCore}.
- *
- * <h2>Usage</h2>
- * <pre>{@code
- * var config = CircuitBreakerConfig.builder("my-service")
- *     .failureThreshold(3)
- *     .waitDurationInOpenState(Duration.ofSeconds(10))
- *     .build();
- *
- * var cb = new ImperativeCircuitBreaker(config);
- *
- * // With exception propagation
- * String result = cb.execute(() -> httpClient.call());
- *
- * // With fallback
- * String result = cb.executeWithFallback(
- *     () -> httpClient.call(),
- *     () -> "fallback-value"
- * );
- * }</pre>
+ * platform threads. Uses lock-free CAS operations for high-throughput fast-paths
+ * and a {@link ReentrantLock} exclusively to serialize state transitions.
  */
 public class ImperativeCircuitBreaker {
 
@@ -48,6 +26,9 @@ public class ImperativeCircuitBreaker {
   private final AtomicReference<CircuitBreakerSnapshot> snapshotRef;
   private final Clock clock;
   private final List<Consumer<StateTransition>> transitionListeners;
+
+  // Lock exclusively used to serialize state transitions and event emissions (Fix 1A)
+  private final ReentrantLock transitionLock = new ReentrantLock();
 
   public ImperativeCircuitBreaker(CircuitBreakerConfig config) {
     this(config, Clock.systemUTC());
@@ -62,36 +43,25 @@ public class ImperativeCircuitBreaker {
 
   // ======================== Execution ========================
 
-  /**
-   * Executes the given callable through the circuit breaker.
-   *
-   * @param callable the operation to protect
-   * @param <T>      the return type
-   * @return the result of the callable
-   * @throws CircuitBreakerException if the circuit is open and the call is not permitted
-   * @throws Exception               if the callable itself throws
-   */
   public <T> T execute(Callable<T> callable) throws Exception {
     acquirePermissionOrThrow();
     try {
       T result = callable.call();
       recordSuccess();
       return result;
-    } catch (Exception e) {
-      handleException(e);
-      throw e;
+      // Fix 2B: Catch Throwable to ensure Errors (e.g., OutOfMemoryError) are evaluated
+    } catch (Throwable t) {
+      handleThrowable(t);
+      if (t instanceof Exception e) {
+        throw e;
+      } else if (t instanceof Error err) {
+        throw err;
+      } else {
+        throw new RuntimeException(t);
+      }
     }
   }
 
-  /**
-   * Executes the given callable with a fallback when the circuit is open.
-   *
-   * @param callable the primary operation
-   * @param fallback the fallback supplier invoked when the circuit rejects the call
-   * @param <T>      the return type
-   * @return the result of the callable or the fallback
-   * @throws Exception if the callable throws (non-recorded exceptions still propagate)
-   */
   public <T> T executeWithFallback(Callable<T> callable, Supplier<T> fallback) throws Exception {
     try {
       return execute(callable);
@@ -100,12 +70,6 @@ public class ImperativeCircuitBreaker {
     }
   }
 
-  /**
-   * Executes a {@link Runnable} through the circuit breaker.
-   *
-   * @param runnable the operation to protect
-   * @throws CircuitBreakerException if the circuit is open
-   */
   public void execute(Runnable runnable) {
     try {
       execute(() -> {
@@ -114,8 +78,8 @@ public class ImperativeCircuitBreaker {
       });
     } catch (CircuitBreakerException e) {
       throw e;
-    } catch (RuntimeException e) {
-      throw e;
+    } catch (RuntimeException | Error e) {
+      throw e; // Rethrow directly
     } catch (Exception e) {
       throw new RuntimeException(e);
     }
@@ -133,12 +97,31 @@ public class ImperativeCircuitBreaker {
         throw new CircuitBreakerException(config.name(), current.state());
       }
 
-      // CAS: apply the (possibly transitioned) snapshot
-      if (snapshotRef.compareAndSet(current, result.snapshot())) {
-        emitTransitionIfChanged(current, result.snapshot(), now);
-        return;
+      // Fix 1A: Fast-path (no transition) vs Slow-path (transition)
+      if (result.snapshot().state() != current.state()) {
+        transitionLock.lock();
+        try {
+          // Re-evaluate inside lock to guarantee strict event order
+          current = snapshotRef.get();
+          result = CircuitBreakerCore.tryAcquirePermission(current, config, now);
+
+          if (!result.permitted()) {
+            throw new CircuitBreakerException(config.name(), current.state());
+          }
+
+          if (snapshotRef.compareAndSet(current, result.snapshot())) {
+            emitTransitionIfChanged(current, result.snapshot(), now);
+            return;
+          }
+        } finally {
+          transitionLock.unlock();
+        }
+      } else {
+        // Fast-path: simple state increment
+        if (snapshotRef.compareAndSet(current, result.snapshot())) {
+          return;
+        }
       }
-      // CAS failed — another thread modified state; retry
     }
   }
 
@@ -149,17 +132,31 @@ public class ImperativeCircuitBreaker {
     while (true) {
       CircuitBreakerSnapshot current = snapshotRef.get();
       CircuitBreakerSnapshot updated = CircuitBreakerCore.recordSuccess(current, config, now);
-      if (snapshotRef.compareAndSet(current, updated)) {
-        emitTransitionIfChanged(current, updated, now);
-        return;
+
+      if (updated.state() != current.state()) {
+        transitionLock.lock();
+        try {
+          current = snapshotRef.get();
+          updated = CircuitBreakerCore.recordSuccess(current, config, now);
+          if (snapshotRef.compareAndSet(current, updated)) {
+            emitTransitionIfChanged(current, updated, now);
+            return;
+          }
+        } finally {
+          transitionLock.unlock();
+        }
+      } else {
+        if (snapshotRef.compareAndSet(current, updated)) {
+          return;
+        }
       }
     }
   }
 
-  private void handleException(Exception exception) {
-    if (!config.shouldRecordAsFailure(exception)) {
-      // Exception is ignored — treat as success for the circuit
-      recordSuccess();
+  private void handleThrowable(Throwable throwable) {
+    if (!config.shouldRecordAsFailure(throwable)) {
+      // Fix 2A: Ignored exceptions are simply bypassed.
+      // They do NOT count as a success, preventing premature state switching.
       return;
     }
 
@@ -167,20 +164,29 @@ public class ImperativeCircuitBreaker {
     while (true) {
       CircuitBreakerSnapshot current = snapshotRef.get();
       CircuitBreakerSnapshot updated = CircuitBreakerCore.recordFailure(current, config, now);
-      if (snapshotRef.compareAndSet(current, updated)) {
-        emitTransitionIfChanged(current, updated, now);
-        return;
+
+      if (updated.state() != current.state()) {
+        transitionLock.lock();
+        try {
+          current = snapshotRef.get();
+          updated = CircuitBreakerCore.recordFailure(current, config, now);
+          if (snapshotRef.compareAndSet(current, updated)) {
+            emitTransitionIfChanged(current, updated, now);
+            return;
+          }
+        } finally {
+          transitionLock.unlock();
+        }
+      } else {
+        if (snapshotRef.compareAndSet(current, updated)) {
+          return;
+        }
       }
     }
   }
 
   // ======================== Listeners ========================
 
-  /**
-   * Registers a listener that is called on every state transition.
-   *
-   * @param listener the transition listener
-   */
   public void onStateTransition(Consumer<StateTransition> listener) {
     transitionListeners.add(Objects.requireNonNull(listener));
   }
@@ -196,33 +202,28 @@ public class ImperativeCircuitBreaker {
 
   // ======================== Introspection ========================
 
-  /**
-   * Returns the current state of the circuit breaker.
-   */
   public CircuitState getState() {
     return snapshotRef.get().state();
   }
 
-  /**
-   * Returns a snapshot of the current internal state. Useful for monitoring.
-   */
   public CircuitBreakerSnapshot getSnapshot() {
     return snapshotRef.get();
   }
 
-  /**
-   * Returns the configuration of this circuit breaker.
-   */
   public CircuitBreakerConfig getConfig() {
     return config;
   }
 
-  /**
-   * Resets the circuit breaker to its initial CLOSED state.
-   */
   public void reset() {
-    Instant now = clock.instant();
-    CircuitBreakerSnapshot before = snapshotRef.getAndSet(CircuitBreakerSnapshot.initial(now));
-    emitTransitionIfChanged(before, snapshotRef.get(), now);
+    // Fix 1B: Atomically pre-construct the snapshot and lock to ensure clean event emission
+    transitionLock.lock();
+    try {
+      Instant now = clock.instant();
+      CircuitBreakerSnapshot initial = CircuitBreakerSnapshot.initial(now);
+      CircuitBreakerSnapshot before = snapshotRef.getAndSet(initial);
+      emitTransitionIfChanged(before, initial, now);
+    } finally {
+      transitionLock.unlock();
+    }
   }
 }

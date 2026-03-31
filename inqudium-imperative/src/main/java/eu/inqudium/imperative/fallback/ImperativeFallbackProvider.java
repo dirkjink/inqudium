@@ -3,6 +3,7 @@ package eu.inqudium.imperative.fallback;
 import eu.inqudium.core.fallback.*;
 
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
@@ -12,35 +13,6 @@ import java.util.function.Consumer;
 
 /**
  * Thread-safe, imperative fallback provider implementation.
- *
- * <p>Designed for use with virtual threads (Project Loom). Intercepts
- * exceptions from the primary operation and routes them to registered
- * fallback handlers based on exception type, predicate, or catch-all.
- *
- * <p>Also supports result-based fallback: if the primary operation returns
- * an unacceptable value (e.g. {@code null}), a registered result handler
- * provides a substitute.
- *
- * <p>Delegates all state-machine logic to the functional
- * {@link FallbackCore}.
- *
- * <h2>Usage</h2>
- * <pre>{@code
- * var config = FallbackConfig.<String>builder("user-service")
- *     .onException(IOException.class, ex -> "cached-user")
- *     .onException(TimeoutException.class, ex -> "timeout-default")
- *     .onResult(result -> result == null, () -> "unknown-user")
- *     .onAnyException(ex -> "generic-fallback")
- *     .build();
- *
- * var fallback = new ImperativeFallbackProvider<>(config);
- *
- * // Exceptions are caught and routed to the matching handler
- * String user = fallback.execute(() -> userService.findById(42));
- *
- * // null results are replaced by the result handler
- * String user = fallback.execute(() -> userService.findByName("unknown"));
- * }</pre>
  */
 public class ImperativeFallbackProvider<T> {
 
@@ -58,21 +30,6 @@ public class ImperativeFallbackProvider<T> {
     this.eventListeners = new CopyOnWriteArrayList<>();
   }
 
-  // ======================== Execution ========================
-
-  /**
-   * Executes the given callable with fallback protection.
-   *
-   * <p>On exception: the first matching handler is invoked.
-   * On unacceptable result: the first matching result handler is invoked.
-   * If no handler matches, the original exception propagates.
-   * If the fallback handler itself fails, a {@link FallbackException} is thrown.
-   *
-   * @param callable the primary operation
-   * @return the result (from primary or fallback)
-   * @throws FallbackException if no handler matches or the fallback fails
-   * @throws Exception         if the primary throws a non-matched exception
-   */
   public T execute(Callable<T> callable) throws Exception {
     Instant now = clock.instant();
     FallbackSnapshot snapshot = FallbackCore.start(now);
@@ -81,107 +38,97 @@ public class ImperativeFallbackProvider<T> {
     try {
       T result = callable.call();
 
-      // Check for result-based fallback
       Instant resultTime = clock.instant();
-      FallbackCore.HandlerResolution<T> resultResolution =
+      FallbackCore.ResultResolution<T> resultResolution =
           FallbackCore.resolveResultHandler(snapshot, config, result, resultTime);
 
       if (resultResolution == null) {
-        // Result is acceptable
         snapshot = FallbackCore.recordPrimarySuccess(snapshot, resultTime);
         emitEvent(FallbackEvent.primarySucceeded(
             config.name(), snapshot.elapsed(resultTime), resultTime));
         return result;
       }
 
-      // Result-based fallback
+      // Update snapshot tracking
       snapshot = resultResolution.snapshot();
+      // Duration is 0 as the fallback execution just starts now
       emitEvent(FallbackEvent.resultFallbackInvoked(
-          config.name(), resultResolution.handler().name(),
-          snapshot.elapsed(resultTime), resultTime));
+          config.name(), resultResolution.handler().name(), Duration.ZERO, resultTime));
 
       T fallbackResult = FallbackCore.invokeResultHandler(resultResolution.handler());
       Instant recoveredTime = clock.instant();
       snapshot = FallbackCore.recordFallbackSuccess(snapshot, recoveredTime);
+
+      // Pass the specific fallback execution time
       emitEvent(FallbackEvent.resultFallbackRecovered(
           config.name(), resultResolution.handler().name(),
-          snapshot.elapsed(recoveredTime), recoveredTime));
+          snapshot.fallbackElapsed(recoveredTime), recoveredTime));
       return fallbackResult;
 
-    } catch (Exception primary) {
-      return handleException(snapshot, primary);
+      // Catch Throwable to handle Error properly
+    } catch (Throwable primary) {
+      return handleThrowable(snapshot, primary);
     }
   }
 
-  /**
-   * Executes a {@link Runnable} with fallback protection.
-   * Note: fallback handlers must return a value, so this only provides
-   * exception-swallowing semantics for void operations.
-   */
   public void execute(Runnable runnable) {
     try {
       execute(() -> {
         runnable.run();
         return null;
       });
-    } catch (FallbackException e) {
-      throw e;
-    } catch (RuntimeException e) {
-      throw e;
+    } catch (RuntimeException | Error e) {
+      throw e; // Fängt RuntimeException (inkl. FallbackException) und Errors, wirft sie direkt weiter
     } catch (Exception e) {
       throw new RuntimeException(e);
     }
   }
 
-  // ======================== Internal ========================
-
-  private T handleException(FallbackSnapshot snapshot, Exception primary) throws Exception {
+  private T handleThrowable(FallbackSnapshot snapshot, Throwable primary) throws Exception {
     Instant failedTime = clock.instant();
     emitEvent(FallbackEvent.primaryFailed(
         config.name(), snapshot.elapsed(failedTime), primary, failedTime));
 
-    // Resolve handler
-    FallbackCore.HandlerResolution<T> resolution =
-        FallbackCore.resolveHandler(snapshot, config, primary, failedTime);
+    FallbackCore.ExceptionResolution<T> resolution =
+        FallbackCore.resolveExceptionHandler(snapshot, config, primary, failedTime);
 
     if (!resolution.matched()) {
+      snapshot = resolution.snapshot();
       emitEvent(FallbackEvent.noHandlerMatched(
           config.name(), snapshot.elapsed(failedTime), primary, failedTime));
-      throw primary; // No handler found — propagate the original exception
+
+      // Transparent propagation
+      if (primary instanceof Exception e) throw e;
+      if (primary instanceof Error err) throw err;
+      throw new RuntimeException(primary);
     }
 
     snapshot = resolution.snapshot();
     emitEvent(FallbackEvent.fallbackInvoked(
-        config.name(), resolution.handler().name(),
-        snapshot.elapsed(failedTime), failedTime));
+        config.name(), resolution.handler().name(), Duration.ZERO, failedTime));
 
-    // Invoke the handler
     try {
       T fallbackValue = FallbackCore.invokeExceptionHandler(resolution.handler(), primary);
       Instant recoveredTime = clock.instant();
       snapshot = FallbackCore.recordFallbackSuccess(snapshot, recoveredTime);
+
       emitEvent(FallbackEvent.fallbackRecovered(
           config.name(), resolution.handler().name(),
-          snapshot.elapsed(recoveredTime), recoveredTime));
+          snapshot.fallbackElapsed(recoveredTime), recoveredTime));
       return fallbackValue;
 
-    } catch (Exception fallbackEx) {
+    } catch (Throwable fallbackEx) {
       Instant fbFailedTime = clock.instant();
       snapshot = FallbackCore.recordFallbackFailure(snapshot, fallbackEx, fbFailedTime);
+
       emitEvent(FallbackEvent.fallbackFailed(
           config.name(), resolution.handler().name(),
-          snapshot.elapsed(fbFailedTime), fallbackEx, fbFailedTime));
-      throw new FallbackException(
-          config.name(), FallbackException.Reason.FALLBACK_FAILED,
-          primary, fallbackEx);
+          snapshot.fallbackElapsed(fbFailedTime), fallbackEx, fbFailedTime));
+
+      throw new FallbackException(config.name(), primary, fallbackEx);
     }
   }
 
-  // ======================== Listeners ========================
-
-  /**
-   * Registers a listener that is called on every fallback event.
-   */
   public void onEvent(Consumer<FallbackEvent> listener) {
     eventListeners.add(Objects.requireNonNull(listener));
   }
@@ -192,11 +139,6 @@ public class ImperativeFallbackProvider<T> {
     }
   }
 
-  // ======================== Introspection ========================
-
-  /**
-   * Returns the configuration.
-   */
   public FallbackConfig<T> getConfig() {
     return config;
   }

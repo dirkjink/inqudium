@@ -303,7 +303,7 @@ class ImperativeFallbackProviderTest {
       })).isInstanceOf(FallbackException.class)
           .satisfies(e -> {
             FallbackException fe = (FallbackException) e;
-            assertThat(fe.getReason()).isEqualTo(FallbackException.Reason.FALLBACK_FAILED);
+            // Der Reason-Enum wurde entfernt, wir prüfen direkt die Cause
             assertThat(fe.getCause().getMessage()).isEqualTo("handler crashed");
           });
     }
@@ -588,7 +588,9 @@ class ImperativeFallbackProviderTest {
           .build();
 
       // Then
-      assertThat(config.handlers()).hasSize(3);
+      // Angepasst an die neuen getrennten Listen
+      assertThat(config.exceptionHandlers()).hasSize(3);
+      assertThat(config.resultHandlers()).isEmpty();
     }
   }
 }

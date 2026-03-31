@@ -132,8 +132,8 @@ class FallbackCoreTest {
       IOException ioError = new IOException("connection refused");
 
       // When
-      FallbackCore.HandlerResolution<String> resolution =
-          FallbackCore.resolveHandler(executing, config, ioError, NOW);
+      FallbackCore.ExceptionResolution<String> resolution =
+          FallbackCore.resolveExceptionHandler(executing, config, ioError, NOW);
 
       // Then
       assertThat(resolution.matched()).isTrue();
@@ -153,8 +153,8 @@ class FallbackCoreTest {
       FallbackSnapshot executing = FallbackCore.start(NOW);
 
       // When
-      FallbackCore.HandlerResolution<String> resolution =
-          FallbackCore.resolveHandler(executing, config, new IOException(), NOW);
+      FallbackCore.ExceptionResolution<String> resolution =
+          FallbackCore.resolveExceptionHandler(executing, config, new IOException(), NOW);
 
       // Then — first registered handler wins
       assertThat(resolution.handler().name()).isEqualTo("specific");
@@ -171,8 +171,8 @@ class FallbackCoreTest {
       FallbackSnapshot executing = FallbackCore.start(NOW);
 
       // When — IllegalStateException does not match IOException
-      FallbackCore.HandlerResolution<String> resolution =
-          FallbackCore.resolveHandler(executing, config, new IllegalStateException(), NOW);
+      FallbackCore.ExceptionResolution<String> resolution =
+          FallbackCore.resolveExceptionHandler(executing, config, new IllegalStateException(), NOW);
 
       // Then
       assertThat(resolution.matched()).isTrue();
@@ -189,8 +189,8 @@ class FallbackCoreTest {
       FallbackSnapshot executing = FallbackCore.start(NOW);
 
       // When
-      FallbackCore.HandlerResolution<String> resolution =
-          FallbackCore.resolveHandler(executing, config,
+      FallbackCore.ExceptionResolution<String> resolution =
+          FallbackCore.resolveExceptionHandler(executing, config,
               new IllegalArgumentException("no match"), NOW);
 
       // Then
@@ -210,8 +210,8 @@ class FallbackCoreTest {
       FallbackSnapshot executing = FallbackCore.start(NOW);
 
       // When
-      FallbackCore.HandlerResolution<String> resolution =
-          FallbackCore.resolveHandler(executing, config,
+      FallbackCore.ExceptionResolution<String> resolution =
+          FallbackCore.resolveExceptionHandler(executing, config,
               new RuntimeException("connection timeout"), NOW);
 
       // Then
@@ -229,8 +229,8 @@ class FallbackCoreTest {
       FallbackSnapshot executing = FallbackCore.start(NOW);
 
       // When
-      FallbackCore.HandlerResolution<String> resolution =
-          FallbackCore.resolveHandler(executing, config, new RuntimeException(), NOW);
+      FallbackCore.ExceptionResolution<String> resolution =
+          FallbackCore.resolveExceptionHandler(executing, config, new RuntimeException(), NOW);
 
       // Then
       assertThat(resolution.matched()).isTrue();
@@ -258,7 +258,7 @@ class FallbackCoreTest {
       FallbackSnapshot executing = FallbackCore.start(NOW);
 
       // When
-      FallbackCore.HandlerResolution<String> resolution =
+      FallbackCore.ResultResolution<String> resolution =
           FallbackCore.resolveResultHandler(executing, config, "valid", NOW);
 
       // Then
@@ -276,7 +276,7 @@ class FallbackCoreTest {
       FallbackSnapshot executing = FallbackCore.start(NOW);
 
       // When
-      FallbackCore.HandlerResolution<String> resolution =
+      FallbackCore.ResultResolution<String> resolution =
           FallbackCore.resolveResultHandler(executing, config, null, NOW);
 
       // Then
@@ -295,7 +295,7 @@ class FallbackCoreTest {
       FallbackSnapshot executing = FallbackCore.start(NOW);
 
       // When
-      FallbackCore.HandlerResolution<String> resolution =
+      FallbackCore.ResultResolution<String> resolution =
           FallbackCore.resolveResultHandler(executing, config, null, NOW);
 
       // Then
@@ -382,7 +382,7 @@ class FallbackCoreTest {
     @DisplayName("should invoke a typed exception handler with the correct exception")
     void should_invoke_a_typed_exception_handler_with_the_correct_exception() {
       // Given
-      FallbackHandler<String> handler = new FallbackHandler.ForExceptionType<>(
+      FallbackExceptionHandler<String> handler = new FallbackExceptionHandler.ForExceptionType<>(
           "io-handler", IOException.class, IOException::getMessage);
       IOException error = new IOException("disk full");
 
@@ -397,7 +397,7 @@ class FallbackCoreTest {
     @DisplayName("should invoke a predicate-based handler with the exception")
     void should_invoke_a_predicate_based_handler_with_the_exception() {
       // Given
-      FallbackHandler<String> handler = new FallbackHandler.ForExceptionPredicate<>(
+      FallbackExceptionHandler<String> handler = new FallbackExceptionHandler.ForExceptionPredicate<>(
           "msg-handler", e -> true, Throwable::getMessage);
 
       // When
@@ -411,7 +411,7 @@ class FallbackCoreTest {
     @DisplayName("should invoke a catch-all handler with any exception")
     void should_invoke_a_catch_all_handler_with_any_exception() {
       // Given
-      FallbackHandler<String> handler = new FallbackHandler.CatchAll<>("catch-all", e -> "caught");
+      FallbackExceptionHandler<String> handler = new FallbackExceptionHandler.CatchAll<>("catch-all", e -> "caught");
 
       // When
       String result = FallbackCore.invokeExceptionHandler(handler, new Error("anything"));
@@ -424,7 +424,7 @@ class FallbackCoreTest {
     @DisplayName("should invoke a constant value handler regardless of exception")
     void should_invoke_a_constant_value_handler_regardless_of_exception() {
       // Given
-      FallbackHandler<String> handler = new FallbackHandler.ConstantValue<>("const", "fixed-value");
+      FallbackExceptionHandler<String> handler = new FallbackExceptionHandler.ConstantValue<>("const", "fixed-value");
 
       // When
       String result = FallbackCore.invokeExceptionHandler(handler, new RuntimeException());
@@ -437,7 +437,7 @@ class FallbackCoreTest {
     @DisplayName("should invoke a result handler and return the fallback value")
     void should_invoke_a_result_handler_and_return_the_fallback_value() {
       // Given
-      FallbackHandler<String> handler = new FallbackHandler.ForResult<>(
+      FallbackResultHandler<String> handler = new FallbackResultHandler.ForResult<>(
           "null-handler", result -> result == null, () -> "default");
 
       // When
@@ -480,8 +480,8 @@ class FallbackCoreTest {
       FallbackSnapshot executing = FallbackCore.start(NOW);
 
       // When — primary fails, handler resolved, fallback succeeds
-      FallbackCore.HandlerResolution<String> resolution =
-          FallbackCore.resolveHandler(executing, config, new RuntimeException("fail"), NOW);
+      FallbackCore.ExceptionResolution<String> resolution =
+          FallbackCore.resolveExceptionHandler(executing, config, new RuntimeException("fail"), NOW);
       assertThat(resolution.matched()).isTrue();
 
       String value = FallbackCore.invokeExceptionHandler(resolution.handler(), new RuntimeException());
@@ -503,8 +503,8 @@ class FallbackCoreTest {
       FallbackSnapshot executing = FallbackCore.start(NOW);
 
       // When
-      FallbackCore.HandlerResolution<String> resolution =
-          FallbackCore.resolveHandler(executing, config,
+      FallbackCore.ExceptionResolution<String> resolution =
+          FallbackCore.resolveExceptionHandler(executing, config,
               new IllegalStateException("no match"), NOW);
 
       // Then
@@ -582,7 +582,7 @@ class FallbackCoreTest {
     @Test
     @DisplayName("should reject an empty handler list")
     void should_reject_an_empty_handler_list() {
-      assertThatThrownBy(() -> new FallbackConfig<String>("test", java.util.List.of()))
+      assertThatThrownBy(() -> new FallbackConfig<String>("test", java.util.List.of(), java.util.List.of()))
           .isInstanceOf(IllegalArgumentException.class)
           .hasMessageContaining("At least one");
     }

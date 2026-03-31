@@ -32,119 +32,55 @@ public final class FallbackCore {
     // Utility class — not instantiable
   }
 
-  // ======================== Lifecycle Transitions ========================
-
-  /**
-   * Starts the execution. Transitions IDLE → EXECUTING.
-   *
-   * @param now the current time
-   * @return a snapshot in EXECUTING state
-   */
   public static FallbackSnapshot start(Instant now) {
     return FallbackSnapshot.idle().withExecuting(now);
   }
 
-  /**
-   * Records a successful primary execution. Transitions EXECUTING → SUCCEEDED.
-   *
-   * @param snapshot the current snapshot (must be in EXECUTING)
-   * @param now      the current time
-   * @return a snapshot in SUCCEEDED state
-   * @throws IllegalStateException if not in EXECUTING state
-   */
   public static FallbackSnapshot recordPrimarySuccess(FallbackSnapshot snapshot, Instant now) {
     requireState(snapshot, FallbackState.EXECUTING, "recordPrimarySuccess");
     return snapshot.withSucceeded(now);
   }
 
-  // ======================== Handler Resolution ========================
-
-  /**
-   * Resolves which fallback handler (if any) matches the primary failure
-   * and transitions the snapshot accordingly.
-   *
-   * <p>If a matching handler is found, transitions to FALLING_BACK.
-   * If no handler matches, transitions to UNHANDLED.
-   *
-   * @param snapshot the current snapshot (must be in EXECUTING)
-   * @param config   the fallback configuration
-   * @param failure  the primary operation's exception
-   * @param now      the current time
-   * @return a resolved result containing the handler and updated snapshot
-   * @throws IllegalStateException if not in EXECUTING state
-   */
-  public static <T> HandlerResolution<T> resolveHandler(
+  public static <T> ExceptionResolution<T> resolveExceptionHandler(
       FallbackSnapshot snapshot,
       FallbackConfig<T> config,
       Throwable failure,
       Instant now) {
 
-    requireState(snapshot, FallbackState.EXECUTING, "resolveHandler");
+    requireState(snapshot, FallbackState.EXECUTING, "resolveExceptionHandler");
 
-    FallbackHandler<T> handler = config.findHandlerForException(failure);
+    FallbackExceptionHandler<T> handler = config.findHandlerForException(failure);
     if (handler == null) {
       FallbackSnapshot unhandled = snapshot.withUnhandled(failure, now);
-      return new HandlerResolution<>(null, unhandled, false);
+      return new ExceptionResolution<>(null, unhandled, false);
     }
 
     FallbackSnapshot fallingBack = snapshot.withFallingBack(failure, handler.name(), now);
-    return new HandlerResolution<>(handler, fallingBack, true);
+    return new ExceptionResolution<>(handler, fallingBack, true);
   }
 
-  /**
-   * Resolves which fallback handler (if any) matches the primary result
-   * and transitions the snapshot accordingly.
-   *
-   * @param snapshot the current snapshot (must be in EXECUTING)
-   * @param config   the fallback configuration
-   * @param result   the primary operation's result to evaluate
-   * @param now      the current time
-   * @return a resolved result, or {@code null} if no handler matches (result is acceptable)
-   * @throws IllegalStateException if not in EXECUTING state
-   */
-  public static <T> HandlerResolution<T> resolveResultHandler(
+  public static <T> ResultResolution<T> resolveResultHandler(
       FallbackSnapshot snapshot,
       FallbackConfig<T> config,
-      Object result,
+      T result,
       Instant now) {
 
     requireState(snapshot, FallbackState.EXECUTING, "resolveResultHandler");
 
-    FallbackHandler<T> handler = config.findHandlerForResult(result);
+    FallbackResultHandler<T> handler = config.findHandlerForResult(result);
     if (handler == null) {
       return null; // Result is acceptable
     }
 
     FallbackSnapshot fallingBack = snapshot.withFallingBack(null, handler.name(), now);
-    return new HandlerResolution<>(handler, fallingBack, true);
+    return new ResultResolution<>(handler, fallingBack, true);
   }
 
-  // ======================== Fallback Outcome ========================
-
-  /**
-   * Records that the fallback handler recovered successfully.
-   * Transitions FALLING_BACK → RECOVERED.
-   *
-   * @param snapshot the current snapshot (must be in FALLING_BACK)
-   * @param now      the current time
-   * @return a snapshot in RECOVERED state
-   * @throws IllegalStateException if not in FALLING_BACK state
-   */
   public static FallbackSnapshot recordFallbackSuccess(FallbackSnapshot snapshot, Instant now) {
     requireState(snapshot, FallbackState.FALLING_BACK, "recordFallbackSuccess");
     return snapshot.withRecovered(now);
   }
 
-  /**
-   * Records that the fallback handler itself failed.
-   * Transitions FALLING_BACK → FALLBACK_FAILED.
-   *
-   * @param snapshot        the current snapshot (must be in FALLING_BACK)
-   * @param fallbackFailure the exception thrown by the fallback handler
-   * @param now             the current time
-   * @return a snapshot in FALLBACK_FAILED state
-   * @throws IllegalStateException if not in FALLING_BACK state
-   */
   public static FallbackSnapshot recordFallbackFailure(
       FallbackSnapshot snapshot,
       Throwable fallbackFailure,
@@ -154,46 +90,19 @@ public final class FallbackCore {
     return snapshot.withFallbackFailed(fallbackFailure, now);
   }
 
-  // ======================== Handler Invocation (pure) ========================
-
-  /**
-   * Invokes the resolved exception-based handler and returns the fallback value.
-   *
-   * <p>This is a pure delegation method — it pattern-matches on the handler
-   * type and calls the appropriate {@code apply} method.
-   *
-   * @param handler the resolved handler
-   * @param failure the primary exception
-   * @param <T>     the result type
-   * @return the fallback value
-   */
   @SuppressWarnings("unchecked")
-  public static <T> T invokeExceptionHandler(FallbackHandler<T> handler, Throwable failure) {
+  public static <T> T invokeExceptionHandler(FallbackExceptionHandler<T> handler, Throwable failure) {
     return switch (handler) {
-      case FallbackHandler.ForExceptionType<T, ?> typed -> typed.apply(failure);
-      case FallbackHandler.ForExceptionPredicate<T> predicated -> predicated.apply(failure);
-      case FallbackHandler.CatchAll<T> catchAll -> catchAll.apply(failure);
-      case FallbackHandler.ConstantValue<T> constant -> constant.apply();
-      case FallbackHandler.ForResult<T> e ->
-          throw new IllegalStateException("Cannot invoke result handler for an exception");
+      case FallbackExceptionHandler.ForExceptionType<T, ?> typed -> typed.apply(failure);
+      case FallbackExceptionHandler.ForExceptionPredicate<T> predicated -> predicated.apply(failure);
+      case FallbackExceptionHandler.CatchAll<T> catchAll -> catchAll.apply(failure);
+      case FallbackExceptionHandler.ConstantValue<T> constant -> constant.apply();
     };
   }
 
-  /**
-   * Invokes the resolved result-based handler and returns the fallback value.
-   *
-   * @param handler the resolved handler
-   * @param <T>     the result type
-   * @return the fallback value
-   */
-  public static <T> T invokeResultHandler(FallbackHandler<T> handler) {
-    if (handler instanceof FallbackHandler.ForResult<T> resultHandler) {
-      return resultHandler.apply();
-    }
-    throw new IllegalStateException("Expected a result handler but got: " + handler.getClass().getSimpleName());
+  public static <T> T invokeResultHandler(FallbackResultHandler<T> handler) {
+    return handler.apply();
   }
-
-  // ======================== Internal ========================
 
   private static void requireState(FallbackSnapshot snapshot, FallbackState required, String operation) {
     if (snapshot.state() != required) {
@@ -202,18 +111,15 @@ public final class FallbackCore {
     }
   }
 
-  // ======================== Handler Resolution Record ========================
+  public record ExceptionResolution<T>(
+      FallbackExceptionHandler<T> handler,
+      FallbackSnapshot snapshot,
+      boolean matched
+  ) {
+  }
 
-  /**
-   * The result of resolving a fallback handler for a failure.
-   *
-   * @param handler  the matched handler, or {@code null} if no handler matched
-   * @param snapshot the updated snapshot
-   * @param matched  whether a handler was found
-   * @param <T>      the result type
-   */
-  public record HandlerResolution<T>(
-      FallbackHandler<T> handler,
+  public record ResultResolution<T>(
+      FallbackResultHandler<T> handler,
       FallbackSnapshot snapshot,
       boolean matched
   ) {
