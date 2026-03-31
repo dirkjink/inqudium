@@ -27,6 +27,13 @@ public class ImperativeBulkheadStrategy<T> implements BulkheadParadigmStrategy<I
   /**
    * Instead of silently returning the undecorated call when the state machine is
    * not a BlockingBulkheadStateMachine, we throw an IllegalArgumentException.
+   *
+   * <h4>Late RTT Measurement in Synchronous Code</h4>
+   * The startNanos is measured after tryAcquire has blocked.
+   * This is perfectly correct for Vegas and AIMD, as they require pure downstream metrics
+   * (business logic). Keep this in mind: The RTT reported to releaseAndReport does not reflect
+   * the total call time from the caller's perspective, but only the execution time after
+   * the bulkhead is released.
    */
   @Override
   public InqCall<T> decorate(InqCall<T> call, BulkheadStateMachine stateMachine) {

@@ -225,12 +225,34 @@ public final class CoDelImperativeStateMachine
    *       which is not possible with {@code synchronized} blocks.</li>
    * </ol>
    *
-   * <p>The lock is <em>not</em> created with fairness ({@code new ReentrantLock(false)},
-   * the default) because fairness imposes significant throughput overhead. The condition
-   * variable provides sufficient ordering: threads waiting on {@code permitAvailable} are
-   * signaled in FIFO order by the JVM's condition queue implementation.
+   * <p><b>CRITICAL: This lock MUST be fair ({@code new ReentrantLock(true)}).</b>
+   *
+   * <p>Using an unfair lock (the default) completely breaks the CoDel algorithm under load
+   * due to a concurrency phenomenon known as "lock barging". While it is true that
+   * {@link Condition#signal()} wakes up waiting threads in FIFO order, a signaled thread
+   * does not immediately execute; it must first re-acquire the lock to exit the
+   * {@code awaitNanos()} method.
+   *
+   * <p>With an unfair lock, a newly arriving thread can barge in and acquire the lock
+   * before the signaled (older) thread can re-acquire it. This creates a fatal flaw
+   * for CoDel's congestion memory:
+   * <ol>
+   * <li>The new thread acquires the lock and sees an available permit.</li>
+   * <li>It measures its sojourn time, which is near zero since it just arrived.</li>
+   * <li>Because its sojourn time is well below the target delay, it concludes the
+   * system is healthy and resets the congestion stopwatch
+   * ({@code firstAboveTargetNanos = 0L}).</li>
+   * <li>The older thread finally re-acquires the lock and measures a massive
+   * sojourn time. However, because the barging thread just reset the stopwatch,
+   * the old thread cannot reject the request. It merely restarts the timer.</li>
+   * </ol>
+   *
+   * <p>This cycle permanently prevents CoDel from detecting sustained congestion, as
+   * incoming traffic constantly wipes the memory of the queue's true delay. A fair lock
+   * ensures that threads evaluate their sojourn times in strict arrival order, preserving
+   * the integrity of the queue-wait measurements.
    */
-  private final ReentrantLock lock = new ReentrantLock();
+  private final ReentrantLock lock = new ReentrantLock(true);
 
   /**
    * The condition variable that threads wait on when no permits are available.

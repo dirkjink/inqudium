@@ -385,16 +385,6 @@ public final class VegasLimitAlgorithm implements InqLimitAlgorithm {
     do {
       current = state.get();
 
-      // ── Step 1: Maintain the No-Load Baseline ──
-      //
-      // The baseline represents the physical minimum response time when the downstream
-      // system has zero queued requests. It is the anchor for the gradient calculation:
-      // gradient = baseline / smoothedRtt.
-      //
-      // First, take the minimum of the current baseline and the new sample.
-      // This allows the baseline to converge downward toward the true minimum.
-      long candidateNoLoad = Math.min(current.noLoadRttNanos(), rttNanos);
-
       // Apply decay — slowly drift the baseline toward the smoothed RTT.
       //
       // The decay counteracts the monotonic downward pull of Math.min. Without it:
@@ -416,68 +406,94 @@ public final class VegasLimitAlgorithm implements InqLimitAlgorithm {
       // The result is capped at smoothedRttNanos to ensure the baseline never drifts
       // above the average. The baseline should always represent "best case, no queuing",
       // never "average case with some queuing".
-      long newNoLoad;
-      if (baselineDecayFactor > 0.0 && current.smoothedRttNanos() > 0
-          && candidateNoLoad < current.smoothedRttNanos()) {
-        long decayed = (long) (candidateNoLoad * (1.0 - baselineDecayFactor)
-            + current.smoothedRttNanos() * baselineDecayFactor);
-        newNoLoad = Math.min(decayed, current.smoothedRttNanos());
+      final long newNoLoad;
+      if (isSuccess) {
+        // ── Step 1: Maintain the No-Load Baseline ──
+        //
+        // The baseline represents the physical minimum response time when the downstream
+        // system has zero queued requests. It is the anchor for the gradient calculation:
+        // gradient = baseline / smoothedRtt.
+        //
+        // First, take the minimum of the current baseline and the new sample.
+        // This allows the baseline to converge downward toward the true minimum.
+        long candidateNoLoad = Math.min(current.noLoadRttNanos(), rttNanos);
+        if (baselineDecayFactor > 0.0 && current.smoothedRttNanos() > 0
+            && candidateNoLoad < current.smoothedRttNanos()) {
+          long decayed = (long) (candidateNoLoad * (1.0 - baselineDecayFactor)
+              + current.smoothedRttNanos() * baselineDecayFactor);
+          newNoLoad = Math.min(decayed, current.smoothedRttNanos());
+        } else {
+          // No decay applied. Either decay is disabled, no smoothed average exists yet,
+          // or the baseline is already at or above the smoothed average.
+          newNoLoad = candidateNoLoad;
+        }
       } else {
-        // No decay applied. Either decay is disabled, no smoothed average exists yet,
-        // or the baseline is already at or above the smoothed average.
-        newNoLoad = candidateNoLoad;
+        // The problem: Failed requests often have extremely atypical latencies.
+        // An immediate connection failure (Connection Refused) might have an RTT of 1ms,
+        // while a timeout corresponds exactly to the configured maximum duration.
+        // When a "Fast Fail" occurs, noLoadRttNanos is reduced to this tiny value (Math.min).
+        // When the system recovers and successful requests again take a real 50ms,
+        // the algorithm calculates the gradient as 1ms / 50ms = 0.02. Vegas interprets this
+        // as a catastrophic overload and permanently throttles the system to the absolute
+        // minimum (minLimit).
+        newNoLoad = current.noLoadRttNanos();
       }
 
-      // ── Step 2: Update the Smoothed Current RTT (EWMA) ──
-      //
-      // The smoothed RTT is an Exponentially Weighted Moving Average that filters out
-      // random latency noise (GC pauses, network jitter, occasional slow queries) and
-      // provides a stable "current conditions" signal for the gradient.
-      //
-      // Formula: smoothed = oldSmoothed × (1 - α) + newSample × α
-      //
-      // Special case: when smoothedRttNanos == 0 (first sample ever), we use the raw
-      // sample as-is. This avoids a cold-start problem where the EWMA would be
-      // artificially low (pulled toward 0) for the first few samples, causing the
-      // gradient to overestimate congestion.
-      long newSmoothed = current.smoothedRttNanos() == 0
-          ? rttNanos
-          : (long) (current.smoothedRttNanos() * (1 - smoothingFactor) + rttNanos * smoothingFactor);
+      final long newSmoothed;
+      if (isSuccess) {
+        // ── Step 2: Update the Smoothed Current RTT (EWMA) ──
+        //
+        // The smoothed RTT is an Exponentially Weighted Moving Average that filters out
+        // random latency noise (GC pauses, network jitter, occasional slow queries) and
+        // provides a stable "current conditions" signal for the gradient.
+        //
+        // Formula: smoothed = oldSmoothed × (1 - α) + newSample × α
+        //
+        // Special case: when smoothedRttNanos == 0 (first sample ever), we use the raw
+        // sample as-is. This avoids a cold-start problem where the EWMA would be
+        // artificially low (pulled toward 0) for the first few samples, causing the
+        // gradient to overestimate congestion.
+        newSmoothed = current.smoothedRttNanos() == 0
+            ? rttNanos
+            : (long) (current.smoothedRttNanos() * (1 - smoothingFactor) + rttNanos * smoothingFactor);
+      } else {
+        newSmoothed = current.smoothedRttNanos();
+      }
 
-      // ── Step 3: Compute the Gradient ──
-      //
-      // The gradient is the heart of Vegas: it quantifies how much the downstream
-      // system is slowing down relative to its best-case performance.
-      //
-      //   gradient = noLoadRtt / smoothedRtt
-      //
-      // Interpretation:
-      //   1.0  → Current latency matches the baseline. No queuing detected.
-      //          The downstream system is operating at peak efficiency.
-      //   0.5  → Current latency is 2× the baseline. Roughly half the time is
-      //          spent in the downstream system's internal queue.
-      //   0.25 → Current latency is 4× the baseline. Severe queuing — 75% of
-      //          response time is queue wait, only 25% is actual processing.
-      //   >1.0 → Current latency is better than the recorded baseline. This can
-      //          happen when the baseline was established during a warm-up period,
-      //          or when the downstream service's performance has improved (e.g.,
-      //          cache warming, JIT compilation completing).
-      //
-      // Clamping:
-      //   - Minimum 0.5: Prevents the limit from dropping by more than 50% in a
-      //     single update, even under extreme congestion. This avoids oscillations
-      //     where a massive drop undershoots, triggering an equally massive rebound.
-      //   - Maximum 1.2: Prevents runaway growth when the gradient exceeds 1.0.
-      //     A 20% overshoot allowance lets the algorithm gently probe beyond its
-      //     current baseline, but the cap prevents explosive growth from a
-      //     temporarily low smoothed RTT.
-      double gradient = (double) newNoLoad / (double) newSmoothed;
-      gradient = Math.max(0.5, Math.min(1.2, gradient));
-
-      // ── Step 4: Calculate the New Concurrency Limit ──
       double newLimit;
 
       if (isSuccess) {
+        // ── Step 3: Compute the Gradient ──
+        //
+        // The gradient is the heart of Vegas: it quantifies how much the downstream
+        // system is slowing down relative to its best-case performance.
+        //
+        //   gradient = noLoadRtt / smoothedRtt
+        //
+        // Interpretation:
+        //   1.0  → Current latency matches the baseline. No queuing detected.
+        //          The downstream system is operating at peak efficiency.
+        //   0.5  → Current latency is 2× the baseline. Roughly half the time is
+        //          spent in the downstream system's internal queue.
+        //   0.25 → Current latency is 4× the baseline. Severe queuing — 75% of
+        //          response time is queue wait, only 25% is actual processing.
+        //   >1.0 → Current latency is better than the recorded baseline. This can
+        //          happen when the baseline was established during a warm-up period,
+        //          or when the downstream service's performance has improved (e.g.,
+        //          cache warming, JIT compilation completing).
+        //
+        // Clamping:
+        //   - Minimum 0.5: Prevents the limit from dropping by more than 50% in a
+        //     single update, even under extreme congestion. This avoids oscillations
+        //     where a massive drop undershoots, triggering an equally massive rebound.
+        //   - Maximum 1.2: Prevents runaway growth when the gradient exceeds 1.0.
+        //     A 20% overshoot allowance lets the algorithm gently probe beyond its
+        //     current baseline, but the cap prevents explosive growth from a
+        //     temporarily low smoothed RTT.
+        double gradient = (newSmoothed > 0) ? (double) newNoLoad / (double) newSmoothed : 1.0;
+        gradient = Math.max(0.5, Math.min(1.2, gradient));
+
+        // ── Step 4: Calculate the New Concurrency Limit ──
         // ── Proactive Gradient-Based Adjustment ──
         //
         // Scale the current limit by the gradient and add a small probing factor (+0.5).
