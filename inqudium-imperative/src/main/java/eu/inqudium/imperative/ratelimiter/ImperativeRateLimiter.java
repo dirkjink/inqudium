@@ -16,48 +16,6 @@ import java.util.function.Supplier;
 
 /**
  * Thread-safe, imperative rate limiter implementation.
- *
- * <p>Designed for use with virtual threads (Project Loom) or traditional
- * platform threads. Uses lock-free CAS operations on an
- * {@link AtomicReference} to manage state, avoiding pinning of virtual threads
- * on monitors.
- *
- * <p>Supports two modes:
- * <ul>
- *   <li><strong>Fail-fast</strong> ({@code defaultTimeout = Duration.ZERO}):
- *       throws {@link RateLimiterException} immediately when no permits
- *       are available.</li>
- *   <li><strong>Blocking wait</strong> ({@code defaultTimeout > 0}):
- *       parks the calling (virtual) thread using {@link LockSupport#parkNanos}
- *       until a permit becomes available or the timeout expires.</li>
- * </ul>
- *
- * <p>Delegates all state-machine logic to the functional
- * {@link RateLimiterCore}.
- *
- * <h2>Usage</h2>
- * <pre>{@code
- * var config = RateLimiterConfig.builder("api-limiter")
- *     .limitForPeriod(100, Duration.ofSeconds(1))
- *     .defaultTimeout(Duration.ofMillis(500))
- *     .build();
- *
- * var limiter = new ImperativeRateLimiter(config);
- *
- * // Blocking (waits up to 500ms if rate-limited)
- * String result = limiter.execute(() -> httpClient.call());
- *
- * // Fail-fast check
- * if (limiter.tryAcquirePermission()) {
- *     doWork();
- * }
- *
- * // With fallback
- * String result = limiter.executeWithFallback(
- *     () -> httpClient.call(),
- *     () -> "rate-limited-fallback"
- * );
- * }</pre>
  */
 public class ImperativeRateLimiter {
 
@@ -79,65 +37,37 @@ public class ImperativeRateLimiter {
 
   // ======================== Execution ========================
 
-  /**
-   * Executes the given callable, acquiring a permit first.
-   *
-   * <p>If no permit is available and a timeout is configured, the calling
-   * thread is parked (virtual-thread-friendly) until a permit becomes
-   * available or the timeout expires.
-   *
-   * @param callable the operation to protect
-   * @param <T>      the return type
-   * @return the result of the callable
-   * @throws RateLimiterException if no permit is available within the timeout
-   * @throws Exception            if the callable itself throws
-   */
   public <T> T execute(Callable<T> callable) throws Exception {
     acquirePermissionOrThrow(config.defaultTimeout());
     return callable.call();
   }
 
-  /**
-   * Executes with a custom timeout override.
-   */
   public <T> T execute(Callable<T> callable, Duration timeout) throws Exception {
     acquirePermissionOrThrow(timeout);
     return callable.call();
   }
 
-  /**
-   * Executes the given callable with a fallback when rate-limited.
-   *
-   * @param callable the primary operation
-   * @param fallback the fallback supplier invoked when no permit is available
-   * @param <T>      the return type
-   * @return the result of the callable or the fallback
-   * @throws Exception if the callable throws
-   */
   public <T> T executeWithFallback(Callable<T> callable, Supplier<T> fallback) throws Exception {
     try {
       return execute(callable);
     } catch (RateLimiterException e) {
-      return fallback.get();
+      // Fix 3B: Prüfe den Ursprung der Exception, um zu verhindern, dass
+      // Fehler von nachgelagerten Rate Limitern fälschlicherweise hier maskiert werden.
+      if (Objects.equals(e.getRateLimiterName(), config.name())) {
+        return fallback.get();
+      }
+      throw e;
     }
   }
 
-  /**
-   * Executes a {@link Runnable}, acquiring a permit first.
-   *
-   * @param runnable the operation to protect
-   * @throws RateLimiterException if no permit is available within the timeout
-   */
   public void execute(Runnable runnable) {
     try {
       execute(() -> {
         runnable.run();
         return null;
       });
-    } catch (RateLimiterException e) {
-      throw e;
-    } catch (RuntimeException e) {
-      throw e;
+    } catch (RuntimeException | Error e) {
+      throw e; // Fängt RuntimeException (inkl. RateLimiterException) und Errors, wirft sie direkt weiter
     } catch (Exception e) {
       throw new RuntimeException(e);
     }
@@ -145,11 +75,6 @@ public class ImperativeRateLimiter {
 
   // ======================== Direct permission API ========================
 
-  /**
-   * Attempts to acquire a permit without waiting.
-   *
-   * @return {@code true} if a permit was acquired
-   */
   public boolean tryAcquirePermission() {
     Instant now = clock.instant();
     while (true) {
@@ -160,18 +85,16 @@ public class ImperativeRateLimiter {
         if (result.permitted()) {
           emitEvent(RateLimiterEvent.permitted(
               config.name(), result.snapshot().availablePermits(), now));
+        } else {
+          // Fix 3A: Feuern des REJECTED Events, falls der Request fail-fast scheitert
+          emitEvent(RateLimiterEvent.rejected(
+              config.name(), result.snapshot().availablePermits(), result.waitDuration(), now));
         }
         return result.permitted();
       }
-      // CAS failed — retry
     }
   }
 
-  /**
-   * Acquires a permit, blocking if necessary up to the configured timeout.
-   *
-   * @throws RateLimiterException if no permit becomes available within the timeout
-   */
   public void acquirePermission() {
     acquirePermissionOrThrow(config.defaultTimeout());
   }
@@ -179,19 +102,24 @@ public class ImperativeRateLimiter {
   // ======================== Internal ========================
 
   private void acquirePermissionOrThrow(Duration timeout) {
-    Instant now = clock.instant();
-    Instant deadline = now.plus(timeout);
+    Instant start = clock.instant();
+    Instant deadline = start.plus(timeout);
 
     while (true) {
       RateLimiterSnapshot current = snapshotRef.get();
-      now = clock.instant();
+      Instant now = clock.instant();
 
-      // Try with reservation (supports waiting)
+      // Fix 2A: Verbleibendes Timeout in der Schleife neu berechnen,
+      // um Timeout-Erosion durch Thread-Contention zu verhindern.
+      Duration remainingTimeout = timeout.isZero() ? Duration.ZERO : Duration.between(now, deadline);
+      if (remainingTimeout.isNegative()) {
+        remainingTimeout = Duration.ZERO;
+      }
+
       ReservationResult reservation = RateLimiterCore.reservePermission(
-          current, config, now, timeout);
+          current, config, now, remainingTimeout);
 
       if (reservation.timedOut()) {
-        // No permit available within timeout
         emitEvent(RateLimiterEvent.rejected(
             config.name(), current.availablePermits(), reservation.waitDuration(), now));
         throw new RateLimiterException(
@@ -200,44 +128,42 @@ public class ImperativeRateLimiter {
 
       if (snapshotRef.compareAndSet(current, reservation.snapshot())) {
         if (reservation.waitDuration().isZero()) {
-          // Immediate permit
           emitEvent(RateLimiterEvent.permitted(
               config.name(), reservation.snapshot().availablePermits(), now));
           return;
         }
 
-        // Wait for the reservation
         emitEvent(RateLimiterEvent.waiting(
             config.name(), reservation.snapshot().availablePermits(),
             reservation.waitDuration(), now));
 
-        parkForDuration(reservation.waitDuration(), deadline);
+        // Ziel-Zeit berechnen, zu der wir aufwachen sollen
+        Instant targetWakeup = now.plus(reservation.waitDuration());
+        parkUntil(targetWakeup);
         return;
       }
-      // CAS failed — retry
     }
   }
 
   /**
-   * Parks the current thread for the given duration.
-   * Uses {@link LockSupport#parkNanos} which is virtual-thread-friendly
-   * (does not pin to a carrier thread).
+   * Parks the current thread until the target time is reached.
    */
-  private void parkForDuration(Duration waitDuration, Instant deadline) {
-    Instant now = clock.instant();
-    Duration remaining = Duration.between(now, deadline);
-    Duration actualWait = waitDuration.compareTo(remaining) < 0 ? waitDuration : remaining;
+  private void parkUntil(Instant targetWakeupTime) {
+    // Fix 2B: while-Schleife schützt vor Spurious Wakeups
+    while (true) {
+      Instant now = clock.instant();
+      Duration remaining = Duration.between(now, targetWakeupTime);
 
-    if (actualWait.isPositive()) {
-      LockSupport.parkNanos(actualWait.toNanos());
+      if (remaining.isNegative() || remaining.isZero()) {
+        break; // Wartezeit ist physisch vergangen, wir dürfen weiter
+      }
+
+      LockSupport.parkNanos(remaining.toNanos());
     }
   }
 
   // ======================== Listeners ========================
 
-  /**
-   * Registers a listener that is called on every rate limiter event.
-   */
   public void onEvent(Consumer<RateLimiterEvent> listener) {
     eventListeners.add(Objects.requireNonNull(listener));
   }
@@ -250,30 +176,18 @@ public class ImperativeRateLimiter {
 
   // ======================== Introspection ========================
 
-  /**
-   * Returns the current number of available permits (with refill applied).
-   */
   public int getAvailablePermits() {
     return RateLimiterCore.availablePermits(snapshotRef.get(), config, clock.instant());
   }
 
-  /**
-   * Returns a snapshot of the current internal state.
-   */
   public RateLimiterSnapshot getSnapshot() {
     return snapshotRef.get();
   }
 
-  /**
-   * Returns the configuration.
-   */
   public RateLimiterConfig getConfig() {
     return config;
   }
 
-  /**
-   * Drains all permits from the bucket.
-   */
   public void drain() {
     Instant now = clock.instant();
     while (true) {
@@ -286,9 +200,6 @@ public class ImperativeRateLimiter {
     }
   }
 
-  /**
-   * Resets the rate limiter to its initial (full-bucket) state.
-   */
   public void reset() {
     Instant now = clock.instant();
     RateLimiterSnapshot fresh = RateLimiterCore.reset(config, now);
