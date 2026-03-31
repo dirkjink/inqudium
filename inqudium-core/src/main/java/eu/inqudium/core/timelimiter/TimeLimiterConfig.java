@@ -2,7 +2,7 @@ package eu.inqudium.core.timelimiter;
 
 import java.time.Duration;
 import java.util.Objects;
-import java.util.function.Function;
+import java.util.function.BiFunction;
 
 /**
  * Immutable configuration for a time limiter instance.
@@ -16,13 +16,13 @@ import java.util.function.Function;
  * @param timeout          maximum duration an operation may run
  * @param cancelOnTimeout  whether to cancel/interrupt the running operation on timeout
  * @param exceptionFactory factory for the exception thrown on timeout; receives the
- *                         configured timeout duration and returns the throwable to propagate
+ *                         name and the configured timeout duration and returns the throwable to propagate
  */
 public record TimeLimiterConfig(
     String name,
     Duration timeout,
     boolean cancelOnTimeout,
-    Function<Duration, ? extends RuntimeException> exceptionFactory
+    BiFunction<String, Duration, ? extends RuntimeException> exceptionFactory
 ) {
 
   public TimeLimiterConfig {
@@ -42,15 +42,18 @@ public record TimeLimiterConfig(
    * Creates the timeout exception using the configured factory.
    */
   public RuntimeException createTimeoutException() {
-    return exceptionFactory.apply(timeout);
+    // Fix 2A: Namen und Dauer sicher injizieren, ohne Exception-Instanzen für instanceof-Checks zu bauen.
+    return exceptionFactory.apply(name, timeout);
   }
 
   public static final class Builder {
     private final String name;
     private Duration timeout = Duration.ofSeconds(5);
     private boolean cancelOnTimeout = true;
-    private Function<Duration, ? extends RuntimeException> exceptionFactory =
-        duration -> new TimeLimiterException(null, duration);
+
+    // Fix 2A: BiFunction erwartet Name und Duration. Die Standard-Exception passt perfekt auf diese Signatur.
+    private BiFunction<String, Duration, ? extends RuntimeException> exceptionFactory =
+        TimeLimiterException::new;
 
     private Builder(String name) {
       this.name = Objects.requireNonNull(name);
@@ -68,21 +71,15 @@ public record TimeLimiterConfig(
 
     /**
      * Custom factory for the exception thrown on timeout.
-     * Receives the configured timeout duration.
+     * Receives the limiter name and configured timeout duration.
      */
-    public Builder exceptionFactory(Function<Duration, ? extends RuntimeException> factory) {
+    public Builder exceptionFactory(BiFunction<String, Duration, ? extends RuntimeException> factory) {
       this.exceptionFactory = factory;
       return this;
     }
 
     public TimeLimiterConfig build() {
-      // Rebind the name into the default factory if it hasn't been customised
-      Function<Duration, ? extends RuntimeException> factory = this.exceptionFactory;
-      final String n = this.name;
-      if (factory.apply(Duration.ZERO) instanceof TimeLimiterException) {
-        factory = duration -> new TimeLimiterException(n, duration);
-      }
-      return new TimeLimiterConfig(n, timeout, cancelOnTimeout, factory);
+      return new TimeLimiterConfig(name, timeout, cancelOnTimeout, exceptionFactory);
     }
   }
 }

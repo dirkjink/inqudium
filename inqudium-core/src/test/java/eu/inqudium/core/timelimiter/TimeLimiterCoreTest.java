@@ -745,7 +745,8 @@ class TimeLimiterCoreTest {
       // Given
       TimeLimiterConfig config = TimeLimiterConfig.builder("custom")
           .timeout(Duration.ofSeconds(3))
-          .exceptionFactory(d -> new IllegalStateException("custom timeout: " + d.toMillis()))
+          .exceptionFactory((name, duration) ->
+              new IllegalStateException("Limiter '" + name + "' custom timeout: " + duration.toMillis() + "ms"))
           .build();
 
       // When
