@@ -197,32 +197,64 @@ class ImperativeCircuitBreakerTest {
     }
 
     @Test
-    @DisplayName("should reset the failure counter after a successful call")
-    void should_reset_the_failure_counter_after_a_successful_call() throws Exception {
+    @DisplayName("should gradually decay failures so interleaved successes prevent tripping")
+    void should_gradually_decay_failures_so_interleaved_successes_prevent_tripping() throws Exception {
       // Given
       ImperativeCircuitBreaker cb = createBreaker(); // threshold = 3
 
-      // When — 2 failures, then 1 success, then 2 more failures
+      // When — 2 failures, then 2 successes (fully heals), then 2 more failures
       for (int i = 0; i < 2; i++) {
         try {
           cb.execute(() -> {
             throw new RuntimeException("fail");
           });
-        } catch (Exception e) {
+        } catch (Exception ignored) {
         }
       }
       cb.execute(() -> "success");
+      cb.execute(() -> "success"); // second success needed to fully heal 2 failures
+
       for (int i = 0; i < 2; i++) {
         try {
           cb.execute(() -> {
             throw new RuntimeException("fail");
           });
-        } catch (Exception e) {
+        } catch (Exception ignored) {
         }
       }
 
-      // Then — should still be closed (2+2=4 failures but reset in between)
+      // Then — still closed: 2 failures - 2 successes + 2 failures = 2, below threshold of 3
       assertThat(cb.getState()).isEqualTo(CircuitState.CLOSED);
+    }
+
+    @Test
+    @DisplayName("should trip when single success cannot heal enough failures")
+    void should_trip_when_single_success_cannot_heal_enough_failures() throws Exception {
+      // Given
+      ImperativeCircuitBreaker cb = createBreaker(); // threshold = 3
+
+      // When — 2 failures, only 1 success, then 2 more failures
+      for (int i = 0; i < 2; i++) {
+        try {
+          cb.execute(() -> {
+            throw new RuntimeException("fail");
+          });
+        } catch (Exception ignored) {
+        }
+      }
+      cb.execute(() -> "success"); // heals only 1 failure → failureCount = 1
+
+      for (int i = 0; i < 2; i++) {
+        try {
+          cb.execute(() -> {
+            throw new RuntimeException("fail");
+          });
+        } catch (Exception ignored) {
+        }
+      }
+
+      // Then — opens: 2 - 1 + 2 = 3 = threshold
+      assertThat(cb.getState()).isEqualTo(CircuitState.OPEN);
     }
   }
 

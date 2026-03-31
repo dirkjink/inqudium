@@ -50,4 +50,14 @@ public record CircuitBreakerSnapshot(
   public CircuitBreakerSnapshot withResetFailureCount() {
     return new CircuitBreakerSnapshot(state, 0, successCount, halfOpenAttempts, stateChangedAt);
   }
+
+  // Fix 2: Allow releasing a HALF_OPEN attempt slot when an ignored exception occurs
+  public CircuitBreakerSnapshot withDecrementedHalfOpenAttempts() {
+    return new CircuitBreakerSnapshot(state, failureCount, successCount, Math.max(0, halfOpenAttempts - 1), stateChangedAt);
+  }
+
+  // Fix 4: Gradual failure decay instead of full reset — one success heals one failure
+  public CircuitBreakerSnapshot withDecrementedFailureCount() {
+    return new CircuitBreakerSnapshot(state, Math.max(0, failureCount - 1), successCount, halfOpenAttempts, stateChangedAt);
+  }
 }

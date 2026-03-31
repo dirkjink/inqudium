@@ -2,6 +2,7 @@ package eu.inqudium.core.circuitbreaker;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Optional;
 
 /**
  * Pure functional core of the circuit breaker state machine.
@@ -80,7 +81,8 @@ public final class CircuitBreakerCore {
   /**
    * Records a successful call and returns the updated snapshot.
    *
-   * <p>In CLOSED state the failure counter is reset.
+   * <p>In CLOSED state the failure counter is decremented by one (gradual decay),
+   * rather than fully reset, to prevent masking sustained failure patterns.
    * In HALF_OPEN state the success counter is incremented; if it reaches the
    * configured threshold the circuit transitions back to CLOSED.
    *
@@ -95,7 +97,9 @@ public final class CircuitBreakerCore {
       Instant now) {
 
     return switch (snapshot.state()) {
-      case CLOSED -> snapshot.withResetFailureCount();
+      // Fix 4: Gradual decay — one success heals one failure instead of resetting entirely.
+      // This prevents patterns like 4 failures → 1 success → 4 failures from never tripping.
+      case CLOSED -> snapshot.withDecrementedFailureCount();
 
       case HALF_OPEN -> {
         int newSuccessCount = snapshot.successCount() + 1;
@@ -146,6 +150,26 @@ public final class CircuitBreakerCore {
     };
   }
 
+  /**
+   * Records that a call outcome was ignored (neither success nor failure).
+   *
+   * <p>Fix 2: In HALF_OPEN state, an ignored exception must release the attempt slot
+   * that was consumed during permission acquisition. Without this, ignored exceptions
+   * would permanently consume HALF_OPEN slots, potentially preventing the circuit
+   * from ever accumulating enough successes to transition back to CLOSED.
+   *
+   * <p>In CLOSED and OPEN states, this is a no-op.
+   *
+   * @param snapshot the current state snapshot
+   * @return the updated snapshot with the attempt slot released (in HALF_OPEN)
+   */
+  public static CircuitBreakerSnapshot recordIgnored(CircuitBreakerSnapshot snapshot) {
+    return switch (snapshot.state()) {
+      case HALF_OPEN -> snapshot.withDecrementedHalfOpenAttempts();
+      case CLOSED, OPEN -> snapshot;
+    };
+  }
+
   // ======================== Query helpers ========================
 
   /**
@@ -169,17 +193,20 @@ public final class CircuitBreakerCore {
 
   /**
    * Detects whether a state transition occurred between two snapshots.
-   * Returns {@code null} if no transition happened.
+   *
+   * <p>Fix 9: Returns {@link Optional} instead of nullable to align with modern Java idioms.
+   *
+   * @return an Optional containing the transition, or empty if no transition occurred
    */
-  public static StateTransition detectTransition(
+  public static Optional<StateTransition> detectTransition(
       String name,
       CircuitBreakerSnapshot before,
       CircuitBreakerSnapshot after,
       Instant now) {
 
     if (before.state() != after.state()) {
-      return new StateTransition(name, before.state(), after.state(), now);
+      return Optional.of(new StateTransition(name, before.state(), after.state(), now));
     }
-    return null;
+    return Optional.empty();
   }
 }

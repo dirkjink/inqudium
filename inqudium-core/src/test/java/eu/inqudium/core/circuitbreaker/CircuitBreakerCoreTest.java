@@ -6,6 +6,7 @@ import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -187,8 +188,8 @@ class CircuitBreakerCoreTest {
   class SuccessRecordingInClosedState {
 
     @Test
-    @DisplayName("should reset the failure counter on a successful call")
-    void should_reset_the_failure_counter_on_a_successful_call() {
+    @DisplayName("should decrement the failure counter by one on a successful call")
+    void should_decrement_the_failure_counter_by_one_on_a_successful_call() {
       // Given
       CircuitBreakerConfig config = defaultConfig();
       CircuitBreakerSnapshot snapshot = CircuitBreakerSnapshot.initial(NOW);
@@ -199,7 +200,7 @@ class CircuitBreakerCoreTest {
       CircuitBreakerSnapshot afterSuccess = CircuitBreakerCore.recordSuccess(withFailures, config, NOW);
 
       // Then
-      assertThat(afterSuccess.failureCount()).isZero();
+      assertThat(afterSuccess.failureCount()).isEqualTo(1);
       assertThat(afterSuccess.state()).isEqualTo(CircuitState.CLOSED);
     }
 
@@ -488,13 +489,13 @@ class CircuitBreakerCoreTest {
       CircuitBreakerSnapshot after = before.withState(CircuitState.OPEN, NOW);
 
       // When
-      StateTransition transition = CircuitBreakerCore.detectTransition("test", before, after, NOW);
+      Optional<StateTransition> transition = CircuitBreakerCore.detectTransition("test", before, after, NOW);
 
       // Then
-      assertThat(transition).isNotNull();
-      assertThat(transition.fromState()).isEqualTo(CircuitState.CLOSED);
-      assertThat(transition.toState()).isEqualTo(CircuitState.OPEN);
-      assertThat(transition.name()).isEqualTo("test");
+      assertThat(transition.isPresent()).isTrue();
+      assertThat(transition.get().fromState()).isEqualTo(CircuitState.CLOSED);
+      assertThat(transition.get().toState()).isEqualTo(CircuitState.OPEN);
+      assertThat(transition.get().name()).isEqualTo("test");
     }
 
     @Test
@@ -505,10 +506,10 @@ class CircuitBreakerCoreTest {
       CircuitBreakerSnapshot after = before.withIncrementedFailureCount();
 
       // When
-      StateTransition transition = CircuitBreakerCore.detectTransition("test", before, after, NOW);
+      Optional<StateTransition> transition = CircuitBreakerCore.detectTransition("test", before, after, NOW);
 
       // Then
-      assertThat(transition).isNull();
+      assertThat(transition.isPresent()).isFalse();
     }
   }
 

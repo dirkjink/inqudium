@@ -30,6 +30,12 @@ public record CircuitBreakerConfig(
     if (permittedCallsInHalfOpen < 1) {
       throw new IllegalArgumentException("permittedCallsInHalfOpen must be >= 1, got " + permittedCallsInHalfOpen);
     }
+    // Fix 1: Prevent impossible configuration where the circuit can never leave HALF_OPEN
+    if (permittedCallsInHalfOpen < successThresholdInHalfOpen) {
+      throw new IllegalArgumentException(
+          "permittedCallsInHalfOpen (%d) must be >= successThresholdInHalfOpen (%d), otherwise the circuit can never transition from HALF_OPEN back to CLOSED"
+              .formatted(permittedCallsInHalfOpen, successThresholdInHalfOpen));
+    }
     if (waitDurationInOpenState.isNegative() || waitDurationInOpenState.isZero()) {
       throw new IllegalArgumentException("waitDurationInOpenState must be positive");
     }
@@ -53,6 +59,10 @@ public record CircuitBreakerConfig(
     private int permittedCallsInHalfOpen = 3;
     private Duration waitDurationInOpenState = Duration.ofSeconds(30);
     private Predicate<Throwable> recordFailurePredicate = e -> true;
+
+    // Fix 8: Track whether predicate was set via recordExceptions/ignoreExceptions
+    // to prevent silent overwriting
+    private boolean predicateSetViaConvenienceMethod = false;
 
     private Builder(String name) {
       this.name = Objects.requireNonNull(name);
@@ -79,15 +89,26 @@ public record CircuitBreakerConfig(
     }
 
     public Builder recordFailurePredicate(Predicate<Throwable> recordFailurePredicate) {
+      // Fix 8: Direct predicate setting resets the convenience method flag
       this.recordFailurePredicate = recordFailurePredicate;
+      this.predicateSetViaConvenienceMethod = false;
       return this;
     }
 
     /**
      * Convenience method: only record exceptions of the given types as failures.
+     *
+     * <p>Cannot be combined with {@link #ignoreExceptions} — an
+     * {@link IllegalStateException} is thrown if both are called on the same builder.
      */
     @SafeVarargs
     public final Builder recordExceptions(Class<? extends Throwable>... exceptionTypes) {
+      // Fix 8: Prevent silent overwriting when combined with ignoreExceptions
+      if (predicateSetViaConvenienceMethod) {
+        throw new IllegalStateException(
+            "recordExceptions() and ignoreExceptions() cannot both be used on the same builder. "
+                + "Use recordFailurePredicate() for complex filtering logic.");
+      }
       this.recordFailurePredicate = throwable -> {
         for (Class<? extends Throwable> type : exceptionTypes) {
           if (type.isInstance(throwable)) {
@@ -96,14 +117,24 @@ public record CircuitBreakerConfig(
         }
         return false;
       };
+      this.predicateSetViaConvenienceMethod = true;
       return this;
     }
 
     /**
      * Convenience method: ignore (do not record) exceptions of the given types.
+     *
+     * <p>Cannot be combined with {@link #recordExceptions} — an
+     * {@link IllegalStateException} is thrown if both are called on the same builder.
      */
     @SafeVarargs
     public final Builder ignoreExceptions(Class<? extends Throwable>... exceptionTypes) {
+      // Fix 8: Prevent silent overwriting when combined with recordExceptions
+      if (predicateSetViaConvenienceMethod) {
+        throw new IllegalStateException(
+            "recordExceptions() and ignoreExceptions() cannot both be used on the same builder. "
+                + "Use recordFailurePredicate() for complex filtering logic.");
+      }
       this.recordFailurePredicate = throwable -> {
         for (Class<? extends Throwable> type : exceptionTypes) {
           if (type.isInstance(throwable)) {
@@ -112,6 +143,7 @@ public record CircuitBreakerConfig(
         }
         return true;
       };
+      this.predicateSetViaConvenienceMethod = true;
       return this;
     }
 
