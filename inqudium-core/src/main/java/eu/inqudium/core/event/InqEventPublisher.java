@@ -123,9 +123,14 @@ public interface InqEventPublisher extends AutoCloseable {
   /**
    * Publishes an event to all registered consumers and global exporters.
    *
-   * <p>This method must be thread-safe. Consumer exceptions are caught and
-   * do not propagate to the element. The publish path contains no expiry logic —
-   * all TTL-based cleanup is handled asynchronously by the background watchdog.
+   * <p>Consumers and exporters are invoked <strong>sequentially on the calling
+   * thread</strong>. This keeps the publish path simple and allocation-free, but
+   * means that a slow consumer directly delays subsequent consumers, the exporter
+   * forward, and — most importantly — the resilience element's calling thread.
+   *
+   * <p>Consumer exceptions are caught and logged but do not propagate to the
+   * element. The publish path contains no expiry logic — all TTL-based cleanup
+   * is handled asynchronously by the background watchdog.
    *
    * @param event the event to publish
    */

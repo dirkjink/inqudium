@@ -82,6 +82,9 @@ public record InqPublisherConfig(
     if (expiryCheckInterval == null) {
       throw new IllegalArgumentException("expiryCheckInterval must not be null");
     }
+    if (expiryCheckInterval.toMillis() < 100) {
+      throw new IllegalArgumentException("expiryCheckInterval must not be less than 100ms, was: " + expiryCheckInterval.toMillis());
+    }
     if (expiryCheckInterval.isNegative() || expiryCheckInterval.isZero()) {
       throw new IllegalArgumentException(
           "expiryCheckInterval must be positive, was: " + expiryCheckInterval);
