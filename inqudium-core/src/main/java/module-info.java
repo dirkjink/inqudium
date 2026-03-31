@@ -41,7 +41,6 @@ module inqudium.core {
   exports eu.inqudium.core;
   exports eu.inqudium.core.circuitbreaker;
   exports eu.inqudium.core.retry;
-  exports eu.inqudium.core.retry.backoff;
   exports eu.inqudium.core.ratelimiter;
   exports eu.inqudium.core.bulkhead;
   exports eu.inqudium.core.timelimiter;
