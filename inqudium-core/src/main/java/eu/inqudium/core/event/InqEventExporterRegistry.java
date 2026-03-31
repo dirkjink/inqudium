@@ -58,7 +58,6 @@ public final class InqEventExporterRegistry {
   // ── Global default instance ──
 
   private static final AtomicReference<InqEventExporterRegistry> DEFAULT_INSTANCE = new AtomicReference<>();
-  private static final String CONSTRUCTION_PHASE = "construction";
   private final AtomicReference<RegistryState> state = new AtomicReference<>(new Open());
 
   // FIX #2: volatile ensures cross-thread visibility when nulled after freeze,
@@ -69,7 +68,7 @@ public final class InqEventExporterRegistry {
 
   public InqEventExporterRegistry() {
     var tccl = Thread.currentThread().getContextClassLoader();
-    // Wir erfassen den TCCL zur Erstellungszeit, halten ihn aber nicht stark fest
+    // Capture the TCCL at creation time but hold it weakly
     this.spiClassLoaderRef = new WeakReference<>(
         tccl != null ? tccl : InqEventExporter.class.getClassLoader()
     );
@@ -150,7 +149,7 @@ public final class InqEventExporterRegistry {
               "(consecutive failure #{}) — retrying.", consecutiveHasNextFailures, t);
           providerErrors.add(new InqProviderErrorEvent(
               "(unknown)", InqEventExporter.class.getName(),
-              CONSTRUCTION_PHASE, t.toString(), Instant.now()));
+              InqProviderErrorEvent.ProviderPhase.CONSTRUCTION, t.toString(), Instant.now()));
           if (consecutiveHasNextFailures >= MAX_CONSECUTIVE_HAS_NEXT_FAILURES) {
             LOGGER.warn("Giving up after {} consecutive hasNext() failures " +
                 "— remaining providers skipped.", MAX_CONSECUTIVE_HAS_NEXT_FAILURES);
@@ -168,7 +167,7 @@ public final class InqEventExporterRegistry {
           LOGGER.warn("Failed to load InqEventExporter provider — provider skipped.", t);
           providerErrors.add(new InqProviderErrorEvent(
               "(unknown)", InqEventExporter.class.getName(),
-              CONSTRUCTION_PHASE, t.toString(), Instant.now()));
+              InqProviderErrorEvent.ProviderPhase.CONSTRUCTION, t.toString(), Instant.now()));
         }
       }
     } catch (Throwable t) {
@@ -176,7 +175,7 @@ public final class InqEventExporterRegistry {
       LOGGER.warn("ServiceLoader discovery for InqEventExporter failed.", t);
       providerErrors.add(new InqProviderErrorEvent(
           "(unknown)", InqEventExporter.class.getName(),
-          CONSTRUCTION_PHASE, t.toString(), Instant.now()));
+          InqProviderErrorEvent.ProviderPhase.CONSTRUCTION, t.toString(), Instant.now()));
     }
 
     // Sort: Comparable first (ascending), then non-Comparable
@@ -194,7 +193,7 @@ public final class InqEventExporterRegistry {
           providerErrors.add(new InqProviderErrorEvent(
               exporter.getClass().getName(),
               InqEventExporter.class.getName(),
-              CONSTRUCTION_PHASE,
+              InqProviderErrorEvent.ProviderPhase.CONSTRUCTION,
               errorMsg,
               Instant.now()
           ));
@@ -241,7 +240,6 @@ public final class InqEventExporterRegistry {
     }
 
     // Fallback if the garbage collector has already cleared it
-    // (or if tccl was null in the constructor and the fallback applies)
     if (classLoader == null) {
       classLoader = InqEventExporter.class.getClassLoader();
     }
@@ -426,7 +424,7 @@ public final class InqEventExporterRegistry {
    * calls and will re-discover ServiceLoader providers on the next
    * {@link #export(InqEvent)} call.
    */
-  void reset() {
+  public void reset() {
     state.set(new Open());
     var tccl = Thread.currentThread().getContextClassLoader();
     this.spiClassLoaderRef = new WeakReference<>(

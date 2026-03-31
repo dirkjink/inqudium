@@ -29,10 +29,10 @@ import java.time.Duration;
  * // Custom — warn at 64, reject at 128, sweep every 500ms
  * var config = InqPublisherConfig.of(64, 128, Duration.ofMillis(500));
  *
- * // Only soft limit, no hard rejection, default expiry interval
- * var config = InqPublisherConfig.withSoftLimit(100);
+ * // Only soft limit, no hard rejection
+ * var config = InqPublisherConfig.of(100, Integer.MAX_VALUE, Duration.ofSeconds(60));
  *
- * var publisher = InqEventPublisher.create("myElement", elementType, config);
+ * var publisher = InqEventPublisher.create("myElement", elementType, registry, config);
  * }</pre>
  *
  * @param softLimit           the consumer count at which a warning is logged (must be &ge; 1)
@@ -40,6 +40,7 @@ import java.time.Duration;
  *                            (must be &ge; softLimit)
  * @param expiryCheckInterval the interval at which expired TTL consumers are swept
  *                            by the background watchdog (must be positive)
+ * @param traceEnabled        whether trace-level event publishing is enabled
  * @since 0.2.0
  */
 public record InqPublisherConfig(
@@ -82,9 +83,6 @@ public record InqPublisherConfig(
     if (expiryCheckInterval == null) {
       throw new IllegalArgumentException("expiryCheckInterval must not be null");
     }
-    if (expiryCheckInterval.toMillis() < 100) {
-      throw new IllegalArgumentException("expiryCheckInterval must not be less than 100ms, was: " + expiryCheckInterval.toMillis());
-    }
     if (expiryCheckInterval.isNegative() || expiryCheckInterval.isZero()) {
       throw new IllegalArgumentException(
           "expiryCheckInterval must be positive, was: " + expiryCheckInterval);
@@ -101,11 +99,13 @@ public record InqPublisherConfig(
   }
 
   /**
-   * Creates a configuration with soft limit, hard limit, and custom expiry interval.
+   * Creates a configuration with soft limit, hard limit, custom expiry interval,
+   * and trace flag.
    *
    * @param softLimit           the consumer count at which a warning is logged
    * @param hardLimit           the consumer count at which new registrations are rejected
    * @param expiryCheckInterval the interval between expiry sweeps
+   * @param traceEnabled        whether trace-level event publishing is enabled
    * @return a new configuration
    */
   public static InqPublisherConfig of(int softLimit,
@@ -120,6 +120,7 @@ public record InqPublisherConfig(
 
   /**
    * Creates a configuration with soft limit, hard limit, and custom expiry interval.
+   * Trace publishing is disabled.
    *
    * @param softLimit           the consumer count at which a warning is logged
    * @param hardLimit           the consumer count at which new registrations are rejected
@@ -132,48 +133,6 @@ public record InqPublisherConfig(
     return new InqPublisherConfig(softLimit,
         hardLimit,
         expiryCheckInterval,
-        false);
-  }
-
-  /**
-   * Creates a configuration with soft and hard limits, using the default expiry interval (60s).
-   *
-   * @param softLimit the consumer count at which a warning is logged
-   * @param hardLimit the consumer count at which new registrations are rejected
-   * @return a new configuration
-   */
-  public static InqPublisherConfig of(int softLimit, int hardLimit) {
-    return new InqPublisherConfig(softLimit,
-        hardLimit,
-        DEFAULT_EXPIRY_CHECK_INTERVAL,
-        false);
-  }
-
-  /**
-   * Creates a configuration with only a soft limit (no hard rejection),
-   * using the default expiry interval.
-   *
-   * @param softLimit the consumer count at which a warning is logged
-   * @return a new configuration with {@code hardLimit = Integer.MAX_VALUE}
-   */
-  public static InqPublisherConfig withSoftLimit(int softLimit) {
-    return new InqPublisherConfig(softLimit,
-        Integer.MAX_VALUE,
-        DEFAULT_EXPIRY_CHECK_INTERVAL,
-        false);
-  }
-
-  /**
-   * Creates a configuration with both limits set to the same value,
-   * using the default expiry interval.
-   *
-   * @param limit the consumer count for both soft and hard limit
-   * @return a new configuration
-   */
-  public static InqPublisherConfig withHardLimit(int limit) {
-    return new InqPublisherConfig(limit,
-        limit,
-        DEFAULT_EXPIRY_CHECK_INTERVAL,
         false);
   }
 

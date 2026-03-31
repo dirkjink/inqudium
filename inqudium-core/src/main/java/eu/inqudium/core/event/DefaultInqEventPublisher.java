@@ -74,7 +74,7 @@ final class DefaultInqEventPublisher implements InqEventPublisher {
    * Lazily initialized watchdog for sweeping expired TTL consumers.
    * Null until the first TTL subscription is registered.
    */
-  private final AtomicReference<InqConsumerExpiryWatchdog<?>> watchdog = new AtomicReference<>();
+  private final AtomicReference<InqConsumerExpiryWatchdog> watchdog = new AtomicReference<>();
 
   DefaultInqEventPublisher(String elementName,
                            InqElementType elementType,
@@ -102,8 +102,6 @@ final class DefaultInqEventPublisher implements InqEventPublisher {
     }
     return Instant.now().plus(ttl);
   }
-
-  // ── Permanent subscriptions ──
 
   /**
    * Returns a new array with all expired entries removed. If no entries are expired,
@@ -179,16 +177,7 @@ final class DefaultInqEventPublisher implements InqEventPublisher {
     publish(eventSupplier.get());
   }
 
-  // ── TTL-based subscriptions ──
-
-  @Override
-  public InqSubscription onEvent(InqEventConsumer consumer) {
-    Objects.requireNonNull(consumer, "consumer must not be null");
-    long subscriptionId = subscriptionCounter.incrementAndGet();
-    String description = consumer.getClass().getName();
-    addConsumer(new ConsumerEntry(subscriptionId, consumer, description, null));
-    return () -> removeConsumer(subscriptionId);
-  }
+  // ── Typed subscriptions ──
 
   @Override
   public <E extends InqEvent> InqSubscription onEvent(Class<E> eventType, Consumer<E> consumer) {
@@ -196,21 +185,6 @@ final class DefaultInqEventPublisher implements InqEventPublisher {
     Objects.requireNonNull(consumer, "consumer must not be null");
     return registerTyped(eventType, consumer, null);
   }
-
-  // ── Lifecycle ──
-
-  @Override
-  public InqSubscription onEvent(InqEventConsumer consumer, Duration ttl) {
-    Objects.requireNonNull(consumer, "consumer must not be null");
-    Instant expiresAt = validateTtlAndComputeExpiry(ttl);
-    long subscriptionId = subscriptionCounter.incrementAndGet();
-    String description = consumer.getClass().getName() + " [TTL=" + ttl + "]";
-    addConsumer(new ConsumerEntry(subscriptionId, consumer, description, expiresAt));
-    ensureWatchdogStarted();
-    return () -> removeConsumer(subscriptionId);
-  }
-
-  // ── Internal registration ──
 
   @Override
   public <E extends InqEvent> InqSubscription onEvent(Class<E> eventType, Consumer<E> consumer,
@@ -223,15 +197,25 @@ final class DefaultInqEventPublisher implements InqEventPublisher {
     return subscription;
   }
 
+  // ── Lifecycle ──
+
   @Override
   public void close() {
-    InqConsumerExpiryWatchdog<?> current = watchdog.getAndSet(null);
+    InqConsumerExpiryWatchdog current = watchdog.getAndSet(null);
     if (current != null) {
       current.close();
     }
   }
 
-  // ── Copy-on-write array management ──
+  // ── Internal registration ──
+
+  /**
+   * Returns the element name of this publisher. Package-private accessor
+   * used by {@link InqConsumerExpiryWatchdog} for thread naming and logging.
+   */
+  String elementName() {
+    return elementName;
+  }
 
   /**
    * Shared registration logic for typed consumers with optional TTL.
@@ -254,6 +238,8 @@ final class DefaultInqEventPublisher implements InqEventPublisher {
     addConsumer(new ConsumerEntry(subscriptionId, wrapper, description, expiresAt));
     return () -> removeConsumer(subscriptionId);
   }
+
+  // ── Copy-on-write array management ──
 
   /**
    * Adds a consumer entry using a CAS loop. Before adding, expired entries are
@@ -307,8 +293,6 @@ final class DefaultInqEventPublisher implements InqEventPublisher {
     }
   }
 
-  // ── Expiry sweep (called by watchdog and addConsumer) ──
-
   private void removeConsumer(long id) {
     consumers.updateAndGet(arr -> {
       int index = -1;
@@ -337,6 +321,8 @@ final class DefaultInqEventPublisher implements InqEventPublisher {
     });
   }
 
+  // ── Expiry sweep (called by watchdog and addConsumer) ──
+
   /**
    * Performs a single-attempt CAS sweep of expired entries from the consumer array.
    *
@@ -364,17 +350,14 @@ final class DefaultInqEventPublisher implements InqEventPublisher {
    * Lazily starts the expiry watchdog on the first TTL subscription registration.
    *
    * <p>Thread-safe via CAS — if two TTL registrations race, only one watchdog is
-   * created. The losing thread's duplicate is immediately closed.
+   * created. The losing thread's duplicate is discarded without starting its thread.
    */
   private void ensureWatchdogStarted() {
     if (watchdog.get() != null) {
       return;
     }
 
-    // Do not start the thread in the constructor of InqConsumerExpiryWatchdog anymore.
-    // Add a separate start() method to the watchdog class.
-    var newWatchdog = new InqConsumerExpiryWatchdog<>(
-        elementName,
+    var newWatchdog = new InqConsumerExpiryWatchdog(
         this,
         config.expiryCheckInterval(),
         DefaultInqEventPublisher::performExpirySweep);
@@ -397,7 +380,7 @@ final class DefaultInqEventPublisher implements InqEventPublisher {
         activeCount++;
       }
     }
-    InqConsumerExpiryWatchdog<?> wd = watchdog.get();
+    InqConsumerExpiryWatchdog wd = watchdog.get();
     return "InqEventPublisher{" +
         "elementName='" + elementName + '\'' +
         ", elementType=" + elementType +

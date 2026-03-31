@@ -10,7 +10,7 @@ import java.util.function.Consumer;
 
 /**
  * Background watchdog that periodically sweeps expired TTL-based consumers
- * from an {@link InqEventPublisher}.
+ * from a {@link DefaultInqEventPublisher}.
  *
  * <p>Runs on a virtual thread (Project Loom) with a configurable check interval.
  * The watchdog is designed to be started lazily — only when the first TTL-based
@@ -23,22 +23,23 @@ import java.util.function.Consumer;
  *
  * <h2>Design rationale</h2>
  * <p>Expiry sweeping is decoupled from the publish hot path to avoid any overhead
- * on event delivery. The watchdog operates on a {@link Runnable} sweep action
+ * on event delivery. The watchdog operates on a {@link Consumer} sweep action
  * provided by the publisher, keeping the watchdog independent of internal data
  * structures. Sweep failures are logged but never propagated — the watchdog
  * continues its schedule regardless.
  *
  * @since 0.2.0
  */
-final class InqConsumerExpiryWatchdog<T> implements AutoCloseable {
+final class InqConsumerExpiryWatchdog implements AutoCloseable {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(InqConsumerExpiryWatchdog.class);
 
   private final Duration interval;
-  private final Consumer<T> sweepAction;
+  private final Consumer<DefaultInqEventPublisher> sweepAction;
+  // Captured at construction for logging after owner may have been GC'd
   private final String ownerName;
   // Holds a weak reference so the owner can be garbage collected
-  private final WeakReference<T> ownerRef;
+  private final WeakReference<DefaultInqEventPublisher> ownerRef;
   private volatile Thread watchdogThread;
   /**
    * Flag to signal the watchdog to stop. Volatile ensures visibility across
@@ -47,25 +48,28 @@ final class InqConsumerExpiryWatchdog<T> implements AutoCloseable {
   private volatile boolean running = true;
 
   /**
-   * Creates and immediately starts a new expiry watchdog.
+   * Creates a new expiry watchdog. The thread is not started until
+   * {@link #startThread()} is called explicitly.
    *
-   * @param ownerName   the name of the owning publisher (used for thread naming and logging)
+   * @param owner       the owning publisher (used for naming, logging, and sweep target)
    * @param interval    the interval between sweep cycles (must be positive)
    * @param sweepAction the action to execute on each sweep cycle — typically a method
    *                    reference to the publisher's internal sweep logic
    * @throws IllegalArgumentException if interval is zero or negative
    */
-  InqConsumerExpiryWatchdog(String ownerName, T owner, Duration interval, Consumer<T> sweepAction) {
-    Objects.requireNonNull(ownerName, "ownerName must not be null");
+  InqConsumerExpiryWatchdog(DefaultInqEventPublisher owner,
+                            Duration interval,
+                            Consumer<DefaultInqEventPublisher> sweepAction) {
+    Objects.requireNonNull(owner, "owner must not be null");
     Objects.requireNonNull(interval, "interval must not be null");
     Objects.requireNonNull(sweepAction, "sweepAction must not be null");
-    if (interval.toMillis() > 100) {
-      throw new IllegalArgumentException("interval must be greater than 100ms, was: " + interval);
+    if (interval.isNegative() || interval.isZero()) {
+      throw new IllegalArgumentException("interval must be positive, was: " + interval);
     }
 
     this.interval = interval;
     this.sweepAction = sweepAction;
-    this.ownerName = ownerName;
+    this.ownerName = owner.elementName();
     this.ownerRef = new WeakReference<>(owner);
   }
 
@@ -75,7 +79,7 @@ final class InqConsumerExpiryWatchdog<T> implements AutoCloseable {
    */
   void startThread() {
     if (this.watchdogThread != null) {
-      return; // Bereits gestartet (Idempotenz)
+      return; // Already started (idempotent)
     }
 
     // Virtual threads are daemon threads by default — they will not prevent
@@ -107,7 +111,7 @@ final class InqConsumerExpiryWatchdog<T> implements AutoCloseable {
         return;
       }
 
-      T owner = ownerRef.get();
+      DefaultInqEventPublisher owner = ownerRef.get();
       if (owner == null) {
         LOGGER.debug("Owner of expiry watchdog '{}' was garbage collected. Stopping virtual thread.", ownerName);
         running = false;

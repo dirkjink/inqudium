@@ -18,16 +18,18 @@ import java.util.function.Supplier;
  *
  * <h2>Creating a publisher</h2>
  * <pre>{@code
- * // Production — uses the global default registry
+ * // Production — uses the global default registry and default config
  * var publisher = InqEventPublisher.create("paymentService", InqElementType.CIRCUIT_BREAKER);
  *
- * // With consumer limits and custom expiry interval
+ * // Full control — custom registry and config
  * var config = InqPublisherConfig.of(64, 128, Duration.ofMillis(500));
- * var publisher = InqEventPublisher.create("paymentService", InqElementType.CIRCUIT_BREAKER, config);
+ * var publisher = InqEventPublisher.create("paymentService", InqElementType.CIRCUIT_BREAKER,
+ *     InqEventExporterRegistry.getDefault(), config);
  *
- * // Testing — uses an isolated registry
+ * // Testing — isolated registry, default config
  * var testRegistry = new InqEventExporterRegistry();
- * var publisher = InqEventPublisher.create("paymentService", InqElementType.CIRCUIT_BREAKER, testRegistry);
+ * var publisher = InqEventPublisher.create("paymentService", InqElementType.CIRCUIT_BREAKER,
+ *     testRegistry, InqPublisherConfig.defaultConfig());
  * }</pre>
  *
  * <h2>Subscribing to events</h2>
@@ -69,39 +71,6 @@ public interface InqEventPublisher extends AutoCloseable {
   static InqEventPublisher create(String elementName, InqElementType elementType) {
     return new DefaultInqEventPublisher(elementName, elementType,
         InqEventExporterRegistry.getDefault(), InqPublisherConfig.defaultConfig());
-  }
-
-  /**
-   * Creates a new publisher for an element instance with custom consumer limits,
-   * using the {@linkplain InqEventExporterRegistry#getDefault() global default registry}.
-   *
-   * @param elementName the name of the element instance
-   * @param elementType the type of the element
-   * @param config      the publisher configuration (consumer limits and expiry interval)
-   * @return a new publisher
-   * @since 0.2.0
-   */
-  static InqEventPublisher create(String elementName, InqElementType elementType,
-                                  InqPublisherConfig config) {
-    return new DefaultInqEventPublisher(elementName, elementType,
-        InqEventExporterRegistry.getDefault(), config);
-  }
-
-  /**
-   * Creates a new publisher for an element instance, using the specified registry
-   * and the {@linkplain InqPublisherConfig#defaultConfig() default configuration}.
-   *
-   * <p>Useful for testing — pass an isolated registry to avoid cross-test pollution.
-   *
-   * @param elementName the name of the element instance
-   * @param elementType the type of the element
-   * @param registry    the exporter registry to use
-   * @return a new publisher
-   */
-  static InqEventPublisher create(String elementName, InqElementType elementType,
-                                  InqEventExporterRegistry registry) {
-    return new DefaultInqEventPublisher(elementName, elementType,
-        registry, InqPublisherConfig.defaultConfig());
   }
 
   /**
@@ -153,11 +122,16 @@ public interface InqEventPublisher extends AutoCloseable {
   /**
    * Registers a consumer for all events from this publisher.
    *
+   * <p>Delegates to {@link #onEvent(Class, Consumer)} with {@link InqEvent} as
+   * the event type, matching all events.
+   *
    * @param consumer the event consumer
    * @return a subscription handle for cancellation
    * @throws IllegalStateException if the hard consumer limit is reached
    */
-  InqSubscription onEvent(InqEventConsumer consumer);
+  default InqSubscription onEvent(InqEventConsumer consumer) {
+    return onEvent(InqEvent.class, consumer::accept);
+  }
 
   /**
    * Registers a typed consumer that only receives events of the specified type.
@@ -173,6 +147,9 @@ public interface InqEventPublisher extends AutoCloseable {
   /**
    * Registers a consumer for all events with a time-to-live.
    *
+   * <p>Delegates to {@link #onEvent(Class, Consumer, Duration)} with
+   * {@link InqEvent} as the event type, matching all events.
+   *
    * <p>The consumer is automatically removed after the specified duration by the
    * background {@link InqConsumerExpiryWatchdog}. On the first TTL registration,
    * the watchdog is started lazily. The returned subscription can be used to
@@ -184,7 +161,9 @@ public interface InqEventPublisher extends AutoCloseable {
    * @throws IllegalStateException if the hard consumer limit is reached
    * @since 0.2.0
    */
-  InqSubscription onEvent(InqEventConsumer consumer, Duration ttl);
+  default InqSubscription onEvent(InqEventConsumer consumer, Duration ttl) {
+    return onEvent(InqEvent.class, consumer::accept, ttl);
+  }
 
   /**
    * Registers a typed consumer with a time-to-live.

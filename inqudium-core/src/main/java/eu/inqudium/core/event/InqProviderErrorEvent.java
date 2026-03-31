@@ -16,32 +16,59 @@ import java.util.Objects;
  */
 public final class InqProviderErrorEvent extends InqEvent {
 
+  /**
+   * The phase in which a provider failure occurred.
+   *
+   * <p>Each phase maps to a unique error code suffix via {@link #errorIndex()},
+   * ensuring structured, machine-readable error codes (ADR-021).
+   *
+   * @since 0.2.0
+   */
+  public enum ProviderPhase {
+
+    /** Failure during provider instantiation (ServiceLoader construction). */
+    CONSTRUCTION(1),
+
+    /** Failure during provider execution (e.g. exporter.export()). */
+    EXECUTION(2);
+
+    private final int errorIndex;
+
+    ProviderPhase(int errorIndex) {
+      this.errorIndex = errorIndex;
+    }
+
+    /**
+     * Returns the error code index used with {@link InqElementType#errorCode(int)}.
+     */
+    public int errorIndex() {
+      return errorIndex;
+    }
+  }
+
   private final String code;
   private final String providerClassName;
   private final String spiInterfaceName;
+  private final ProviderPhase phase;
   private final String errorMessage;
-  private final String phase;
 
   /**
    * Creates a new provider error event.
    *
    * @param providerClassName the class name of the failing provider
    * @param spiInterfaceName  the SPI interface the provider implements
-   * @param phase             "construction" or "execution"
+   * @param phase             the phase in which the failure occurred
    * @param errorMessage      the error description
    * @param timestamp         when the error occurred
    */
   public InqProviderErrorEvent(String providerClassName, String spiInterfaceName,
-                               String phase, String errorMessage, Instant timestamp) {
+                               ProviderPhase phase, String errorMessage, Instant timestamp) {
     super("system", "InqServiceLoader", InqElementType.NO_ELEMENT, timestamp);
-    // FIX #8: Validate all parameters — consistent with codebase-wide null-safety conventions
     this.providerClassName = Objects.requireNonNull(providerClassName, "providerClassName must not be null");
     this.spiInterfaceName = Objects.requireNonNull(spiInterfaceName, "spiInterfaceName must not be null");
     this.phase = Objects.requireNonNull(phase, "phase must not be null");
     this.errorMessage = Objects.requireNonNull(errorMessage, "errorMessage must not be null");
-    this.code = "construction".equals(phase)
-        ? InqElementType.NO_ELEMENT.errorCode(1)
-        : InqElementType.NO_ELEMENT.errorCode(2);
+    this.code = InqElementType.NO_ELEMENT.errorCode(phase.errorIndex());
   }
 
   /**
@@ -66,9 +93,9 @@ public final class InqProviderErrorEvent extends InqEvent {
   }
 
   /**
-   * Returns the failure phase: "construction" or "execution".
+   * Returns the failure phase.
    */
-  public String getPhase() {
+  public ProviderPhase getPhase() {
     return phase;
   }
 
