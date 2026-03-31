@@ -1,6 +1,10 @@
 package eu.inqudium.reactor.fallback;
 
-import eu.inqudium.core.fallback.*;
+import eu.inqudium.core.fallback.FallbackConfig;
+import eu.inqudium.core.fallback.FallbackCore;
+import eu.inqudium.core.fallback.FallbackEvent;
+import eu.inqudium.core.fallback.FallbackException;
+import eu.inqudium.core.fallback.FallbackSnapshot;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.core.publisher.Sinks;

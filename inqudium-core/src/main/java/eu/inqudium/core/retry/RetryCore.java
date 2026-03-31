@@ -139,16 +139,12 @@ public final class RetryCore {
       return null; // Result is acceptable — no retry needed
     }
 
-    // Check if retries remain
     if (snapshot.attemptNumber() >= config.maxAttempts()) {
-      // Exhausted, but no exception — create a synthetic one
+      // Fix 2B: Synthetischen Fehler erzeugen, anstatt hier schon eine RetryException zu bauen
+      Throwable syntheticFailure = new RuntimeException("Unacceptable result: " + result);
       return new RetryDecision.RetriesExhausted(
-          snapshot.withExhausted(new RetryException(
-              config.name(), snapshot.attemptNumber(),
-              new RuntimeException("Unacceptable result after all retries: " + result),
-              snapshot.failures())),
-          snapshot.lastFailure() != null ? snapshot.lastFailure()
-              : new RuntimeException("Unacceptable result: " + result));
+          snapshot.withExhausted(syntheticFailure),
+          snapshot.lastFailure() != null ? snapshot.lastFailure() : syntheticFailure);
     }
 
     int retryIndex = snapshot.attemptNumber() - 1;

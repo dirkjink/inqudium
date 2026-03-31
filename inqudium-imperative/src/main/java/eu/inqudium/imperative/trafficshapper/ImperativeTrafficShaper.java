@@ -1,6 +1,11 @@
 package eu.inqudium.imperative.trafficshapper;
 
-import eu.inqudium.core.trafficshaper.*;
+import eu.inqudium.core.trafficshaper.ThrottlePermission;
+import eu.inqudium.core.trafficshaper.ThrottleSnapshot;
+import eu.inqudium.core.trafficshaper.TrafficShaperConfig;
+import eu.inqudium.core.trafficshaper.TrafficShaperCore;
+import eu.inqudium.core.trafficshaper.TrafficShaperEvent;
+import eu.inqudium.core.trafficshaper.TrafficShaperException;
 
 import java.time.Clock;
 import java.time.Duration;

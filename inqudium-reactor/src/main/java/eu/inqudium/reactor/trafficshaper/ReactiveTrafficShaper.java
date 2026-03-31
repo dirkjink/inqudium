@@ -1,6 +1,11 @@
 package eu.inqudium.reactor.trafficshaper;
 
-import eu.inqudium.core.trafficshaper.*;
+import eu.inqudium.core.trafficshaper.ThrottlePermission;
+import eu.inqudium.core.trafficshaper.ThrottleSnapshot;
+import eu.inqudium.core.trafficshaper.TrafficShaperConfig;
+import eu.inqudium.core.trafficshaper.TrafficShaperCore;
+import eu.inqudium.core.trafficshaper.TrafficShaperEvent;
+import eu.inqudium.core.trafficshaper.TrafficShaperException;
 import org.reactivestreams.Publisher;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;

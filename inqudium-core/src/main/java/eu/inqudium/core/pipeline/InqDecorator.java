@@ -1,6 +1,14 @@
 package eu.inqudium.core.pipeline;
 
-import eu.inqudium.core.*;
+import eu.inqudium.core.InqCall;
+import eu.inqudium.core.InqCallIdGenerator;
+import eu.inqudium.core.InqConfig;
+import eu.inqudium.core.InqElement;
+import eu.inqudium.core.Invocation;
+import eu.inqudium.core.Invocation2;
+import eu.inqudium.core.Invocation3;
+import eu.inqudium.core.InvocationArray;
+import eu.inqudium.core.InvocationVarargs;
 import eu.inqudium.core.exception.InqException;
 import eu.inqudium.core.exception.InqRuntimeException;
 

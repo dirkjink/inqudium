@@ -1,6 +1,12 @@
 package eu.inqudium.imperative.retry;
 
-import eu.inqudium.core.retry.*;
+import eu.inqudium.core.retry.RetryConfig;
+import eu.inqudium.core.retry.RetryCore;
+import eu.inqudium.core.retry.RetryDecision;
+import eu.inqudium.core.retry.RetryEvent;
+import eu.inqudium.core.retry.RetryException;
+import eu.inqudium.core.retry.RetrySnapshot;
+import eu.inqudium.core.retry.RetryState;
 
 import java.time.Clock;
 import java.time.Duration;
@@ -15,33 +21,6 @@ import java.util.function.Supplier;
 
 /**
  * Thread-safe, imperative retry implementation.
- *
- * <p>Designed for use with virtual threads (Project Loom). The backoff
- * delay between retries is honoured via {@link LockSupport#parkNanos},
- * which is virtual-thread-friendly (does not pin to a carrier thread).
- *
- * <p>Delegates all state-machine logic to the functional
- * {@link RetryCore}.
- *
- * <h2>Usage</h2>
- * <pre>{@code
- * var config = RetryConfig.builder("downstream-call")
- *     .maxAttempts(4)
- *     .exponentialBackoff(Duration.ofMillis(200))
- *     .retryOnExceptions(IOException.class, TimeoutException.class)
- *     .build();
- *
- * var retry = new ImperativeRetry(config);
- *
- * // Basic usage
- * String result = retry.execute(() -> httpClient.call());
- *
- * // With fallback on exhaustion
- * String result = retry.executeWithFallback(
- *     () -> httpClient.call(),
- *     () -> "fallback-value"
- * );
- * }</pre>
  */
 public class ImperativeRetry {
 
@@ -61,32 +40,27 @@ public class ImperativeRetry {
 
   // ======================== Callable Execution ========================
 
-  /**
-   * Executes the given callable with retry logic.
-   *
-   * <p>On each retryable failure, the calling thread is parked for the
-   * computed backoff delay before the next attempt.
-   *
-   * @param callable the operation to protect with retries
-   * @param <T>      the return type
-   * @return the result of the callable
-   * @throws RetryException if all attempts are exhausted
-   * @throws Exception      if the callable throws a non-retryable exception
-   */
   public <T> T execute(Callable<T> callable) throws Exception {
     Instant now = clock.instant();
     RetrySnapshot snapshot = RetryCore.startFirstAttempt(now);
-    emitEvent(RetryEvent.attemptStarted(
-        config.name(), 1, snapshot.totalElapsed(now), now));
+    emitEvent(RetryEvent.attemptStarted(config.name(), 1, snapshot.totalElapsed(now), now));
 
     while (true) {
-      try {
-        T result = callable.call();
+      boolean success = false;
+      T result = null;
+      Throwable attemptFailure = null;
 
-        // Check if the result should trigger a retry
+      // Fix 2A & 2D: Try-Catch ist jetzt isoliert und fängt Throwable.
+      try {
+        result = callable.call();
+        success = true;
+      } catch (Throwable e) {
+        attemptFailure = e;
+      }
+
+      if (success) {
         RetryDecision resultDecision = RetryCore.evaluateResult(snapshot, config, result);
         if (resultDecision == null) {
-          // Result is acceptable
           snapshot = RetryCore.recordSuccess(snapshot);
           Instant completedAt = clock.instant();
           emitEvent(RetryEvent.attemptSucceeded(
@@ -95,26 +69,27 @@ public class ImperativeRetry {
           return result;
         }
 
-        // Result-based retry
         snapshot = handleDecision(resultDecision, snapshot, null);
-        if (snapshot.state().isTerminal()) {
-          throw new RetryException(config.name(), snapshot.totalAttempts(),
-              new RuntimeException("Unacceptable result: " + result),
-              snapshot.failures());
-        }
 
-      } catch (RetryException e) {
-        throw e; // Don't retry our own exhaustion exception
-      } catch (Exception e) {
-        RetryDecision decision = RetryCore.evaluateFailure(snapshot, config, e);
-        snapshot = handleDecision(decision, snapshot, e);
-
-        if (snapshot.state() == RetryState.FAILED) {
-          throw e;
-        }
         if (snapshot.state() == RetryState.EXHAUSTED) {
           throw new RetryException(
-              config.name(), snapshot.totalAttempts(), e, snapshot.failures());
+              config.name(), snapshot.totalAttempts(),
+              snapshot.lastFailure(), snapshot.failures());
+        }
+      } else {
+        RetryDecision decision = RetryCore.evaluateFailure(snapshot, config, attemptFailure);
+        snapshot = handleDecision(decision, snapshot, attemptFailure);
+
+        if (snapshot.state() == RetryState.FAILED) {
+          if (attemptFailure instanceof Exception ex) throw ex;
+          if (attemptFailure instanceof Error err) throw err;
+          throw new RuntimeException(attemptFailure);
+        }
+
+        if (snapshot.state() == RetryState.EXHAUSTED) {
+          throw new RetryException(
+              config.name(), snapshot.totalAttempts(),
+              attemptFailure, snapshot.failures());
         }
       }
 
@@ -122,7 +97,7 @@ public class ImperativeRetry {
       if (snapshot.state() == RetryState.WAITING_FOR_RETRY) {
         Duration delay = snapshot.nextRetryDelay();
         if (delay != null && delay.isPositive()) {
-          LockSupport.parkNanos(delay.toNanos());
+          parkUntil(clock.instant().plus(delay));
         }
 
         Instant retryNow = clock.instant();
@@ -134,42 +109,51 @@ public class ImperativeRetry {
     }
   }
 
-  /**
-   * Executes a {@link Runnable} with retry logic.
-   */
   public void execute(Runnable runnable) {
     try {
       execute(() -> {
         runnable.run();
         return null;
       });
-    } catch (RetryException e) {
-      throw e;
-    } catch (RuntimeException e) {
+    } catch (RuntimeException | Error e) { // Fix: Disjunkte Typen korrigiert
       throw e;
     } catch (Exception e) {
       throw new RuntimeException(e);
     }
   }
 
-  /**
-   * Executes with a fallback on retry exhaustion.
-   *
-   * @param callable the primary operation
-   * @param fallback supplier invoked when all retries are exhausted
-   * @param <T>      the return type
-   * @return the result of the callable or the fallback
-   * @throws Exception if the callable throws a non-retryable exception
-   */
   public <T> T executeWithFallback(Callable<T> callable, Supplier<T> fallback) throws Exception {
     try {
       return execute(callable);
     } catch (RetryException e) {
-      return fallback.get();
+      // Fix 2C: Verhindere Maskierung von RetryExceptions aus tieferen Schichten
+      if (Objects.equals(e.getRetryName(), config.name())) {
+        return fallback.get();
+      }
+      throw e;
     }
   }
 
   // ======================== Internal ========================
+
+  /**
+   * Parks the thread safely, preventing spurious wakeups and handling interrupts.
+   */
+  private void parkUntil(Instant targetWakeup) {
+    while (true) {
+      // Fix 1A: Wenn der Thread während des Backoffs abgebrochen wird,
+      // sofort mit einer Exception abbrechen, statt unendlich zu parken.
+      if (Thread.currentThread().isInterrupted()) {
+        throw new RuntimeException(new InterruptedException("Thread interrupted during retry backoff"));
+      }
+
+      Duration remaining = Duration.between(clock.instant(), targetWakeup);
+      if (remaining.isNegative() || remaining.isZero()) {
+        break; // Wartezeit ist physisch vorüber
+      }
+      LockSupport.parkNanos(remaining.toNanos());
+    }
+  }
 
   private RetrySnapshot handleDecision(RetryDecision decision, RetrySnapshot snapshot, Throwable failure) {
     Instant now = clock.instant();
@@ -197,11 +181,8 @@ public class ImperativeRetry {
     };
   }
 
-  // ======================== Listeners ========================
+  // ======================== Listeners & Introspection ========================
 
-  /**
-   * Registers a listener that is called on every retry event.
-   */
   public void onEvent(Consumer<RetryEvent> listener) {
     eventListeners.add(Objects.requireNonNull(listener));
   }
@@ -212,11 +193,6 @@ public class ImperativeRetry {
     }
   }
 
-  // ======================== Introspection ========================
-
-  /**
-   * Returns the configuration.
-   */
   public RetryConfig getConfig() {
     return config;
   }

@@ -1,6 +1,11 @@
 package eu.inqudium.reactor.retry;
 
-import eu.inqudium.core.retry.*;
+import eu.inqudium.core.retry.BackoffStrategy;
+import eu.inqudium.core.retry.RetryConfig;
+import eu.inqudium.core.retry.RetryCore;
+import eu.inqudium.core.retry.RetryDecision;
+import eu.inqudium.core.retry.RetrySnapshot;
+import eu.inqudium.core.retry.RetryState;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
