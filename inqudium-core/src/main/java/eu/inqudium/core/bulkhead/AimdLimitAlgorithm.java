@@ -344,9 +344,11 @@ public final class AimdLimitAlgorithm implements InqLimitAlgorithm {
   @Override
   public int getLimit() {
     // Add a tiny epsilon (1e-9) to counteract IEEE 754 floating-point precision loss.
-    // E.g., adding 0.1 ten times to 10.0 results in 10.999999999999998.
-    // The explicit cast to (int) truncates decimals, which would incorrectly return 10.
-    // The epsilon ensures mathematically complete windows cross the integer boundary safely.
+    // Even with a fixed integer denominator, summing fractions like 0.1 ten times in
+    // binary floating-point arithmetic results in 10.999999999999998 rather than exactly 11.0.
+    // The explicit cast to (int) performs strict truncation. Without this epsilon,
+    // 10.999999999999998 would incorrectly truncate back down to 10, failing to cross
+    // the integer boundary despite a mathematically complete window.
     return (int) (state.get().currentLimit() + 1e-9);
   }
 
