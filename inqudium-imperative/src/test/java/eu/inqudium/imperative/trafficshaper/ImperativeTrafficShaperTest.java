@@ -36,7 +36,7 @@ class ImperativeTrafficShaperTest {
       var config = TrafficShaperConfig.builder("immediate")
           .ratePerSecond(100)
           .build();
-      var shaper = new ImperativeTrafficShaper(config);
+      var shaper = new ImperativeTrafficShaper<>(config);
 
       // When
       String result = shaper.execute(() -> "success");
@@ -50,7 +50,7 @@ class ImperativeTrafficShaperTest {
     void should_rethrow_runtime_exceptions_from_the_callable() {
       // Given
       var config = TrafficShaperConfig.builder("exceptions").ratePerSecond(100).build();
-      var shaper = new ImperativeTrafficShaper(config);
+      var shaper = new ImperativeTrafficShaper<>(config);
 
       // When / Then
       assertThatThrownBy(() -> shaper.execute(() -> {
@@ -67,7 +67,7 @@ class ImperativeTrafficShaperTest {
       var config = TrafficShaperConfig.builder("delay")
           .ratePerSecond(10) // 100ms interval
           .build();
-      var shaper = new ImperativeTrafficShaper(config);
+      var shaper = new ImperativeTrafficShaper<>(config);
       List<TrafficShaperEvent> events = new ArrayList<>();
       shaper.onEvent(events::add);
 
@@ -101,7 +101,7 @@ class ImperativeTrafficShaperTest {
           .ratePerSecond(2) // 500ms interval
           .maxQueueDepth(2)
           .build();
-      var shaper = new ImperativeTrafficShaper(config);
+      var shaper = new ImperativeTrafficShaper<>(config);
       AtomicInteger successCount = new AtomicInteger();
       AtomicInteger rejectCount = new AtomicInteger();
       CountDownLatch latch = new CountDownLatch(5);
@@ -135,14 +135,6 @@ class ImperativeTrafficShaperTest {
   // Fallbacks
   // ================================================================
 
-// ================================================================
-  // Fallbacks
-  // ================================================================
-
-// ================================================================
-  // Fallbacks
-  // ================================================================
-
   @Nested
   @DisplayName("Fallbacks")
   class Fallbacks {
@@ -152,15 +144,15 @@ class ImperativeTrafficShaperTest {
     void should_use_fallback_when_the_traffic_shaper_rejects_the_request() throws Exception {
       // Given
       var config = TrafficShaperConfig.builder("fallback")
-          .ratePerSecond(1) // 1 Slot pro Sekunde
-          .maxWaitDuration(Duration.ofMillis(10)) // Jeder Request, der länger als 10ms warten müsste, wird abgewiesen
+          .ratePerSecond(1) // 1 slot per second
+          .maxWaitDuration(Duration.ofMillis(10)) // reject if wait > 10ms
           .build();
-      var shaper = new ImperativeTrafficShaper(config);
+      var shaper = new ImperativeTrafficShaper<>(config);
 
-      // 1. Request nimmt sich sofort den Slot (der nächste freie Slot wandert 1 Sekunde in die Zukunft)
+      // 1st request takes the slot (next free slot moves 1 second into the future)
       shaper.execute(() -> "ok");
 
-      // When — 2. Request kommt rein. Er müsste ~1000ms warten. Das ist > 10ms -> REJECTED!
+      // When — 2nd request would wait ~1000ms > 10ms → REJECTED → fallback
       String result = shaper.executeWithFallback(
           () -> "primary",
           () -> "fallback-value"
@@ -177,15 +169,15 @@ class ImperativeTrafficShaperTest {
       var outerConfig = TrafficShaperConfig.builder("outer").ratePerSecond(100).build();
       var innerConfig = TrafficShaperConfig.builder("inner")
           .ratePerSecond(1)
-          .maxWaitDuration(Duration.ofMillis(10)) // Erzwingt Rejection für wartende Requests
+          .maxWaitDuration(Duration.ofMillis(10)) // forces rejection for waiting requests
           .build();
-      var outer = new ImperativeTrafficShaper(outerConfig);
-      var inner = new ImperativeTrafficShaper(innerConfig);
+      var outer = new ImperativeTrafficShaper<>(outerConfig);
+      var inner = new ImperativeTrafficShaper<>(innerConfig);
 
-      // Den inneren Shaper auslasten (Slot wandert 1 Sekunde in die Zukunft)
+      // Exhaust the inner shaper (next slot moves 1 second into the future)
       inner.execute(() -> "ok");
 
-      // When / Then — Der äußere Fallback darf die TrafficShaperException des inneren Shapers NICHT abfangen
+      // When / Then — the outer fallback must NOT catch the inner shaper's exception
       assertThatThrownBy(() -> outer.executeWithFallback(
           () -> inner.execute(() -> "fail"),
           () -> "outer-fallback"
@@ -213,7 +205,7 @@ class ImperativeTrafficShaperTest {
       var config = TrafficShaperConfig.builder("events")
           .ratePerSecond(10)
           .build();
-      var shaper = new ImperativeTrafficShaper(config);
+      var shaper = new ImperativeTrafficShaper<>(config);
       List<TrafficShaperEvent.Type> eventTypes = new ArrayList<>();
       shaper.onEvent(e -> eventTypes.add(e.type()));
 
@@ -235,7 +227,7 @@ class ImperativeTrafficShaperTest {
     void should_return_the_configuration() {
       // Given
       var config = TrafficShaperConfig.builder("config").ratePerSecond(5).build();
-      var shaper = new ImperativeTrafficShaper(config);
+      var shaper = new ImperativeTrafficShaper<>(config);
 
       // When / Then
       assertThat(shaper.getConfig()).isEqualTo(config);

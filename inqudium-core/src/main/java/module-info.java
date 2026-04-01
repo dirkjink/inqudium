@@ -46,6 +46,7 @@ module inqudium.core {
   exports eu.inqudium.core.bulkhead;
   exports eu.inqudium.core.timelimiter;
   exports eu.inqudium.core.trafficshaper;
+  exports eu.inqudium.core.trafficshaper.strategy;
   exports eu.inqudium.core.fallback;
   exports eu.inqudium.core.cache;
   exports eu.inqudium.core.event;
