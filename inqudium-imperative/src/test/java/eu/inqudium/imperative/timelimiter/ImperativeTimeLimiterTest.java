@@ -536,7 +536,9 @@ class ImperativeTimeLimiterTest {
       // Given
       TimeLimiterConfig config = TimeLimiterConfig.builder("custom-exception")
           .timeout(Duration.ofMillis(100))
-          .exceptionFactory((name, duration) -> new IllegalStateException("Limiter '" + name + "' custom timeout: " + duration.toMillis() + "ms")).build();
+          .exceptionFactory((name, duration) -> new IllegalStateException(
+              "Limiter '" + name + "' custom timeout: " + duration.toMillis() + "ms"))
+          .build();
       ImperativeTimeLimiter limiter = new ImperativeTimeLimiter(config);
 
       // When / Then
@@ -544,7 +546,7 @@ class ImperativeTimeLimiterTest {
         Thread.sleep(1000);
         return "too late";
       })).isInstanceOf(IllegalStateException.class)
-          .hasMessageContaining("custom: 100ms");
+          .hasMessageContaining("custom timeout: 100ms");
     }
   }
 

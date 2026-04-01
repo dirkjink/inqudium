@@ -6,6 +6,7 @@ import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -436,10 +437,10 @@ class TimeLimiterCoreTest {
       ExecutionSnapshot running = TimeLimiterCore.start(defaultConfig(), NOW);
 
       // When
-      ExecutionResult<String> result = TimeLimiterCore.checkForTimeout(running, NOW.plusSeconds(2));
+      Optional<ExecutionResult<Object>> result = TimeLimiterCore.checkForTimeout(running, NOW.plusSeconds(2));
 
       // Then
-      assertThat(result).isNull();
+      assertThat(result.isPresent()).isFalse();
     }
 
     @Test
@@ -449,11 +450,12 @@ class TimeLimiterCoreTest {
       ExecutionSnapshot running = TimeLimiterCore.start(defaultConfig(), NOW);
 
       // When
-      ExecutionResult<String> result = TimeLimiterCore.checkForTimeout(running, NOW.plusSeconds(6));
+      Optional<ExecutionResult<Object>> result = TimeLimiterCore.checkForTimeout(running, NOW.plusSeconds(6));
 
       // Then
-      assertThat(result).isInstanceOf(ExecutionResult.Timeout.class);
-      assertThat(result.snapshot().state()).isEqualTo(ExecutionState.TIMED_OUT);
+      assertThat(result).isPresent();
+      assertThat(result.get()).isInstanceOf(ExecutionResult.Timeout.class);
+      assertThat(result.get().snapshot().state()).isEqualTo(ExecutionState.TIMED_OUT);
     }
 
     @Test
@@ -464,10 +466,10 @@ class TimeLimiterCoreTest {
           TimeLimiterCore.start(defaultConfig(), NOW), NOW.plusSeconds(1));
 
       // When
-      ExecutionResult<String> result = TimeLimiterCore.checkForTimeout(completed, NOW.plusSeconds(10));
+      Optional<ExecutionResult<Object>> result = TimeLimiterCore.checkForTimeout(completed, NOW.plusSeconds(10));
 
       // Then
-      assertThat(result).isNull();
+      assertThat(result.isPresent()).isFalse();
     }
   }
 

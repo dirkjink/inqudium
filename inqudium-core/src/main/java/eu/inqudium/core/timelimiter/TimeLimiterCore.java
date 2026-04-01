@@ -2,6 +2,7 @@ package eu.inqudium.core.timelimiter;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Optional;
 
 /**
  * Pure functional core of the time limiter.
@@ -14,7 +15,7 @@ import java.time.Instant;
  *                        │
  *                        ├──[fail]──────────► FAILED
  *                        │
- *                        ├──[timeout]───────► TIMED_OUT
+ *                        ├──[timeout]───────► TIMED_OUT ──[cancel]──► CANCELLED
  *                        │
  *                        └──[cancel]────────► CANCELLED
  * </pre>
@@ -48,6 +49,21 @@ public final class TimeLimiterCore {
    */
   public static ExecutionSnapshot start(TimeLimiterConfig config, Instant now) {
     return ExecutionSnapshot.idle().withStarted(now, config.timeout());
+  }
+
+  /**
+   * Creates a new execution with an explicit timeout override.
+   *
+   * <p>Fix 4: When the caller provides a timeout that differs from the config default,
+   * the snapshot's deadline must reflect the actual timeout used — not the config default.
+   *
+   * @param config           the time limiter configuration (used for name)
+   * @param effectiveTimeout the actual timeout to use for this execution
+   * @param now              the execution start time
+   * @return a snapshot in the RUNNING state with the overridden deadline
+   */
+  public static ExecutionSnapshot start(TimeLimiterConfig config, Duration effectiveTimeout, Instant now) {
+    return ExecutionSnapshot.idle().withStarted(now, effectiveTimeout);
   }
 
   /**
@@ -97,14 +113,22 @@ public final class TimeLimiterCore {
   /**
    * Records a cancellation of the execution (typically following a timeout).
    *
-   * @param snapshot the current snapshot (usually RUNNING or TIMED_OUT)
+   * <p>Fix 7: Cancellation is only allowed from RUNNING or TIMED_OUT states.
+   * The state machine diagram explicitly shows TIMED_OUT → CANCELLED as a valid
+   * transition (the wrapper times out, then cancels the underlying Future).
+   * RUNNING → CANCELLED is also valid (direct cancellation without timeout).
+   * All other terminal states are truly final.
+   *
+   * @param snapshot the current snapshot (RUNNING or TIMED_OUT)
    * @param now      the cancellation time
    * @return a snapshot in the CANCELLED state
+   * @throws IllegalStateException if the snapshot is in any other terminal state
    */
   public static ExecutionSnapshot recordCancellation(ExecutionSnapshot snapshot, Instant now) {
-    if (snapshot.state().isTerminal() && snapshot.state() != ExecutionState.TIMED_OUT) {
+    ExecutionState state = snapshot.state();
+    if (state != ExecutionState.RUNNING && state != ExecutionState.TIMED_OUT) {
       throw new IllegalStateException(
-          "Cannot cancel execution in state %s".formatted(snapshot.state()));
+          "Cannot cancel execution in state %s (expected RUNNING or TIMED_OUT)".formatted(state));
     }
     return snapshot.withCancelled(now);
   }
@@ -149,20 +173,22 @@ public final class TimeLimiterCore {
   // ======================== Result Construction ========================
 
   /**
-   * Evaluates a RUNNING snapshot at the given time and determines the
-   * appropriate outcome. If the deadline has been exceeded, returns a
-   * timeout result; this is a pure check — no side effects.
+   * Evaluates a RUNNING snapshot at the given time and determines whether
+   * a timeout has occurred.
+   *
+   * <p>Fix 5: Returns {@link Optional} instead of nullable for API consistency
+   * with the rest of the framework.
    *
    * @param snapshot the current RUNNING snapshot
    * @param now      the current time
-   * @return a timeout result if the deadline is exceeded, {@code null} otherwise
+   * @return an Optional containing a timeout result if the deadline is exceeded, empty otherwise
    */
-  public static <T> ExecutionResult<T> checkForTimeout(ExecutionSnapshot snapshot, Instant now) {
+  public static <T> Optional<ExecutionResult<T>> checkForTimeout(ExecutionSnapshot snapshot, Instant now) {
     if (snapshot.state() == ExecutionState.RUNNING && isDeadlineExceeded(snapshot, now)) {
       ExecutionSnapshot timedOut = recordTimeout(snapshot, now);
-      return new ExecutionResult.Timeout<>(timedOut);
+      return Optional.of(new ExecutionResult.Timeout<>(timedOut));
     }
-    return null;
+    return Optional.empty();
   }
 
   /**

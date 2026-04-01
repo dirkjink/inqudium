@@ -42,16 +42,26 @@ public record TimeLimiterConfig(
    * Creates the timeout exception using the configured factory.
    */
   public RuntimeException createTimeoutException() {
-    // Fix 2A: Namen und Dauer sicher injizieren, ohne Exception-Instanzen für instanceof-Checks zu bauen.
     return exceptionFactory.apply(name, timeout);
+  }
+
+  /**
+   * Creates the timeout exception for the given effective timeout.
+   *
+   * <p>Fix 4/6: When an overridden timeout is used (via {@code execute(callable, timeout)}),
+   * the exception should reflect the actual timeout, not the configured default.
+   *
+   * @param effectiveTimeout the actual timeout that was exceeded
+   * @return the timeout exception
+   */
+  public RuntimeException createTimeoutException(Duration effectiveTimeout) {
+    return exceptionFactory.apply(name, effectiveTimeout);
   }
 
   public static final class Builder {
     private final String name;
     private Duration timeout = Duration.ofSeconds(5);
     private boolean cancelOnTimeout = true;
-
-    // Fix 2A: BiFunction erwartet Name und Duration. Die Standard-Exception passt perfekt auf diese Signatur.
     private BiFunction<String, Duration, ? extends RuntimeException> exceptionFactory =
         TimeLimiterException::new;
 
