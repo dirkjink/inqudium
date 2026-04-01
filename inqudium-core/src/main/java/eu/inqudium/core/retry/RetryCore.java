@@ -97,7 +97,8 @@ public final class RetryCore {
     }
 
     int retryIndex = snapshot.attemptNumber() - 1;
-    Duration delay = config.backoffStrategy().computeDelay(retryIndex);
+    Duration previousDelay = previousDelayOrZero(snapshot);
+    Duration delay = config.backoffStrategy().computeDelay(retryIndex, previousDelay);
 
     return new RetryDecision.DoRetry(
         snapshot.withRetryScheduled(failure, delay), delay, retryIndex);
@@ -131,7 +132,8 @@ public final class RetryCore {
     }
 
     int retryIndex = snapshot.attemptNumber() - 1;
-    Duration delay = config.backoffStrategy().computeDelay(retryIndex);
+    Duration previousDelay = previousDelayOrZero(snapshot);
+    Duration delay = config.backoffStrategy().computeDelay(retryIndex, previousDelay);
 
     return new RetryDecision.DoRetry(
         snapshot.withResultRetryScheduled(delay), delay, retryIndex);
@@ -162,6 +164,15 @@ public final class RetryCore {
       throw new IllegalStateException(
           "Cannot %s in state %s (expected %s)".formatted(operation, snapshot.state(), required));
     }
+  }
+
+  /**
+   * Extracts the previous retry delay from the snapshot, or {@link Duration#ZERO}
+   * if this is the first retry. Used to feed stateful backoff strategies
+   * (e.g., {@link BackoffStrategy.DecorrelatedJitter}).
+   */
+  private static Duration previousDelayOrZero(RetrySnapshot snapshot) {
+    return snapshot.nextRetryDelay() != null ? snapshot.nextRetryDelay() : Duration.ZERO;
   }
 
   /**

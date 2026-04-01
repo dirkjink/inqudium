@@ -121,6 +121,36 @@ public record RetryConfig(
       return this;
     }
 
+    public Builder linearBackoff(Duration initialDelay, Duration increment) {
+      this.backoffStrategy = BackoffStrategy.linear(initialDelay, increment);
+      return this;
+    }
+
+    public Builder linearBackoff(Duration initialDelay, Duration increment, Duration maxDelay) {
+      this.backoffStrategy = BackoffStrategy.linear(initialDelay, increment, maxDelay);
+      return this;
+    }
+
+    public Builder fibonacciBackoff(Duration initialDelay) {
+      this.backoffStrategy = BackoffStrategy.fibonacci(initialDelay);
+      return this;
+    }
+
+    public Builder fibonacciBackoff(Duration initialDelay, Duration maxDelay) {
+      this.backoffStrategy = BackoffStrategy.fibonacci(initialDelay, maxDelay);
+      return this;
+    }
+
+    public Builder decorrelatedJitter(Duration initialDelay) {
+      this.backoffStrategy = BackoffStrategy.decorrelatedJitter(initialDelay);
+      return this;
+    }
+
+    public Builder decorrelatedJitter(Duration initialDelay, Duration maxDelay) {
+      this.backoffStrategy = BackoffStrategy.decorrelatedJitter(initialDelay, maxDelay);
+      return this;
+    }
+
     public Builder noWait() {
       this.backoffStrategy = BackoffStrategy.noWait();
       return this;
