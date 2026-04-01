@@ -1,4 +1,4 @@
-package eu.inqudium.core.bulkhead;
+package eu.inqudium.core.element.bulkhead;
 
 import eu.inqudium.core.callid.InqCallIdGenerator;
 import eu.inqudium.core.config.compatibility.InqCompatibility;

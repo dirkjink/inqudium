@@ -1,4 +1,4 @@
-package eu.inqudium.core.ratelimiter.strategy;
+package eu.inqudium.core.element.ratelimiter.strategy;
 
 import eu.inqudium.core.element.ratelimiter.RateLimitPermission;
 import eu.inqudium.core.element.ratelimiter.RateLimiterConfig;
