@@ -4,7 +4,7 @@ import eu.inqudium.core.InqElementType;
 import eu.inqudium.core.bulkhead.BulkheadConfig;
 import eu.inqudium.core.bulkhead.strategy.BlockingBulkheadStrategy;
 import eu.inqudium.core.pipeline.InqDecorator;
-import eu.inqudium.imperative.bulkhead.imperative.ImperativeBulkhead;
+import eu.inqudium.imperative.bulkhead.strategy.SemaphoreBulkheadStrategy;
 
 /**
  * Imperative bulkhead — limits concurrent calls via pluggable strategies.
@@ -46,7 +46,7 @@ public interface Bulkhead extends InqDecorator {
    * non-blocking strategy was configured (imperative paradigm requires blocking).
    */
   static Bulkhead of(String name, BulkheadConfig config) {
-    return new ImperativeBulkhead(name, config, config.getBlockingStrategy());
+    return new ImperativeBulkhead(name, config, new SemaphoreBulkheadStrategy(config.getMaxConcurrentCalls()));
   }
 
   static Bulkhead ofDefaults(String name) {

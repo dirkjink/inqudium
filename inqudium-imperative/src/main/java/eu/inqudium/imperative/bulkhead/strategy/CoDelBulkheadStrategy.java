@@ -1,5 +1,6 @@
-package eu.inqudium.core.bulkhead.strategy;
+package eu.inqudium.imperative.bulkhead.strategy;
 
+import eu.inqudium.core.bulkhead.strategy.BlockingBulkheadStrategy;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

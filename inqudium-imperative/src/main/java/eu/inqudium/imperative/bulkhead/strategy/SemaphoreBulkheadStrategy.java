@@ -1,4 +1,6 @@
-package eu.inqudium.core.bulkhead.strategy;
+package eu.inqudium.imperative.bulkhead.strategy;
+
+import eu.inqudium.core.bulkhead.strategy.BlockingBulkheadStrategy;
 
 import java.time.Duration;
 import java.util.concurrent.Semaphore;

@@ -1,4 +1,4 @@
-package eu.inqudium.imperative.bulkhead.imperative;
+package eu.inqudium.imperative.bulkhead;
 
 import eu.inqudium.core.InqCall;
 import eu.inqudium.core.InqElementType;
@@ -14,7 +14,6 @@ import eu.inqudium.core.bulkhead.strategy.BlockingBulkheadStrategy;
 import eu.inqudium.core.bulkhead.strategy.BulkheadStrategy;
 import eu.inqudium.core.bulkhead.strategy.NonBlockingBulkheadStrategy;
 import eu.inqudium.core.event.InqEventPublisher;
-import eu.inqudium.imperative.bulkhead.Bulkhead;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

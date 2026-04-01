@@ -4,12 +4,9 @@ import eu.inqudium.core.InqCallIdGenerator;
 import eu.inqudium.core.InqClock;
 import eu.inqudium.core.InqConfig;
 import eu.inqudium.core.bulkhead.algo.InqLimitAlgorithm;
-import eu.inqudium.core.bulkhead.strategy.AdaptiveBulkheadStrategy;
 import eu.inqudium.core.bulkhead.strategy.BlockingBulkheadStrategy;
 import eu.inqudium.core.bulkhead.strategy.BulkheadStrategy;
-import eu.inqudium.core.bulkhead.strategy.CoDelBulkheadStrategy;
 import eu.inqudium.core.bulkhead.strategy.NonBlockingBulkheadStrategy;
-import eu.inqudium.core.bulkhead.strategy.SemaphoreBulkheadStrategy;
 import eu.inqudium.core.compatibility.InqCompatibility;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -22,13 +19,7 @@ import java.util.function.LongSupplier;
  * Immutable configuration for the Bulkhead element.
  *
  * <p>Carries a pluggable {@link BulkheadStrategy} that defines how concurrent
- * access is controlled. The builder automatically selects the appropriate
- * {@link BlockingBulkheadStrategy} based on the configured options:
- * <ul>
- *   <li>CoDel parameters → {@link CoDelBulkheadStrategy}</li>
- *   <li>Limit algorithm → {@link AdaptiveBulkheadStrategy}</li>
- *   <li>Neither → {@link SemaphoreBulkheadStrategy} (default)</li>
- * </ul>
+ * access is controlled.
  *
  * <p>A strategy can also be set explicitly via {@link Builder#strategy(BulkheadStrategy)},
  * which accepts any {@link BulkheadStrategy} subtype (blocking or non-blocking).
@@ -266,26 +257,7 @@ public final class BulkheadConfig implements InqConfig {
     }
 
     public BulkheadConfig build() {
-      BulkheadStrategy resolved;
-
-      if (explicitStrategy != null) {
-        resolved = explicitStrategy;
-      } else {
-        if (limitAlgorithm != null && codelTargetDelay != null) {
-          throw new IllegalStateException(
-              "Cannot combine limitAlgorithm with CoDel. Use one or set an explicit strategy().");
-        }
-        if (codelTargetDelay != null && codelInterval != null) {
-          resolved = new CoDelBulkheadStrategy(
-              maxConcurrentCalls, codelTargetDelay, codelInterval, nanoTimeSource);
-        } else if (limitAlgorithm != null) {
-          resolved = new AdaptiveBulkheadStrategy(limitAlgorithm);
-        } else {
-          resolved = new SemaphoreBulkheadStrategy(maxConcurrentCalls);
-        }
-      }
-
-      return new BulkheadConfig(this, resolved);
+      return new BulkheadConfig(this, explicitStrategy);
     }
   }
 }
