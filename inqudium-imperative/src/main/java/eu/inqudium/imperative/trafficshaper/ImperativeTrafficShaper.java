@@ -1,11 +1,11 @@
 package eu.inqudium.imperative.trafficshaper;
 
-import eu.inqudium.core.trafficshaper.ThrottlePermission;
-import eu.inqudium.core.trafficshaper.TrafficShaperConfig;
-import eu.inqudium.core.trafficshaper.TrafficShaperEvent;
-import eu.inqudium.core.trafficshaper.TrafficShaperException;
-import eu.inqudium.core.trafficshaper.strategy.SchedulingState;
-import eu.inqudium.core.trafficshaper.strategy.SchedulingStrategy;
+import eu.inqudium.core.element.trafficshaper.ThrottlePermission;
+import eu.inqudium.core.element.trafficshaper.TrafficShaperConfig;
+import eu.inqudium.core.element.trafficshaper.TrafficShaperEvent;
+import eu.inqudium.core.element.trafficshaper.TrafficShaperException;
+import eu.inqudium.core.element.trafficshaper.strategy.SchedulingState;
+import eu.inqudium.core.element.trafficshaper.strategy.SchedulingStrategy;
 
 import java.time.Clock;
 import java.time.Duration;

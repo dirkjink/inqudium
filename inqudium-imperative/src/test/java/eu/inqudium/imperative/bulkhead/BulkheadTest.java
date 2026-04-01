@@ -1,10 +1,11 @@
 package eu.inqudium.imperative.bulkhead;
 
-import eu.inqudium.core.bulkhead.BulkheadConfig;
-import eu.inqudium.core.bulkhead.InqBulkheadFullException;
-import eu.inqudium.core.bulkhead.event.BulkheadOnAcquireEvent;
-import eu.inqudium.core.bulkhead.event.BulkheadOnRejectEvent;
-import eu.inqudium.core.bulkhead.event.BulkheadOnReleaseEvent;
+import eu.inqudium.core.config.InqConfig;
+import eu.inqudium.core.element.bulkhead.InqBulkheadFullException;
+import eu.inqudium.core.element.bulkhead.config.InqBulkheadConfigBuilder;
+import eu.inqudium.core.element.bulkhead.event.BulkheadOnAcquireEvent;
+import eu.inqudium.core.element.bulkhead.event.BulkheadOnRejectEvent;
+import eu.inqudium.core.element.bulkhead.event.BulkheadOnReleaseEvent;
 import eu.inqudium.core.event.InqEvent;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -30,7 +31,13 @@ class BulkheadTest {
     @Test
     void should_permit_calls_below_max_concurrent() {
       // Given
-      var bh = Bulkhead.of("test", BulkheadConfig.builder().maxConcurrentCalls(5).build());
+      var config = InqConfig.configure()
+          .general()
+          .with(new InqBulkheadConfigBuilder(), c -> c
+              .name("test")
+              .maxConcurrentCalls(5)
+          ).build();
+      var bh = Bulkhead.of(config);
 
       // When / Then
       var result = bh.executeSupplier(() -> "ok");
@@ -40,7 +47,13 @@ class BulkheadTest {
     @Test
     void should_release_permit_after_successful_call() {
       // Given
-      var bh = Bulkhead.of("test", BulkheadConfig.builder().maxConcurrentCalls(1).build());
+      var config = InqConfig.configure()
+          .general()
+          .with(new InqBulkheadConfigBuilder(), c -> c
+              .name("test")
+              .maxConcurrentCalls(1)
+          ).build();
+      var bh = Bulkhead.of(config);
 
       // When — call completes, permit should be released
       bh.executeSupplier(() -> "first");
@@ -53,7 +66,13 @@ class BulkheadTest {
     @Test
     void should_release_permit_after_failed_call() {
       // Given
-      var bh = Bulkhead.of("test", BulkheadConfig.builder().maxConcurrentCalls(1).build());
+      var config = InqConfig.configure()
+          .general()
+          .with(new InqBulkheadConfigBuilder(), c -> c
+              .name("test")
+              .maxConcurrentCalls(1)
+          ).build();
+      var bh = Bulkhead.of(config);
 
       // When — call fails, permit should still be released
       try {
@@ -76,8 +95,13 @@ class BulkheadTest {
     @Test
     void should_reject_when_all_permits_are_held() throws Exception {
       // Given — 1 permit, held by a blocking call
-      var config = BulkheadConfig.builder().maxConcurrentCalls(1).build();
-      var bh = Bulkhead.of("test", config);
+      var config = InqConfig.configure()
+          .general()
+          .with(new InqBulkheadConfigBuilder(), c -> c
+              .name("test")
+              .maxConcurrentCalls(1)
+          ).build();
+      var bh = Bulkhead.of(config);
 
       var entered = new CountDownLatch(1);
       var release = new CountDownLatch(1);
@@ -116,7 +140,13 @@ class BulkheadTest {
     @Test
     void should_report_zero_concurrent_calls_when_idle() {
       // Given
-      var bh = Bulkhead.of("test", BulkheadConfig.builder().maxConcurrentCalls(10).build());
+      var config = InqConfig.configure()
+          .general()
+          .with(new InqBulkheadConfigBuilder(), c -> c
+              .name("test")
+              .maxConcurrentCalls(10)
+          ).build();
+      var bh = Bulkhead.of(config);
 
       // Then
       assertThat(bh.getConcurrentCalls()).isZero();
@@ -126,7 +156,13 @@ class BulkheadTest {
     @Test
     void should_report_correct_available_permits_after_call() {
       // Given
-      var bh = Bulkhead.of("test", BulkheadConfig.builder().maxConcurrentCalls(5).build());
+      var config = InqConfig.configure()
+          .general()
+          .with(new InqBulkheadConfigBuilder(), c -> c
+              .name("test")
+              .maxConcurrentCalls(5)
+          ).build();
+      var bh = Bulkhead.of(config);
 
       // When — call completes (permit acquired and released)
       bh.executeSupplier(() -> "ok");
@@ -143,7 +179,13 @@ class BulkheadTest {
     @Test
     void should_emit_acquire_and_release_events_for_successful_call() {
       // Given
-      var bh = Bulkhead.of("test", BulkheadConfig.builder().maxConcurrentCalls(5).build());
+      var config = InqConfig.configure()
+          .general()
+          .with(new InqBulkheadConfigBuilder(), c -> c
+              .name("test")
+              .maxConcurrentCalls(5)
+          ).build();
+      var bh = Bulkhead.of(config);
       var events = Collections.synchronizedList(new ArrayList<InqEvent>());
       bh.getEventPublisher().onEvent(events::add);
 
@@ -159,7 +201,13 @@ class BulkheadTest {
     @Test
     void should_emit_reject_event_when_full() throws Exception {
       // Given
-      var bh = Bulkhead.of("test", BulkheadConfig.builder().maxConcurrentCalls(1).build());
+      var config = InqConfig.configure()
+          .general()
+          .with(new InqBulkheadConfigBuilder(), c -> c
+              .name("test")
+              .maxConcurrentCalls(1)
+          ).build();
+      var bh = Bulkhead.of(config);
       var events = Collections.synchronizedList(new ArrayList<InqEvent>());
       bh.getEventPublisher().onEvent(events::add);
 
@@ -199,7 +247,13 @@ class BulkheadTest {
     @Test
     void should_decorate_runnable_with_acquire_and_release() {
       // Given
-      var bh = Bulkhead.of("test", BulkheadConfig.builder().maxConcurrentCalls(5).build());
+      var config = InqConfig.configure()
+          .general()
+          .with(new InqBulkheadConfigBuilder(), c -> c
+              .name("test")
+              .maxConcurrentCalls(5)
+          ).build();
+      var bh = Bulkhead.of(config);
       var executed = new AtomicBoolean(false);
 
       // When

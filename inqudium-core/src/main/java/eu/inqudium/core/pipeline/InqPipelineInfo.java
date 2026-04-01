@@ -1,5 +1,7 @@
 package eu.inqudium.core.pipeline;
 
+import eu.inqudium.core.callid.InqCallIdGenerator;
+
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
@@ -40,7 +42,7 @@ import java.util.stream.Collectors;
 public record InqPipelineInfo(
     List<InqDecorator> decorators,
     PipelineOrder order,
-    eu.inqudium.core.InqCallIdGenerator callIdGenerator,
+    InqCallIdGenerator callIdGenerator,
     Class<?> interfaceType,
     Object target
 ) {

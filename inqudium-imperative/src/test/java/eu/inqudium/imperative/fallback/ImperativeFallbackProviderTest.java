@@ -1,8 +1,8 @@
 package eu.inqudium.imperative.fallback;
 
-import eu.inqudium.core.fallback.FallbackConfig;
-import eu.inqudium.core.fallback.FallbackEvent;
-import eu.inqudium.core.fallback.FallbackException;
+import eu.inqudium.core.element.fallback.FallbackConfig;
+import eu.inqudium.core.element.fallback.FallbackEvent;
+import eu.inqudium.core.element.fallback.FallbackException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;

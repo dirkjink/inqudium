@@ -1,6 +1,6 @@
 package eu.inqudium.core.context;
 
-import eu.inqudium.core.InqElementType;
+import eu.inqudium.core.element.InqElementType;
 
 /**
  * SPI for propagating diagnostic context across execution boundaries.

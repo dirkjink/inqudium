@@ -1,6 +1,6 @@
 package eu.inqudium.core.pipeline;
 
-import eu.inqudium.core.InqElementType;
+import eu.inqudium.core.element.InqElementType;
 
 import java.util.Comparator;
 import java.util.List;

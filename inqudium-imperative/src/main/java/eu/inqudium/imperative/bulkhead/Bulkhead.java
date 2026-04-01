@@ -1,8 +1,10 @@
 package eu.inqudium.imperative.bulkhead;
 
-import eu.inqudium.core.InqElementType;
-import eu.inqudium.core.bulkhead.BulkheadConfig;
-import eu.inqudium.core.bulkhead.strategy.BlockingBulkheadStrategy;
+import eu.inqudium.core.config.InqConfig;
+import eu.inqudium.core.element.InqElementType;
+import eu.inqudium.core.element.bulkhead.BulkheadConfig;
+import eu.inqudium.core.element.bulkhead.config.InqBulkheadConfig;
+import eu.inqudium.core.element.bulkhead.strategy.BlockingBulkheadStrategy;
 import eu.inqudium.core.pipeline.InqDecorator;
 import eu.inqudium.imperative.bulkhead.strategy.SemaphoreBulkheadStrategy;
 
@@ -39,21 +41,21 @@ import eu.inqudium.imperative.bulkhead.strategy.SemaphoreBulkheadStrategy;
  */
 public interface Bulkhead extends InqDecorator {
 
+  static Bulkhead of(InqConfig config) {
+    return of(config.of(InqBulkheadConfig.class).orElseThrow());
+  }
+
   /**
    * Creates a bulkhead with the given configuration.
    *
    * <p>Uses {@link BulkheadConfig#getBlockingStrategy()} — throws if a
    * non-blocking strategy was configured (imperative paradigm requires blocking).
    */
-  static Bulkhead of(String name, BulkheadConfig config) {
-    return new ImperativeBulkhead(name, config, new SemaphoreBulkheadStrategy(config.getMaxConcurrentCalls()));
+  static Bulkhead of(InqBulkheadConfig config) {
+    return new ImperativeBulkhead(config, new SemaphoreBulkheadStrategy(config.maxConcurrentCalls()));
   }
 
-  static Bulkhead ofDefaults(String name) {
-    return of(name, BulkheadConfig.ofDefaults());
-  }
-
-  BulkheadConfig getConfig();
+  InqBulkheadConfig getConfig();
 
   int getConcurrentCalls();
 

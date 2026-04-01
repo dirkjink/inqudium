@@ -1,16 +1,16 @@
 package eu.inqudium.core.pipeline;
 
-import eu.inqudium.core.InqCall;
-import eu.inqudium.core.InqCallIdGenerator;
-import eu.inqudium.core.InqConfig;
-import eu.inqudium.core.InqElement;
-import eu.inqudium.core.Invocation;
-import eu.inqudium.core.Invocation2;
-import eu.inqudium.core.Invocation3;
-import eu.inqudium.core.InvocationArray;
-import eu.inqudium.core.InvocationVarargs;
+import eu.inqudium.core.callid.InqCallIdGenerator;
+import eu.inqudium.core.element.InqElement;
+import eu.inqudium.core.element.InqElementConfig;
 import eu.inqudium.core.exception.InqException;
 import eu.inqudium.core.exception.InqRuntimeException;
+import eu.inqudium.core.invoke.InqCall;
+import eu.inqudium.core.invoke.Invocation;
+import eu.inqudium.core.invoke.Invocation2;
+import eu.inqudium.core.invoke.Invocation3;
+import eu.inqudium.core.invoke.InvocationArray;
+import eu.inqudium.core.invoke.InvocationVarargs;
 
 import java.util.concurrent.Callable;
 import java.util.function.Supplier;
@@ -66,7 +66,7 @@ public interface InqDecorator extends InqElement {
    *
    * @return the element configuration
    */
-  InqConfig getConfig();
+  InqElementConfig getConfig();
 
   // ── Pipeline mode ──
 
@@ -115,12 +115,12 @@ public interface InqDecorator extends InqElement {
         // Expected element behavior (CB open, BH full, etc.) — rethrow without logging
         throw ie;
       } catch (RuntimeException re) {
-        getConfig().getLogger().error("{} '{}': {}",
-            getElementType(), getName(), re.toString());
+//        getConfig().getLogger().error("{} '{}': {}",
+//            getElementType(), getName(), re.toString());
         throw re;
       } catch (Exception e) {
-        getConfig().getLogger().error("{} '{}': {}",
-            getElementType(), getName(), e.toString());
+//        getConfig().getLogger().error("{} '{}': {}",
+//            getElementType(), getName(), e.toString());
         throw new InqRuntimeException(InqCallIdGenerator.NONE, getName(), getElementType(), e);
       }
     };

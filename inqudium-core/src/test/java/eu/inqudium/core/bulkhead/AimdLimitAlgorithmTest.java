@@ -1,6 +1,6 @@
 package eu.inqudium.core.bulkhead;
 
-import eu.inqudium.core.bulkhead.algo.AimdLimitAlgorithm;
+import eu.inqudium.core.element.bulkhead.algo.AimdLimitAlgorithm;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 

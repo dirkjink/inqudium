@@ -1,9 +1,9 @@
 package eu.inqudium.imperative.circuitbreaker;
 
-import eu.inqudium.core.circuitbreaker.CircuitBreakerConfig;
-import eu.inqudium.core.circuitbreaker.CircuitBreakerException;
-import eu.inqudium.core.circuitbreaker.CircuitState;
-import eu.inqudium.core.circuitbreaker.StateTransition;
+import eu.inqudium.core.element.circuitbreaker.CircuitBreakerConfig;
+import eu.inqudium.core.element.circuitbreaker.CircuitBreakerException;
+import eu.inqudium.core.element.circuitbreaker.CircuitState;
+import eu.inqudium.core.element.circuitbreaker.StateTransition;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;

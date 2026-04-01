@@ -1,8 +1,8 @@
 package eu.inqudium.imperative.retry;
 
-import eu.inqudium.core.retry.RetryConfig;
-import eu.inqudium.core.retry.RetryEvent;
-import eu.inqudium.core.retry.RetryException;
+import eu.inqudium.core.element.retry.RetryConfig;
+import eu.inqudium.core.element.retry.RetryEvent;
+import eu.inqudium.core.element.retry.RetryException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;

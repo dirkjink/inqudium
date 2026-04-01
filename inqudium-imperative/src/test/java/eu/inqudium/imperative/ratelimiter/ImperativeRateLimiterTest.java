@@ -1,9 +1,9 @@
 package eu.inqudium.imperative.ratelimiter;
 
-import eu.inqudium.core.ratelimiter.RateLimiterConfig;
-import eu.inqudium.core.ratelimiter.RateLimiterEvent;
-import eu.inqudium.core.ratelimiter.RateLimiterException;
-import eu.inqudium.core.ratelimiter.strategy.TokenBucketState;
+import eu.inqudium.core.element.ratelimiter.RateLimiterConfig;
+import eu.inqudium.core.element.ratelimiter.RateLimiterEvent;
+import eu.inqudium.core.element.ratelimiter.RateLimiterException;
+import eu.inqudium.core.element.ratelimiter.strategy.TokenBucketState;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;

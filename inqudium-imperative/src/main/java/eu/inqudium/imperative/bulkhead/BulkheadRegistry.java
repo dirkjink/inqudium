@@ -1,7 +1,7 @@
 package eu.inqudium.imperative.bulkhead;
 
 import eu.inqudium.core.InqRegistry;
-import eu.inqudium.core.bulkhead.BulkheadConfig;
+import eu.inqudium.core.element.bulkhead.config.InqBulkheadConfig;
 
 import java.util.Map;
 import java.util.Objects;
@@ -14,17 +14,13 @@ import java.util.concurrent.ConcurrentHashMap;
  *
  * @since 0.1.0
  */
-public final class BulkheadRegistry implements InqRegistry<Bulkhead, BulkheadConfig> {
+public final class BulkheadRegistry implements InqRegistry<Bulkhead, InqBulkheadConfig> {
 
-  private final BulkheadConfig defaultConfig;
+  private final InqBulkheadConfig defaultConfig;
   private final ConcurrentHashMap<String, Bulkhead> instances = new ConcurrentHashMap<>();
 
-  public BulkheadRegistry(BulkheadConfig defaultConfig) {
+  public BulkheadRegistry(InqBulkheadConfig defaultConfig) {
     this.defaultConfig = Objects.requireNonNull(defaultConfig);
-  }
-
-  public BulkheadRegistry() {
-    this(BulkheadConfig.ofDefaults());
   }
 
   @Override
@@ -33,13 +29,13 @@ public final class BulkheadRegistry implements InqRegistry<Bulkhead, BulkheadCon
   }
 
   @Override
-  public Bulkhead get(String name, BulkheadConfig config) {
-    return instances.computeIfAbsent(name, n -> Bulkhead.of(n, config));
+  public Bulkhead get(String name, InqBulkheadConfig config) {
+    return instances.computeIfAbsent(name, n -> Bulkhead.of(config));
   }
 
   @Override
-  public void register(String name, BulkheadConfig config) {
-    instances.computeIfAbsent(name, n -> Bulkhead.of(n, config));
+  public void register(String name, InqBulkheadConfig config) {
+    instances.computeIfAbsent(name, n -> Bulkhead.of(config));
   }
 
   @Override
@@ -58,7 +54,7 @@ public final class BulkheadRegistry implements InqRegistry<Bulkhead, BulkheadCon
   }
 
   @Override
-  public BulkheadConfig getDefaultConfig() {
+  public InqBulkheadConfig getDefaultConfig() {
     return defaultConfig;
   }
 }

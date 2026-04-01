@@ -1,10 +1,11 @@
 package eu.inqudium.core.bulkhead;
 
-import eu.inqudium.core.InqCallIdGenerator;
-import eu.inqudium.core.InqClock;
-import eu.inqudium.core.bulkhead.algo.AimdLimitAlgorithm;
-import eu.inqudium.core.bulkhead.algo.InqLimitAlgorithm;
-import eu.inqudium.core.compatibility.InqCompatibility;
+import eu.inqudium.core.callid.InqCallIdGenerator;
+import eu.inqudium.core.config.compatibility.InqCompatibility;
+import eu.inqudium.core.element.bulkhead.BulkheadConfig;
+import eu.inqudium.core.element.bulkhead.algo.AimdLimitAlgorithm;
+import eu.inqudium.core.element.bulkhead.algo.InqLimitAlgorithm;
+import eu.inqudium.core.time.InqClock;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;

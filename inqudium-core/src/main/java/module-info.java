@@ -39,30 +39,33 @@ module inqudium.core {
   // ── Exports: all public packages ──
 
   exports eu.inqudium.core;
-  exports eu.inqudium.core.circuitbreaker;
-  exports eu.inqudium.core.retry;
-  exports eu.inqudium.core.ratelimiter;
-  exports eu.inqudium.core.ratelimiter.strategy;
-  exports eu.inqudium.core.bulkhead;
-  exports eu.inqudium.core.timelimiter;
-  exports eu.inqudium.core.trafficshaper;
-  exports eu.inqudium.core.trafficshaper.strategy;
-  exports eu.inqudium.core.fallback;
-  exports eu.inqudium.core.cache;
+  exports eu.inqudium.core.element.circuitbreaker;
+  exports eu.inqudium.core.element.retry;
+  exports eu.inqudium.core.element.ratelimiter;
+  exports eu.inqudium.core.element.ratelimiter.strategy;
+  exports eu.inqudium.core.element.bulkhead;
+  exports eu.inqudium.core.element.timelimiter;
+  exports eu.inqudium.core.element.trafficshaper;
+  exports eu.inqudium.core.element.trafficshaper.strategy;
+  exports eu.inqudium.core.element.fallback;
   exports eu.inqudium.core.event;
   exports eu.inqudium.core.context;
-  exports eu.inqudium.core.compatibility;
+  exports eu.inqudium.core.config.compatibility;
   exports eu.inqudium.core.exception;
   exports eu.inqudium.core.pipeline;
-  exports eu.inqudium.core.circuitbreaker.metrics;
-  exports eu.inqudium.core.retry.strategy;
-  exports eu.inqudium.core.bulkhead.strategy;
-  exports eu.inqudium.core.bulkhead.algo;
+  exports eu.inqudium.core.element.circuitbreaker.metrics;
+  exports eu.inqudium.core.element.retry.strategy;
+  exports eu.inqudium.core.element.bulkhead.strategy;
+  exports eu.inqudium.core.element.bulkhead.algo;
+  exports eu.inqudium.core.invoke;
+  exports eu.inqudium.core.config;
+  exports eu.inqudium.core.element;
+  exports eu.inqudium.core.time;
+  exports eu.inqudium.core.callid;
 
 
   // ── ServiceLoader SPI declarations ──
 
   uses eu.inqudium.core.context.InqContextPropagator;
-  uses eu.inqudium.core.compatibility.InqCompatibilityOptions;
   uses eu.inqudium.core.event.InqEventExporter;
 }

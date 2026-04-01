@@ -1,8 +1,10 @@
 package eu.inqudium.core.ratelimiter.strategy;
 
-import eu.inqudium.core.ratelimiter.RateLimitPermission;
-import eu.inqudium.core.ratelimiter.RateLimiterConfig;
-import eu.inqudium.core.ratelimiter.ReservationResult;
+import eu.inqudium.core.element.ratelimiter.RateLimitPermission;
+import eu.inqudium.core.element.ratelimiter.RateLimiterConfig;
+import eu.inqudium.core.element.ratelimiter.ReservationResult;
+import eu.inqudium.core.element.ratelimiter.strategy.TokenBucketState;
+import eu.inqudium.core.element.ratelimiter.strategy.TokenBucketStrategy;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;

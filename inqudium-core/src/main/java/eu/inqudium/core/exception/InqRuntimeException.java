@@ -1,7 +1,7 @@
 package eu.inqudium.core.exception;
 
-import eu.inqudium.core.InqCallIdGenerator;
-import eu.inqudium.core.InqElementType;
+import eu.inqudium.core.callid.InqCallIdGenerator;
+import eu.inqudium.core.element.InqElementType;
 
 import java.util.Locale;
 

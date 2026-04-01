@@ -38,6 +38,6 @@
  * all resilience elements.
  *
  * @see eu.inqudium.core.context.InqContextPropagator
- * @see eu.inqudium.core.compatibility.InqCompatibilityEvent
+ * @see eu.inqudium.core.config.compatibility.InqCompatibilityEvent
  */
 package eu.inqudium.core.event;

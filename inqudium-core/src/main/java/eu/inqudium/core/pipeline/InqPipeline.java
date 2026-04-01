@@ -1,11 +1,11 @@
 package eu.inqudium.core.pipeline;
 
-import eu.inqudium.core.InqCall;
-import eu.inqudium.core.InqCallIdGenerator;
-import eu.inqudium.core.InqElementType;
+import eu.inqudium.core.callid.InqCallIdGenerator;
 import eu.inqudium.core.context.InqContextPropagation;
+import eu.inqudium.core.element.InqElementType;
 import eu.inqudium.core.exception.InqException;
 import eu.inqudium.core.exception.InqRuntimeException;
+import eu.inqudium.core.invoke.InqCall;
 
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;

@@ -1,13 +1,13 @@
 package eu.inqudium.imperative.circuitbreaker;
 
-import eu.inqudium.core.circuitbreaker.CircuitBreakerConfig;
-import eu.inqudium.core.circuitbreaker.CircuitBreakerCore;
-import eu.inqudium.core.circuitbreaker.CircuitBreakerException;
-import eu.inqudium.core.circuitbreaker.CircuitBreakerSnapshot;
-import eu.inqudium.core.circuitbreaker.CircuitState;
-import eu.inqudium.core.circuitbreaker.PermissionResult;
-import eu.inqudium.core.circuitbreaker.StateTransition;
-import eu.inqudium.core.circuitbreaker.metrics.FailureMetrics;
+import eu.inqudium.core.element.circuitbreaker.CircuitBreakerConfig;
+import eu.inqudium.core.element.circuitbreaker.CircuitBreakerCore;
+import eu.inqudium.core.element.circuitbreaker.CircuitBreakerException;
+import eu.inqudium.core.element.circuitbreaker.CircuitBreakerSnapshot;
+import eu.inqudium.core.element.circuitbreaker.CircuitState;
+import eu.inqudium.core.element.circuitbreaker.PermissionResult;
+import eu.inqudium.core.element.circuitbreaker.StateTransition;
+import eu.inqudium.core.element.circuitbreaker.metrics.FailureMetrics;
 
 import java.time.Clock;
 import java.time.Instant;

@@ -34,6 +34,6 @@
  * which elements to apply. Without {@code @InqShield}, the canonical order is used
  * implicitly (ADR-017).
  *
- * @see eu.inqudium.core.InqElementType
+ * @see eu.inqudium.core.element.InqElementType
  */
 package eu.inqudium.core.pipeline;

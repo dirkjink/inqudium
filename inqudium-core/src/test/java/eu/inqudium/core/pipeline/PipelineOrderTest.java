@@ -1,6 +1,6 @@
 package eu.inqudium.core.pipeline;
 
-import eu.inqudium.core.InqElementType;
+import eu.inqudium.core.element.InqElementType;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;

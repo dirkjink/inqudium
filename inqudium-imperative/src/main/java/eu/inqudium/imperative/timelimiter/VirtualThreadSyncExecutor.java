@@ -1,8 +1,8 @@
 package eu.inqudium.imperative.timelimiter;
 
-import eu.inqudium.core.timelimiter.ExecutionSnapshot;
-import eu.inqudium.core.timelimiter.TimeLimiterCore;
-import eu.inqudium.core.timelimiter.TimeLimiterEvent;
+import eu.inqudium.core.element.timelimiter.ExecutionSnapshot;
+import eu.inqudium.core.element.timelimiter.TimeLimiterCore;
+import eu.inqudium.core.element.timelimiter.TimeLimiterEvent;
 
 import java.time.Duration;
 import java.time.Instant;

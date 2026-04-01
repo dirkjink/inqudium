@@ -1,6 +1,6 @@
 package eu.inqudium.core.bulkhead;
 
-import eu.inqudium.core.bulkhead.algo.VegasLimitAlgorithm;
+import eu.inqudium.core.element.bulkhead.algo.VegasLimitAlgorithm;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;

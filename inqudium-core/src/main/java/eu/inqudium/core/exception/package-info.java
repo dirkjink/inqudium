@@ -40,6 +40,6 @@
  *     .orElseThrow();
  * </pre>
  *
- * @see eu.inqudium.core.InqElementType
+ * @see eu.inqudium.core.element.InqElementType
  */
 package eu.inqudium.core.exception;

@@ -1,7 +1,7 @@
 package eu.inqudium.core.exception;
 
-import eu.inqudium.core.bulkhead.InqBulkheadFullException;
-import eu.inqudium.core.bulkhead.InqBulkheadInterruptedException;
+import eu.inqudium.core.element.bulkhead.InqBulkheadFullException;
+import eu.inqudium.core.element.bulkhead.InqBulkheadInterruptedException;
 
 import java.io.UncheckedIOException;
 import java.lang.reflect.InvocationTargetException;

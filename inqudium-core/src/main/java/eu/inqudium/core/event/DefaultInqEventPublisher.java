@@ -1,6 +1,6 @@
 package eu.inqudium.core.event;
 
-import eu.inqudium.core.InqElementType;
+import eu.inqudium.core.element.InqElementType;
 import eu.inqudium.core.exception.InqException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

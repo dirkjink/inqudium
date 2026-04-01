@@ -1,7 +1,7 @@
 package eu.inqudium.imperative.bulkhead.strategy;
 
-import eu.inqudium.core.bulkhead.algo.InqLimitAlgorithm;
-import eu.inqudium.core.bulkhead.strategy.BlockingBulkheadStrategy;
+import eu.inqudium.core.element.bulkhead.algo.InqLimitAlgorithm;
+import eu.inqudium.core.element.bulkhead.strategy.BlockingBulkheadStrategy;
 
 import java.time.Duration;
 import java.util.Objects;

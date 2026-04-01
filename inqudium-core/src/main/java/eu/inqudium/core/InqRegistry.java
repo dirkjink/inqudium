@@ -1,5 +1,8 @@
 package eu.inqudium.core;
 
+import eu.inqudium.core.element.InqElement;
+import eu.inqudium.core.element.InqElementConfig;
+
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -19,7 +22,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * @param <C> the configuration type
  * @since 0.1.0
  */
-public interface InqRegistry<E extends InqElement, C extends InqConfig> {
+public interface InqRegistry<E extends InqElement, C extends InqElementConfig> {
 
   /**
    * Returns the element for the given name, creating it with the default

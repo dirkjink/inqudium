@@ -1,25 +1,26 @@
 package eu.inqudium.imperative.bulkhead;
 
-import eu.inqudium.core.InqCall;
-import eu.inqudium.core.InqElementType;
-import eu.inqudium.core.bulkhead.BulkheadConfig;
-import eu.inqudium.core.bulkhead.InqBulkheadFullException;
-import eu.inqudium.core.bulkhead.InqBulkheadInterruptedException;
-import eu.inqudium.core.bulkhead.event.BulkheadOnAcquireEvent;
-import eu.inqudium.core.bulkhead.event.BulkheadOnRejectEvent;
-import eu.inqudium.core.bulkhead.event.BulkheadOnReleaseEvent;
-import eu.inqudium.core.bulkhead.event.BulkheadRollbackTraceEvent;
-import eu.inqudium.core.bulkhead.event.BulkheadWaitTraceEvent;
-import eu.inqudium.core.bulkhead.strategy.BlockingBulkheadStrategy;
-import eu.inqudium.core.bulkhead.strategy.BulkheadStrategy;
-import eu.inqudium.core.bulkhead.strategy.NonBlockingBulkheadStrategy;
+import eu.inqudium.core.element.InqElementType;
+import eu.inqudium.core.element.bulkhead.InqBulkheadFullException;
+import eu.inqudium.core.element.bulkhead.InqBulkheadInterruptedException;
+import eu.inqudium.core.element.bulkhead.config.InqBulkheadConfig;
+import eu.inqudium.core.element.bulkhead.event.BulkheadOnAcquireEvent;
+import eu.inqudium.core.element.bulkhead.event.BulkheadOnRejectEvent;
+import eu.inqudium.core.element.bulkhead.event.BulkheadOnReleaseEvent;
+import eu.inqudium.core.element.bulkhead.event.BulkheadRollbackTraceEvent;
+import eu.inqudium.core.element.bulkhead.event.BulkheadWaitTraceEvent;
+import eu.inqudium.core.element.bulkhead.strategy.BlockingBulkheadStrategy;
+import eu.inqudium.core.element.bulkhead.strategy.BulkheadStrategy;
+import eu.inqudium.core.element.bulkhead.strategy.NonBlockingBulkheadStrategy;
 import eu.inqudium.core.event.InqEventPublisher;
+import eu.inqudium.core.invoke.InqCall;
+import eu.inqudium.core.time.InqClock;
+import eu.inqudium.core.time.InqNanoTimeSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.time.Duration;
 import java.util.Objects;
-import java.util.function.LongSupplier;
 
 /**
  * Composition-based imperative bulkhead facade.
@@ -38,31 +39,29 @@ public final class ImperativeBulkhead implements Bulkhead {
   private static final Logger LOG = LoggerFactory.getLogger(ImperativeBulkhead.class);
 
   private final String name;
-  private final BulkheadConfig config;
+  private final InqBulkheadConfig config;
   private final BlockingBulkheadStrategy strategy;
   private final InqEventPublisher eventPublisher;
   private final Duration maxWaitDuration;
-  private final LongSupplier nanoTimeSource;
+  private final InqNanoTimeSource nanoTimeSource;
+  private final InqClock clock;
 
-  public ImperativeBulkhead(String name, BulkheadConfig config, BulkheadStrategy strategy) {
-    Objects.requireNonNull(name, "name must not be null");
+  public ImperativeBulkhead(InqBulkheadConfig config, BulkheadStrategy strategy) {
     Objects.requireNonNull(config, "config must not be null");
     Objects.requireNonNull(strategy, "strategy must not be null");
-    if (name.isBlank()) {
-      throw new IllegalArgumentException("Bulkhead name must not be blank");
-    }
     if (!(strategy instanceof BlockingBulkheadStrategy blocking)) {
       throw new IllegalArgumentException(
           "ImperativeBulkhead requires a BlockingBulkheadStrategy, but received: "
               + strategy.getClass().getName()
               + ". Use the reactive bulkhead facade for NonBlockingBulkheadStrategy.");
     }
-    this.name = name;
+    this.name = config.name();
     this.config = config;
     this.strategy = blocking;
-    this.maxWaitDuration = config.getMaxWaitDuration();
-    this.nanoTimeSource = config.getNanoTimeSource();
+    this.maxWaitDuration = config.maxWaitDuration();
+    this.nanoTimeSource = config.general().nanoTimesource();
     this.eventPublisher = InqEventPublisher.create(name, InqElementType.BULKHEAD);
+    this.clock = config.general().clock();
   }
 
   // ======================== Bulkhead facade ========================
@@ -78,7 +77,7 @@ public final class ImperativeBulkhead implements Bulkhead {
   }
 
   @Override
-  public BulkheadConfig getConfig() {
+  public InqBulkheadConfig getConfig() {
     return config;
   }
 
@@ -87,7 +86,7 @@ public final class ImperativeBulkhead implements Bulkhead {
     return call.withCallable(() -> {
 
       // Duty 1: Acquire
-      long startWait = nanoTimeSource.getAsLong();
+      long startWait = nanoTimeSource.now();
       boolean acquired;
       try {
         acquired = strategy.tryAcquire(maxWaitDuration);
@@ -110,7 +109,7 @@ public final class ImperativeBulkhead implements Bulkhead {
       handleAcquireSuccess(call.callId(), startWait);
 
       // Duty 3 (start): RTT measurement
-      long startNanos = nanoTimeSource.getAsLong();
+      long startNanos = nanoTimeSource.now();
       Throwable businessError = null;
 
       try {
@@ -120,7 +119,7 @@ public final class ImperativeBulkhead implements Bulkhead {
         throw t;
       } finally {
         // Duty 3 (end): Measurement
-        Duration rtt = Duration.ofNanos(nanoTimeSource.getAsLong() - startNanos);
+        Duration rtt = Duration.ofNanos(nanoTimeSource.now() - startNanos);
 
         // Duty 2: Guaranteed release
         releaseAndReport(call.callId(), rtt, businessError);
@@ -152,12 +151,12 @@ public final class ImperativeBulkhead implements Bulkhead {
     // Tier 1: Acquire event — rollback on failure
     try {
       eventPublisher.publish(new BulkheadOnAcquireEvent(
-          callId, name, strategy.concurrentCalls(), config.getClock().instant()));
+          callId, name, strategy.concurrentCalls(), clock.instant()));
     } catch (RuntimeException e) {
       strategy.rollback();
       try {
         eventPublisher.publishTrace(() -> new BulkheadRollbackTraceEvent(
-            callId, name, e.getClass().getSimpleName(), config.getClock().instant()));
+            callId, name, e.getClass().getSimpleName(), clock.instant()));
       } catch (RuntimeException traceError) {
         LOG.error("Failed to publish rollback trace for bulkhead '{}', callId='{}'. "
             + "Permit rolled back.", name, callId, traceError);
@@ -183,7 +182,7 @@ public final class ImperativeBulkhead implements Bulkhead {
     }
     try {
       eventPublisher.publish(new BulkheadOnRejectEvent(
-          callId, name, strategy.concurrentCalls(), config.getClock().instant()));
+          callId, name, strategy.concurrentCalls(), clock.instant()));
     } catch (RuntimeException e) {
       LOG.error("Failed to publish reject event for bulkhead '{}', callId='{}'. "
           + "Telemetry-only failure.", name, callId, e);
@@ -212,7 +211,7 @@ public final class ImperativeBulkhead implements Bulkhead {
 
     try {
       eventPublisher.publish(new BulkheadOnReleaseEvent(
-          callId, name, strategy.concurrentCalls(), config.getClock().instant()));
+          callId, name, strategy.concurrentCalls(), clock.instant()));
     } catch (RuntimeException publisherError) {
       LOG.error("Failed to publish release event for bulkhead '{}', callId='{}'. "
           + "Telemetry-only failure.", name, callId, publisherError);
@@ -231,10 +230,10 @@ public final class ImperativeBulkhead implements Bulkhead {
 
   private void publishWaitTrace(String callId, long startWait, boolean acquired) {
     if (eventPublisher.isTraceEnabled()) {
-      long waitDurationNanos = nanoTimeSource.getAsLong() - startWait;
+      long waitDurationNanos = nanoTimeSource.now() - startWait;
       if (waitDurationNanos > 0) {
         eventPublisher.publishTrace(() -> new BulkheadWaitTraceEvent(
-            callId, name, waitDurationNanos, acquired, config.getClock().instant()));
+            callId, name, waitDurationNanos, acquired, clock.instant()));
       }
     }
   }

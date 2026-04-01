@@ -1,8 +1,8 @@
 package eu.inqudium.imperative.trafficshaper;
 
-import eu.inqudium.core.trafficshaper.TrafficShaperConfig;
-import eu.inqudium.core.trafficshaper.TrafficShaperEvent;
-import eu.inqudium.core.trafficshaper.TrafficShaperException;
+import eu.inqudium.core.element.trafficshaper.TrafficShaperConfig;
+import eu.inqudium.core.element.trafficshaper.TrafficShaperEvent;
+import eu.inqudium.core.element.trafficshaper.TrafficShaperException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;

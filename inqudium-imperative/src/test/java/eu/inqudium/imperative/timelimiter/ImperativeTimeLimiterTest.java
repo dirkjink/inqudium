@@ -1,8 +1,8 @@
 package eu.inqudium.imperative.timelimiter;
 
-import eu.inqudium.core.timelimiter.TimeLimiterConfig;
-import eu.inqudium.core.timelimiter.TimeLimiterEvent;
-import eu.inqudium.core.timelimiter.TimeLimiterException;
+import eu.inqudium.core.element.timelimiter.TimeLimiterConfig;
+import eu.inqudium.core.element.timelimiter.TimeLimiterEvent;
+import eu.inqudium.core.element.timelimiter.TimeLimiterException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;

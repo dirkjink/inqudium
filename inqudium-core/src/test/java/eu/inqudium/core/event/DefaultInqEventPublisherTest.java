@@ -1,6 +1,6 @@
 package eu.inqudium.core.event;
 
-import eu.inqudium.core.InqElementType;
+import eu.inqudium.core.element.InqElementType;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 

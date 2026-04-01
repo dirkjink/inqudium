@@ -1,6 +1,6 @@
 package eu.inqudium.core.event;
 
-import eu.inqudium.core.InqElementType;
+import eu.inqudium.core.element.InqElementType;
 
 import java.time.Duration;
 import java.util.Objects;
