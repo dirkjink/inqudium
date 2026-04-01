@@ -1,5 +1,6 @@
 package eu.inqudium.core.trafficshaper.strategy;
 
+import eu.inqudium.core.trafficshaper.ThrottleMode;
 import eu.inqudium.core.trafficshaper.ThrottlePermission;
 import eu.inqudium.core.trafficshaper.TrafficShaperConfig;
 
@@ -10,98 +11,91 @@ import java.time.Instant;
  * Strategy interface for traffic shaping algorithms.
  *
  * <p>Implementations define <em>how</em> incoming requests are scheduled
- * across time to produce smooth output traffic. The {@link eu.inqudium.imperative.trafficshaper.ImperativeTrafficShaper}
- * delegates all scheduling decisions to this interface.
+ * across time to produce smooth output traffic.
  *
  * <p><strong>Immutability contract:</strong> All implementations must treat the
  * state parameter as immutable and return a new state instance for every
- * mutating operation. The imperative wrapper relies on this for its CAS-based
- * thread safety model.
+ * mutating operation.
  *
- * <p>The default implementation is {@link LeakyBucketStrategy}, which assigns
- * evenly-spaced time slots. Other possible strategies include:
- * <ul>
- *   <li><strong>Token bucket shaping</strong> — allows controlled bursts up to
- *       a capacity, then shapes the remainder</li>
- *   <li><strong>Weighted fair queuing</strong> — assigns slots based on request
- *       priority or weight</li>
- *   <li><strong>Adaptive rate shaping</strong> — dynamically adjusts the interval
- *       based on downstream backpressure signals</li>
- *   <li><strong>Sliding window shaping</strong> — smooths traffic within a
- *       rolling time window rather than per-slot</li>
- * </ul>
+ * <h2>Built-in strategies</h2>
+ * <table>
+ *   <tr><th>Strategy</th><th>Burst</th><th>Adaptive</th><th>Use case</th></tr>
+ *   <tr><td>{@link LeakyBucketStrategy}</td><td>No</td><td>No</td><td>Strict even spacing</td></tr>
+ *   <tr><td>{@link TokenBucketShapingStrategy}</td><td>Yes</td><td>No</td><td>Allow bursts, then shape</td></tr>
+ *   <tr><td>{@link FixedWindowStrategy}</td><td>Yes</td><td>No</td><td>Simple window-based limit</td></tr>
+ *   <tr><td>{@link SlidingWindowStrategy}</td><td>Yes</td><td>No</td><td>Rolling window, no boundary spike</td></tr>
+ *   <tr><td>{@link AdaptiveRateStrategy}</td><td>No</td><td>Yes</td><td>Downstream backpressure</td></tr>
+ *   <tr><td>{@link AimdStrategy}</td><td>No</td><td>Yes</td><td>TCP-style congestion control</td></tr>
+ * </table>
  *
  * @param <S> the strategy-specific state type
  */
 public interface SchedulingStrategy<S extends SchedulingState> {
 
-  /**
-   * Creates the initial state for this strategy.
-   *
-   * @param config the traffic shaper configuration
-   * @param now    the creation time
-   * @return a fresh state with the first slot immediately available
-   */
   S initial(TrafficShaperConfig<S> config, Instant now);
 
-  /**
-   * Schedules a request and returns the throttling decision.
-   *
-   * <p>This is the central function. It evaluates whether the request
-   * can be admitted (immediately or after a delay) or must be rejected,
-   * and returns the updated state reflecting the scheduling decision.
-   *
-   * @param state  the current scheduling state
-   * @param config the traffic shaper configuration
-   * @param now    the arrival time of the request
-   * @return a throttle permission with the updated state
-   */
   ThrottlePermission<S> schedule(S state, TrafficShaperConfig<S> config, Instant now);
 
-  /**
-   * Records that a previously queued request has left the queue and
-   * started executing. Typically decrements the queue depth.
-   *
-   * @param state the current state
-   * @return the updated state with the request dequeued
-   */
   S recordExecution(S state);
 
-  /**
-   * Resets the strategy to its initial state with an incremented epoch.
-   * All pending reservations are invalidated — parked threads detect the
-   * epoch change and re-acquire their slot.
-   *
-   * @param state  the current state (epoch is read and incremented)
-   * @param config the traffic shaper configuration
-   * @param now    the reset time
-   * @return a fresh state with incremented epoch
-   */
   S reset(S state, TrafficShaperConfig<S> config, Instant now);
 
-  /**
-   * Estimates the wait time for a request arriving at the given instant.
-   * Does <strong>not</strong> modify the state.
-   *
-   * @param state  the current state
-   * @param config the traffic shaper configuration
-   * @param now    the hypothetical arrival time
-   * @return the estimated wait duration
-   */
   Duration estimateWait(S state, TrafficShaperConfig<S> config, Instant now);
 
-  /**
-   * Returns the current queue depth from the state.
-   */
   int queueDepth(S state);
 
-  /**
-   * Checks whether the unbounded queue has grown beyond the warning threshold.
-   *
-   * @param state  the current state
-   * @param config the configuration (contains the warning threshold)
-   * @param now    the current time
-   * @return true if a warning should be emitted
-   */
   boolean isUnboundedQueueWarning(S state, TrafficShaperConfig<S> config, Instant now);
+
+  /**
+   * Records that a shaped request completed successfully.
+   *
+   * <p>Adaptive strategies (e.g., {@link AdaptiveRateStrategy}, {@link AimdStrategy})
+   * override this to increase the throughput rate. Non-adaptive strategies return
+   * the state unchanged.
+   *
+   * @param state the current state
+   * @return the updated state (possibly with adjusted rate)
+   */
+  default S recordSuccess(S state) {
+    return state;
+  }
+
+  /**
+   * Records that a shaped request failed.
+   *
+   * <p>Adaptive strategies override this to decrease the throughput rate.
+   * Non-adaptive strategies return the state unchanged.
+   *
+   * @param state the current state
+   * @return the updated state (possibly with adjusted rate)
+   */
+  default S recordFailure(S state) {
+    return state;
+  }
+
+  // ======================== Shared overflow check ========================
+
+  /**
+   * Shared helper for overflow detection used by multiple strategies.
+   * Checks queue depth and wait duration limits in SHAPE_AND_REJECT_OVERFLOW mode.
+   */
+  default boolean shouldReject(S state, TrafficShaperConfig<S> config, Duration waitDuration) {
+    if (config.hasQueueDepthLimit() && state.queueDepth() >= config.maxQueueDepth()) {
+      return true;
+    }
+    if (config.hasMaxWaitDurationLimit()
+        && waitDuration.compareTo(config.maxWaitDuration()) > 0) {
+      return true;
+    }
+    return false;
+  }
+
+  /**
+   * Shared helper for unbounded queue warning detection.
+   */
+  default boolean checkUnboundedWarning(S state, TrafficShaperConfig<S> config, Instant now) {
+    if (config.throttleMode() != ThrottleMode.SHAPE_UNBOUNDED) return false;
+    if (config.unboundedWarnAfter() == null) return false;
+    return state.projectedTailWait(now).compareTo(config.unboundedWarnAfter()) > 0;
+  }
 }

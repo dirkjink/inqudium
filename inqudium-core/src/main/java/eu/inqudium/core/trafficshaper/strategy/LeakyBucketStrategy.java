@@ -59,11 +59,10 @@ public class LeakyBucketStrategy implements SchedulingStrategy<LeakyBucketState>
     }
 
     // Check overflow conditions (only in SHAPE_AND_REJECT_OVERFLOW mode)
-    if (!isImmediate && config.throttleMode() == ThrottleMode.SHAPE_AND_REJECT_OVERFLOW) {
-      if (shouldReject(effective, config, waitDuration)) {
-        return ThrottlePermission.rejected(
-            effective.withRequestRejected(), waitDuration);
-      }
+    if (!isImmediate && config.throttleMode() == ThrottleMode.SHAPE_AND_REJECT_OVERFLOW
+        && shouldReject(effective, config, waitDuration)) {
+      return ThrottlePermission.rejected(
+          effective.withRequestRejected(), waitDuration);
     }
 
     // Admit the request: assign the current nextFreeSlot as its execution slot
@@ -111,38 +110,10 @@ public class LeakyBucketStrategy implements SchedulingStrategy<LeakyBucketState>
       LeakyBucketState state,
       TrafficShaperConfig<LeakyBucketState> config,
       Instant now) {
-    if (config.throttleMode() != ThrottleMode.SHAPE_UNBOUNDED) {
-      return false;
-    }
-    if (config.unboundedWarnAfter() == null) {
-      return false;
-    }
-    Duration tailWait = state.projectedTailWait(now);
-    return tailWait.compareTo(config.unboundedWarnAfter()) > 0;
+    return checkUnboundedWarning(state, config, now);
   }
 
-  // ======================== Internal ========================
-
-  /**
-   * Determines whether a request should be rejected based on queue depth
-   * and wait duration limits.
-   */
-  private boolean shouldReject(
-      LeakyBucketState state,
-      TrafficShaperConfig<LeakyBucketState> config,
-      Duration waitDuration) {
-
-    if (config.hasQueueDepthLimit() && state.queueDepth() >= config.maxQueueDepth()) {
-      return true;
-    }
-
-    if (config.hasMaxWaitDurationLimit()
-        && waitDuration.compareTo(config.maxWaitDuration()) > 0) {
-      return true;
-    }
-
-    return false;
-  }
+  // ======================== Internal — Slot Reclamation ========================
 
   /**
    * Reclaims unused time slots when the scheduling timeline has fallen
