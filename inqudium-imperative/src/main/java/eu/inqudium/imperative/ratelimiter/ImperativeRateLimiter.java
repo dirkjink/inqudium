@@ -2,11 +2,13 @@ package eu.inqudium.imperative.ratelimiter;
 
 import eu.inqudium.core.ratelimiter.RateLimitPermission;
 import eu.inqudium.core.ratelimiter.RateLimiterConfig;
-import eu.inqudium.core.ratelimiter.RateLimiterCore;
 import eu.inqudium.core.ratelimiter.RateLimiterEvent;
 import eu.inqudium.core.ratelimiter.RateLimiterException;
-import eu.inqudium.core.ratelimiter.RateLimiterSnapshot;
+import eu.inqudium.core.ratelimiter.RateLimiterState;
 import eu.inqudium.core.ratelimiter.ReservationResult;
+import eu.inqudium.core.ratelimiter.strategy.RateLimiterStrategy;
+import eu.inqudium.core.ratelimiter.strategy.TokenBucketState;
+import eu.inqudium.core.ratelimiter.strategy.TokenBucketStrategy;
 
 import java.time.Clock;
 import java.time.Duration;
@@ -26,36 +28,53 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 /**
- * Thread-safe, imperative rate limiter implementation.
+ * Thread-safe, imperative rate limiter implementation using a pluggable strategy.
  */
-public class ImperativeRateLimiter {
+public class ImperativeRateLimiter<S extends RateLimiterState> {
 
   private static final Logger LOG = Logger.getLogger(ImperativeRateLimiter.class.getName());
 
   private final RateLimiterConfig config;
-  private final AtomicReference<RateLimiterSnapshot> snapshotRef;
+  private final RateLimiterStrategy<S> strategy;
+  private final AtomicReference<S> stateRef;
   private final Clock clock;
   private final List<Consumer<RateLimiterEvent>> eventListeners;
-
-  // Fix 3: Erfasst blockierte Threads, um sie bei reset/drain aufzuwecken
   private final Set<Thread> parkedThreads;
-
   private final String instanceId;
 
-  public ImperativeRateLimiter(RateLimiterConfig config) {
-    this(config, Clock.systemUTC());
+  // ======================== Static Factories (Default Algorithm) ========================
+
+  public ImperativeRateLimiter(RateLimiterConfig config, RateLimiterStrategy<S> strategy) {
+    this(config, strategy, Clock.systemUTC());
   }
 
-  public ImperativeRateLimiter(RateLimiterConfig config, Clock clock) {
+  public ImperativeRateLimiter(RateLimiterConfig config, RateLimiterStrategy<S> strategy, Clock clock) {
     this.config = Objects.requireNonNull(config, "config must not be null");
+    this.strategy = Objects.requireNonNull(strategy, "strategy must not be null");
     this.clock = Objects.requireNonNull(clock, "clock must not be null");
-    this.snapshotRef = new AtomicReference<>(RateLimiterSnapshot.initial(config, clock.instant()));
+    this.stateRef = new AtomicReference<>(strategy.initial(config, clock.instant()));
     this.eventListeners = new CopyOnWriteArrayList<>();
     this.parkedThreads = ConcurrentHashMap.newKeySet();
     this.instanceId = UUID.randomUUID().toString();
   }
 
-  // ======================== Execution (Fix 4: Multi-Permits) ========================
+  // ======================== Constructors (Custom Algorithms) ========================
+
+  /**
+   * Creates a rate limiter using the default Token Bucket algorithm.
+   */
+  public static ImperativeRateLimiter<TokenBucketState> create(RateLimiterConfig config) {
+    return new ImperativeRateLimiter<>(config, new TokenBucketStrategy());
+  }
+
+  /**
+   * Creates a rate limiter using the default Token Bucket algorithm and a custom clock.
+   */
+  public static ImperativeRateLimiter<TokenBucketState> create(RateLimiterConfig config, Clock clock) {
+    return new ImperativeRateLimiter<>(config, new TokenBucketStrategy(), clock);
+  }
+
+  // ======================== Execution ========================
 
   public <T> T execute(Callable<T> callable) throws Exception {
     return execute(callable, 1, config.defaultTimeout());
@@ -76,7 +95,6 @@ public class ImperativeRateLimiter {
       throw new IllegalArgumentException("timeout must not be negative, got " + timeout);
     }
 
-    // Fix 2: Erlaubt nun das kontrollierte Durchreichen von InterruptedException
     acquirePermissionsOrThrow(permits, timeout);
     return callable.call();
   }
@@ -112,7 +130,7 @@ public class ImperativeRateLimiter {
         return null;
       }, permits, timeout);
     } catch (InterruptedException | RuntimeException | Error e) {
-      throw e; // Fix 2: Transparentes Durchreichen
+      throw e;
     } catch (Exception e) {
       throw new RuntimeException(e);
     }
@@ -127,17 +145,16 @@ public class ImperativeRateLimiter {
   public boolean tryAcquirePermissions(int permits) {
     Instant now = clock.instant();
     while (true) {
-      RateLimiterSnapshot current = snapshotRef.get();
-      RateLimitPermission result = RateLimiterCore.tryAcquirePermissions(
-          current, config, now, permits);
+      S current = stateRef.get();
+      RateLimitPermission<S> result = strategy.tryAcquirePermissions(current, config, now, permits);
 
-      if (snapshotRef.compareAndSet(current, result.snapshot())) {
+      if (stateRef.compareAndSet(current, result.state())) {
         if (result.permitted()) {
           emitEvent(RateLimiterEvent.permitted(
-              config.name(), result.snapshot().availablePermits(), now));
+              config.name(), strategy.availablePermits(result.state(), config, now), now));
         } else {
           emitEvent(RateLimiterEvent.rejected(
-              config.name(), result.snapshot().availablePermits(), result.waitDuration(), now));
+              config.name(), strategy.availablePermits(result.state(), config, now), result.waitDuration(), now));
         }
         return result.permitted();
       }
@@ -155,7 +172,7 @@ public class ImperativeRateLimiter {
     Instant deadline = timeout.isZero() ? start : start.plus(timeout);
 
     while (true) {
-      RateLimiterSnapshot current = snapshotRef.get();
+      S current = stateRef.get();
       Instant now = clock.instant();
 
       Duration remainingTimeout = timeout.isZero()
@@ -165,59 +182,51 @@ public class ImperativeRateLimiter {
         remainingTimeout = Duration.ZERO;
       }
 
-      ReservationResult reservation = RateLimiterCore.reservePermissions(
-          current, config, now, permits, remainingTimeout);
+      ReservationResult<S> reservation = strategy.reservePermissions(current, config, now, permits, remainingTimeout);
 
       if (reservation.timedOut()) {
-        emitEvent(RateLimiterEvent.rejected(
-            config.name(), current.availablePermits(), reservation.waitDuration(), now));
-        throw new RateLimiterException(
-            config.name(), instanceId, reservation.waitDuration(), current.availablePermits());
+        int available = strategy.availablePermits(current, config, now);
+        emitEvent(RateLimiterEvent.rejected(config.name(), available, reservation.waitDuration(), now));
+        throw new RateLimiterException(config.name(), instanceId, reservation.waitDuration(), available);
       }
 
-      if (snapshotRef.compareAndSet(current, reservation.snapshot())) {
+      if (stateRef.compareAndSet(current, reservation.state())) {
+        int newAvailable = strategy.availablePermits(reservation.state(), config, now);
+
         if (reservation.waitDuration().isZero()) {
-          emitEvent(RateLimiterEvent.permitted(
-              config.name(), reservation.snapshot().availablePermits(), now));
+          emitEvent(RateLimiterEvent.permitted(config.name(), newAvailable, now));
           return;
         }
 
-        emitEvent(RateLimiterEvent.waiting(
-            config.name(), reservation.snapshot().availablePermits(),
-            reservation.waitDuration(), now));
+        emitEvent(RateLimiterEvent.waiting(config.name(), newAvailable, reservation.waitDuration(), now));
 
-        long epochBeforePark = reservation.snapshot().epoch();
+        long epochBeforePark = reservation.state().epoch();
         Instant targetWakeup = now.plus(reservation.waitDuration());
 
-        // Fix 1 & 2: Token Leak Protection und Interrupted Exception
         try {
           parkedThreads.add(Thread.currentThread());
           parkUntil(targetWakeup, epochBeforePark);
         } catch (InterruptedException e) {
-          refundPermits(permits); // Gib den reservierten Token dem Bucket zurück!
-          throw e; // Und propagiere die semantisch richtige Exception weiter
+          refundPermits(permits);
+          throw e;
         } finally {
           parkedThreads.remove(Thread.currentThread());
         }
 
-        RateLimiterSnapshot currentAfterWake = snapshotRef.get();
+        S currentAfterWake = stateRef.get();
         if (currentAfterWake.epoch() != epochBeforePark) {
-          // Fix 3: Epoch hat sich geändert. Neustart der Evaluierung (z.B. nach Reset)
-          continue;
+          continue; // Epoch changed, retry
         }
         return;
       }
     }
   }
 
-  /**
-   * Erstattet reservierte Token im Bucket zurück, falls der Prozess abbricht.
-   */
   private void refundPermits(int permits) {
     while (true) {
-      RateLimiterSnapshot current = snapshotRef.get();
-      RateLimiterSnapshot refunded = RateLimiterCore.refund(current, config, permits);
-      if (snapshotRef.compareAndSet(current, refunded)) {
+      S current = stateRef.get();
+      S refunded = strategy.refund(current, config, permits);
+      if (stateRef.compareAndSet(current, refunded)) {
         return;
       }
     }
@@ -229,9 +238,8 @@ public class ImperativeRateLimiter {
         throw new InterruptedException("Thread was interrupted while waiting for rate limiter permits");
       }
 
-      // Fix 3: Überprüfe auf Invalidierung durch reset/drain
-      if (snapshotRef.get().epoch() != expectedEpoch) {
-        break; // Verlasse den Schlaf, da eine Epochengrenze überschritten wurde
+      if (stateRef.get().epoch() != expectedEpoch) {
+        break;
       }
 
       Instant now = clock.instant();
@@ -261,7 +269,7 @@ public class ImperativeRateLimiter {
     for (Consumer<RateLimiterEvent> listener : eventListeners) {
       try {
         listener.accept(event);
-      } catch (Throwable t) { // Fix 5: Throwable fangen, um Abstürze durch fatale Metrik-Errors zu isolieren
+      } catch (Throwable t) {
         LOG.log(Level.WARNING,
             "Event listener threw exception for rate limiter '%s' (event: %s): %s"
                 .formatted(config.name(), event.type(), t.getMessage()),
@@ -273,11 +281,11 @@ public class ImperativeRateLimiter {
   // ======================== Introspection & Maintenance ========================
 
   public int getAvailablePermits() {
-    return RateLimiterCore.availablePermits(snapshotRef.get(), config, clock.instant());
+    return strategy.availablePermits(stateRef.get(), config, clock.instant());
   }
 
-  public RateLimiterSnapshot getSnapshot() {
-    return snapshotRef.get();
+  public S getState() {
+    return stateRef.get();
   }
 
   public RateLimiterConfig getConfig() {
@@ -291,11 +299,11 @@ public class ImperativeRateLimiter {
   public void drain() {
     Instant now = clock.instant();
     while (true) {
-      RateLimiterSnapshot current = snapshotRef.get();
-      RateLimiterSnapshot drained = RateLimiterCore.drain(current, now);
-      if (snapshotRef.compareAndSet(current, drained)) {
+      S current = stateRef.get();
+      S drained = strategy.drain(current, config, now);
+      if (stateRef.compareAndSet(current, drained)) {
         emitEvent(RateLimiterEvent.drained(config.name(), now));
-        unparkAll(); // Fix 3: Wecke Threads auf, damit sie die neue Epoche bemerken
+        unparkAll();
         return;
       }
     }
@@ -304,11 +312,11 @@ public class ImperativeRateLimiter {
   public void reset() {
     Instant now = clock.instant();
     while (true) {
-      RateLimiterSnapshot current = snapshotRef.get();
-      RateLimiterSnapshot fresh = RateLimiterCore.reset(current, config, now);
-      if (snapshotRef.compareAndSet(current, fresh)) {
-        emitEvent(RateLimiterEvent.reset(config.name(), fresh.availablePermits(), now));
-        unparkAll(); // Fix 3: Wecke alle wartenden Threads sofort auf, damit sie die frischen Permits nehmen
+      S current = stateRef.get();
+      S fresh = strategy.reset(current, config, now);
+      if (stateRef.compareAndSet(current, fresh)) {
+        emitEvent(RateLimiterEvent.reset(config.name(), strategy.availablePermits(fresh, config, now), now));
+        unparkAll();
         return;
       }
     }

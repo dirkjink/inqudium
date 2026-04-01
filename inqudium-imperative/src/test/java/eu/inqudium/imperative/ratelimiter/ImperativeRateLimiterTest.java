@@ -3,6 +3,7 @@ package eu.inqudium.imperative.ratelimiter;
 import eu.inqudium.core.ratelimiter.RateLimiterConfig;
 import eu.inqudium.core.ratelimiter.RateLimiterEvent;
 import eu.inqudium.core.ratelimiter.RateLimiterException;
+import eu.inqudium.core.ratelimiter.strategy.TokenBucketState;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -21,7 +22,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class ImperativeRateLimiterTest {
 
   // ================================================================
-  // Standard Execution & Multi-Permits
+  // Standard Execution & Multi-Permits (Using Default Algorithm)
   // ================================================================
 
   @Nested
@@ -29,11 +30,11 @@ class ImperativeRateLimiterTest {
   class ExecutionAndPermits {
 
     @Test
-    @DisplayName("should successfully execute a callable when permits are available")
+    @DisplayName("Should successfully execute a callable when permits are available")
     void should_successfully_execute_a_callable_when_permits_are_available() throws Exception {
-      // Given
+      // Given - Implicitly using TokenBucketStrategy via create()
       RateLimiterConfig config = RateLimiterConfig.builder("test").capacity(5).build();
-      ImperativeRateLimiter limiter = new ImperativeRateLimiter(config);
+      ImperativeRateLimiter<TokenBucketState> limiter = ImperativeRateLimiter.create(config);
 
       // When
       String result = limiter.execute(() -> "success");
@@ -44,11 +45,11 @@ class ImperativeRateLimiterTest {
     }
 
     @Test
-    @DisplayName("should allow consuming multiple permits in a single execution")
+    @DisplayName("Should allow consuming multiple permits in a single execution")
     void should_allow_consuming_multiple_permits_in_a_single_execution() throws Exception {
       // Given
       RateLimiterConfig config = RateLimiterConfig.builder("multi").capacity(10).build();
-      ImperativeRateLimiter limiter = new ImperativeRateLimiter(config);
+      ImperativeRateLimiter<TokenBucketState> limiter = ImperativeRateLimiter.create(config);
 
       // When
       limiter.execute(() -> "batch-task", 5);
@@ -58,7 +59,7 @@ class ImperativeRateLimiterTest {
     }
 
     @Test
-    @DisplayName("should throw RateLimiterException if multi permit request exceeds timeout")
+    @DisplayName("Should throw RateLimiterException if multi permit request exceeds timeout")
     void should_throw_rate_limiter_exception_if_multi_permit_request_exceeds_timeout() {
       // Given
       RateLimiterConfig config = RateLimiterConfig.builder("fail-fast")
@@ -67,7 +68,7 @@ class ImperativeRateLimiterTest {
           .refillPeriod(Duration.ofSeconds(10))
           .defaultTimeout(Duration.ZERO) // Fail fast
           .build();
-      ImperativeRateLimiter limiter = new ImperativeRateLimiter(config);
+      ImperativeRateLimiter<TokenBucketState> limiter = ImperativeRateLimiter.create(config);
 
       // Drain the bucket first
       limiter.drain();
@@ -82,7 +83,7 @@ class ImperativeRateLimiterTest {
   }
 
   // ================================================================
-  // Interrupt Handling & Token Refund (The critical fix)
+  // Interrupt Handling & Token Refund
   // ================================================================
 
   @Nested
@@ -90,7 +91,7 @@ class ImperativeRateLimiterTest {
   class InterruptAndRefund {
 
     @Test
-    @DisplayName("should throw InterruptedException and refund token if thread is interrupted while waiting")
+    @DisplayName("Should throw InterruptedException and refund token if thread is interrupted while waiting")
     void should_throw_interrupted_exception_and_refund_token_if_thread_is_interrupted_while_waiting() throws InterruptedException {
       // Given — capacity 1, slow refill
       RateLimiterConfig config = RateLimiterConfig.builder("interrupt-test")
@@ -98,7 +99,7 @@ class ImperativeRateLimiterTest {
           .refillPermits(1)
           .refillPeriod(Duration.ofSeconds(10))
           .build();
-      ImperativeRateLimiter limiter = new ImperativeRateLimiter(config);
+      ImperativeRateLimiter<TokenBucketState> limiter = ImperativeRateLimiter.create(config);
 
       // Empty the bucket completely
       limiter.drain();
@@ -110,7 +111,6 @@ class ImperativeRateLimiterTest {
       Thread worker = new Thread(() -> {
         try {
           threadStarted.countDown();
-          // Ask for 1 permit. It will reserve it (debt goes to -1) and park for 10 seconds.
           limiter.execute(() -> "task", 1, Duration.ofSeconds(15));
         } catch (InterruptedException e) {
           caughtInterrupt.set(true);
@@ -120,20 +120,15 @@ class ImperativeRateLimiterTest {
       });
       worker.start();
 
-      // Wait for thread to actually enter the park loop
       threadStarted.await();
       Thread.sleep(100);
 
-      // Interrupt the worker while it's waiting for the token
       worker.interrupt();
       worker.join();
 
       // Then
       assertThat(caughtInterrupt).isTrue();
-      // Crucial part of Fix 1: The permit that was reserved MUST be refunded.
-      // Since it was drained to 0, and the thread reserved 1 (going to -1 conceptually),
-      // the refund should put it back to 0. It should NOT be stuck at -1.
-      assertThat(limiter.getSnapshot().availablePermits()).isZero();
+      assertThat(limiter.getState().availablePermits()).isZero();
     }
   }
 
@@ -146,22 +141,21 @@ class ImperativeRateLimiterTest {
   class Unparking {
 
     @Test
-    @DisplayName("should wake up blocked threads immediately when reset is called")
+    @DisplayName("Should wake up blocked threads immediately when reset is called")
     void should_wake_up_blocked_threads_immediately_when_reset_is_called() throws InterruptedException {
       // Given
       RateLimiterConfig config = RateLimiterConfig.builder("unpark-test")
           .capacity(1)
           .refillPermits(1)
-          .refillPeriod(Duration.ofDays(1)) // Very long wait
+          .refillPeriod(Duration.ofDays(1))
           .build();
-      ImperativeRateLimiter limiter = new ImperativeRateLimiter(config);
-      limiter.drain(); // Empty the bucket
+      ImperativeRateLimiter<TokenBucketState> limiter = ImperativeRateLimiter.create(config);
+      limiter.drain();
 
       CountDownLatch threadFinished = new CountDownLatch(1);
 
       Thread worker = new Thread(() -> {
         try {
-          // Will block for 1 day
           limiter.execute(() -> "task", 1, Duration.ofDays(2));
           threadFinished.countDown();
         } catch (Exception e) {
@@ -170,15 +164,14 @@ class ImperativeRateLimiterTest {
       });
       worker.start();
 
-      // Wait to ensure thread is parked
       Thread.sleep(100);
 
       // When
-      limiter.reset(); // This should trigger LockSupport.unpark(thread)
+      limiter.reset();
 
       // Then
       boolean finishedQuickly = threadFinished.await(2, TimeUnit.SECONDS);
-      assertThat(finishedQuickly).isTrue(); // Thread woke up and consumed the reset token
+      assertThat(finishedQuickly).isTrue();
     }
   }
 
@@ -191,17 +184,15 @@ class ImperativeRateLimiterTest {
   class ObservabilityIsolation {
 
     @Test
-    @DisplayName("should isolate fatal errors in event listeners so execution proceeds safely")
+    @DisplayName("Should isolate fatal errors in event listeners so execution proceeds safely")
     void should_isolate_fatal_errors_in_event_listeners_so_execution_proceeds_safely() throws Exception {
       // Given
       RateLimiterConfig config = RateLimiterConfig.builder("events").capacity(5).build();
-      ImperativeRateLimiter limiter = new ImperativeRateLimiter(config);
+      ImperativeRateLimiter<TokenBucketState> limiter = ImperativeRateLimiter.create(config);
 
       List<RateLimiterEvent> events = new ArrayList<>();
 
-      // Normal listener
       limiter.onEvent(events::add);
-      // Malicious listener throwing a severe Error (simulating an agent crash)
       limiter.onEvent(event -> {
         throw new Error("Fatal Telemetry Error");
       });
@@ -211,7 +202,7 @@ class ImperativeRateLimiterTest {
 
       // Then
       assertThat(result).isEqualTo("survived");
-      assertThat(events).hasSize(1); // The healthy listener still got the event
+      assertThat(events).hasSize(1);
     }
   }
 }
