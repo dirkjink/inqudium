@@ -89,4 +89,12 @@ public record LeakyBucketMetrics(
   private static long toNanos(Instant instant) {
     return instant.getEpochSecond() * 1_000_000_000L + instant.getNano();
   }
+
+  @Override
+  public String getTripReason(CircuitBreakerConfig config, Instant now) {
+    // We apply the leak to get the absolutely current level for the log
+    LeakyBucketMetrics evaluatedState = leak(toNanos(now));
+    return "Leaky bucket overflow: Current failure level is %.2f (Capacity: %d, Leak Rate: %.1f/sec)."
+        .formatted(evaluatedState.currentLevel(), config.failureThreshold(), leakRatePerSecond);
+  }
 }

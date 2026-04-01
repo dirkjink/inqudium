@@ -34,4 +34,10 @@ public record GradualDecayMetrics(int failureCount) implements FailureMetrics {
   public FailureMetrics reset(Instant now) {
     return initial();
   }
+
+  @Override
+  public String getTripReason(CircuitBreakerConfig config, Instant now) {
+    return "Failure threshold reached: Current failure count is %d (Threshold: %d)."
+        .formatted(failureCount, config.failureThreshold());
+  }
 }

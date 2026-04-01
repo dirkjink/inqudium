@@ -33,6 +33,10 @@ public final class ContinuousTimeEwma {
     this.tauNanos = Math.max(1L, timeConstant.toNanos());
   }
 
+  public long tauDurationNanos() {
+    return tauNanos;
+  }
+
   /**
    * Calculates the new smoothed value based on the elapsed time and a new sample.
    *

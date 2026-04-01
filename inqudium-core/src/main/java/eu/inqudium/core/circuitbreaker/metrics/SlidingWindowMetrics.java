@@ -96,4 +96,10 @@ public record SlidingWindowMetrics(
     // Return a fresh, empty window with the same configuration
     return initial(windowSize, minimumNumberOfCalls);
   }
+
+  @Override
+  public String getTripReason(CircuitBreakerConfig config, Instant now) {
+    return "Sliding window threshold reached: Found %d failures in the last %d calls (Threshold: %d)."
+        .formatted(failureCount, size, config.failureThreshold());
+  }
 }

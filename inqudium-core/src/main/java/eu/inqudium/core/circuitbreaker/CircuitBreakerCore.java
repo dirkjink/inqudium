@@ -49,6 +49,18 @@ public final class CircuitBreakerCore {
    * @param now      the current timestamp
    * @return a {@link PermissionResult} indicating whether the call is permitted
    */
+  /**
+   * Evaluates whether a call is permitted given the current state.
+   *
+   * <p>May trigger a state transition from OPEN → HALF_OPEN when the
+   * wait duration has expired. The returned {@link PermissionResult}
+   * contains the (possibly updated) snapshot.
+   *
+   * @param snapshot the current state snapshot
+   * @param config   the circuit breaker configuration
+   * @param now      the current timestamp
+   * @return a {@link PermissionResult} indicating whether the call is permitted
+   */
   public static PermissionResult tryAcquirePermission(
       CircuitBreakerSnapshot snapshot,
       CircuitBreakerConfig config,
@@ -59,10 +71,13 @@ public final class CircuitBreakerCore {
 
       case OPEN -> {
         if (isWaitDurationExpired(snapshot, config, now)) {
-          // Transition OPEN → HALF_OPEN and permit the first probe call
+          // DevOps Logging: Reason hinzufügen!
+          String reason = "Wait duration of %s expired".formatted(config.waitDurationInOpenState());
+
           CircuitBreakerSnapshot halfOpen = snapshot
-              .withState(CircuitState.HALF_OPEN, now)
+              .withState(CircuitState.HALF_OPEN, now, reason)
               .withIncrementedHalfOpenAttempts();
+
           yield PermissionResult.permitted(halfOpen);
         }
         yield PermissionResult.rejected(snapshot);
@@ -97,31 +112,25 @@ public final class CircuitBreakerCore {
 
     return switch (snapshot.state()) {
       case CLOSED -> {
-        // Delegate success recording to the configured metrics strategy
         FailureMetrics updatedMetrics = snapshot.failureMetrics().recordSuccess(now);
-
-        // FIX: Evaluate threshold even on a successful call!
-        // A success might push the total calls over the minimum required calls,
-        // proving that the overall failure rate in the window is too high.
         if (updatedMetrics.isThresholdReached(config, now)) {
-          // Transition CLOSED → OPEN
-          yield snapshot.withState(CircuitState.OPEN, now);
+          // METRIK WIRD GEFRAGT WARUM:
+          String reason = updatedMetrics.getTripReason(config, now);
+          yield snapshot.withState(CircuitState.OPEN, now, reason);
         }
-
         yield snapshot.withUpdatedFailureMetrics(updatedMetrics);
       }
 
       case HALF_OPEN -> {
         int newSuccessCount = snapshot.successCount() + 1;
         if (newSuccessCount >= config.successThresholdInHalfOpen()) {
-          // Transition HALF_OPEN → CLOSED
-          yield snapshot.withState(CircuitState.CLOSED, now);
-        } else {
-          yield snapshot.withIncrementedSuccessCount();
+          // Reason hinzufügen!
+          String reason = "Success threshold (%d) met in HALF_OPEN state".formatted(config.successThresholdInHalfOpen());
+          yield snapshot.withState(CircuitState.CLOSED, now, reason);
         }
+        yield snapshot.withIncrementedSuccessCount();
       }
 
-      // Should not happen — calls are rejected in OPEN state
       case OPEN -> snapshot;
     };
   }
@@ -146,22 +155,21 @@ public final class CircuitBreakerCore {
 
     return switch (snapshot.state()) {
       case CLOSED -> {
-        // Delegate failure recording to the configured metrics strategy
         FailureMetrics updatedMetrics = snapshot.failureMetrics().recordFailure(now);
-
-        // Evaluate if the strategy signals that the threshold is reached
         if (updatedMetrics.isThresholdReached(config, now)) {
-          // Transition CLOSED → OPEN
-          yield snapshot.withState(CircuitState.OPEN, now);
+          // METRIK WIRD GEFRAGT WARUM:
+          String reason = updatedMetrics.getTripReason(config, now);
+          yield snapshot.withState(CircuitState.OPEN, now, reason);
         }
-
         yield snapshot.withUpdatedFailureMetrics(updatedMetrics);
       }
 
-      // Any failure in HALF_OPEN immediately reopens the circuit
-      case HALF_OPEN -> snapshot.withState(CircuitState.OPEN, now);
+      case HALF_OPEN -> {
+        // Reason hinzufügen!
+        String reason = "Probe call failed in HALF_OPEN state";
+        yield snapshot.withState(CircuitState.OPEN, now, reason);
+      }
 
-      // Should not happen — calls are rejected in OPEN state
       case OPEN -> snapshot;
     };
   }
@@ -209,7 +217,8 @@ public final class CircuitBreakerCore {
   /**
    * Detects whether a state transition occurred between two snapshots.
    *
-   * @return an Optional containing the transition, or empty if no transition occurred
+   * @return an Optional containing the transition with the captured reason,
+   * or empty if no transition occurred
    */
   public static Optional<StateTransition> detectTransition(
       String name,
@@ -218,7 +227,15 @@ public final class CircuitBreakerCore {
       Instant now) {
 
     if (before.state() != after.state()) {
-      return Optional.of(new StateTransition(name, before.state(), after.state(), now));
+      // Wir nehmen den Grund aus dem neuen Snapshot ('after'),
+      // der beim Zustandswechsel im Core gesetzt wurde.
+      return Optional.of(new StateTransition(
+          name,
+          before.state(),
+          after.state(),
+          now,
+          after.transitionReason()
+      ));
     }
     return Optional.empty();
   }

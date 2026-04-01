@@ -95,4 +95,12 @@ public record ContinuousTimeEwmaMetrics(
   private static long toNanos(Instant instant) {
     return instant.getEpochSecond() * 1_000_000_000L + instant.getNano();
   }
+
+  @Override
+  public String getTripReason(CircuitBreakerConfig config, Instant now) {
+    // Calculate decayed rate for the exact moment of the trip
+    double decayedRate = ewmaCalculator.calculate(currentRate, lastUpdateNanos, toNanos(now), 0.0);
+    return "Continuous-time EWMA threshold reached: Current failure rate is %.1f%% (Threshold: %d%%). Time Constant (Tau): %s."
+        .formatted(decayedRate * 100.0, config.failureThreshold(), ewmaCalculator.tauDurationNanos());
+  }
 }

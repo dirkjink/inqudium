@@ -145,4 +145,22 @@ public record TimeBasedErrorRateMetrics(
         currentEpochSecond
     );
   }
+
+  @Override
+  public String getTripReason(CircuitBreakerConfig config, Instant now) {
+    TimeBasedErrorRateMetrics evaluatedState = fastForward(now.getEpochSecond());
+
+    int totalSuccesses = java.util.Arrays.stream(evaluatedState.successBuckets()).sum();
+    int totalFailures = java.util.Arrays.stream(evaluatedState.failureBuckets()).sum();
+    int totalCalls = totalSuccesses + totalFailures;
+
+    if (totalCalls == 0) {
+      return "Circuit tripped, but no calls were recorded in the current window.";
+    }
+
+    double failureRate = ((double) totalFailures / totalCalls) * 100.0;
+
+    return "Failure rate of %.1f%% (%d failures out of %d calls) in the last %d seconds exceeded the threshold of %d%%."
+        .formatted(failureRate, totalFailures, totalCalls, windowSizeInSeconds, config.failureThreshold());
+  }
 }

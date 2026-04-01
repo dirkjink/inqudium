@@ -1,6 +1,5 @@
 package eu.inqudium.core.circuitbreaker;
 
-
 import java.time.Instant;
 
 /**
@@ -10,16 +9,19 @@ import java.time.Instant;
  * @param fromState the state before the transition
  * @param toState   the state after the transition
  * @param timestamp when the transition occurred
+ * @param reason    the human-readable explanation of why the transition happened
  */
 public record StateTransition(
     String name,
     CircuitState fromState,
     CircuitState toState,
-    Instant timestamp
+    Instant timestamp,
+    String reason
 ) {
 
   @Override
   public String toString() {
-    return "CircuitBreaker '%s': %s -> %s at %s".formatted(name, fromState, toState, timestamp);
+    return "CircuitBreaker '%s': %s -> %s at %s. Reason: %s"
+        .formatted(name, fromState, toState, timestamp, reason);
   }
 }

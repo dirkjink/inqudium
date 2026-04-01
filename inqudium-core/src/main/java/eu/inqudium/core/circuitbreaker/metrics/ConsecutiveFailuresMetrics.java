@@ -47,4 +47,10 @@ public record ConsecutiveFailuresMetrics(int consecutiveFailures) implements Fai
     // Resetting the state is identical to creating the initial state
     return initial();
   }
+
+  @Override
+  public String getTripReason(CircuitBreakerConfig config, Instant now) {
+    return "Consecutive failure threshold reached: Received %d failures in a row (Threshold: %d)."
+        .formatted(consecutiveFailures, config.failureThreshold());
+  }
 }

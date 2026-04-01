@@ -97,4 +97,10 @@ public record RequestBasedEwmaMetrics(
         0
     );
   }
+
+  @Override
+  public String getTripReason(CircuitBreakerConfig config, Instant now) {
+    return "Request-based EWMA threshold reached: Current failure rate is %.1f%% (Threshold: %d%%). Alpha: %.2f."
+        .formatted(currentRate * 100.0, config.failureThreshold(), ewmaCalculator.alpha());
+  }
 }

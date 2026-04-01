@@ -22,7 +22,7 @@ public final class RequestBasedEwma {
    * The EWMA smoothing factor (alpha).
    * Controls how much weight each new sample carries in the running average.
    */
-  private final double alpha;
+  public final double alpha;
 
   /**
    * Creates a new Request-Based EWMA calculator.
@@ -36,6 +36,10 @@ public final class RequestBasedEwma {
     // Clamping to [0.01, 1.0] to prevent degenerate states like 0.0 (permanently frozen)
     // or > 1.0 (mathematically invalid for EWMA).
     this.alpha = Math.max(0.01, Math.min(1.0, smoothingFactor));
+  }
+
+  public double alpha() {
+    return alpha;
   }
 
   /**

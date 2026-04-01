@@ -4,61 +4,42 @@ import eu.inqudium.core.circuitbreaker.metrics.FailureMetrics;
 import java.time.Instant;
 
 /**
- * Immutable snapshot of the circuit breaker's internal state.
- *
- * <p>This is the central data structure of the functional core.
- * All state transitions produce a new snapshot rather than mutating in place.
- *
- * @param state            the current circuit state
- * @param failureMetrics   strategy for tracking failures and evaluating thresholds
- * @param successCount     accumulated success count in HALF_OPEN (reset on state transition)
- * @param halfOpenAttempts number of probe calls issued in HALF_OPEN
- * @param stateChangedAt   timestamp of the last state transition
+ * @param transitionReason a human-readable reason why this state was entered
  */
 public record CircuitBreakerSnapshot(
     CircuitState state,
     FailureMetrics failureMetrics,
     int successCount,
     int halfOpenAttempts,
-    Instant stateChangedAt
+    Instant stateChangedAt,
+    String transitionReason
 ) {
 
-  /**
-   * Creates the initial snapshot in CLOSED state with the provided initial metrics.
-   */
   public static CircuitBreakerSnapshot initial(Instant now, FailureMetrics initialMetrics) {
-    return new CircuitBreakerSnapshot(CircuitState.CLOSED, initialMetrics, 0, 0, now);
+    return new CircuitBreakerSnapshot(
+        CircuitState.CLOSED, initialMetrics, 0, 0, now, "Initial configuration applied"
+    );
   }
 
-  // --- Wither methods for immutable updates ---
+  // --- Wither methods ---
 
-  /**
-   * Transitions to a new state, automatically resetting the failure metrics
-   * and the HALF_OPEN counters to their initial values.
-   */
-  public CircuitBreakerSnapshot withState(CircuitState newState, Instant now) {
-    return new CircuitBreakerSnapshot(newState, failureMetrics.reset(now), 0, 0, now);
+  public CircuitBreakerSnapshot withState(CircuitState newState, Instant now, String reason) {
+    return new CircuitBreakerSnapshot(newState, failureMetrics.reset(now), 0, 0, now, reason);
   }
 
-  /**
-   * Applies an updated failure metrics state (e.g., after recording a success or failure).
-   */
   public CircuitBreakerSnapshot withUpdatedFailureMetrics(FailureMetrics newMetrics) {
-    return new CircuitBreakerSnapshot(state, newMetrics, successCount, halfOpenAttempts, stateChangedAt);
+    return new CircuitBreakerSnapshot(state, newMetrics, successCount, halfOpenAttempts, stateChangedAt, transitionReason);
   }
 
   public CircuitBreakerSnapshot withIncrementedSuccessCount() {
-    return new CircuitBreakerSnapshot(state, failureMetrics, successCount + 1, halfOpenAttempts, stateChangedAt);
+    return new CircuitBreakerSnapshot(state, failureMetrics, successCount + 1, halfOpenAttempts, stateChangedAt, transitionReason);
   }
 
   public CircuitBreakerSnapshot withIncrementedHalfOpenAttempts() {
-    return new CircuitBreakerSnapshot(state, failureMetrics, successCount, halfOpenAttempts + 1, stateChangedAt);
+    return new CircuitBreakerSnapshot(state, failureMetrics, successCount, halfOpenAttempts + 1, stateChangedAt, transitionReason);
   }
 
-  /**
-   * Allows releasing a HALF_OPEN attempt slot when an ignored exception occurs.
-   */
   public CircuitBreakerSnapshot withDecrementedHalfOpenAttempts() {
-    return new CircuitBreakerSnapshot(state, failureMetrics, successCount, Math.max(0, halfOpenAttempts - 1), stateChangedAt);
+    return new CircuitBreakerSnapshot(state, failureMetrics, successCount, Math.max(0, halfOpenAttempts - 1), stateChangedAt, transitionReason);
   }
 }

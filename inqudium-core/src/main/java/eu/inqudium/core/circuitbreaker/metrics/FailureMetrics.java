@@ -29,4 +29,11 @@ public interface FailureMetrics {
    * Resets the metrics to their initial state (e.g., when transitioning to CLOSED).
    */
   FailureMetrics reset(Instant now);
+
+  /**
+   * Returns a human-readable, detailed explanation of why the threshold was reached.
+   * <p>This is highly valuable for DevOps engineers and logging. It should include
+   * the concrete numbers (e.g., current rate vs. threshold) that led to the trip.
+   */
+  String getTripReason(CircuitBreakerConfig config, Instant now);
 }
