@@ -1,6 +1,7 @@
 package eu.inqudium.core.circuitbreaker;
 
 import java.time.Duration;
+import java.util.List;
 import java.util.Objects;
 import java.util.function.Predicate;
 
@@ -103,14 +104,18 @@ public record CircuitBreakerConfig(
      */
     @SafeVarargs
     public final Builder recordExceptions(Class<? extends Throwable>... exceptionTypes) {
-      // Fix 8: Prevent silent overwriting when combined with ignoreExceptions
       if (predicateSetViaConvenienceMethod) {
         throw new IllegalStateException(
             "recordExceptions() and ignoreExceptions() cannot both be used on the same builder. "
                 + "Use recordFailurePredicate() for complex filtering logic.");
       }
+
+      // Defensive copy to prevent array reference leaks from the caller.
+      // List.of creates an immutable copy of the varargs array.
+      List<Class<? extends Throwable>> types = List.of(exceptionTypes);
+
       this.recordFailurePredicate = throwable -> {
-        for (Class<? extends Throwable> type : exceptionTypes) {
+        for (Class<? extends Throwable> type : types) {
           if (type.isInstance(throwable)) {
             return true;
           }
@@ -129,14 +134,17 @@ public record CircuitBreakerConfig(
      */
     @SafeVarargs
     public final Builder ignoreExceptions(Class<? extends Throwable>... exceptionTypes) {
-      // Fix 8: Prevent silent overwriting when combined with recordExceptions
       if (predicateSetViaConvenienceMethod) {
         throw new IllegalStateException(
             "recordExceptions() and ignoreExceptions() cannot both be used on the same builder. "
                 + "Use recordFailurePredicate() for complex filtering logic.");
       }
+
+      // Defensive copy to prevent array reference leaks from the caller.
+      List<Class<? extends Throwable>> types = List.of(exceptionTypes);
+
       this.recordFailurePredicate = throwable -> {
-        for (Class<? extends Throwable> type : exceptionTypes) {
+        for (Class<? extends Throwable> type : types) {
           if (type.isInstance(throwable)) {
             return false;
           }

@@ -92,7 +92,7 @@ public class ImperativeCircuitBreaker {
   }
 
   /**
-   * Fix 6: Executes the callable with a fallback that activates on ANY exception,
+   * Executes the callable with a fallback that activates on ANY exception,
    * including business exceptions thrown by the callable and circuit breaker rejections.
    *
    * <p>This matches the common developer expectation that "fallback" means
@@ -101,6 +101,11 @@ public class ImperativeCircuitBreaker {
   public <T> T executeWithFallbackOnAny(Callable<T> callable, Supplier<T> fallback) throws Exception {
     try {
       return execute(callable);
+    } catch (InterruptedException e) {
+      // Do not mask thread interrupts by executing a fallback.
+      // The interrupt status was already restored in execute(), but we must re-throw
+      // to ensure the calling context can abort properly.
+      throw e;
     } catch (Exception e) {
       return fallback.get();
     }
@@ -208,14 +213,11 @@ public class ImperativeCircuitBreaker {
 
   private void handleThrowable(Throwable throwable) {
     if (!config.shouldRecordAsFailure(throwable)) {
-      // Fix 2: Ignored exceptions in HALF_OPEN must release their attempt slot,
-      // otherwise the circuit can get stuck when all slots are consumed by ignored exceptions.
       recordIgnored();
       return;
     }
 
     while (true) {
-      // Fix 5: Fresh timestamp per retry
       Instant now = clock.instant();
       CircuitBreakerSnapshot current = snapshotRef.get();
       CircuitBreakerSnapshot updated = CircuitBreakerCore.recordFailure(current, config, now);
@@ -227,6 +229,14 @@ public class ImperativeCircuitBreaker {
           now = clock.instant();
           current = snapshotRef.get();
           updated = CircuitBreakerCore.recordFailure(current, config, now);
+
+          // Bail out early if another thread already completed the state transition
+          // while we were waiting to acquire the lock.
+          // Continue the loop to fall back into the lock-free fast-path.
+          if (updated.state() == current.state()) {
+            continue;
+          }
+
           if (snapshotRef.compareAndSet(current, updated)) {
             transition = CircuitBreakerCore.detectTransition(
                 config.name(), current, updated, now).orElse(null);
@@ -236,7 +246,6 @@ public class ImperativeCircuitBreaker {
         } finally {
           transitionLock.unlock();
         }
-        // Fix 3: Emit outside lock
         notifyListeners(transition);
         return;
       } else {
@@ -263,8 +272,17 @@ public class ImperativeCircuitBreaker {
 
   // ======================== Listeners ========================
 
-  public void onStateTransition(Consumer<StateTransition> listener) {
-    transitionListeners.add(Objects.requireNonNull(listener));
+  /**
+   * Registers a state transition listener.
+   * * @param listener the listener to be notified on state transitions
+   * @return a Runnable that, when executed, unregisters this listener to prevent memory leaks
+   */
+  public Runnable onStateTransition(Consumer<StateTransition> listener) {
+    Objects.requireNonNull(listener, "listener must not be null");
+    transitionListeners.add(listener);
+
+    // Return a disposable handle to allow removing the listener
+    return () -> transitionListeners.remove(listener);
   }
 
   /**
