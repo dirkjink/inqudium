@@ -5,13 +5,12 @@ import eu.inqudium.core.fallback.FallbackConfig;
 import eu.inqudium.core.fallback.FallbackCore;
 import eu.inqudium.core.fallback.FallbackEvent;
 import eu.inqudium.core.fallback.FallbackException;
-import eu.inqudium.core.fallback.FallbackSnapshot;
 import eu.inqudium.core.fallback.FallbackExceptionHandler;
 import eu.inqudium.core.fallback.FallbackResultHandler;
+import eu.inqudium.core.fallback.FallbackSnapshot;
 
 import java.time.Clock;
 import java.time.Duration;
-import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.Callable;

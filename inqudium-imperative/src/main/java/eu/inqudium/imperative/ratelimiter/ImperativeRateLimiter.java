@@ -13,8 +13,10 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.Callable;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.LockSupport;
@@ -35,7 +37,9 @@ public class ImperativeRateLimiter {
   private final Clock clock;
   private final List<Consumer<RateLimiterEvent>> eventListeners;
 
-  // Fix 8: Unique instance identifier for identity-based comparison in executeWithFallback
+  // Fix 3: Erfasst blockierte Threads, um sie bei reset/drain aufzuwecken
+  private final Set<Thread> parkedThreads;
+
   private final String instanceId;
 
   public ImperativeRateLimiter(RateLimiterConfig config) {
@@ -47,40 +51,43 @@ public class ImperativeRateLimiter {
     this.clock = Objects.requireNonNull(clock, "clock must not be null");
     this.snapshotRef = new AtomicReference<>(RateLimiterSnapshot.initial(config, clock.instant()));
     this.eventListeners = new CopyOnWriteArrayList<>();
+    this.parkedThreads = ConcurrentHashMap.newKeySet();
     this.instanceId = UUID.randomUUID().toString();
   }
 
-  // ======================== Execution ========================
+  // ======================== Execution (Fix 4: Multi-Permits) ========================
 
   public <T> T execute(Callable<T> callable) throws Exception {
-    // Fix 10: Fail fast on null
-    Objects.requireNonNull(callable, "callable must not be null");
-    acquirePermissionOrThrow(config.defaultTimeout());
-    return callable.call();
+    return execute(callable, 1, config.defaultTimeout());
   }
 
   public <T> T execute(Callable<T> callable, Duration timeout) throws Exception {
+    return execute(callable, 1, timeout);
+  }
+
+  public <T> T execute(Callable<T> callable, int permits) throws Exception {
+    return execute(callable, permits, config.defaultTimeout());
+  }
+
+  public <T> T execute(Callable<T> callable, int permits, Duration timeout) throws Exception {
     Objects.requireNonNull(callable, "callable must not be null");
-    // Fix 10: Validate timeout to prevent cryptic NPEs deep in Duration arithmetic
     Objects.requireNonNull(timeout, "timeout must not be null");
     if (timeout.isNegative()) {
       throw new IllegalArgumentException("timeout must not be negative, got " + timeout);
     }
-    acquirePermissionOrThrow(timeout);
+
+    // Fix 2: Erlaubt nun das kontrollierte Durchreichen von InterruptedException
+    acquirePermissionsOrThrow(permits, timeout);
     return callable.call();
   }
 
-  /**
-   * Executes with a fallback that activates when <em>this</em> rate limiter rejects the call.
-   *
-   * <p>Fix 8: Uses instance-based comparison ({@code instanceId}) instead of the
-   * human-readable name to determine whether the exception originated from this
-   * rate limiter. This prevents false positives when multiple rate limiters share
-   * the same name, or when a downstream rate limiter throws.
-   */
   public <T> T executeWithFallback(Callable<T> callable, Supplier<T> fallback) throws Exception {
+    return executeWithFallback(callable, 1, config.defaultTimeout(), fallback);
+  }
+
+  public <T> T executeWithFallback(Callable<T> callable, int permits, Duration timeout, Supplier<T> fallback) throws Exception {
     try {
-      return execute(callable);
+      return execute(callable, permits, timeout);
     } catch (RateLimiterException e) {
       if (Objects.equals(e.getInstanceId(), this.instanceId)) {
         return fallback.get();
@@ -89,15 +96,23 @@ public class ImperativeRateLimiter {
     }
   }
 
-  public void execute(Runnable runnable) {
+  public void execute(Runnable runnable) throws InterruptedException {
+    execute(runnable, 1, config.defaultTimeout());
+  }
+
+  public void execute(Runnable runnable, Duration timeout) throws InterruptedException {
+    execute(runnable, 1, timeout);
+  }
+
+  public void execute(Runnable runnable, int permits, Duration timeout) throws InterruptedException {
     Objects.requireNonNull(runnable, "runnable must not be null");
     try {
       execute(() -> {
         runnable.run();
         return null;
-      });
-    } catch (RuntimeException | Error e) {
-      throw e;
+      }, permits, timeout);
+    } catch (InterruptedException | RuntimeException | Error e) {
+      throw e; // Fix 2: Transparentes Durchreichen
     } catch (Exception e) {
       throw new RuntimeException(e);
     }
@@ -106,30 +121,9 @@ public class ImperativeRateLimiter {
   // ======================== Direct permission API ========================
 
   public boolean tryAcquirePermission() {
-    Instant now = clock.instant();
-    while (true) {
-      RateLimiterSnapshot current = snapshotRef.get();
-      RateLimitPermission result = RateLimiterCore.tryAcquirePermission(current, config, now);
-
-      if (snapshotRef.compareAndSet(current, result.snapshot())) {
-        if (result.permitted()) {
-          emitEvent(RateLimiterEvent.permitted(
-              config.name(), result.snapshot().availablePermits(), now));
-        } else {
-          emitEvent(RateLimiterEvent.rejected(
-              config.name(), result.snapshot().availablePermits(), result.waitDuration(), now));
-        }
-        return result.permitted();
-      }
-    }
+    return tryAcquirePermissions(1);
   }
 
-  /**
-   * Fix 3: Exposes the multi-permit acquisition from the core.
-   *
-   * @param permits the number of permits to acquire (must be >= 1 and <= capacity)
-   * @return {@code true} if all permits were acquired
-   */
   public boolean tryAcquirePermissions(int permits) {
     Instant now = clock.instant();
     while (true) {
@@ -150,13 +144,13 @@ public class ImperativeRateLimiter {
     }
   }
 
-  public void acquirePermission() {
-    acquirePermissionOrThrow(config.defaultTimeout());
+  public void acquirePermission() throws InterruptedException {
+    acquirePermissionsOrThrow(1, config.defaultTimeout());
   }
 
   // ======================== Internal ========================
 
-  private void acquirePermissionOrThrow(Duration timeout) {
+  private void acquirePermissionsOrThrow(int permits, Duration timeout) throws InterruptedException {
     Instant start = clock.instant();
     Instant deadline = timeout.isZero() ? start : start.plus(timeout);
 
@@ -164,8 +158,6 @@ public class ImperativeRateLimiter {
       RateLimiterSnapshot current = snapshotRef.get();
       Instant now = clock.instant();
 
-      // Fix 2A: Recompute remaining timeout on every CAS retry to prevent
-      // timeout erosion from thread contention or slow CAS loops.
       Duration remainingTimeout = timeout.isZero()
           ? Duration.ZERO
           : Duration.between(now, deadline);
@@ -173,8 +165,8 @@ public class ImperativeRateLimiter {
         remainingTimeout = Duration.ZERO;
       }
 
-      ReservationResult reservation = RateLimiterCore.reservePermission(
-          current, config, now, remainingTimeout);
+      ReservationResult reservation = RateLimiterCore.reservePermissions(
+          current, config, now, permits, remainingTimeout);
 
       if (reservation.timedOut()) {
         emitEvent(RateLimiterEvent.rejected(
@@ -194,56 +186,68 @@ public class ImperativeRateLimiter {
             config.name(), reservation.snapshot().availablePermits(),
             reservation.waitDuration(), now));
 
-        // Remember the epoch before parking so we can detect invalidation
         long epochBeforePark = reservation.snapshot().epoch();
         Instant targetWakeup = now.plus(reservation.waitDuration());
 
-        // Fix 9: parkUntil now handles interrupts properly
-        parkUntil(targetWakeup);
-
-        // Fix 2: After waking, verify the epoch hasn't changed (e.g. by reset/drain).
-        // If it changed, the reservation from the old epoch is invalid and we must re-acquire.
-        RateLimiterSnapshot currentAfterWake = snapshotRef.get();
-        if (currentAfterWake.epoch() != epochBeforePark) {
-          // Epoch changed — our reservation is from a previous lifecycle.
-          // Loop back to re-acquire a permit in the new epoch.
-          continue;
+        // Fix 1 & 2: Token Leak Protection und Interrupted Exception
+        try {
+          parkedThreads.add(Thread.currentThread());
+          parkUntil(targetWakeup, epochBeforePark);
+        } catch (InterruptedException e) {
+          refundPermits(permits); // Gib den reservierten Token dem Bucket zurück!
+          throw e; // Und propagiere die semantisch richtige Exception weiter
+        } finally {
+          parkedThreads.remove(Thread.currentThread());
         }
 
+        RateLimiterSnapshot currentAfterWake = snapshotRef.get();
+        if (currentAfterWake.epoch() != epochBeforePark) {
+          // Fix 3: Epoch hat sich geändert. Neustart der Evaluierung (z.B. nach Reset)
+          continue;
+        }
         return;
       }
-      // CAS failed — retry
     }
   }
 
   /**
-   * Parks the current thread until the target time is reached.
-   *
-   * <p>Fix 9: Checks for thread interruption on each iteration. If the thread
-   * is interrupted (e.g. by a virtual-thread cancellation or executor shutdown),
-   * the method restores the interrupt flag and throws a {@link RateLimiterException}
-   * instead of silently busy-waiting through the remaining duration.
+   * Erstattet reservierte Token im Bucket zurück, falls der Prozess abbricht.
    */
-  private void parkUntil(Instant targetWakeupTime) {
+  private void refundPermits(int permits) {
     while (true) {
-      // Fix 9: Detect and honour interrupts instead of spinning through them
+      RateLimiterSnapshot current = snapshotRef.get();
+      RateLimiterSnapshot refunded = RateLimiterCore.refund(current, config, permits);
+      if (snapshotRef.compareAndSet(current, refunded)) {
+        return;
+      }
+    }
+  }
+
+  private void parkUntil(Instant targetWakeupTime, long expectedEpoch) throws InterruptedException {
+    while (true) {
       if (Thread.currentThread().isInterrupted()) {
-        // Do not clear the flag — let the caller see it
-        throw new RateLimiterException(
-            config.name(),
-            instanceId,
-            Duration.between(clock.instant(), targetWakeupTime),
-            snapshotRef.get().availablePermits());
+        throw new InterruptedException("Thread was interrupted while waiting for rate limiter permits");
+      }
+
+      // Fix 3: Überprüfe auf Invalidierung durch reset/drain
+      if (snapshotRef.get().epoch() != expectedEpoch) {
+        break; // Verlasse den Schlaf, da eine Epochengrenze überschritten wurde
       }
 
       Instant now = clock.instant();
       Duration remaining = Duration.between(now, targetWakeupTime);
 
       if (remaining.isNegative() || remaining.isZero()) {
-        break; // Wait time has physically elapsed
+        break;
       }
 
       LockSupport.parkNanos(remaining.toNanos());
+    }
+  }
+
+  private void unparkAll() {
+    for (Thread thread : parkedThreads) {
+      LockSupport.unpark(thread);
     }
   }
 
@@ -253,24 +257,20 @@ public class ImperativeRateLimiter {
     eventListeners.add(Objects.requireNonNull(listener));
   }
 
-  /**
-   * Fix 6: Each listener is invoked in its own try-catch to ensure a failing listener
-   * does not break the event chain or corrupt the rate limiter execution flow.
-   */
   private void emitEvent(RateLimiterEvent event) {
     for (Consumer<RateLimiterEvent> listener : eventListeners) {
       try {
         listener.accept(event);
-      } catch (Exception e) {
+      } catch (Throwable t) { // Fix 5: Throwable fangen, um Abstürze durch fatale Metrik-Errors zu isolieren
         LOG.log(Level.WARNING,
             "Event listener threw exception for rate limiter '%s' (event: %s): %s"
-                .formatted(config.name(), event.type(), e.getMessage()),
-            e);
+                .formatted(config.name(), event.type(), t.getMessage()),
+            t);
       }
     }
   }
 
-  // ======================== Introspection ========================
+  // ======================== Introspection & Maintenance ========================
 
   public int getAvailablePermits() {
     return RateLimiterCore.availablePermits(snapshotRef.get(), config, clock.instant());
@@ -284,10 +284,6 @@ public class ImperativeRateLimiter {
     return config;
   }
 
-  /**
-   * Returns the unique instance identifier.
-   * Useful for diagnostic logging and identity-based exception matching.
-   */
   public String getInstanceId() {
     return instanceId;
   }
@@ -296,21 +292,15 @@ public class ImperativeRateLimiter {
     Instant now = clock.instant();
     while (true) {
       RateLimiterSnapshot current = snapshotRef.get();
-      RateLimiterSnapshot drained = RateLimiterCore.drain(current);
+      RateLimiterSnapshot drained = RateLimiterCore.drain(current, now);
       if (snapshotRef.compareAndSet(current, drained)) {
         emitEvent(RateLimiterEvent.drained(config.name(), now));
+        unparkAll(); // Fix 3: Wecke Threads auf, damit sie die neue Epoche bemerken
         return;
       }
     }
   }
 
-  /**
-   * Resets the rate limiter to a full bucket.
-   *
-   * <p>Fix 7: Uses the epoch-incrementing reset from the core, which signals
-   * to threads parked on old reservations that their permits are invalidated.
-   * Those threads will detect the epoch change after waking and re-acquire.
-   */
   public void reset() {
     Instant now = clock.instant();
     while (true) {
@@ -318,6 +308,7 @@ public class ImperativeRateLimiter {
       RateLimiterSnapshot fresh = RateLimiterCore.reset(current, config, now);
       if (snapshotRef.compareAndSet(current, fresh)) {
         emitEvent(RateLimiterEvent.reset(config.name(), fresh.availablePermits(), now));
+        unparkAll(); // Fix 3: Wecke alle wartenden Threads sofort auf, damit sie die frischen Permits nehmen
         return;
       }
     }
