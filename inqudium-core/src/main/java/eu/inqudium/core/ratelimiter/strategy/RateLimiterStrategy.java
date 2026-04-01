@@ -10,17 +10,17 @@ import java.time.Instant;
 
 public interface RateLimiterStrategy<S extends RateLimiterState> {
 
-  S initial(RateLimiterConfig config, Instant now);
+  S initial(RateLimiterConfig<S> config, Instant now);
 
-  RateLimitPermission<S> tryAcquirePermissions(S state, RateLimiterConfig config, Instant now, int permits);
+  RateLimitPermission<S> tryAcquirePermissions(S state, RateLimiterConfig<S> config, Instant now, int permits);
 
-  ReservationResult<S> reservePermissions(S state, RateLimiterConfig config, Instant now, int permits, Duration timeout);
+  ReservationResult<S> reservePermissions(S state, RateLimiterConfig<S> config, Instant now, int permits, Duration timeout);
 
-  S drain(S state, RateLimiterConfig config, Instant now); // Korrigiert
+  S drain(S state, RateLimiterConfig<S> config, Instant now); // Korrigiert
 
-  S reset(S state, RateLimiterConfig config, Instant now);
+  S reset(S state, RateLimiterConfig<S> config, Instant now);
 
-  S refund(S state, RateLimiterConfig config, int permits);
+  S refund(S state, RateLimiterConfig<S> config, int permits);
 
-  int availablePermits(S state, RateLimiterConfig config, Instant now);
+  int availablePermits(S state, RateLimiterConfig<S> config, Instant now);
 }

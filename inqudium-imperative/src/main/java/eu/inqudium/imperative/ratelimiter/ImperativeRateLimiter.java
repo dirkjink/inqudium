@@ -34,7 +34,7 @@ public class ImperativeRateLimiter<S extends RateLimiterState> {
 
   private static final Logger LOG = Logger.getLogger(ImperativeRateLimiter.class.getName());
 
-  private final RateLimiterConfig config;
+  private final RateLimiterConfig<S> config;
   private final RateLimiterStrategy<S> strategy;
   private final AtomicReference<S> stateRef;
   private final Clock clock;
@@ -43,12 +43,26 @@ public class ImperativeRateLimiter<S extends RateLimiterState> {
   private final String instanceId;
 
   // ======================== Static Factories (Default Algorithm) ========================
+  public ImperativeRateLimiter(RateLimiterConfig<S> config) {
+    this(config, Clock.systemUTC());
+  }
 
-  public ImperativeRateLimiter(RateLimiterConfig config, RateLimiterStrategy<S> strategy) {
+  public ImperativeRateLimiter(RateLimiterConfig<S> config, Clock clock) {
+    this.config = Objects.requireNonNull(config, "config must not be null");
+    // Die Strategie wird implizit und typsicher aus der Config extrahiert
+    this.strategy = config.strategy();
+    this.clock = Objects.requireNonNull(clock, "clock must not be null");
+    this.stateRef = new AtomicReference<>(strategy.initial(config, clock.instant()));
+    this.eventListeners = new CopyOnWriteArrayList<>();
+    this.parkedThreads = ConcurrentHashMap.newKeySet();
+    this.instanceId = UUID.randomUUID().toString();
+  }
+
+  public ImperativeRateLimiter(RateLimiterConfig<S> config, RateLimiterStrategy<S> strategy) {
     this(config, strategy, Clock.systemUTC());
   }
 
-  public ImperativeRateLimiter(RateLimiterConfig config, RateLimiterStrategy<S> strategy, Clock clock) {
+  public ImperativeRateLimiter(RateLimiterConfig<S> config, RateLimiterStrategy<S> strategy, Clock clock) {
     this.config = Objects.requireNonNull(config, "config must not be null");
     this.strategy = Objects.requireNonNull(strategy, "strategy must not be null");
     this.clock = Objects.requireNonNull(clock, "clock must not be null");

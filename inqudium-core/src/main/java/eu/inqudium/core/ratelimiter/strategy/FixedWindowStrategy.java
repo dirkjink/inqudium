@@ -10,7 +10,7 @@ import java.time.Instant;
 public class FixedWindowStrategy implements RateLimiterStrategy<FixedWindowState> {
 
   @Override
-  public FixedWindowState initial(RateLimiterConfig config, Instant now) {
+  public FixedWindowState initial(RateLimiterConfig<FixedWindowState> config, Instant now) {
     return new FixedWindowState(0, alignToWindow(now, config.refillPeriod()), 0L);
   }
 
@@ -18,7 +18,7 @@ public class FixedWindowStrategy implements RateLimiterStrategy<FixedWindowState
    * Berechnet den aktuellen Fenster-Start und reduziert die konsumierten Permits,
    * falls vergangene Fenster überschritten wurden (Debt-Abbau).
    */
-  private FixedWindowState refreshWindow(FixedWindowState state, RateLimiterConfig config, Instant now) {
+  private FixedWindowState refreshWindow(FixedWindowState state, RateLimiterConfig<FixedWindowState> config, Instant now) {
     Instant currentWindowStart = alignToWindow(now, config.refillPeriod());
 
     if (currentWindowStart.equals(state.windowStart())) {
@@ -42,7 +42,7 @@ public class FixedWindowStrategy implements RateLimiterStrategy<FixedWindowState
 
   @Override
   public RateLimitPermission<FixedWindowState> tryAcquirePermissions(
-      FixedWindowState state, RateLimiterConfig config, Instant now, int permits) {
+      FixedWindowState state, RateLimiterConfig<FixedWindowState> config, Instant now, int permits) {
     validatePermits(permits, config);
     FixedWindowState refreshed = refreshWindow(state, config, now);
 
@@ -56,7 +56,7 @@ public class FixedWindowStrategy implements RateLimiterStrategy<FixedWindowState
 
   @Override
   public ReservationResult<FixedWindowState> reservePermissions(
-      FixedWindowState state, RateLimiterConfig config, Instant now, int permits, Duration timeout) {
+      FixedWindowState state, RateLimiterConfig<FixedWindowState> config, Instant now, int permits, Duration timeout) {
     validatePermits(permits, config);
     FixedWindowState refreshed = refreshWindow(state, config, now);
 
@@ -81,32 +81,32 @@ public class FixedWindowStrategy implements RateLimiterStrategy<FixedWindowState
   }
 
   @Override
-  public FixedWindowState drain(FixedWindowState state, RateLimiterConfig config, Instant now) {
+  public FixedWindowState drain(FixedWindowState state, RateLimiterConfig<FixedWindowState> config, Instant now) {
     // Entleeren bedeutet, dass das aktuelle Fenster vollständig verbraucht ist.
     Instant currentWindowStart = alignToWindow(now, config.refillPeriod());
     return state.withNextEpoch(config.capacity(), currentWindowStart);
   }
 
   @Override
-  public FixedWindowState reset(FixedWindowState state, RateLimiterConfig config, Instant now) {
+  public FixedWindowState reset(FixedWindowState state, RateLimiterConfig<FixedWindowState> config, Instant now) {
     Instant currentWindowStart = alignToWindow(now, config.refillPeriod());
     return state.withNextEpoch(0, currentWindowStart);
   }
 
   @Override
-  public FixedWindowState refund(FixedWindowState state, RateLimiterConfig config, int permits) {
+  public FixedWindowState refund(FixedWindowState state, RateLimiterConfig<FixedWindowState> config, int permits) {
     if (permits < 1) return state;
     int newUsed = Math.max(0, state.usedPermits() - permits);
     return state.withUsedPermits(newUsed);
   }
 
   @Override
-  public int availablePermits(FixedWindowState state, RateLimiterConfig config, Instant now) {
+  public int availablePermits(FixedWindowState state, RateLimiterConfig<FixedWindowState> config, Instant now) {
     FixedWindowState refreshed = refreshWindow(state, config, now);
     return Math.max(0, config.capacity() - refreshed.usedPermits());
   }
 
-  private Duration estimateWaitDuration(FixedWindowState state, RateLimiterConfig config, Instant now, int requiredPermits) {
+  private Duration estimateWaitDuration(FixedWindowState state, RateLimiterConfig<FixedWindowState> config, Instant now, int requiredPermits) {
     int predictedUsed = state.usedPermits() + requiredPermits;
     if (predictedUsed <= config.capacity()) {
       return Duration.ZERO;
@@ -126,7 +126,7 @@ public class FixedWindowStrategy implements RateLimiterStrategy<FixedWindowState
     return Instant.ofEpochMilli(alignedMs);
   }
 
-  private void validatePermits(int permits, RateLimiterConfig config) {
+  private void validatePermits(int permits, RateLimiterConfig<FixedWindowState> config) {
     if (permits < 1) throw new IllegalArgumentException("permits must be >= 1");
     if (permits > config.capacity()) throw new IllegalArgumentException("permits exceeds capacity");
   }

@@ -1,41 +1,36 @@
 package eu.inqudium.core.ratelimiter;
 
+import eu.inqudium.core.ratelimiter.strategy.RateLimiterStrategy;
+import eu.inqudium.core.ratelimiter.strategy.TokenBucketState;
+import eu.inqudium.core.ratelimiter.strategy.TokenBucketStrategy;
+
 import java.time.Duration;
 import java.util.Objects;
 
 /**
  * Immutable configuration for a rate limiter instance.
  *
- * <p>The rate limiter uses a <strong>token bucket</strong> algorithm:
- * <ul>
- *   <li>The bucket holds up to {@link #capacity()} permits.</li>
- *   <li>Every {@link #refillPeriod()}, exactly {@link #refillPermits()} tokens
- *       are added back (up to the capacity ceiling).</li>
- *   <li>Each call consumes one permit. When no permits remain the call
- *       is either rejected or — in the imperative wrapper — optionally
- *       waits up to {@link #defaultTimeout()}.</li>
- * </ul>
- *
- * <p>Use {@link #builder(String)} to construct.
- *
  * @param name           a human-readable identifier (used in exceptions and events)
- * @param capacity       maximum number of permits in the bucket
+ * @param capacity       maximum number of permits in the bucket / window
  * @param refillPermits  how many permits are added per refill cycle
- * @param refillPeriod   duration of one refill cycle
+ * @param refillPeriod   duration of one refill cycle / window size
  * @param defaultTimeout how long callers may wait for a permit (zero = fail-fast)
+ * @param strategy       the underlying rate limiting algorithm
  */
-public record RateLimiterConfig(
+public record RateLimiterConfig<S extends RateLimiterState>(
     String name,
     int capacity,
     int refillPermits,
     Duration refillPeriod,
-    Duration defaultTimeout
+    Duration defaultTimeout,
+    RateLimiterStrategy<S> strategy
 ) {
 
   public RateLimiterConfig {
     Objects.requireNonNull(name, "name must not be null");
     Objects.requireNonNull(refillPeriod, "refillPeriod must not be null");
     Objects.requireNonNull(defaultTimeout, "defaultTimeout must not be null");
+    Objects.requireNonNull(strategy, "strategy must not be null");
     if (capacity < 1) {
       throw new IllegalArgumentException("capacity must be >= 1, got " + capacity);
     }
@@ -50,74 +45,74 @@ public record RateLimiterConfig(
     }
   }
 
-  public static Builder builder(String name) {
-    return new Builder(name);
+  /**
+   * Startet den Builder standardmäßig mit dem Token Bucket Algorithmus.
+   */
+  public static Builder<TokenBucketState> builder(String name) {
+    return new Builder<>(name, new TokenBucketStrategy());
   }
 
-  /**
-   * Returns the average duration it takes to refill a single permit.
-   *
-   * <p>Fix 5: Uses double-precision floating-point arithmetic to reduce
-   * rounding errors from integer division. The previous implementation
-   * lost precision when {@code refillPeriod.toNanos() < refillPermits}
-   * and silently clamped to 1ns, which could be off by orders of magnitude.
-   *
-   * <p>Note: This is an <em>average</em> — the actual refill is discrete
-   * (all permits arrive at once per cycle), so this value is useful for
-   * estimations and UI display, not for precise scheduling.
-   *
-   * @return the average duration per permit, at least 1 nanosecond
-   */
   public Duration nanosPerPermit() {
     double totalNanos = (double) refillPeriod.toNanos();
     double nanosPerPermit = totalNanos / refillPermits;
     return Duration.ofNanos(Math.max(Math.round(nanosPerPermit), 1));
   }
 
-  public static final class Builder {
+  public static final class Builder<S extends RateLimiterState> {
     private final String name;
     private int capacity = 10;
     private int refillPermits = 10;
     private Duration refillPeriod = Duration.ofSeconds(1);
     private Duration defaultTimeout = Duration.ZERO;
+    private RateLimiterStrategy<S> strategy;
 
-    private Builder(String name) {
+    private Builder(String name, RateLimiterStrategy<S> strategy) {
       this.name = Objects.requireNonNull(name);
+      this.strategy = strategy;
     }
 
-    public Builder capacity(int capacity) {
+    public Builder<S> capacity(int capacity) {
       this.capacity = capacity;
       return this;
     }
 
-    public Builder refillPermits(int refillPermits) {
+    public Builder<S> refillPermits(int refillPermits) {
       this.refillPermits = refillPermits;
       return this;
     }
 
-    public Builder refillPeriod(Duration refillPeriod) {
+    public Builder<S> refillPeriod(Duration refillPeriod) {
       this.refillPeriod = refillPeriod;
       return this;
     }
 
-    public Builder defaultTimeout(Duration defaultTimeout) {
+    public Builder<S> defaultTimeout(Duration defaultTimeout) {
       this.defaultTimeout = defaultTimeout;
       return this;
     }
 
-    /**
-     * Convenience: configures a simple "N requests per period" limiter.
-     * Sets both capacity and refillPermits to {@code permits}.
-     */
-    public Builder limitForPeriod(int permits, Duration period) {
+    public Builder<S> limitForPeriod(int permits, Duration period) {
       this.capacity = permits;
       this.refillPermits = permits;
       this.refillPeriod = period;
       return this;
     }
 
-    public RateLimiterConfig build() {
-      return new RateLimiterConfig(name, capacity, refillPermits, refillPeriod, defaultTimeout);
+    /**
+     * Wechselt den zugrundeliegenden Algorithmus.
+     * Ändert den Typen des Builders auf den neuen State des Algorithmus.
+     */
+    public <T extends RateLimiterState> Builder<T> withStrategy(RateLimiterStrategy<T> newStrategy) {
+      Builder<T> newBuilder = new Builder<>(this.name, Objects.requireNonNull(newStrategy));
+      newBuilder.capacity = this.capacity;
+      newBuilder.refillPermits = this.refillPermits;
+      newBuilder.refillPeriod = this.refillPeriod;
+      newBuilder.defaultTimeout = this.defaultTimeout;
+      return newBuilder;
+    }
+
+    public RateLimiterConfig<S> build() {
+      return new RateLimiterConfig<>(name, capacity, refillPermits, refillPeriod, defaultTimeout, strategy);
     }
   }
 }
