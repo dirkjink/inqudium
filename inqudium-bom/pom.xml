@@ -13,7 +13,7 @@
     <description>Bill of Materials for Inqudium — import this to align versions across modules.</description>
 
     <properties>
-        <revision>0.1.0-SNAPSHOT</revision>
+        <revision>0.2.0-SNAPSHOT</revision>
     </properties>
 
     <dependencyManagement>
