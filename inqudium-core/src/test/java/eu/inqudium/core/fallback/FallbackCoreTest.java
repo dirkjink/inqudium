@@ -569,10 +569,13 @@ class FallbackCoreTest {
   class ConfigurationValidation {
 
     @Test
-    @DisplayName("Should reject an empty handler list")
-    void should_reject_an_empty_handler_list() {
-      // Given array constructors for the updated configuration
-      assertThatThrownBy(() -> new FallbackConfig<String>("test", new FallbackExceptionHandler[0], new FallbackResultHandler[0]))
+    @DisplayName("Should reject a configuration with no handlers via builder")
+    void should_reject_a_configuration_with_no_handlers_via_builder() {
+      // Given
+      FallbackConfig.Builder<String> builder = FallbackConfig.<String>builder("test");
+
+      // When / Then — Building without any handler should fail
+      assertThatThrownBy(builder::build)
           .isInstanceOf(IllegalArgumentException.class)
           .hasMessageContaining("At least one");
     }
@@ -580,8 +583,149 @@ class FallbackCoreTest {
     @Test
     @DisplayName("Should reject a null name")
     void should_reject_a_null_name() {
+      // When / Then
       assertThatThrownBy(() -> FallbackConfig.<String>builder(null))
           .isInstanceOf(NullPointerException.class);
+    }
+
+    @Test
+    @DisplayName("Should reject a catch all handler that is not the last exception handler")
+    void should_reject_a_catch_all_handler_that_is_not_the_last_exception_handler() {
+      // When / Then — CatchAll at position 0 shadows the IOException handler at position 1
+      assertThatThrownBy(() -> FallbackConfig.<String>builder("test")
+          .onAnyException(e -> "catch-all")
+          .onException(IOException.class, e -> "io-handler")
+          .build())
+          .isInstanceOf(IllegalArgumentException.class)
+          .hasMessageContaining("shadow");
+    }
+
+    @Test
+    @DisplayName("Should reject a constant value handler that is not the last exception handler")
+    void should_reject_a_constant_value_handler_that_is_not_the_last_exception_handler() {
+      // When / Then — ConstantValue at position 0 shadows the IOException handler at position 1
+      assertThatThrownBy(() -> FallbackConfig.<String>builder("test")
+          .withDefault("default")
+          .onException(IOException.class, e -> "io-handler")
+          .build())
+          .isInstanceOf(IllegalArgumentException.class)
+          .hasMessageContaining("shadow");
+    }
+
+    @Test
+    @DisplayName("Should reject a Throwable typed handler that is not the last exception handler")
+    void should_reject_a_throwable_typed_handler_that_is_not_the_last_exception_handler() {
+      // When / Then — ForExceptionType<Throwable> at position 0 shadows everything after it
+      assertThatThrownBy(() -> FallbackConfig.<String>builder("test")
+          .onException("broad-catch", Throwable.class, e -> "broad")
+          .onException(IOException.class, e -> "io-handler")
+          .build())
+          .isInstanceOf(IllegalArgumentException.class)
+          .hasMessageContaining("Throwable.class");
+    }
+
+    @Test
+    @DisplayName("Should accept a catch all handler as the last exception handler")
+    void should_accept_a_catch_all_handler_as_the_last_exception_handler() {
+      // When / Then — CatchAll at the last position is valid
+      FallbackConfig<String> config = FallbackConfig.<String>builder("test")
+          .onException(IOException.class, e -> "io-handler")
+          .onAnyException(e -> "catch-all")
+          .build();
+
+      assertThat(config.exceptionHandlers()).hasSize(2);
+    }
+
+    @Test
+    @DisplayName("Should accept a Throwable typed handler as the only exception handler")
+    void should_accept_a_throwable_typed_handler_as_the_only_exception_handler() {
+      // When / Then — Single Throwable handler is valid (nothing to shadow)
+      FallbackConfig<String> config = FallbackConfig.<String>builder("test")
+          .onException("broad-catch", Throwable.class, e -> "broad")
+          .build();
+
+      assertThat(config.exceptionHandlers()).hasSize(1);
+    }
+
+    @Test
+    @DisplayName("Should accept a Throwable typed handler as the last exception handler")
+    void should_accept_a_throwable_typed_handler_as_the_last_exception_handler() {
+      // When / Then — Throwable handler at the end is valid
+      FallbackConfig<String> config = FallbackConfig.<String>builder("test")
+          .onException(IOException.class, e -> "io-handler")
+          .onException("broad-catch", Throwable.class, e -> "broad")
+          .build();
+
+      assertThat(config.exceptionHandlers()).hasSize(2);
+    }
+  }
+
+  // ================================================================
+  // Configuration Immutability
+  // ================================================================
+
+  @Nested
+  @DisplayName("Configuration Immutability")
+  class ConfigurationImmutability {
+
+    @Test
+    @DisplayName("Should return an immutable list of exception handlers")
+    void should_return_an_immutable_list_of_exception_handlers() {
+      // Given
+      FallbackConfig<String> config = FallbackConfig.<String>builder("test")
+          .onAnyException(e -> "fallback")
+          .build();
+
+      // When / Then — Attempting to modify the returned list should fail
+      assertThatThrownBy(() -> config.exceptionHandlers().add(
+          new FallbackExceptionHandler.CatchAll<>("rogue", e -> "injected")))
+          .isInstanceOf(UnsupportedOperationException.class);
+    }
+
+    @Test
+    @DisplayName("Should return an immutable list of result handlers")
+    void should_return_an_immutable_list_of_result_handlers() {
+      // Given
+      FallbackConfig<String> config = FallbackConfig.<String>builder("test")
+          .onResult(result -> result == null, rejectedResult -> "default")
+          .onAnyException(e -> "fallback")
+          .build();
+
+      // When / Then — Attempting to modify the returned list should fail
+      assertThatThrownBy(() -> config.resultHandlers().add(
+          new FallbackResultHandler.ForResult<>("rogue", r -> true, r -> "injected")))
+          .isInstanceOf(UnsupportedOperationException.class);
+    }
+
+    @Test
+    @DisplayName("Should support structural equality for configs with the same handlers")
+    void should_support_structural_equality_for_configs_with_the_same_handlers() {
+      // Given — Two configs built with the same handler setup
+      FallbackConfig<String> config1 = FallbackConfig.<String>builder("test")
+          .withDefault("fallback")
+          .build();
+      FallbackConfig<String> config2 = FallbackConfig.<String>builder("test")
+          .withDefault("fallback")
+          .build();
+
+      // Then — Should be structurally equal (List-based equals, not array identity)
+      assertThat(config1).isEqualTo(config2);
+      assertThat(config1.hashCode()).isEqualTo(config2.hashCode());
+    }
+
+    @Test
+    @DisplayName("Should not be equal when names differ")
+    void should_not_be_equal_when_names_differ() {
+      // Given
+      FallbackConfig<String> config1 = FallbackConfig.<String>builder("alpha")
+          .withDefault("fallback")
+          .build();
+      FallbackConfig<String> config2 = FallbackConfig.<String>builder("beta")
+          .withDefault("fallback")
+          .build();
+
+      // Then
+      assertThat(config1).isNotEqualTo(config2);
     }
   }
 }
