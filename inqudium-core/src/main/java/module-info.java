@@ -56,6 +56,8 @@ module inqudium.core {
   exports eu.inqudium.core.pipeline;
   exports eu.inqudium.core.circuitbreaker.metrics;
   exports eu.inqudium.core.retry.strategy;
+  exports eu.inqudium.core.bulkhead.strategy;
+  exports eu.inqudium.core.bulkhead.algo;
 
 
   // ── ServiceLoader SPI declarations ──

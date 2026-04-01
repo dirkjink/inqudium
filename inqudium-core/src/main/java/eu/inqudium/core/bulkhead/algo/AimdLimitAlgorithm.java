@@ -1,4 +1,4 @@
-package eu.inqudium.core.bulkhead;
+package eu.inqudium.core.bulkhead.algo;
 
 import eu.inqudium.core.algo.ContinuousTimeEwma;
 

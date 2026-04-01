@@ -2,6 +2,7 @@ package eu.inqudium.imperative.bulkhead;
 
 import eu.inqudium.core.InqElementType;
 import eu.inqudium.core.bulkhead.BulkheadConfig;
+import eu.inqudium.core.bulkhead.strategy.BulkheadStrategy;
 import eu.inqudium.core.pipeline.InqDecorator;
 import eu.inqudium.imperative.bulkhead.imperative.ImperativeBulkhead;
 
@@ -44,7 +45,7 @@ public interface Bulkhead extends InqDecorator {
   /**
    * Creates a bulkhead with the given configuration.
    *
-   * <p>The {@link eu.inqudium.core.bulkhead.BulkheadStrategy} is obtained from
+   * <p>The {@link BulkheadStrategy} is obtained from
    * {@link BulkheadConfig#getStrategy()}, which was resolved during
    * {@link BulkheadConfig.Builder#build()}.
    */

@@ -1,4 +1,4 @@
-package eu.inqudium.core.bulkhead;
+package eu.inqudium.core.bulkhead.algo;
 
 import java.time.Duration;
 

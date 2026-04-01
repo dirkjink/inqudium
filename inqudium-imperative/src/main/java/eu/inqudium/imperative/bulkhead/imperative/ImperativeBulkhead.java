@@ -3,7 +3,7 @@ package eu.inqudium.imperative.bulkhead.imperative;
 import eu.inqudium.core.InqCall;
 import eu.inqudium.core.InqElementType;
 import eu.inqudium.core.bulkhead.BulkheadConfig;
-import eu.inqudium.core.bulkhead.BulkheadStrategy;
+import eu.inqudium.core.bulkhead.strategy.BulkheadStrategy;
 import eu.inqudium.core.bulkhead.InqBulkheadFullException;
 import eu.inqudium.core.bulkhead.InqBulkheadInterruptedException;
 import eu.inqudium.core.bulkhead.event.BulkheadOnAcquireEvent;

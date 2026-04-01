@@ -2,6 +2,8 @@ package eu.inqudium.core.bulkhead;
 
 import eu.inqudium.core.InqCallIdGenerator;
 import eu.inqudium.core.InqClock;
+import eu.inqudium.core.bulkhead.algo.AimdLimitAlgorithm;
+import eu.inqudium.core.bulkhead.algo.InqLimitAlgorithm;
 import eu.inqudium.core.compatibility.InqCompatibility;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;

@@ -1,4 +1,6 @@
-package eu.inqudium.core.bulkhead;
+package eu.inqudium.core.bulkhead.strategy;
+
+import eu.inqudium.core.bulkhead.algo.InqLimitAlgorithm;
 
 import java.time.Duration;
 import java.util.Objects;
