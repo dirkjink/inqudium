@@ -31,14 +31,12 @@ import java.time.Instant;
  *       (in {@link ThrottleMode#SHAPE_AND_REJECT_OVERFLOW} mode).</li>
  * </ol>
  *
- * <p>This differs from a token-bucket rate limiter in a key way:
- * a rate limiter <em>permits bursts</em> up to the bucket capacity and then
- * rejects; a traffic shaper <em>smooths bursts</em> by delaying requests
- * so they proceed at a constant rate.
- *
- * <p>This design allows the same core logic to be shared between an
- * imperative wrapper (virtual threads + {@code LockSupport.parkNanos})
- * and a reactive wrapper (Project Reactor + {@code Mono.delay}).
+ * <p><strong>Event transactionality note (Fix 7):</strong> The imperative wrapper
+ * emits rejection events <em>before</em> committing the snapshot via CAS. This means
+ * a listener may observe a REJECTED event even though the rejection was never committed
+ * (because another thread changed the state concurrently). Rejection events should be
+ * treated as <em>best-effort observations</em>, not as transactional guarantees. The
+ * {@code totalRejected} counter in the snapshot is the authoritative source.
  */
 public final class TrafficShaperCore {
 
@@ -51,9 +49,6 @@ public final class TrafficShaperCore {
   /**
    * Schedules a request and returns the throttling decision.
    *
-   * <p>This is the central function. It evaluates whether the request
-   * can be admitted (immediately or after a delay) or must be rejected.
-   *
    * @param snapshot the current shared scheduling state
    * @param config   the traffic shaper configuration
    * @param now      the current timestamp (arrival time of the request)
@@ -64,15 +59,14 @@ public final class TrafficShaperCore {
       TrafficShaperConfig config,
       Instant now) {
 
-    // Reclaim past credits: if the next free slot is in the past and
-    // nobody is queued, reset it to now (prevents accumulating "burst credit")
-    ThrottleSnapshot effective = reclaimSlot(snapshot, now);
+    // Reclaim past credits to prevent burst accumulation after idle periods
+    ThrottleSnapshot effective = reclaimSlot(snapshot, config, now);
 
     // Compute the wait: time from now until the assigned slot
     Duration waitDuration = effective.waitDurationFor(now);
     boolean isImmediate = waitDuration.isZero();
 
-    // Fix 7: If queuing is not allowed (maxQueueDepth=0), any request that
+    // If queuing is not allowed (maxQueueDepth=0), any request that
     // would require waiting must be rejected immediately
     if (!isImmediate && !config.isQueuingAllowed()
         && config.throttleMode() == ThrottleMode.SHAPE_AND_REJECT_OVERFLOW) {
@@ -91,10 +85,7 @@ public final class TrafficShaperCore {
     // Admit the request: assign the current nextFreeSlot as its execution slot
     Instant assignedSlot = effective.nextFreeSlot();
 
-    // Fix 1: Use different scheduling methods for immediate vs. delayed requests.
     // Immediate requests advance the timeline but do NOT increment queueDepth
-    // because they never enter the queue. Previously, both paths incremented
-    // queueDepth, which inflated it and caused premature rejections.
     if (isImmediate) {
       ThrottleSnapshot updated = effective.withRequestScheduledImmediate(config.interval());
       return ThrottlePermission.immediate(updated, assignedSlot);
@@ -121,25 +112,25 @@ public final class TrafficShaperCore {
    * Determines whether a request should be rejected based on queue depth
    * and wait duration limits.
    *
-   * <p>Fix 2: This check evaluates the current state BEFORE the request
-   * is scheduled. The semantics are: "is there room for one more waiting request?"
-   * This means maxQueueDepth=5 allows at most 5 simultaneously waiting requests.
+   * <p>This check evaluates the current state BEFORE the request is scheduled.
+   * The semantics are: "is there room for one more waiting request?"
    *
-   * <p>Fix 7: Queue depth check uses {@link TrafficShaperConfig#hasQueueDepthLimit()}
-   * to correctly handle the three semantics: -1 (unlimited), 0 (no queue), >0 (limit).
+   * <p>Fix 8: Uses {@link TrafficShaperConfig#hasMaxWaitDurationLimit()} to
+   * correctly handle the documented ZERO semantics (ZERO = no limit).
    */
   static boolean shouldReject(
       ThrottleSnapshot snapshot,
       TrafficShaperConfig config,
       Duration waitDuration) {
 
-    // Fix 7: Only check queue depth when a positive limit is configured
+    // Only check queue depth when a positive limit is configured
     if (config.hasQueueDepthLimit() && snapshot.queueDepth() >= config.maxQueueDepth()) {
       return true;
     }
 
-    // Reject if the wait would exceed the max wait duration
-    if (!config.maxWaitDuration().isZero() && waitDuration.compareTo(config.maxWaitDuration()) > 0) {
+    // Fix 8: Only check wait duration when a limit is configured (ZERO = no limit)
+    if (config.hasMaxWaitDurationLimit()
+        && waitDuration.compareTo(config.maxWaitDuration()) > 0) {
       return true;
     }
 
@@ -150,37 +141,49 @@ public final class TrafficShaperCore {
 
   /**
    * Reclaims unused time slots when the scheduling timeline has fallen
-   * behind the current time and no requests are queued.
+   * behind the current time.
    *
    * <p>Without reclamation, a traffic shaper that was idle for 10 seconds
    * would allow the next 10 seconds' worth of requests to pass without
-   * delay, defeating the purpose of traffic shaping. By resetting
-   * {@code nextFreeSlot} to {@code now}, we ensure that even after idle
-   * periods, requests are still paced at the configured rate.
+   * delay, defeating the purpose of traffic shaping.
    *
-   * <p>Fix 3: Reclamation now also applies when queueDepth > 0 but the
-   * nextFreeSlot is far in the past (more than one interval behind now).
-   * This handles the case where waiting threads finished but recordExecution
-   * was delayed due to thread scheduling. We only reclaim up to the point
-   * where existing queue obligations are still honoured.
+   * <p><strong>Fix 5:</strong> When {@code queueDepth > 0}, the slot is clamped
+   * to {@code now - (queueDepth * interval)} instead of being left unchanged.
+   * This prevents burst accumulation while still honouring the timing obligations
+   * of already-queued requests. Without this fix, if a shaper was idle for 5 seconds
+   * with stale queue entries, the next 5 seconds' worth of requests would get
+   * past-dated slots and pass through immediately as an uncontrolled burst.
    *
    * @param snapshot the current snapshot
+   * @param config   the configuration (for the interval)
    * @param now      the current time
    * @return the snapshot with the slot reclaimed (or unchanged)
    */
-  public static ThrottleSnapshot reclaimSlot(ThrottleSnapshot snapshot, Instant now) {
-    if (snapshot.nextFreeSlot().isBefore(now)) {
-      if (snapshot.queueDepth() == 0) {
-        // No one waiting — safe to reclaim fully
-        return snapshot.withNextFreeSlot(now);
-      }
-      // Fix 3: Even with queueDepth > 0, don't let the slot drift too far
-      // into the past. This is a safety net for cases where recordExecution
-      // is delayed. We don't reclaim fully (that would skip queued requests),
-      // but we prevent the slot from being unreasonably stale.
-      // No action needed — the queued requests' slots are still valid
-      // relative to the original nextFreeSlot timeline.
+  public static ThrottleSnapshot reclaimSlot(
+      ThrottleSnapshot snapshot,
+      TrafficShaperConfig config,
+      Instant now) {
+
+    if (!snapshot.nextFreeSlot().isBefore(now)) {
+      // Slot is in the future or exactly now — nothing to reclaim
+      return snapshot;
     }
+
+    if (snapshot.queueDepth() == 0) {
+      // No one waiting — safe to reclaim fully to prevent burst credit
+      return snapshot.withNextFreeSlot(now);
+    }
+
+    // Fix 5: Queue has pending requests but the slot drifted into the past.
+    // Clamp nextFreeSlot so that existing queue obligations are preserved
+    // (each queued request still gets its interval-spaced slot relative to now)
+    // but no additional "burst credit" accumulates.
+    Instant clampedSlot = now.minus(config.interval().multipliedBy(snapshot.queueDepth()));
+    if (clampedSlot.isAfter(snapshot.nextFreeSlot())) {
+      return snapshot.withNextFreeSlot(clampedSlot);
+    }
+
+    // The slot hasn't drifted far enough to matter — keep as-is
     return snapshot;
   }
 
@@ -197,8 +200,9 @@ public final class TrafficShaperCore {
    * Returns the estimated wait time for a request arriving now.
    * Does <strong>not</strong> modify the snapshot.
    */
-  public static Duration estimateWait(ThrottleSnapshot snapshot, Instant now) {
-    ThrottleSnapshot effective = reclaimSlot(snapshot, now);
+  public static Duration estimateWait(
+      ThrottleSnapshot snapshot, TrafficShaperConfig config, Instant now) {
+    ThrottleSnapshot effective = reclaimSlot(snapshot, config, now);
     return effective.waitDurationFor(now);
   }
 
@@ -210,14 +214,15 @@ public final class TrafficShaperCore {
   }
 
   /**
-   * Resets the traffic shaper to its initial state.
+   * Fix 9: Resets the traffic shaper to its initial state with an incremented epoch.
+   * Parked threads detect the epoch change and re-acquire their slot.
    */
-  public static ThrottleSnapshot reset(Instant now) {
-    return ThrottleSnapshot.initial(now);
+  public static ThrottleSnapshot reset(ThrottleSnapshot current, Instant now) {
+    return current.withNextEpoch(now);
   }
 
   /**
-   * Fix 11: Checks whether the unbounded queue has grown beyond the warning threshold.
+   * Checks whether the unbounded queue has grown beyond the warning threshold.
    *
    * @param snapshot the current snapshot
    * @param config   the configuration (contains the warning threshold)

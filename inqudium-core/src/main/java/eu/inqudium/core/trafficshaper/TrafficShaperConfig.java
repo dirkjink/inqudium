@@ -22,11 +22,12 @@ import java.util.Objects;
  *                           simultaneously; 0 = no queue (immediate or reject);
  *                           -1 = unlimited (only maxWaitDuration applies)
  * @param maxWaitDuration    maximum time a single request may wait before
- *                           being rejected (acts as a hard cap on queue depth)
+ *                           being rejected; {@link Duration#ZERO} means no limit
+ *                           on wait time (only queue depth applies)
  * @param throttleMode       how to handle overflow (reject vs. unbounded)
- * @param unboundedWarnAfter Fix 11: in SHAPE_UNBOUNDED mode, emit a warning event
- *                           when projected tail wait exceeds this duration.
- *                           {@code null} disables the warning.
+ * @param unboundedWarnAfter in SHAPE_UNBOUNDED mode, emit a warning event
+ *                           when projected tail wait exceeds this duration;
+ *                           {@code null} disables the warning
  */
 public record TrafficShaperConfig(
     String name,
@@ -49,7 +50,7 @@ public record TrafficShaperConfig(
     if (interval.isNegative() || interval.isZero()) {
       throw new IllegalArgumentException("interval must be positive");
     }
-    // Fix 7: maxQueueDepth semantics:
+    // maxQueueDepth semantics:
     //   -1 = unlimited (only maxWaitDuration applies)
     //    0 = no queuing allowed (immediate or reject)
     //   >0 = max N requests waiting
@@ -66,7 +67,7 @@ public record TrafficShaperConfig(
   }
 
   /**
-   * Fix 7: Returns whether queuing is allowed at all.
+   * Returns whether queuing is allowed at all.
    * When maxQueueDepth is 0, requests are either immediate or rejected — never delayed.
    */
   public boolean isQueuingAllowed() {
@@ -74,11 +75,26 @@ public record TrafficShaperConfig(
   }
 
   /**
-   * Fix 7: Returns whether the queue depth limit is enforced.
+   * Returns whether the queue depth limit is enforced.
    * A limit of -1 means "unlimited" (only maxWaitDuration applies).
    */
   public boolean hasQueueDepthLimit() {
     return maxQueueDepth > 0;
+  }
+
+  /**
+   * Fix 8: Returns whether a maximum wait duration limit is enforced.
+   * {@link Duration#ZERO} disables the wait duration check — only queue depth applies.
+   *
+   * <p>This is intentionally the opposite of what ZERO might intuitively suggest.
+   * The rationale: a traffic shaper that rejects on any delay is better expressed
+   * via {@code maxQueueDepth(0)}, which means "no queuing allowed". Setting
+   * {@code maxWaitDuration(ZERO)} alongside {@code maxQueueDepth(-1)} means
+   * "unlimited queue, no wait limit" — the shaper delays everything and never
+   * rejects (equivalent to SHAPE_UNBOUNDED mode with queue depth tracking).
+   */
+  public boolean hasMaxWaitDurationLimit() {
+    return !maxWaitDuration.isZero();
   }
 
   public static final class Builder {
@@ -89,7 +105,7 @@ public record TrafficShaperConfig(
     private ThrottleMode throttleMode = ThrottleMode.SHAPE_AND_REJECT_OVERFLOW;
     private Duration unboundedWarnAfter = Duration.ofMinutes(1);
 
-    // Fix 6: Store raw count/period for precision-preserving interval computation
+    // Store raw count/period for precision-preserving interval computation
     private Integer rawCount = null;
     private Duration rawPeriod = null;
 
@@ -100,6 +116,9 @@ public record TrafficShaperConfig(
     /**
      * Sets the target throughput in requests per second.
      * The interval between slots is computed automatically.
+     *
+     * <p><strong>Fix 11:</strong> Rates above ~1 billion req/s produce a 1ns interval,
+     * which effectively disables shaping. This is validated at build time.
      */
     public Builder ratePerSecond(double ratePerSecond) {
       this.ratePerSecond = ratePerSecond;
@@ -112,10 +131,9 @@ public record TrafficShaperConfig(
      * Convenience: sets the rate from a count and a period.
      * E.g. {@code rateForPeriod(100, Duration.ofMinutes(1))} = 100 req/min.
      *
-     * <p>Fix 6: The raw count and period are stored and used directly
-     * for interval computation in {@link #build()}, avoiding the double-precision
-     * roundtrip through {@code ratePerSecond} that caused nanosecond-level drift
-     * over millions of requests.
+     * <p>The raw count and period are stored and used directly for interval
+     * computation in {@link #build()}, avoiding the double-precision roundtrip
+     * through {@code ratePerSecond}.
      */
     public Builder rateForPeriod(int count, Duration period) {
       if (count < 1) {
@@ -134,7 +152,7 @@ public record TrafficShaperConfig(
     /**
      * Maximum number of requests that may be queued waiting for their slot.
      *
-     * <p>Fix 7: Semantics:
+     * <p>Semantics:
      * <ul>
      *   <li>{@code -1} = unlimited queue (only maxWaitDuration applies)</li>
      *   <li>{@code 0} = no queuing allowed (immediate or reject, never delay)</li>
@@ -149,6 +167,11 @@ public record TrafficShaperConfig(
     /**
      * Maximum time any single request may wait. Requests whose computed
      * wait exceeds this are rejected regardless of queue depth.
+     *
+     * <p><strong>Fix 8:</strong> {@link Duration#ZERO} disables the wait duration
+     * check entirely — only queue depth limits apply. This is intentional:
+     * "no waiting allowed" is expressed via {@code maxQueueDepth(0)}, not via
+     * a zero maxWaitDuration. See {@link TrafficShaperConfig#hasMaxWaitDurationLimit()}.
      */
     public Builder maxWaitDuration(Duration maxWaitDuration) {
       this.maxWaitDuration = maxWaitDuration;
@@ -161,7 +184,7 @@ public record TrafficShaperConfig(
     }
 
     /**
-     * Fix 11: In SHAPE_UNBOUNDED mode, emit a warning event when the projected
+     * In SHAPE_UNBOUNDED mode, emit a warning event when the projected
      * tail wait exceeds this duration. Set to {@code null} to disable.
      * Default: 1 minute.
      */
@@ -173,7 +196,7 @@ public record TrafficShaperConfig(
     public TrafficShaperConfig build() {
       long intervalNanos;
 
-      // Fix 6: When rateForPeriod was used, compute interval directly from
+      // When rateForPeriod was used, compute interval directly from
       // the raw integer count and period nanos to avoid double-precision loss
       if (rawCount != null && rawPeriod != null) {
         intervalNanos = rawPeriod.toNanos() / rawCount;
@@ -181,7 +204,16 @@ public record TrafficShaperConfig(
         intervalNanos = (long) (1_000_000_000.0 / ratePerSecond);
       }
 
-      Duration interval = Duration.ofNanos(Math.max(intervalNanos, 1));
+      // Fix 11: Ensure the interval is at least 1 microsecond.
+      // Anything below that provides no meaningful shaping — the scheduling
+      // overhead exceeds the interval itself. A 1ns interval at ~1 billion req/s
+      // effectively disables shaping; we clamp at 1µs (1 million req/s practical max).
+      long minimumIntervalNanos = 1_000; // 1 microsecond
+      if (intervalNanos < minimumIntervalNanos) {
+        intervalNanos = minimumIntervalNanos;
+      }
+
+      Duration interval = Duration.ofNanos(intervalNanos);
       return new TrafficShaperConfig(
           name, ratePerSecond, interval, maxQueueDepth, maxWaitDuration,
           throttleMode, unboundedWarnAfter);

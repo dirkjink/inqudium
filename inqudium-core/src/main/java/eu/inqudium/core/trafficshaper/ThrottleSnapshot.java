@@ -22,19 +22,23 @@ import java.time.Instant;
  * @param queueDepth    number of requests currently waiting for their slot
  * @param totalAdmitted total number of requests admitted since creation
  * @param totalRejected total number of requests rejected since creation
+ * @param epoch         monotonically increasing generation counter; incremented
+ *                      on {@link TrafficShaperCore#reset} to invalidate pending
+ *                      reservations from a previous lifecycle (Fix 9)
  */
 public record ThrottleSnapshot(
     Instant nextFreeSlot,
     int queueDepth,
     long totalAdmitted,
-    long totalRejected
+    long totalRejected,
+    long epoch
 ) {
 
   /**
    * Creates the initial snapshot — the first slot is immediately available.
    */
   public static ThrottleSnapshot initial(Instant now) {
-    return new ThrottleSnapshot(now, 0, 0, 0);
+    return new ThrottleSnapshot(now, 0, 0, 0, 0L);
   }
 
   // --- Wither methods for immutable updates ---
@@ -48,24 +52,23 @@ public record ThrottleSnapshot(
         nextFreeSlot.plus(interval),
         queueDepth + 1,
         totalAdmitted + 1,
-        totalRejected
+        totalRejected,
+        epoch
     );
   }
 
   /**
-   * Fix 1: Schedules an immediate request: advances the next free slot by the given
+   * Schedules an immediate request: advances the next free slot by the given
    * interval but does NOT increment the queue depth, because the request proceeds
    * immediately without entering the queue.
-   *
-   * <p>Previously, both immediate and delayed requests incremented queueDepth,
-   * which inflated the queue and caused premature rejections at low maxQueueDepth.
    */
   public ThrottleSnapshot withRequestScheduledImmediate(Duration interval) {
     return new ThrottleSnapshot(
         nextFreeSlot.plus(interval),
         queueDepth,
         totalAdmitted + 1,
-        totalRejected
+        totalRejected,
+        epoch
     );
   }
 
@@ -77,7 +80,8 @@ public record ThrottleSnapshot(
         nextFreeSlot,
         Math.max(0, queueDepth - 1),
         totalAdmitted,
-        totalRejected
+        totalRejected,
+        epoch
     );
   }
 
@@ -85,7 +89,7 @@ public record ThrottleSnapshot(
    * Records a rejected request (does not affect the scheduling timeline).
    */
   public ThrottleSnapshot withRequestRejected() {
-    return new ThrottleSnapshot(nextFreeSlot, queueDepth, totalAdmitted, totalRejected + 1);
+    return new ThrottleSnapshot(nextFreeSlot, queueDepth, totalAdmitted, totalRejected + 1, epoch);
   }
 
   /**
@@ -93,7 +97,16 @@ public record ThrottleSnapshot(
    * the past and no one is queued, to avoid accumulating "credit").
    */
   public ThrottleSnapshot withNextFreeSlot(Instant slot) {
-    return new ThrottleSnapshot(slot, queueDepth, totalAdmitted, totalRejected);
+    return new ThrottleSnapshot(slot, queueDepth, totalAdmitted, totalRejected, epoch);
+  }
+
+  /**
+   * Fix 9: Creates a fresh snapshot with the epoch incremented.
+   * Used by reset to signal that all prior slot reservations are invalidated.
+   * Parked threads detect the epoch change and re-acquire their slot.
+   */
+  public ThrottleSnapshot withNextEpoch(Instant now) {
+    return new ThrottleSnapshot(now, 0, totalAdmitted, totalRejected, epoch + 1);
   }
 
   // --- Query helpers ---
@@ -108,7 +121,7 @@ public record ThrottleSnapshot(
   }
 
   /**
-   * Fix 11: Returns the projected wait time for the last queued request.
+   * Returns the projected wait time for the last queued request.
    * Useful for monitoring in SHAPE_UNBOUNDED mode to detect runaway queues.
    */
   public Duration projectedTailWait(Instant now) {

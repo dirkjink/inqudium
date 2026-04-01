@@ -32,8 +32,8 @@ class TrafficShaperCoreTest {
   class InitialState {
 
     @Test
-    @DisplayName("a freshly created snapshot should have zero queue depth and zero counters")
-    void a_freshly_created_snapshot_should_have_zero_queue_depth_and_zero_counters() {
+    @DisplayName("a freshly created snapshot should have zero queue depth and zero counters and epoch zero")
+    void a_freshly_created_snapshot_should_have_zero_queue_depth_and_zero_counters_and_epoch_zero() {
       // Given / When
       ThrottleSnapshot snapshot = ThrottleSnapshot.initial(NOW);
 
@@ -42,6 +42,7 @@ class TrafficShaperCoreTest {
       assertThat(snapshot.totalAdmitted()).isZero();
       assertThat(snapshot.totalRejected()).isZero();
       assertThat(snapshot.nextFreeSlot()).isEqualTo(NOW);
+      assertThat(snapshot.epoch()).isZero();
     }
   }
 
@@ -344,6 +345,30 @@ class TrafficShaperCoreTest {
       // Then
       assertThat(overflow.admitted()).isFalse();
     }
+
+    @Test
+    @DisplayName("should not enforce max wait duration limit when set to zero")
+    void should_not_enforce_max_wait_duration_limit_when_set_to_zero() {
+      // Given — maxWaitDuration=ZERO means "no limit", maxQueueDepth=-1 (unlimited)
+      TrafficShaperConfig config = TrafficShaperConfig.builder("no-wait-limit")
+          .ratePerSecond(1) // 1 req/s → 1s interval
+          .maxQueueDepth(-1)
+          .maxWaitDuration(Duration.ZERO) // no limit on wait time
+          .build();
+      ThrottleSnapshot current = ThrottleSnapshot.initial(NOW);
+
+      // When — schedule 10 requests; waits up to 9s (would exceed any non-zero limit)
+      for (int i = 0; i < 10; i++) {
+        ThrottlePermission perm = TrafficShaperCore.schedule(current, config, NOW);
+        assertThat(perm.admitted()).isTrue();
+        current = perm.snapshot();
+      }
+
+      // Then — all admitted because ZERO means no wait limit
+      assertThat(current.totalAdmitted()).isEqualTo(10);
+      assertThat(current.totalRejected()).isZero();
+      assertThat(config.hasMaxWaitDurationLimit()).isFalse();
+    }
   }
 
   // ================================================================
@@ -407,21 +432,45 @@ class TrafficShaperCoreTest {
     }
 
     @Test
-    @DisplayName("should not reclaim slots when requests are still queued")
-    void should_not_reclaim_slots_when_requests_are_still_queued() {
+    @DisplayName("should clamp stale slot to preserve queue obligations when requests are still queued")
+    void should_clamp_stale_slot_to_preserve_queue_obligations_when_requests_are_still_queued() {
       // Given — schedule two requests: first is immediate, second is delayed (enters queue)
       ThrottleSnapshot snapshot = ThrottleSnapshot.initial(NOW);
-      TrafficShaperConfig config = defaultConfig();
+      TrafficShaperConfig config = defaultConfig(); // 100ms interval
       ThrottlePermission p1 = TrafficShaperCore.schedule(snapshot, config, NOW);
-      // Second request at the same instant forces a delayed admission → queueDepth = 1
       ThrottlePermission p2 = TrafficShaperCore.schedule(p1.snapshot(), config, NOW);
 
       assertThat(p2.snapshot().queueDepth()).isEqualTo(1);
+      // nextFreeSlot is NOW + 200ms (two intervals advanced)
 
-      // When — try to reclaim at a later time (but queue is not empty)
-      ThrottleSnapshot reclaimed = TrafficShaperCore.reclaimSlot(p2.snapshot(), NOW.plusSeconds(5));
+      // When — 5 seconds pass but the queued request hasn't dequeued yet
+      Instant fiveSecondsLater = NOW.plusSeconds(5);
+      ThrottleSnapshot reclaimed = TrafficShaperCore.reclaimSlot(
+          p2.snapshot(), config, fiveSecondsLater);
 
-      // Then — slot NOT reclaimed because queueDepth > 0
+      // Then — slot is clamped to now - (queueDepth * interval) to prevent burst credit
+      // while still honouring the one queued request's timing
+      Instant expectedSlot = fiveSecondsLater.minus(config.interval().multipliedBy(1));
+      assertThat(reclaimed.nextFreeSlot()).isEqualTo(expectedSlot);
+      // Queue depth is unchanged — the queued request is still waiting
+      assertThat(reclaimed.queueDepth()).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("should not clamp when the slot has not drifted far enough behind")
+    void should_not_clamp_when_the_slot_has_not_drifted_far_enough_behind() {
+      // Given — two requests: immediate + delayed, nextFreeSlot = NOW + 200ms
+      ThrottleSnapshot snapshot = ThrottleSnapshot.initial(NOW);
+      TrafficShaperConfig config = defaultConfig(); // 100ms interval
+      ThrottlePermission p1 = TrafficShaperCore.schedule(snapshot, config, NOW);
+      ThrottlePermission p2 = TrafficShaperCore.schedule(p1.snapshot(), config, NOW);
+
+      // When — only 150ms pass (nextFreeSlot NOW+200ms is still in the future from NOW+150ms perspective)
+      Instant shortlyAfter = NOW.plusMillis(150);
+      ThrottleSnapshot reclaimed = TrafficShaperCore.reclaimSlot(
+          p2.snapshot(), config, shortlyAfter);
+
+      // Then — slot is still in the future, no reclamation needed
       assertThat(reclaimed.nextFreeSlot()).isEqualTo(p2.snapshot().nextFreeSlot());
     }
   }
@@ -477,9 +526,10 @@ class TrafficShaperCoreTest {
     void should_estimate_zero_wait_when_the_slot_is_in_the_past() {
       // Given
       ThrottleSnapshot snapshot = ThrottleSnapshot.initial(NOW);
+      TrafficShaperConfig config = defaultConfig();
 
       // When
-      Duration wait = TrafficShaperCore.estimateWait(snapshot, NOW.plusSeconds(5));
+      Duration wait = TrafficShaperCore.estimateWait(snapshot, config, NOW.plusSeconds(5));
 
       // Then
       assertThat(wait).isEqualTo(Duration.ZERO);
@@ -495,7 +545,7 @@ class TrafficShaperCoreTest {
       ThrottlePermission p2 = TrafficShaperCore.schedule(p1.snapshot(), config, NOW);
 
       // When — estimate at NOW (next free slot is at NOW+200ms)
-      Duration wait = TrafficShaperCore.estimateWait(p2.snapshot(), NOW);
+      Duration wait = TrafficShaperCore.estimateWait(p2.snapshot(), config, NOW);
 
       // Then
       assertThat(wait).isEqualTo(Duration.ofMillis(200));
@@ -524,6 +574,7 @@ class TrafficShaperCoreTest {
       assertThat(original.queueDepth()).isZero();
       assertThat(original.totalAdmitted()).isZero();
       assertThat(original.nextFreeSlot()).isEqualTo(NOW);
+      assertThat(original.epoch()).isZero();
     }
   }
 
@@ -621,6 +672,18 @@ class TrafficShaperCoreTest {
       assertThatThrownBy(() -> TrafficShaperConfig.builder(null))
           .isInstanceOf(NullPointerException.class);
     }
+
+    @Test
+    @DisplayName("should clamp extremely high rates to the minimum interval of one microsecond")
+    void should_clamp_extremely_high_rates_to_the_minimum_interval_of_one_microsecond() {
+      // Given — 10 billion req/s would produce a sub-nanosecond interval
+      TrafficShaperConfig config = TrafficShaperConfig.builder("extreme")
+          .ratePerSecond(10_000_000_000.0)
+          .build();
+
+      // Then — clamped to 1µs minimum (practical max ~1 million req/s)
+      assertThat(config.interval().toNanos()).isEqualTo(1_000);
+    }
   }
 
   // ================================================================
@@ -629,22 +692,44 @@ class TrafficShaperCoreTest {
 
   @Nested
   @DisplayName("Reset")
-  class Reset {
+  class ResetTests {
 
     @Test
-    @DisplayName("should reset to a fresh initial state")
-    void should_reset_to_a_fresh_initial_state() {
-      // Given
-      Instant later = NOW.plusSeconds(100);
+    @DisplayName("should reset to a fresh state with incremented epoch and preserved counters")
+    void should_reset_to_a_fresh_state_with_incremented_epoch_and_preserved_counters() {
+      // Given — some requests have been processed
+      TrafficShaperConfig config = defaultConfig();
+      ThrottleSnapshot current = ThrottleSnapshot.initial(NOW);
+      for (int i = 0; i < 3; i++) {
+        current = TrafficShaperCore.schedule(current, config, NOW).snapshot();
+      }
+      assertThat(current.totalAdmitted()).isEqualTo(3);
+      assertThat(current.epoch()).isZero();
 
       // When
-      ThrottleSnapshot reset = TrafficShaperCore.reset(later);
+      Instant later = NOW.plusSeconds(100);
+      ThrottleSnapshot reset = TrafficShaperCore.reset(current, later);
+
+      // Then — queue cleared, epoch incremented, counters preserved for monitoring
+      assertThat(reset.queueDepth()).isZero();
+      assertThat(reset.nextFreeSlot()).isEqualTo(later);
+      assertThat(reset.epoch()).isEqualTo(1L);
+      assertThat(reset.totalAdmitted()).isEqualTo(3); // preserved
+    }
+
+    @Test
+    @DisplayName("should increment epoch on each successive reset")
+    void should_increment_epoch_on_each_successive_reset() {
+      // Given
+      ThrottleSnapshot current = ThrottleSnapshot.initial(NOW);
+
+      // When
+      current = TrafficShaperCore.reset(current, NOW.plusSeconds(1));
+      current = TrafficShaperCore.reset(current, NOW.plusSeconds(2));
+      current = TrafficShaperCore.reset(current, NOW.plusSeconds(3));
 
       // Then
-      assertThat(reset.queueDepth()).isZero();
-      assertThat(reset.totalAdmitted()).isZero();
-      assertThat(reset.totalRejected()).isZero();
-      assertThat(reset.nextFreeSlot()).isEqualTo(later);
+      assertThat(current.epoch()).isEqualTo(3L);
     }
   }
 }
