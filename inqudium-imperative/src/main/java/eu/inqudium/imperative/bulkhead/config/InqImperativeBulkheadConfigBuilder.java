@@ -15,4 +15,9 @@ public class InqImperativeBulkheadConfigBuilder extends InqBulkheadConfigBuilder
   public InqImperativeBulkheadConfig build() {
     return new InqImperativeBulkheadConfig(generalConfig, common());
   }
+
+  @Override
+  protected InqImperativeBulkheadConfigBuilder self() {
+    return this;
+  }
 }

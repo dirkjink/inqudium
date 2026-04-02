@@ -21,41 +21,43 @@ public abstract class InqBulkheadConfigBuilder
   private Duration maxWaitDuration;
   private InqLimitAlgorithm limitAlgorithm;
 
+  protected InqBulkheadConfigBuilder() {}
+  
   @Override
   protected void general(GeneralConfig generalConfig) {
     this.generalConfig = generalConfig;
   }
-
-  protected InqBulkheadConfigBuilder() {}
+  
+  protected abstract B self();
 
   public B name(String name) {
     this.name = name;
-    return (B) this;
+    return self();
   }
 
   public B strategy(BulkheadStrategy strategy) {
     this.strategy = strategy;
-    return (B) this;
+    return self();
   }
 
   public B maxWaitDuration(Duration maxWaitDuration) {
     this.maxWaitDuration = maxWaitDuration;
-    return (B) this;
+    return self();
   }
 
   public B maxConcurrentCalls(int maxConcurrentCalls) {
     this.maxConcurrentCalls = maxConcurrentCalls;
-    return (B) this;
+    return self();
   }
 
   public B limitAlgorithm(InqLimitAlgorithm limitAlgorithm) {
     this.limitAlgorithm = limitAlgorithm;
-    return (B) this;
+    return self();
   }
 
   public B eventPublisher(InqEventPublisher eventPublisher) {
     this.eventPublisher = eventPublisher;
-    return (B) this;
+    return self();
   }
 
   protected InqBulkheadConfig common() {
