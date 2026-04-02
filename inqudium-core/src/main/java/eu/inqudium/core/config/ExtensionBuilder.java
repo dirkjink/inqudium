@@ -5,7 +5,7 @@ package eu.inqudium.core.config;
  *
  * @param <E> The type of the extension being built.
  */
-public abstract class ExtensionBuilder<E extends ConfigExtension> {
+public abstract class ExtensionBuilder<E extends ConfigExtension<E>> {
   protected void general(GeneralConfig generalConfig) {
   }
 

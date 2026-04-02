@@ -138,7 +138,7 @@ public class ImperativeCircuitBreaker {
    * Executes the callable with a fallback that activates on ANY exception,
    * including business exceptions thrown by the callable and circuit breaker rejections.
    *
-   * <p>This matches the common developer expectation that "fallback" means
+   * <p>This matches the bulkhead developer expectation that "fallback" means
    * "alternative result when the primary path fails for any reason".
    *
    * <p><strong>Bonus fix:</strong> If the fallback itself throws, the original exception

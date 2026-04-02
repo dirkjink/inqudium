@@ -11,6 +11,7 @@ import eu.inqudium.core.event.InqEventPublisher;
 
 import java.time.Duration;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.function.IntFunction;
 
 public abstract class InqBulkheadConfigBuilder
@@ -24,11 +25,6 @@ public abstract class InqBulkheadConfigBuilder
   private int maxConcurrentCalls;
   private Duration maxWaitDuration;
   private InqLimitAlgorithm limitAlgorithm;
-
-  // Factory for creating a strategy that is coupled to maxConcurrentCalls.
-  // When set, the strategy is lazily created during common() with the final
-  // maxConcurrentCalls value, ensuring consistency.
-  private IntFunction<BulkheadStrategy> strategyFactory;
 
   protected InqBulkheadConfigBuilder() {
   }
@@ -74,8 +70,7 @@ public abstract class InqBulkheadConfigBuilder
   /**
    * Sets the bulkhead strategy directly. Note: when using this method, the
    * strategy's internal concurrency limit is NOT automatically synchronized
-   * with {@link #maxConcurrentCalls(int)}. Use {@link #strategyFactory(IntFunction)}
-   * for automatic coupling.
+   * with {@link #maxConcurrentCalls(int)}.
    *
    * @param strategy the bulkhead strategy to use
    * @return this builder
@@ -83,28 +78,6 @@ public abstract class InqBulkheadConfigBuilder
   public B strategy(BulkheadStrategy strategy) {
     Objects.requireNonNull(strategy, "strategy must not be null");
     this.strategy = strategy;
-    this.strategyFactory = null; // explicit strategy overrides factory
-    return self();
-  }
-
-  /**
-   * Sets a factory that creates a {@link BulkheadStrategy} from the final
-   * {@code maxConcurrentCalls} value. This ensures the strategy's internal
-   * concurrency limit is always consistent with the builder's configuration.
-   *
-   * <p>Example usage:
-   * <pre>{@code
-   *   builder.strategyFactory(SemaphoreBulkheadStrategy::new)
-   *          .maxConcurrentCalls(50)
-   * }</pre>
-   *
-   * @param strategyFactory a function that creates a strategy from max concurrent calls
-   * @return this builder
-   */
-  public B strategyFactory(IntFunction<BulkheadStrategy> strategyFactory) {
-    Objects.requireNonNull(strategyFactory, "strategyFactory must not be null");
-    this.strategyFactory = strategyFactory;
-    this.strategy = null; // factory overrides explicit strategy
     return self();
   }
 
@@ -178,9 +151,6 @@ public abstract class InqBulkheadConfigBuilder
   protected InqBulkheadConfig common() {
     // Resolve strategy: factory takes precedence if set, ensuring coupling
     BulkheadStrategy resolvedStrategy = this.strategy;
-    if (strategyFactory != null) {
-      resolvedStrategy = strategyFactory.apply(maxConcurrentCalls);
-    }
 
     InqElementCommonConfig common =
         new InqElementCommonConfig(name, InqElementType.BULKHEAD, eventPublisher);
@@ -212,11 +182,6 @@ public abstract class InqBulkheadConfigBuilder
     if (config.maxConcurrentCalls() <= 0) {
       throw new IllegalStateException(
           "maxConcurrentCalls has not been set to a valid value.");
-    }
-
-    if (config.strategy() == null) {
-      throw new IllegalStateException(
-          "strategy(...) must be set before building the bulkhead.");
     }
   }
 }

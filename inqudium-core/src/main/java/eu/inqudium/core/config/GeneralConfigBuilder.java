@@ -65,7 +65,7 @@ public class GeneralConfigBuilder {
    * @param extensions the registered configuration extensions
    * @return the built general configuration
    */
-  GeneralConfig build(Map<Class<? extends ConfigExtension>, ConfigExtension> extensions) {
+  GeneralConfig build(Map<Class<?>, ConfigExtension<?>> extensions) {
     Objects.requireNonNull(extensions, "extensions map must not be null");
     return new GeneralConfig(
         clock,

@@ -19,12 +19,7 @@ public class InqImperativeBulkheadConfigBuilder
   public static InqImperativeBulkheadConfigBuilder standard() {
     return new InqImperativeBulkheadConfigBuilder()
         .maxConcurrentCalls(25)
-        .maxWaitDuration(Duration.ZERO)
-        // Use strategyFactory to ensure the strategy's permit count
-        // is always consistent with the final maxConcurrentCalls value.
-        // If the user later calls .maxConcurrentCalls(50), the strategy
-        // will be created with 50 permits, not 25.
-        .strategyFactory(SemaphoreBulkheadStrategy::new);
+        .maxWaitDuration(Duration.ZERO);
   }
 
   @Override
@@ -36,14 +31,4 @@ public class InqImperativeBulkheadConfigBuilder
   protected InqImperativeBulkheadConfigBuilder self() {
     return this;
   }
-
-
-
-  /**
-   * Validates cross-field constraints on the fully inferred configuration record.
-   * Individual field constraints are already enforced by each setter.
-   */
-  private void validate(InqImperativeBulkheadConfig config) {
-  }
-
 }

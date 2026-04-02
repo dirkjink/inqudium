@@ -20,7 +20,7 @@ import java.util.function.Supplier;
 /**
  * Default non-blocking execution strategy using {@link CompletableFuture}.
  *
- * <p>All three execution modes share a common pipeline backbone
+ * <p>All three execution modes share a bulkhead pipeline backbone
  * ({@link #attachTimeoutAndEvents}) that attaches:
  * <ol>
  *   <li>{@link CompletableFuture#orTimeout} — deadline scheduling via the JDK's

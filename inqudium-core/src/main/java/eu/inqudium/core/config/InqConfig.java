@@ -9,14 +9,14 @@ import java.util.function.Consumer;
 
 public record InqConfig(
     GeneralConfig general,
-    Map<Class<? extends ConfigExtension>, ConfigExtension> extensions
+    Map<Class<?>, ConfigExtension<?>> extensions
 ) {
   public static MandatoryStep configure() {
     return new BuilderState();
   }
 
-  public <T extends ConfigExtension> Optional<T> of(Class<T> type) {
-    ConfigExtension extension = extensions.get(type);
+  public <T extends ConfigExtension<?>> Optional<T> of(Class<T> type) {
+    ConfigExtension<?> extension = extensions.get(type);
     return Optional.ofNullable(type.cast(extension));
   }
 
@@ -31,21 +31,21 @@ public record InqConfig(
   }
 
   public interface TopicHub extends Buildable {
-    default <B extends ExtensionBuilder<? extends ConfigExtension>> TopicHub with(
+    default <B extends ExtensionBuilder<? extends ConfigExtension<?>>> TopicHub with(
         B builderInstance
     ) {
       return with(builderInstance, c -> {
       });
     }
 
-    <B extends ExtensionBuilder<? extends ConfigExtension>> TopicHub with(
+    <B extends ExtensionBuilder<? extends ConfigExtension<?>>> TopicHub with(
         B builderInstance,
         Consumer<B> customizer
     );
   }
 
   private static class BuilderState implements MandatoryStep, TopicHub {
-    private final Map<Class<? extends ConfigExtension>, ConfigExtension> extensions = new HashMap<>();
+    private final Map<Class<?>, ConfigExtension<?>> extensions = new HashMap<>();
     private GeneralConfig general;
 
     @Override
@@ -69,7 +69,7 @@ public record InqConfig(
     }
 
     @Override
-    public <B extends ExtensionBuilder<? extends ConfigExtension>> TopicHub with(
+    public <B extends ExtensionBuilder<? extends ConfigExtension<?>>> TopicHub with(
         B builderInstance,
         Consumer<B> customizer) {
 
@@ -78,7 +78,7 @@ public record InqConfig(
 
       builderInstance.general(general);
       customizer.accept(builderInstance);
-      ConfigExtension extensionConfig = builderInstance.build();
+      ConfigExtension<?> extensionConfig = builderInstance.build();
 
       this.extensions.put(extensionConfig.getClass(), extensionConfig);
       return this;

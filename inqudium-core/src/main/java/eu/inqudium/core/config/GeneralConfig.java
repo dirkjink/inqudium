@@ -15,11 +15,11 @@ public record GeneralConfig(
     InqCompatibility compatibility,
     InqCallIdGenerator callIdGenerator,
     LoggerFactory loggerFactory,
-    Map<Class<? extends ConfigExtension>, ConfigExtension> extensions
+    Map<Class<?>, ConfigExtension<?>> extensions
 ) {
 
-  public <T extends ConfigExtension> Optional<T> of(Class<T> type) {
-    ConfigExtension extension = extensions.get(type);
+  public <T extends ConfigExtension<?>> Optional<T> of(Class<T> type) {
+    ConfigExtension<?> extension = extensions.get(type);
     return Optional.ofNullable(type.cast(extension));
   }
 

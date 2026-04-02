@@ -8,7 +8,6 @@ import eu.inqudium.core.element.bulkhead.algo.InqLimitAlgorithm;
 import eu.inqudium.core.element.bulkhead.algo.VegasLimitAlgorithm;
 import eu.inqudium.core.element.bulkhead.config.AimdLimitAlgorithmConfig;
 import eu.inqudium.core.element.bulkhead.config.VegasLimitAlgorithmConfig;
-import eu.inqudium.core.element.bulkhead.strategy.BulkheadStrategy;
 import eu.inqudium.core.event.InqEventPublisher;
 import eu.inqudium.core.log.LoggerFactory;
 import eu.inqudium.core.time.InqClock;
