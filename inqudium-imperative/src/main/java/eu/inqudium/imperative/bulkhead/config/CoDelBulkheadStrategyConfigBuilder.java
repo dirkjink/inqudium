@@ -3,19 +3,21 @@ package eu.inqudium.imperative.bulkhead.config;
 import eu.inqudium.core.config.ExtensionBuilder;
 
 import java.time.Duration;
+import java.util.Objects;
 
 public class CoDelBulkheadStrategyConfigBuilder extends ExtensionBuilder<CoDelBulkheadStrategyConfig> {
   private Duration targetDelay;
   private Duration interval;
 
+  // Tracks whether a preset has been applied as a baseline
+  private boolean presetApplied = false;
+
+  // Tracks whether individual setters have been called (after or without a preset)
+  private boolean customized = false;
+
   CoDelBulkheadStrategyConfigBuilder() {
   }
 
-  CoDelBulkheadStrategyConfigBuilder(Duration targetDelay,
-                                     Duration interval) {
-    this.targetDelay = targetDelay;
-    this.interval = interval;
-  }
   // ──────────────────────────────────────────────────────────────────────────
   // Preset Factory Methods
   // ──────────────────────────────────────────────────────────────────────────
@@ -31,33 +33,15 @@ public class CoDelBulkheadStrategyConfigBuilder extends ExtensionBuilder<CoDelBu
    * warning of cascading failure (e.g., payment gateways, auth services, databases
    * with strict connection limits).
    *
-   * <h3>Characteristics</h3>
-   * <ul>
-   *   <li><b>Low concurrency (20):</b> Tight permit budget limits the blast radius
-   *       if the downstream service degrades.</li>
-   *   <li><b>Short target delay (50 ms):</b> Detects queuing early. Any request that
-   *       waits more than 50 ms for a permit is considered "above target" and starts
-   *       the CoDel congestion stopwatch.</li>
-   *   <li><b>Short interval (500 ms):</b> If sojourn times remain above target for
-   *       500 ms, the first drop occurs. Combined with the stopwatch reset after each
-   *       drop, this produces a steady one-drop-per-500ms cadence under sustained
-   *       congestion — shedding load quickly without flushing the entire queue.</li>
-   * </ul>
-   *
-   * <h3>Defaults</h3>
-   * <table>
-   *   <tr><td>Max concurrent calls</td><td>20</td></tr>
-   *   <tr><td>Target delay</td><td>50 ms</td></tr>
-   *   <tr><td>Interval</td><td>500 ms</td></tr>
-   * </table>
-   *
-   * @return a protectively tuned CoDel strategy
+   * @return this builder, configured with protective defaults
+   * @throws IllegalStateException if individual setters have already been called
    */
   public CoDelBulkheadStrategyConfigBuilder protective() {
-    return new CoDelBulkheadStrategyConfigBuilder(
-        Duration.ofMillis(50),      // targetDelay: detect queuing early
-        Duration.ofMillis(500)     // interval: start dropping after 500 ms sustained congestion
-    );
+    guardPreset();
+    this.targetDelay = Duration.ofMillis(50);
+    this.interval = Duration.ofMillis(500);
+    this.presetApplied = true;
+    return this;
   }
 
   /**
@@ -67,33 +51,15 @@ public class CoDelBulkheadStrategyConfigBuilder extends ExtensionBuilder<CoDelBu
    * service has moderate capacity and occasional latency spikes are normal
    * (e.g., internal microservices, managed databases, message brokers).
    *
-   * <h3>Characteristics</h3>
-   * <ul>
-   *   <li><b>Moderate concurrency (50):</b> Provides reasonable throughput while
-   *       limiting the number of threads that can be parked simultaneously.</li>
-   *   <li><b>Moderate target delay (100 ms):</b> Tolerates brief wait times caused by
-   *       bursty traffic without triggering the congestion stopwatch. Only sustained
-   *       queuing beyond 100 ms is considered problematic.</li>
-   *   <li><b>Moderate interval (1 s):</b> Gives the downstream service a full second
-   *       to recover from a transient spike before the first drop. Long enough to
-   *       absorb GC pauses and brief load spikes, short enough to react within
-   *       a few seconds to genuine congestion.</li>
-   * </ul>
-   *
-   * <h3>Defaults</h3>
-   * <table>
-   *   <tr><td>Max concurrent calls</td><td>50</td></tr>
-   *   <tr><td>Target delay</td><td>100 ms</td></tr>
-   *   <tr><td>Interval</td><td>1 s</td></tr>
-   * </table>
-   *
-   * @return a balanced CoDel strategy suitable for general production use
+   * @return this builder, configured with balanced defaults
+   * @throws IllegalStateException if individual setters have already been called
    */
   public CoDelBulkheadStrategyConfigBuilder balanced() {
-    return new CoDelBulkheadStrategyConfigBuilder(
-        Duration.ofMillis(100),     // targetDelay: tolerates brief spikes
-        Duration.ofSeconds(1)    // interval: absorbs transient congestion
-    );
+    guardPreset();
+    this.targetDelay = Duration.ofMillis(100);
+    this.interval = Duration.ofSeconds(1);
+    this.presetApplied = true;
+    return this;
   }
 
   /**
@@ -104,52 +70,88 @@ public class CoDelBulkheadStrategyConfigBuilder extends ExtensionBuilder<CoDelBu
    * capacity (e.g., autoscaling compute clusters, CDN origins, horizontally
    * scaled stateless services).
    *
-   * <h3>Characteristics</h3>
-   * <ul>
-   *   <li><b>High concurrency (100):</b> Allows many requests in flight simultaneously,
-   *       maximizing utilization of elastic backends.</li>
-   *   <li><b>Tolerant target delay (250 ms):</b> Accepts longer wait times before
-   *       considering the system congested. Elastic backends may have variable latency
-   *       during scale-up; a higher target prevents premature drops during these
-   *       transient periods.</li>
-   *   <li><b>Long interval (2 s):</b> Gives the downstream service ample time to
-   *       absorb load or scale up before any drops occur. Only truly sustained
-   *       congestion (beyond 2 seconds) triggers load shedding. This minimizes
-   *       unnecessary request rejection at the cost of slightly slower reaction
-   *       to genuine overload.</li>
-   * </ul>
-   *
-   * <h3>Defaults</h3>
-   * <table>
-   *   <tr><td>Max concurrent calls</td><td>100</td></tr>
-   *   <tr><td>Target delay</td><td>250 ms</td></tr>
-   *   <tr><td>Interval</td><td>2 s</td></tr>
-   * </table>
-   *
-   * @return a throughput-optimized CoDel strategy
+   * @return this builder, configured with performant defaults
+   * @throws IllegalStateException if individual setters have already been called
    */
   public CoDelBulkheadStrategyConfigBuilder performant() {
-    return new CoDelBulkheadStrategyConfigBuilder(
-        Duration.ofMillis(250),     // targetDelay: tolerant of queue buildup
-        Duration.ofSeconds(2)     // interval: only drop under sustained congestion
-    );
+    guardPreset();
+    this.targetDelay = Duration.ofMillis(250);
+    this.interval = Duration.ofSeconds(2);
+    this.presetApplied = true;
+    return this;
   }
 
+  // ──────────────────────────────────────────────────────────────────────────
+  // Individual Setters — each guards its own value immediately
+  // ──────────────────────────────────────────────────────────────────────────
+
   public CoDelBulkheadStrategyConfigBuilder targetDelay(Duration targetDelay) {
+    Objects.requireNonNull(targetDelay, "targetDelay must not be null");
+    if (targetDelay.isNegative() || targetDelay.isZero()) {
+      throw new IllegalArgumentException(
+          "targetDelay must be positive, got: " + targetDelay);
+    }
     this.targetDelay = targetDelay;
+    this.customized = true;
     return this;
   }
 
   public CoDelBulkheadStrategyConfigBuilder interval(Duration interval) {
+    Objects.requireNonNull(interval, "interval must not be null");
+    if (interval.isNegative() || interval.isZero()) {
+      throw new IllegalArgumentException(
+          "interval must be positive, got: " + interval);
+    }
     this.interval = interval;
+    this.customized = true;
     return this;
   }
 
+  // ──────────────────────────────────────────────────────────────────────────
+  // Build
+  // ──────────────────────────────────────────────────────────────────────────
+
   @Override
   public CoDelBulkheadStrategyConfig build() {
-    return new CoDelBulkheadStrategyConfig(
+    CoDelBulkheadStrategyConfig config = new CoDelBulkheadStrategyConfig(
         targetDelay,
         interval
     ).inference();
+
+    validate(config);
+    return config;
+  }
+
+  /**
+   * Prevents calling a preset after individual setters have been used.
+   * Presets must be applied first as a baseline for further customization.
+   */
+  private void guardPreset() {
+    if (customized) {
+      throw new IllegalStateException(
+          "Cannot apply a preset after individual setters have been called. "
+              + "Presets must be applied first as a baseline, then customized. "
+              + "Example: coDelBulkheadStrategy().protective().targetDelay(Duration.ofMillis(75))");
+    }
+  }
+
+  /**
+   * Validates cross-field constraints on the fully inferred configuration record.
+   * Individual field constraints are already enforced by each setter.
+   */
+  private void validate(CoDelBulkheadStrategyConfig config) {
+    // Detect unconfigured fields
+    if (config.targetDelay() == null || config.interval() == null) {
+      throw new IllegalStateException(
+          "targetDelay and interval have not been fully set. Either apply a preset "
+              + "(e.g. balanced()) as a baseline, or set all values explicitly.");
+    }
+
+    // Cross-field invariant: CoDel requires target < interval
+    if (config.targetDelay().compareTo(config.interval()) >= 0) {
+      throw new IllegalArgumentException(
+          "targetDelay (" + config.targetDelay() + ") must be shorter than interval ("
+              + config.interval() + "). CoDel requires target < interval to function correctly.");
+    }
   }
 }

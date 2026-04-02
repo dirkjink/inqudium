@@ -3,6 +3,7 @@ package eu.inqudium.core.element.bulkhead.config;
 import eu.inqudium.core.config.ExtensionBuilder;
 
 import java.time.Duration;
+import java.util.Objects;
 
 public class AimdLimitAlgorithmConfigBuilder extends ExtensionBuilder<AimdLimitAlgorithmConfig> {
   private int initialLimit;
@@ -14,31 +15,22 @@ public class AimdLimitAlgorithmConfigBuilder extends ExtensionBuilder<AimdLimitA
   private boolean windowedIncrease;
   private double minUtilizationThreshold;
 
+  // Tracks whether a preset has been applied as a baseline
+  private boolean presetApplied = false;
+
+  // Tracks whether individual setters have been called (after or without a preset)
+  private boolean customized = false;
 
   AimdLimitAlgorithmConfigBuilder() {
-  }
-
-  AimdLimitAlgorithmConfigBuilder(int initialLimit,
-                                  int minLimit,
-                                  int maxLimit,
-                                  double backoffRatio,
-                                  Duration smoothingTimeConstant,
-                                  double errorRateThreshold,
-                                  boolean windowedIncrease,
-                                  double minUtilizationThreshold) {
-    this.initialLimit = initialLimit;
-    this.minLimit = minLimit;
-    this.maxLimit = maxLimit;
-    this.backoffRatio = backoffRatio;
-    this.smoothingTimeConstant = smoothingTimeConstant;
-    this.errorRateThreshold = errorRateThreshold;
-    this.windowedIncrease = windowedIncrease;
-    this.minUtilizationThreshold = minUtilizationThreshold;
   }
 
   public static AimdLimitAlgorithmConfigBuilder aimdLimitAlgorithm() {
     return new AimdLimitAlgorithmConfigBuilder().balanced();
   }
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // Preset Methods
+  // ──────────────────────────────────────────────────────────────────────────
 
   /**
    * <b>Protective</b> preset — prioritizes stability over throughput.
@@ -58,30 +50,21 @@ public class AimdLimitAlgorithmConfigBuilder extends ExtensionBuilder<AimdLimitA
    *       so the limit can still adapt during moderate-load periods.</li>
    * </ul>
    *
-   * <h3>Defaults</h3>
-   * <table>
-   *   <tr><td>Initial limit</td><td>20</td></tr>
-   *   <tr><td>Min / Max limit</td><td>1 / 200</td></tr>
-   *   <tr><td>Backoff ratio</td><td>0.5</td></tr>
-   *   <tr><td>Smoothing Tau</td><td>5 s</td></tr>
-   *   <tr><td>Error rate threshold</td><td>15%</td></tr>
-   *   <tr><td>Windowed increase</td><td>true</td></tr>
-   *   <tr><td>Min utilization</td><td>50%</td></tr>
-   * </table>
-   *
-   * @return a protectively tuned AIMD algorithm
+   * @return this builder, configured with protective defaults
+   * @throws IllegalStateException if individual setters have already been called
    */
   public AimdLimitAlgorithmConfigBuilder protective() {
-    return new AimdLimitAlgorithmConfigBuilder(
-        20,                       // initialLimit: conservative starting point
-        1,                        // minLimit: always allow at least one probe
-        200,                      // maxLimit: hard ceiling prevents runaway scaling
-        0.5,                      // backoffRatio: halve on sustained failures
-        Duration.ofSeconds(5),    // smoothingTimeConstant: very smooth error tracking
-        0.15,                     // errorRateThreshold: tolerant — absorbs transient bursts
-        true,                     // windowedIncrease: slow, RPS-independent growth
-        0.5                      // minUtilizationThreshold: moderate gate
-    );
+    guardPreset();
+    this.initialLimit = 20;
+    this.minLimit = 1;
+    this.maxLimit = 200;
+    this.backoffRatio = 0.5;
+    this.smoothingTimeConstant = Duration.ofSeconds(5);
+    this.errorRateThreshold = 0.15;
+    this.windowedIncrease = true;
+    this.minUtilizationThreshold = 0.5;
+    this.presetApplied = true;
+    return this;
   }
 
   /**
@@ -91,42 +74,21 @@ public class AimdLimitAlgorithmConfigBuilder extends ExtensionBuilder<AimdLimitA
    * service has moderate and somewhat predictable capacity (e.g., internal
    * microservices, managed databases, message brokers).
    *
-   * <h3>Characteristics</h3>
-   * <ul>
-   *   <li><b>Moderate growth:</b> Windowed increase provides steady, predictable scaling
-   *       that is independent of request throughput.</li>
-   *   <li><b>Moderate backoff:</b> Retains 70% of capacity on sustained failures,
-   *       shedding load without overshooting.</li>
-   *   <li><b>Balanced error detection:</b> 10% smoothed error rate with a 2-second EWMA
-   *       window reacts within a few seconds while still filtering single-request hiccups.</li>
-   *   <li><b>Utilization gate:</b> 60% utilization required before the limit is allowed
-   *       to grow, preventing inflation during off-peak periods.</li>
-   * </ul>
-   *
-   * <h3>Defaults</h3>
-   * <table>
-   *   <tr><td>Initial limit</td><td>50</td></tr>
-   *   <tr><td>Min / Max limit</td><td>5 / 500</td></tr>
-   *   <tr><td>Backoff ratio</td><td>0.7</td></tr>
-   *   <tr><td>Smoothing Tau</td><td>2 s</td></tr>
-   *   <tr><td>Error rate threshold</td><td>10%</td></tr>
-   *   <tr><td>Windowed increase</td><td>true</td></tr>
-   *   <tr><td>Min utilization</td><td>60%</td></tr>
-   * </table>
-   *
-   * @return a balanced AIMD algorithm suitable for general production use
+   * @return this builder, configured with balanced defaults
+   * @throws IllegalStateException if individual setters have already been called
    */
   public AimdLimitAlgorithmConfigBuilder balanced() {
-    return new AimdLimitAlgorithmConfigBuilder(
-        50,                       // initialLimit: moderate starting point
-        5,                        // minLimit: keeps a small probe window open
-        500,                      // maxLimit: allows significant scaling headroom
-        0.7,                      // backoffRatio: retain 70% on failures
-        Duration.ofSeconds(2),    // smoothingTimeConstant: responsive yet stable
-        0.1,                      // errorRateThreshold: 10% triggers decrease
-        true,                     // windowedIncrease: RPS-independent growth
-        0.6                      // minUtilizationThreshold: prevents low-load inflation
-    );
+    guardPreset();
+    this.initialLimit = 50;
+    this.minLimit = 5;
+    this.maxLimit = 500;
+    this.backoffRatio = 0.7;
+    this.smoothingTimeConstant = Duration.ofSeconds(2);
+    this.errorRateThreshold = 0.1;
+    this.windowedIncrease = true;
+    this.minUtilizationThreshold = 0.6;
+    this.presetApplied = true;
+    return this;
   }
 
   /**
@@ -136,87 +98,113 @@ public class AimdLimitAlgorithmConfigBuilder extends ExtensionBuilder<AimdLimitA
    * under-utilization is more costly than brief oversaturation (e.g., autoscaling
    * compute clusters, CDN origins, horizontally scaled stateless services).
    *
-   * <h3>Characteristics</h3>
-   * <ul>
-   *   <li><b>Fast growth:</b> Fixed {@code +1} increase scales the limit rapidly
-   *       in proportion to successful request throughput.</li>
-   *   <li><b>Gentle backoff:</b> Retains 85% of capacity on sustained failures,
-   *       avoiding deep cuts that would starve an elastic backend.</li>
-   *   <li><b>Strict error detection:</b> 5% smoothed error rate with a 1-second
-   *       EWMA triggers quickly, compensating for the gentle backoff.</li>
-   *   <li><b>High utilization gate:</b> 75% utilization required before the limit is
-   *       allowed to grow, ensuring the system genuinely needs more capacity.</li>
-   * </ul>
-   *
-   * <h3>Defaults</h3>
-   * <table>
-   *   <tr><td>Initial limit</td><td>100</td></tr>
-   *   <tr><td>Min / Max limit</td><td>10 / 1000</td></tr>
-   *   <tr><td>Backoff ratio</td><td>0.85</td></tr>
-   *   <tr><td>Smoothing Tau</td><td>1 s</td></tr>
-   *   <tr><td>Error rate threshold</td><td>5%</td></tr>
-   *   <tr><td>Windowed increase</td><td>false (+1 per success)</td></tr>
-   *   <tr><td>Min utilization</td><td>75%</td></tr>
-   * </table>
-   *
-   * @return a throughput-optimized AIMD algorithm
+   * @return this builder, configured with performant defaults
+   * @throws IllegalStateException if individual setters have already been called
    */
   public AimdLimitAlgorithmConfigBuilder performant() {
-    return new AimdLimitAlgorithmConfigBuilder(
-        100,                      // initialLimit: high starting point
-        10,                       // minLimit: substantial floor for elastic backends
-        1000,                     // maxLimit: generous ceiling
-        0.85,                     // backoffRatio: gentle — retain 85%
-        Duration.ofSeconds(1),    // smoothingTimeConstant: fast error detection
-        0.05,                     // errorRateThreshold: strict — react at 5%
-        false,                    // windowedIncrease: fast +1 growth per success
-        0.75                     // minUtilizationThreshold: only grow when truly loaded
-    );
+    guardPreset();
+    this.initialLimit = 100;
+    this.minLimit = 10;
+    this.maxLimit = 1000;
+    this.backoffRatio = 0.85;
+    this.smoothingTimeConstant = Duration.ofSeconds(1);
+    this.errorRateThreshold = 0.05;
+    this.windowedIncrease = false;
+    this.minUtilizationThreshold = 0.75;
+    this.presetApplied = true;
+    return this;
   }
 
+  // ──────────────────────────────────────────────────────────────────────────
+  // Individual Setters — each guards its own value immediately
+  // ──────────────────────────────────────────────────────────────────────────
+
   public AimdLimitAlgorithmConfigBuilder initialLimit(int initialLimit) {
+    if (initialLimit <= 0) {
+      throw new IllegalArgumentException(
+          "initialLimit must be positive, got: " + initialLimit);
+    }
     this.initialLimit = initialLimit;
+    this.customized = true;
     return this;
   }
 
   public AimdLimitAlgorithmConfigBuilder minLimit(int minLimit) {
+    if (minLimit <= 0) {
+      throw new IllegalArgumentException(
+          "minLimit must be positive, got: " + minLimit);
+    }
     this.minLimit = minLimit;
+    this.customized = true;
     return this;
   }
 
   public AimdLimitAlgorithmConfigBuilder maxLimit(int maxLimit) {
+    if (maxLimit <= 0) {
+      throw new IllegalArgumentException(
+          "maxLimit must be positive, got: " + maxLimit);
+    }
     this.maxLimit = maxLimit;
+    this.customized = true;
     return this;
   }
 
   public AimdLimitAlgorithmConfigBuilder backoffRatio(double backoffRatio) {
+    if (backoffRatio <= 0.0 || backoffRatio >= 1.0) {
+      throw new IllegalArgumentException(
+          "backoffRatio must be in range (0.0, 1.0), got: " + backoffRatio);
+    }
     this.backoffRatio = backoffRatio;
+    this.customized = true;
     return this;
   }
 
   public AimdLimitAlgorithmConfigBuilder smoothingTimeConstant(Duration smoothingTimeConstant) {
+    Objects.requireNonNull(smoothingTimeConstant,
+        "smoothingTimeConstant must not be null");
+    if (smoothingTimeConstant.isNegative() || smoothingTimeConstant.isZero()) {
+      throw new IllegalArgumentException(
+          "smoothingTimeConstant must be positive, got: " + smoothingTimeConstant);
+    }
     this.smoothingTimeConstant = smoothingTimeConstant;
+    this.customized = true;
     return this;
   }
 
   public AimdLimitAlgorithmConfigBuilder errorRateThreshold(double errorRateThreshold) {
+    if (errorRateThreshold <= 0.0 || errorRateThreshold >= 1.0) {
+      throw new IllegalArgumentException(
+          "errorRateThreshold must be in range (0.0, 1.0), got: " + errorRateThreshold);
+    }
     this.errorRateThreshold = errorRateThreshold;
+    this.customized = true;
     return this;
   }
 
   public AimdLimitAlgorithmConfigBuilder windowedIncrease(boolean windowedIncrease) {
     this.windowedIncrease = windowedIncrease;
+    this.customized = true;
     return this;
   }
 
   public AimdLimitAlgorithmConfigBuilder minUtilizationThreshold(double minUtilizationThreshold) {
+    if (minUtilizationThreshold < 0.0 || minUtilizationThreshold > 1.0) {
+      throw new IllegalArgumentException(
+          "minUtilizationThreshold must be in range [0.0, 1.0], got: "
+              + minUtilizationThreshold);
+    }
     this.minUtilizationThreshold = minUtilizationThreshold;
+    this.customized = true;
     return this;
   }
 
+  // ──────────────────────────────────────────────────────────────────────────
+  // Build
+  // ──────────────────────────────────────────────────────────────────────────
+
   @Override
   public AimdLimitAlgorithmConfig build() {
-    return new AimdLimitAlgorithmConfig(
+    AimdLimitAlgorithmConfig config = new AimdLimitAlgorithmConfig(
         initialLimit,
         minLimit,
         maxLimit,
@@ -226,5 +214,63 @@ public class AimdLimitAlgorithmConfigBuilder extends ExtensionBuilder<AimdLimitA
         windowedIncrease,
         minUtilizationThreshold
     ).inference();
+
+    validate(config);
+    return config;
+  }
+
+  /**
+   * Prevents calling a preset after individual setters have been used.
+   * Presets must be applied first as a baseline for further customization.
+   */
+  private void guardPreset() {
+    if (customized) {
+      throw new IllegalStateException(
+          "Cannot apply a preset after individual setters have been called. "
+              + "Presets must be applied first as a baseline, then customized. "
+              + "Example: aimdLimitAlgorithm().protective().initialLimit(30)");
+    }
+  }
+
+  /**
+   * Validates cross-field constraints on the fully inferred configuration record.
+   * Individual field constraints are already enforced by each setter.
+   */
+  private void validate(AimdLimitAlgorithmConfig config) {
+    Objects.requireNonNull(config.smoothingTimeConstant(),
+        "smoothingTimeConstant has not been set. Either apply a preset "
+            + "(e.g. balanced()) as a baseline, or set all values explicitly.");
+
+    if (config.initialLimit() <= 0 || config.minLimit() <= 0 || config.maxLimit() <= 0) {
+      throw new IllegalStateException(
+          "Limit values (initialLimit, minLimit, maxLimit) have not been fully set. "
+              + "Either apply a preset (e.g. balanced()) as a baseline, "
+              + "or set all values explicitly.");
+    }
+
+    if (config.backoffRatio() <= 0.0 || config.backoffRatio() >= 1.0) {
+      throw new IllegalStateException(
+          "backoffRatio has not been set to a valid value. Either apply a preset "
+              + "(e.g. balanced()) as a baseline, or set all values explicitly.");
+    }
+
+    if (config.errorRateThreshold() <= 0.0 || config.errorRateThreshold() >= 1.0) {
+      throw new IllegalStateException(
+          "errorRateThreshold has not been set to a valid value. Either apply a preset "
+              + "(e.g. balanced()) as a baseline, or set all values explicitly.");
+    }
+
+    if (config.minLimit() > config.maxLimit()) {
+      throw new IllegalArgumentException(
+          "minLimit (" + config.minLimit() + ") must not exceed maxLimit ("
+              + config.maxLimit() + ")");
+    }
+
+    if (config.initialLimit() < config.minLimit()
+        || config.initialLimit() > config.maxLimit()) {
+      throw new IllegalArgumentException(
+          "initialLimit (" + config.initialLimit() + ") must be between minLimit ("
+              + config.minLimit() + ") and maxLimit (" + config.maxLimit() + ")");
+    }
   }
 }

@@ -17,16 +17,19 @@ public class InqImperativeBulkheadConfigBuilder
   }
 
   public static InqImperativeBulkheadConfigBuilder standard() {
-    int maxConcurrentCalls = 25;
     return new InqImperativeBulkheadConfigBuilder()
-        .maxConcurrentCalls(maxConcurrentCalls)
+        .maxConcurrentCalls(25)
         .maxWaitDuration(Duration.ZERO)
-        .strategy(new SemaphoreBulkheadStrategy(maxConcurrentCalls));
+        // Use strategyFactory to ensure the strategy's permit count
+        // is always consistent with the final maxConcurrentCalls value.
+        // If the user later calls .maxConcurrentCalls(50), the strategy
+        // will be created with 50 permits, not 25.
+        .strategyFactory(SemaphoreBulkheadStrategy::new);
   }
 
   @Override
   public InqImperativeBulkheadConfig build() {
-    return new InqImperativeBulkheadConfig(generalConfig, common()).inference();
+    return new InqImperativeBulkheadConfig(getGeneralConfig(), common()).inference();
   }
 
   @Override

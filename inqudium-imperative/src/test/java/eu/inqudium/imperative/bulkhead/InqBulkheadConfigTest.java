@@ -71,8 +71,6 @@ class InqBulkheadConfigTest {
       Duration expectedWaitDuration = Duration.ofMillis(500);
 
       // Assuming strategy could be an Enum, we pass null to test the setter without needing mockito.
-      BulkheadStrategy customStrategy = null;
-      InqLimitAlgorithm customLimitAlgorithm = VegasLimitAlgorithm.balanced();
       InqEventPublisher customEventPublisher = InqEventPublisher.create("name", InqElementType.BULKHEAD);
 
       // When appending a bulkhead extension to the configuration
@@ -82,8 +80,6 @@ class InqBulkheadConfigTest {
               .name(expectedName)
               .maxConcurrentCalls(expectedMaxConcurrentCalls)
               .maxWaitDuration(expectedWaitDuration)
-              .strategy(customStrategy)
-              .limitAlgorithm(customLimitAlgorithm)
               .eventPublisher(customEventPublisher))
           .with(coDelBulkheadStrategy().balanced())
           .build();
@@ -94,8 +90,6 @@ class InqBulkheadConfigTest {
         assertThat(bulkheadConfig.elementType()).isEqualTo(InqElementType.BULKHEAD);
         assertThat(bulkheadConfig.maxConcurrentCalls()).isEqualTo(expectedMaxConcurrentCalls);
         assertThat(bulkheadConfig.maxWaitDuration()).isEqualTo(expectedWaitDuration);
-        assertThat(bulkheadConfig.strategy()).isNull();
-        assertThat(bulkheadConfig.limitAlgorithm()).isSameAs(customLimitAlgorithm);
         assertThat(bulkheadConfig.eventPublisher()).isSameAs(customEventPublisher);
         assertThat(bulkheadConfig.general()).isEqualTo(config.general());
       });
@@ -124,8 +118,6 @@ class InqBulkheadConfigTest {
       double utilizationThreshold = 0.6;
 
       // Assuming strategy could be an Enum, we pass null to test the setter without needing mockito.
-      BulkheadStrategy customStrategy = null;
-      InqLimitAlgorithm customLimitAlgorithm = VegasLimitAlgorithm.balanced();
       InqEventPublisher customEventPublisher = InqEventPublisher.create("name", InqElementType.BULKHEAD);
 
       // When appending a bulkhead extension to the configuration
@@ -135,8 +127,6 @@ class InqBulkheadConfigTest {
               .name(expectedName)
               .maxConcurrentCalls(expectedMaxConcurrentCalls)
               .maxWaitDuration(expectedWaitDuration)
-              .strategy(customStrategy)
-              .limitAlgorithm(customLimitAlgorithm)
               .eventPublisher(customEventPublisher))
           .with(vegasLimitAlgorithm().balanced())
           .build();
@@ -147,8 +137,6 @@ class InqBulkheadConfigTest {
         assertThat(bulkheadConfig.elementType()).isEqualTo(InqElementType.BULKHEAD);
         assertThat(bulkheadConfig.maxConcurrentCalls()).isEqualTo(expectedMaxConcurrentCalls);
         assertThat(bulkheadConfig.maxWaitDuration()).isEqualTo(expectedWaitDuration);
-        assertThat(bulkheadConfig.strategy()).isNull();
-        assertThat(bulkheadConfig.limitAlgorithm()).isSameAs(customLimitAlgorithm);
         assertThat(bulkheadConfig.eventPublisher()).isSameAs(customEventPublisher);
         assertThat(bulkheadConfig.general()).isEqualTo(config.general());
       });
@@ -174,7 +162,6 @@ class InqBulkheadConfigTest {
       Duration expectedWaitDuration = Duration.ofMillis(500);
 
       // Assuming strategy could be an Enum, we pass null to test the setter without needing mockito.
-      BulkheadStrategy customStrategy = null;
       InqLimitAlgorithm customLimitAlgorithm = VegasLimitAlgorithm.balanced();
       InqEventPublisher customEventPublisher = InqEventPublisher.create("name", InqElementType.BULKHEAD);
       ;
@@ -186,7 +173,6 @@ class InqBulkheadConfigTest {
               .name(expectedName)
               .maxConcurrentCalls(expectedMaxConcurrentCalls)
               .maxWaitDuration(expectedWaitDuration)
-              .strategy(customStrategy)
               .limitAlgorithm(customLimitAlgorithm)
               .eventPublisher(customEventPublisher))
           .build();
@@ -197,7 +183,6 @@ class InqBulkheadConfigTest {
         assertThat(bulkheadConfig.elementType()).isEqualTo(InqElementType.BULKHEAD);
         assertThat(bulkheadConfig.maxConcurrentCalls()).isEqualTo(expectedMaxConcurrentCalls);
         assertThat(bulkheadConfig.maxWaitDuration()).isEqualTo(expectedWaitDuration);
-        assertThat(bulkheadConfig.strategy()).isNull();
         assertThat(bulkheadConfig.limitAlgorithm()).isSameAs(customLimitAlgorithm);
         assertThat(bulkheadConfig.eventPublisher()).isSameAs(customEventPublisher);
         assertThat(bulkheadConfig.general()).isEqualTo(config.general());
