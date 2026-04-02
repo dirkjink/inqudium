@@ -23,7 +23,7 @@ public record InqConfig(
   public interface MandatoryStep {
     TopicHub general();
 
-    TopicHub general(Consumer<GeneralExtensionBuilder> customizer);
+    TopicHub general(Consumer<GeneralConfigBuilder> customizer);
   }
 
   public interface Buildable {
@@ -43,16 +43,16 @@ public record InqConfig(
 
     @Override
     public TopicHub general() {
-      return general(new GeneralExtensionBuilder(), (c) -> {
+      return general(new GeneralConfigBuilder(), (c) -> {
       });
     }
 
     @Override
-    public TopicHub general(Consumer<GeneralExtensionBuilder> customizer) {
-      return general(new GeneralExtensionBuilder(), customizer);
+    public TopicHub general(Consumer<GeneralConfigBuilder> customizer) {
+      return general(new GeneralConfigBuilder(), customizer);
     }
 
-    private TopicHub general(GeneralExtensionBuilder builderInstance, Consumer<GeneralExtensionBuilder> customizer) {
+    private TopicHub general(GeneralConfigBuilder builderInstance, Consumer<GeneralConfigBuilder> customizer) {
       Objects.requireNonNull(builderInstance, "Core builder instance must not be null");
       Objects.requireNonNull(customizer, "Core customizer must not be null");
 

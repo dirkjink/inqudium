@@ -1,10 +1,10 @@
 package eu.inqudium.core.element.bulkhead.algo;
 
 import eu.inqudium.core.algo.ContinuousTimeEwma;
+import eu.inqudium.core.time.InqNanoTimeSource;
 
 import java.time.Duration;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.function.LongSupplier;
 
 /**
  * Thread-safe implementation of the Additive Increase, Multiplicative Decrease (AIMD) algorithm.
@@ -134,7 +134,7 @@ public final class AimdLimitAlgorithm implements InqLimitAlgorithm {
   /**
    * The injectable nano-time source for all timing measurements related to the EWMA decay.
    */
-  private final LongSupplier nanoTimeSource;
+  private final InqNanoTimeSource nanoTimeSource;
 
   // ──────────────────────────────────────────────────────────────────────────
   // Mutable State (managed via CAS on an immutable snapshot)
@@ -371,7 +371,7 @@ public final class AimdLimitAlgorithm implements InqLimitAlgorithm {
                             double backoffRatio, Duration smoothingTimeConstant,
                             double errorRateThreshold, boolean windowedIncrease,
                             double minUtilizationThreshold,
-                            LongSupplier nanoTimeSource) {
+                            InqNanoTimeSource nanoTimeSource) {
 
     this.minLimit = Math.max(1, minLimit);
     this.maxLimit = Math.max(this.minLimit, maxLimit);
@@ -386,7 +386,7 @@ public final class AimdLimitAlgorithm implements InqLimitAlgorithm {
     this.state = new AtomicReference<>(
         new AimdState(bounded,
             0.0,
-            this.nanoTimeSource.getAsLong()));
+            this.nanoTimeSource.now()));
   }
 
   // ──────────────────────────────────────────────────────────────────────────
@@ -404,7 +404,7 @@ public final class AimdLimitAlgorithm implements InqLimitAlgorithm {
       return;
     }
 
-    long now = nanoTimeSource.getAsLong();
+    long now = nanoTimeSource.now();
 
     AimdState current;
     AimdState next;
