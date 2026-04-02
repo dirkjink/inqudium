@@ -24,7 +24,7 @@ import java.time.Duration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-class InqConfigTest {
+class InqBulkheadConfigTest {
 
   @Nested
   class GeneralConfigurationTests {
