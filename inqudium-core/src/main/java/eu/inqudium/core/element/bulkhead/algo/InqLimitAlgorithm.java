@@ -13,8 +13,8 @@ public interface InqLimitAlgorithm {
   /**
    * Updates the internal mathematical model based on the result of a completed call.
    *
-   * @param rttNanos  the round-trip time of the call in nanoseconds
-   * @param isSuccess true if no business or technical error occurred
+   * @param rttNanos      the round-trip time of the call in nanoseconds
+   * @param isSuccess     true if no business or technical error occurred
    * @param inFlightCalls the number of calls currently in flight
    */
   void update(long rttNanos, boolean isSuccess, int inFlightCalls);

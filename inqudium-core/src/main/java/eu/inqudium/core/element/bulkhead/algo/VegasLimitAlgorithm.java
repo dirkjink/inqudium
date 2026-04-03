@@ -141,12 +141,12 @@ public final class VegasLimitAlgorithm implements InqLimitAlgorithm {
    * which allows independent tuning of error rate smoothing and utilization thresholds.
    *
    * @param initialLimit          The starting concurrency limit before any RTT feedback is
-   * received. Clamped to [{@code minLimit}, {@code maxLimit}].
+   *                              received. Clamped to [{@code minLimit}, {@code maxLimit}].
    * @param minLimit              The absolute minimum concurrency. Clamped to at least 1.
    * @param maxLimit              The absolute maximum concurrency. Clamped to at least
-   * {@code minLimit}.
+   *                              {@code minLimit}.
    * @param smoothingTimeConstant The time constant (Tau) for RTT smoothing. A larger
-   * duration means the average reacts more slowly and ignores short spikes.
+   *                              duration means the average reacts more slowly and ignores short spikes.
    * @param errorRateThreshold    Threshold (0.0-1.0) for the smoothed error rate fallback.
    * @param nanoTimeSource        The time source used for calculating elapsed time.
    */
@@ -189,14 +189,14 @@ public final class VegasLimitAlgorithm implements InqLimitAlgorithm {
    * }</pre>
    *
    * @param initialLimit              The starting concurrency limit. Clamped to
-   * [{@code minLimit}, {@code maxLimit}].
+   *                                  [{@code minLimit}, {@code maxLimit}].
    * @param minLimit                  The absolute minimum concurrency. Clamped to at least 1.
    * @param maxLimit                  The absolute maximum concurrency. Clamped to at least
-   * {@code minLimit}.
+   *                                  {@code minLimit}.
    * @param smoothingTimeConstant     The time constant (Tau) for continuous-time RTT smoothing.
    * @param baselineDriftTimeConstant The time constant (Tau) at which the no-load baseline
-   * drifts toward the smoothed RTT. A null or zero duration
-   * disables decay entirely.
+   *                                  drifts toward the smoothed RTT. A null or zero duration
+   *                                  disables decay entirely.
    * @param errorRateThreshold        Threshold (0.0-1.0) for the smoothed error rate fallback.
    * @param nanoTimeSource            The time source used for calculating elapsed time.
    */
@@ -219,22 +219,22 @@ public final class VegasLimitAlgorithm implements InqLimitAlgorithm {
   /**
    * Creates a new Vegas limit algorithm with full control over all behavioral parameters.
    *
-   * @param initialLimit                    The starting concurrency limit. Clamped to
-   * [{@code minLimit}, {@code maxLimit}].
-   * @param minLimit                        The absolute minimum concurrency. Clamped to at least 1.
-   * @param maxLimit                        The absolute maximum concurrency. Clamped to at least
-   * {@code minLimit}.
-   * @param smoothingTimeConstant           The time constant (Tau) for continuous-time RTT smoothing.
-   * @param baselineDriftTimeConstant       The time constant (Tau) at which the no-load baseline
-   * drifts toward the smoothed RTT. A null or zero duration
-   * disables decay entirely.
-   * @param errorRateSmoothingTimeConstant  The time constant (Tau) for smoothing the error rate.
-   * Should typically be larger than {@code smoothingTimeConstant}
-   * to avoid overreacting to isolated failures.
-   * @param errorRateThreshold              Threshold (0.0-1.0) for the smoothed error rate fallback.
-   * @param minUtilizationThreshold         The minimum utilization percentage (0.0 to 1.0) required
-   * to allow limit growth. Prevents limit inflation under low load.
-   * @param nanoTimeSource                  The time source used for calculating elapsed time.
+   * @param initialLimit                   The starting concurrency limit. Clamped to
+   *                                       [{@code minLimit}, {@code maxLimit}].
+   * @param minLimit                       The absolute minimum concurrency. Clamped to at least 1.
+   * @param maxLimit                       The absolute maximum concurrency. Clamped to at least
+   *                                       {@code minLimit}.
+   * @param smoothingTimeConstant          The time constant (Tau) for continuous-time RTT smoothing.
+   * @param baselineDriftTimeConstant      The time constant (Tau) at which the no-load baseline
+   *                                       drifts toward the smoothed RTT. A null or zero duration
+   *                                       disables decay entirely.
+   * @param errorRateSmoothingTimeConstant The time constant (Tau) for smoothing the error rate.
+   *                                       Should typically be larger than {@code smoothingTimeConstant}
+   *                                       to avoid overreacting to isolated failures.
+   * @param errorRateThreshold             Threshold (0.0-1.0) for the smoothed error rate fallback.
+   * @param minUtilizationThreshold        The minimum utilization percentage (0.0 to 1.0) required
+   *                                       to allow limit growth. Prevents limit inflation under low load.
+   * @param nanoTimeSource                 The time source used for calculating elapsed time.
    */
   public VegasLimitAlgorithm(int initialLimit,
                              int minLimit,
@@ -562,15 +562,16 @@ public final class VegasLimitAlgorithm implements InqLimitAlgorithm {
   /**
    * Immutable snapshot of the algorithm's mutable state.
    *
-   * @param noLoadRttNanos     The no-load baseline in nanoseconds.
-   * @param smoothedRttNanos   The continuous-time EWMA-smoothed current RTT in nanoseconds.
-   * A value of 0 indicates that no samples have been received yet.
-   * @param currentLimit       The current concurrency limit as a double to support the
-   * fractional results of gradient-based scaling.
-   * @param smoothedErrorRate  The time-smoothed error rate (0.0 to 1.0).
-   * @param lastUpdateNanos    The timestamp of the last state update, used by the
-   * {@link ContinuousTimeEwma} calculators.
+   * @param noLoadRttNanos    The no-load baseline in nanoseconds.
+   * @param smoothedRttNanos  The continuous-time EWMA-smoothed current RTT in nanoseconds.
+   *                          A value of 0 indicates that no samples have been received yet.
+   * @param currentLimit      The current concurrency limit as a double to support the
+   *                          fractional results of gradient-based scaling.
+   * @param smoothedErrorRate The time-smoothed error rate (0.0 to 1.0).
+   * @param lastUpdateNanos   The timestamp of the last state update, used by the
+   *                          {@link ContinuousTimeEwma} calculators.
    */
-  private record VegasState(long noLoadRttNanos, long smoothedRttNanos, double currentLimit, double smoothedErrorRate, long lastUpdateNanos) {
+  private record VegasState(long noLoadRttNanos, long smoothedRttNanos, double currentLimit, double smoothedErrorRate,
+                            long lastUpdateNanos) {
   }
 }

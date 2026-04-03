@@ -3,7 +3,7 @@ package eu.inqudium.imperative.bulkhead;
 import eu.inqudium.core.element.InqElementType;
 import eu.inqudium.core.element.bulkhead.InqBulkheadFullException;
 import eu.inqudium.core.element.bulkhead.InqBulkheadInterruptedException;
-import eu.inqudium.core.element.bulkhead.event.BulkheadEventConfig;
+import eu.inqudium.core.element.bulkhead.config.BulkheadEventConfig;
 import eu.inqudium.core.element.bulkhead.event.BulkheadOnAcquireEvent;
 import eu.inqudium.core.element.bulkhead.event.BulkheadOnRejectEvent;
 import eu.inqudium.core.element.bulkhead.event.BulkheadOnReleaseEvent;
@@ -27,7 +27,20 @@ import java.util.Objects;
  * Composition-based imperative bulkhead facade.
  *
  * <p>Delegates permit management to a {@link BlockingBulkheadStrategy} and
- * owns the entire telemetry lifecycle (events, traces, two-tier error handling).
+ * owns the diagnostic event lifecycle.
+ *
+ * <h2>Observability model</h2>
+ * <p><b>Metrics</b> (always on, zero per-call overhead) are delivered via polling-based
+ * gauges that read the strategy's introspection methods ({@link BlockingBulkheadStrategy#concurrentCalls()},
+ * {@link BlockingBulkheadStrategy#availablePermits()}). These are bound to a
+ * {@code MeterRegistry} externally.
+ *
+ * <p><b>Events</b> (off by default, enable for diagnostics) provide per-call tracing
+ * for troubleshooting: permit lifecycle, wait durations, rejection context. Controlled
+ * by {@link BulkheadEventConfig} — the {@linkplain BulkheadEventConfig#standard() standard}
+ * configuration emits only rejection events. Switch to
+ * {@linkplain BulkheadEventConfig#diagnostic() diagnostic} mode for full per-call tracing
+ * during incident analysis.
  *
  * <p>Requires a {@link BlockingBulkheadStrategy} — non-blocking strategies
  * are rejected at construction time. For reactive paradigms, use the reactive
@@ -88,15 +101,16 @@ public final class ImperativeBulkhead implements Bulkhead {
   public <T> InqCall<T> decorate(InqCall<T> call) {
     return call.withCallable(() -> {
 
-      // Duty 1: Acquire
-      long startWait = nanoTimeSource.now();
+      // ── Acquire permit ──
+      // startWait is only needed for trace events (wait duration measurement).
+      // In standard mode (trace disabled), this nanoTime call is skipped entirely.
+      long startWait = eventConfig.isTraceEnabled() ? nanoTimeSource.now() : 0L;
+
       RejectionContext rejection;
       try {
         rejection = strategy.tryAcquire(maxWaitDuration);
       } catch (InterruptedException e) {
         Thread.currentThread().interrupt();
-        // No RejectionContext available for interrupts — the strategy never made
-        // a rejection decision, the thread was externally interrupted.
         handleAcquireFailure(call.callId(), startWait, null);
         throw new InqBulkheadInterruptedException(call.callId(), name);
       }
@@ -106,10 +120,10 @@ public final class ImperativeBulkhead implements Bulkhead {
         throw new InqBulkheadFullException(call.callId(), name, rejection);
       }
 
-      // Two-tier acquire telemetry
+      // Diagnostic events (acquire) — no-op in standard mode
       handleAcquireSuccess(call.callId(), startWait);
 
-      // Duty 3 (start): RTT measurement
+      // ── Execute business call with RTT measurement ──
       long startNanos = nanoTimeSource.now();
       Throwable businessError = null;
 
@@ -119,10 +133,7 @@ public final class ImperativeBulkhead implements Bulkhead {
         businessError = t;
         throw t;
       } finally {
-        // Duty 3 (end): Measurement — raw nanos, no Duration allocation
         long rttNanos = nanoTimeSource.now() - startNanos;
-
-        // Duty 2: Guaranteed release
         releaseAndReport(call.callId(), rttNanos, businessError);
       }
     });
@@ -146,11 +157,15 @@ public final class ImperativeBulkhead implements Bulkhead {
     return strategy;
   }
 
-  // ======================== Telemetry — acquire ========================
+  // ======================== Diagnostic events — acquire ========================
 
+  /**
+   * Publishes diagnostic acquire events. In standard mode ({@link BulkheadEventConfig#standard()}),
+   * both lifecycle and trace are disabled — this method is a complete no-op.
+   */
   private void handleAcquireSuccess(String callId, long startWait) {
     if (eventConfig.isLifecycleEnabled()) {
-      // Tier 1: Acquire event — rollback on failure
+      // Lifecycle tracing: acquire event with rollback safety
       try {
         eventPublisher.publish(new BulkheadOnAcquireEvent(
             callId, name, strategy.concurrentCalls(), clock.instant()));
@@ -169,24 +184,19 @@ public final class ImperativeBulkhead implements Bulkhead {
       }
     }
 
-    // Tier 2: Wait trace — best-effort
     if (eventConfig.isTraceEnabled()) {
       try {
         publishWaitTrace(callId, startWait, true);
       } catch (RuntimeException e) {
         logger.error().log("Failed to publish wait trace for acquired call on bulkhead '{}', "
-            + "callId='{}'. Telemetry-only failure.", name, callId, e);
+            + "callId='{}'. Diagnostic-only failure.", name, callId, e);
       }
     }
   }
 
   /**
-   * Handles telemetry for a failed acquire attempt.
-   *
-   * @param callId    the call identifier
-   * @param startWait the nanoTime when the acquire attempt started
-   * @param rejection the rejection context, or {@code null} if the failure was due to
-   *                  an {@link InterruptedException} (no rejection decision was made)
+   * Publishes diagnostic events for a rejected or interrupted acquire attempt.
+   * Rejection events are enabled in standard mode; trace events only in diagnostic mode.
    */
   private void handleAcquireFailure(String callId, long startWait, RejectionContext rejection) {
     if (eventConfig.isTraceEnabled()) {
@@ -194,7 +204,7 @@ public final class ImperativeBulkhead implements Bulkhead {
         publishWaitTrace(callId, startWait, false);
       } catch (RuntimeException e) {
         logger.error().log("Failed to publish wait trace for rejected call on bulkhead '{}', "
-            + "callId='{}'. Telemetry-only failure.", name, callId, e);
+            + "callId='{}'. Diagnostic-only failure.", name, callId, e);
       }
     }
     if (eventConfig.isRejectionEnabled()) {
@@ -203,13 +213,17 @@ public final class ImperativeBulkhead implements Bulkhead {
             callId, name, rejection, clock.instant()));
       } catch (RuntimeException e) {
         logger.error().log("Failed to publish reject event for bulkhead '{}', callId='{}'. "
-            + "Telemetry-only failure.", name, callId, e);
+            + "Diagnostic-only failure.", name, callId, e);
       }
     }
   }
 
-  // ======================== Telemetry — release ========================
+  // ======================== Release + diagnostic events ========================
 
+  /**
+   * Releases the permit, feeds the adaptive algorithm, and optionally publishes
+   * the diagnostic release event (only in {@link BulkheadEventConfig#diagnostic()} mode).
+   */
   private void releaseAndReport(String callId, long rttNanos, Throwable businessError) {
     RuntimeException releaseError = null;
 
@@ -224,7 +238,7 @@ public final class ImperativeBulkhead implements Bulkhead {
       } catch (RuntimeException e) {
         releaseError = e;
         logger.error().log("Strategy release failed for bulkhead '{}', callId='{}'. "
-            + "Telemetry will still be published.", name, callId, e);
+            + "Events will still be published.", name, callId, e);
       }
     }
 
@@ -234,7 +248,7 @@ public final class ImperativeBulkhead implements Bulkhead {
             callId, name, strategy.concurrentCalls(), clock.instant()));
       } catch (RuntimeException publisherError) {
         logger.error().log("Failed to publish release event for bulkhead '{}', callId='{}'. "
-            + "Telemetry-only failure.", name, callId, publisherError);
+            + "Diagnostic-only failure.", name, callId, publisherError);
       }
     }
 

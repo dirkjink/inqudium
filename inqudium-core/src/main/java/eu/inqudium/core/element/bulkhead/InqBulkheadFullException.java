@@ -53,9 +53,9 @@ public class InqBulkheadFullException extends InqException {
    * @param concurrentCalls    the current number of in-flight calls
    * @param maxConcurrentCalls the configured maximum
    * @deprecated Use {@link #InqBulkheadFullException(String, String, RejectionContext)} instead.
-   *             The explicit values are typically read after the rejection decision and may
-   *             already be stale. The RejectionContext captures them at the exact moment
-   *             of rejection.
+   * The explicit values are typically read after the rejection decision and may
+   * already be stale. The RejectionContext captures them at the exact moment
+   * of rejection.
    */
   @Deprecated(since = "0.3.0", forRemoval = true)
   public InqBulkheadFullException(String callId, String elementName,

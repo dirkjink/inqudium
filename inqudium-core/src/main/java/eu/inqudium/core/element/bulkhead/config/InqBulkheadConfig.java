@@ -6,7 +6,6 @@ import eu.inqudium.core.config.InqElementCommonConfig;
 import eu.inqudium.core.config.InqElementConfig;
 import eu.inqudium.core.element.InqElementType;
 import eu.inqudium.core.element.bulkhead.algo.InqLimitAlgorithm;
-import eu.inqudium.core.element.bulkhead.event.BulkheadEventConfig;
 import eu.inqudium.core.element.bulkhead.strategy.BulkheadStrategy;
 import eu.inqudium.core.event.InqEventPublisher;
 
@@ -45,7 +44,7 @@ public record InqBulkheadConfig(
   public InqBulkheadConfig inference() {
     BulkheadEventConfig eventConfigInference = eventConfig;
     if (eventConfig == null) {
-      eventConfigInference = BulkheadEventConfig.rejectionsOnly();
+      eventConfigInference = BulkheadEventConfig.standard();
     }
     return new InqBulkheadConfig(
         this.general,

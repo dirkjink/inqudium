@@ -6,7 +6,6 @@ import eu.inqudium.core.config.GeneralConfig;
 import eu.inqudium.core.config.InqElementCommonConfig;
 import eu.inqudium.core.element.InqElementType;
 import eu.inqudium.core.element.bulkhead.algo.InqLimitAlgorithm;
-import eu.inqudium.core.element.bulkhead.event.BulkheadEventConfig;
 import eu.inqudium.core.element.bulkhead.strategy.BulkheadStrategy;
 import eu.inqudium.core.event.InqEventPublisher;
 
