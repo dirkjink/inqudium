@@ -2,7 +2,7 @@
 
 **Status:** Accepted  
 **Date:** 2026-03-22  
-**Last updated:** 2026-03-23  
+**Last updated:** 2026-04-03  
 **Deciders:** Core team
 
 ## Context
@@ -218,31 +218,104 @@ The per-element publisher and the global exporter mechanism are independent. A c
 
 ### No internal logging
 
-Elements do **not** log their own state changes. All observability goes through events. This gives consumers full control over how state changes are recorded — whether that's SLF4J logging, Micrometer counters, JFR events, or all three.
+Elements do **not** log their own state changes. All observability goes through the two-tier model described below.
+
+### Two-tier observability: polling metrics vs diagnostic events
+
+The event system's role is **diagnostic tracing**, not primary metrics delivery. Production metrics and diagnostic events serve different audiences, have different performance characteristics, and should be independently controllable.
+
+#### Tier 1: Polling-based metrics (always on, zero per-call overhead)
+
+Continuous metrics — current concurrency, available permits, configured limits, rejection counts — are delivered via **polling-based gauges** that read the element's introspection methods at scrape time:
+
+```java
+// Micrometer MeterBinder for a Bulkhead (inqudium-micrometer module)
+meterRegistry.gauge("inqudium.bulkhead.concurrent.calls",
+    Tags.of("name", bulkhead.getName()),
+    bulkhead, b -> b.getConcurrentCalls());
+
+meterRegistry.gauge("inqudium.bulkhead.available.permits",
+    Tags.of("name", bulkhead.getName()),
+    bulkhead, b -> b.getAvailablePermits());
+```
+
+These gauges cost nothing on the hot path — no event objects, no `Instant` allocation, no publisher dispatch. The values are read from the strategy's atomic state when Prometheus scrapes or Micrometer polls. This is the same approach used by Resilience4j's `TaggedBulkheadMetrics`, and benchmarks confirm it achieves 0 B/op on the happy path.
+
+Rejection counts are the one exception: they are tracked by a `LongAdder` incremented in the rejection path (which is already dominated by exception creation) and exposed as a Micrometer counter.
+
+**This tier is the recommended default for dashboards, alerting, and SLA monitoring.**
+
+#### Tier 2: Diagnostic events (off by default, enable for troubleshooting)
+
+Per-call events — acquire, release, wait duration, rejection context — provide a complete timeline for a specific call's journey through the bulkhead. They are controlled by `BulkheadEventConfig`:
+
+| Preset | What fires | When to use | Happy-path cost |
+|---|---|---|---|
+| `standard()` **(default)** | Rejection events only | Normal production | 0 B/op |
+| `diagnostic()` | All events (lifecycle + rejection + trace) | Incident investigation | ~80 B/op |
+
+The `standard()` preset is the recommended production configuration. The `diagnostic()` preset is enabled on-demand — like a Flight Recorder that you activate when something is wrong.
+
+```java
+// Production (default) — zero happy-path event overhead
+var config = bulkhead()
+    .name("paymentService")
+    .eventConfig(BulkheadEventConfig.standard())
+    .build();
+
+// Troubleshooting — full per-call tracing
+var config = bulkhead()
+    .name("paymentService")
+    .eventConfig(BulkheadEventConfig.diagnostic())
+    .build();
+```
+
+Event categories are independently toggleable via `BulkheadEventConfig.of(...)`:
+
+| Category | Events | Standard | Diagnostic |
+|---|---|---|---|
+| `LIFECYCLE` | `BulkheadOnAcquireEvent`, `BulkheadOnReleaseEvent` | off | on |
+| `REJECTION` | `BulkheadOnRejectEvent` | **on** | on |
+| `TRACE` | `BulkheadWaitTraceEvent`, `BulkheadRollbackTraceEvent` | off | on |
+
+#### Why not event-driven metrics?
+
+Benchmarks showed that per-call event creation costs ~80 B/op (two `Instant` objects + two event instances), which under high throughput (>10K ops/sec) generates measurable GC pressure. Polling-based gauges that read the strategy's existing atomic state achieve the same observability at zero cost. The event system adds diagnostic depth (per-call timeline, wait durations, rejection context) that gauges cannot provide — but this depth is only valuable during troubleshooting, not for continuous metrics.
+
+This is consistent with the approach taken by Resilience4j's Micrometer integration, which registers only gauges for the semaphore bulkhead and achieves 0 B/op on the happy path.
 
 ### Relationship to JFR, Micrometer, and other observability systems
 
-`InqEventPublisher` and its `InqEvent` type hierarchy are the **canonical event bus** of Inqudium. They live in `inqudium-core` and have no dependency on any external observability system.
+`InqEventPublisher` and its `InqEvent` type hierarchy are the **diagnostic event bus** of Inqudium. They live in `inqudium-core` and have no dependency on any external observability system.
 
-External observability modules are **consumers** of this event bus — they translate `InqEvent` instances into their own type systems:
+External observability modules interact with Inqudium through **two independent channels**:
 
 ```
-InqEventPublisher (this ADR)
+Polling-based metrics (Tier 1 — always on)
        │
-       ├── inqudium-micrometer     InqEvent → Counter.increment() / Timer.record()
+       ├── inqudium-micrometer     strategy.concurrentCalls() → Gauge
+       │                           strategy.availablePermits() → Gauge
+       │                           rejectionCounter → Counter
+       └── Any MeterBinder         (reads element state at scrape time)
+
+Diagnostic events (Tier 2 — on demand)
+       │
+       ├── inqudium-micrometer     InqEvent → Timer.record() (when diagnostic mode is active)
        ├── inqudium-jfr            InqEvent → jdk.jfr.Event subclass → commit()
        ├── Custom SLF4J listener   InqEvent → log.info(...)
        └── Any user-defined consumer
 ```
 
+The `inqudium-micrometer` module serves both tiers: it registers gauges unconditionally (Tier 1) and optionally subscribes to events for detailed timer recordings when diagnostic mode is active (Tier 2). The `inqudium-jfr` module operates exclusively in Tier 2 — JFR events are meaningful only as detailed per-call records, not as polling targets.
+
 Critically, `InqEvent` does **not** extend `jdk.jfr.Event`, and JFR event classes do **not** extend `InqEvent`. The two type hierarchies are fully independent:
 
-- `InqEvent` hierarchy — lightweight POJOs in `inqudium-core`, zero dependencies, always emitted.
-- `jdk.jfr.Event` hierarchy — JFR-annotated classes in `inqudium-jfr`, only instantiated when the JFR module is on the classpath.
+- `InqEvent` hierarchy — lightweight POJOs in `inqudium-core`, zero dependencies, emitted only when the corresponding event category is enabled.
+- `jdk.jfr.Event` hierarchy — JFR-annotated classes in `inqudium-jfr`, only instantiated when the JFR module is on the classpath and diagnostic events are active.
 
 This separation is intentional. Binding `InqEvent` to `jdk.jfr.Event` would force JFR's class hierarchy (`begin()`/`end()`/`commit()` lifecycle, `@Name`/`@Label` annotations) onto the core event model — an abstraction leak that couples the internal pub/sub mechanism to a specific observability backend.
 
-The JFR binder (ADR-007) bridges the gap: it subscribes to `InqEventPublisher`, receives `InqEvent` instances, and creates the corresponding `jdk.jfr.Event` — mapping fields one-to-one. The same pattern applies to the Micrometer binder, which maps events to metric increments and timer recordings.
+The JFR binder (ADR-007) bridges the gap: it subscribes to `InqEventPublisher`, receives `InqEvent` instances, and creates the corresponding `jdk.jfr.Event` — mapping fields one-to-one.
 
 See ADR-007 for the JFR event design and the binder mechanism.
 
@@ -357,17 +430,20 @@ The `InqEventExporter` SPI bridges the gap: events flow **out** of Inqudium into
 
 **Positive:**
 - Single observability contract for all elements and paradigms.
-- Consumers choose their observability backend (Micrometer, JFR, logging, custom) without the library making assumptions.
+- Two-tier observability model separates concerns cleanly: polling gauges for metrics (zero overhead), diagnostic events for troubleshooting (on demand).
+- The `standard()` event configuration achieves 0 B/op on the happy path — competitive with Resilience4j's Micrometer integration, which uses the same polling-gauge approach.
+- `diagnostic()` mode provides per-call tracing depth (permit timeline, wait durations, rejection context) that polling gauges cannot deliver — available when needed without always-on overhead.
 - Event types are stable API — new listeners can be added without modifying element internals.
 - Cross-paradigm consistency: a `CircuitBreakerOnStateTransitionEvent` is identical whether it came from `ReentrantLock`-based or `Mutex`-based state machine.
 - `callId` enables end-to-end correlation of a single call across all elements, paradigms, and observability backends.
 - `InqEventExporter` SPI allows integration with arbitrary external systems without Inqudium needing to know the target.
 
 **Negative:**
-- Every paradigm implementation must remember to emit events at the correct points. This is enforced by behavioral contract tests in core (given a mock publisher, verify the correct events are emitted for each scenario).
-- Slight overhead from event object creation, though this is negligible compared to the actual resilience logic (network calls, timeouts).
+- Every paradigm implementation must remember to emit events at the correct points when the event category is enabled. This is enforced by behavioral contract tests in core (given a mock publisher and `BulkheadEventConfig.diagnostic()`, verify the correct events are emitted for each scenario).
+- The two-tier model requires the Micrometer binder (`inqudium-micrometer`) to implement both gauge registration (Tier 1) and optional event subscription (Tier 2). This is more complex than a pure event-consumer binder, but the performance benefit (0 B/op vs ~80 B/op) justifies it.
 - Exporter implementations must handle their own buffering and error recovery — Inqudium provides the SPI, not a production-ready exporter for every target system.
 
 **Neutral:**
 - Elements ship with zero logging dependency. The `inqudium-test` module may optionally log events for debugging convenience.
 - The event system is open for consumption and export, but closed for external event emission. This keeps the type contract stable.
+- Per-call event overhead (~80 B/op in `diagnostic()` mode) is acceptable for short troubleshooting sessions but not for continuous production use. This is by design — the overhead is the cost of per-call diagnostic depth, and the `standard()` default ensures it is never paid unknowingly.
