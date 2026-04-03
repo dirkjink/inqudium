@@ -42,6 +42,11 @@ public record InqImperativeBulkheadConfig(
   }
 
   @Override
+  public Boolean enableExceptionOptimization() {
+    return bulkhead.enableExceptionOptimization();
+  }
+
+  @Override
   public InqElementType elementType() {
     return bulkhead.elementType();
   }

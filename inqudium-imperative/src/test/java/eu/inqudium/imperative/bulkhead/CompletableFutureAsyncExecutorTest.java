@@ -295,6 +295,11 @@ class CompletableFutureAsyncExecutorTest {
     }
 
     @Override
+    public boolean isEnableExceptionOptimization() {
+      return false;
+    }
+
+    @Override
     public String bulkheadName() {
       return "test-bulkhead";
     }

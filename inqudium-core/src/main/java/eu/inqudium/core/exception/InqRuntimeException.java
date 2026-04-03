@@ -51,18 +51,25 @@ public class InqRuntimeException extends InqException {
    * common wrapper exceptions (ExecutionException, CompletionException, etc.)
    * before storing. The error code is derived from the element type: {@code INQ-XX-000}.
    *
-   * @param callId      the unique call identifier
-   * @param elementName the element instance name
-   * @param elementType the element type
-   * @param cause       the checked exception to wrap (unwrapped automatically)
+   * @param callId                      the unique call identifier
+   * @param elementName                 the element instance name
+   * @param elementType                 the element type
+   * @param cause                       the checked exception to wrap (unwrapped automatically)
+   * @param enableExceptionOptimization whether suppression is enabled or disabled, and whether the stack trace
+   *                                    should be writable.
    */
-  public InqRuntimeException(String callId, String elementName, InqElementType elementType, Throwable cause) {
+  public InqRuntimeException(String callId,
+                             String elementName,
+                             InqElementType elementType,
+                             Throwable cause,
+                             boolean enableExceptionOptimization) {
     super(callId,
         (elementType != null ? elementType : InqElementType.NO_ELEMENT).errorCode(0),
         elementName,
         elementType != null ? elementType : InqElementType.NO_ELEMENT,
         formatCauseMessage(elementName, elementType, InqFailure.unwrap(cause)),
-        InqFailure.unwrap(cause), false);
+        InqFailure.unwrap(cause),
+        enableExceptionOptimization);
   }
 
   /**
@@ -72,13 +79,16 @@ public class InqRuntimeException extends InqException {
    * The cause is {@linkplain InqFailure#unwrap(Throwable) unwrapped} before storing.
    * The error code is {@code "INQ-XX-000"} (no element context).
    *
-   * @param cause the checked exception to wrap (unwrapped automatically)
+   * @param cause                       the checked exception to wrap (unwrapped automatically)
+   * @param enableExceptionOptimization whether suppression is enabled or disabled, and whether the stack trace
+   *                                    should be writable.
    */
-  InqRuntimeException(Throwable cause) {
+  InqRuntimeException(Throwable cause, boolean enableExceptionOptimization) {
     super(InqCallIdGenerator.NONE, InqElementType.NO_ELEMENT.errorCode(0),
         null, InqElementType.NO_ELEMENT,
         formatCauseMessage(null, null, InqFailure.unwrap(cause)),
-        InqFailure.unwrap(cause), false);
+        InqFailure.unwrap(cause),
+        enableExceptionOptimization);
   }
 
   private static String formatCauseMessage(String elementName, InqElementType elementType, Throwable unwrapped) {

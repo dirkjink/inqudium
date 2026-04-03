@@ -42,6 +42,7 @@ import java.util.function.Supplier;
 public final class InqPipeline {
 
   private static final org.slf4j.Logger LOGGER = org.slf4j.LoggerFactory.getLogger(InqPipeline.class);
+  static final private boolean enableExceptionOptimization = false;
 
   private InqPipeline() {
   }
@@ -290,7 +291,7 @@ public final class InqPipeline {
           throw re;
         } catch (Exception e) {
           LOGGER.error("[{}] pipeline: {}", callId, e.toString());
-          throw new InqRuntimeException(callId, "pipeline", InqElementType.NO_ELEMENT, e);
+          throw new InqRuntimeException(callId, "pipeline", InqElementType.NO_ELEMENT, e, enableExceptionOptimization);
         }
       };
 
@@ -460,7 +461,7 @@ public final class InqPipeline {
               LOGGER.error("[{}] pipeline-proxy {}.{}: {}",
                   callId, interfaceType.getSimpleName(), method.getName(), e.toString());
               throw new InqRuntimeException(
-                  callId, "pipeline-proxy", InqElementType.NO_ELEMENT, e);
+                  callId, "pipeline-proxy", InqElementType.NO_ELEMENT, e, enableExceptionOptimization);
             }
           });
     }

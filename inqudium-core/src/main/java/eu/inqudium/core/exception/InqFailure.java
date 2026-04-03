@@ -47,6 +47,7 @@ public final class InqFailure {
   private final Throwable original;
   private final InqException found;
   private boolean handled;
+  boolean enableExceptionOptimization = false;
 
   private InqFailure(Throwable original, InqException found) {
     this.original = original;
@@ -201,7 +202,7 @@ public final class InqFailure {
       if (original instanceof RuntimeException re) {
         throw re;
       }
-      throw new InqRuntimeException(original);
+      throw new InqRuntimeException(original, enableExceptionOptimization);
     }
   }
 
@@ -216,7 +217,7 @@ public final class InqFailure {
       if (original instanceof RuntimeException re) {
         throw re;
       }
-      throw new InqRuntimeException(original);
+      throw new InqRuntimeException(original, enableExceptionOptimization);
     }
   }
 }

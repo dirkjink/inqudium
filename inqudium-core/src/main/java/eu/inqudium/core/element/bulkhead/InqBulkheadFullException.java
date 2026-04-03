@@ -38,31 +38,21 @@ public class InqBulkheadFullException extends InqException {
    * @param callId           the call identifier
    * @param elementName      the bulkhead instance name
    * @param rejectionContext the rejection snapshot from the strategy
+   * @param enableExceptionOptimization whether suppression is enabled or disabled, and whether the stack trace
+   *                                    should be writable.
    */
-  public InqBulkheadFullException(String callId, String elementName, RejectionContext rejectionContext) {
-    super(callId, CODE, elementName, InqElementType.BULKHEAD,
-        "Bulkhead '" + elementName + "' rejected: " + rejectionContext);
+  public InqBulkheadFullException(String callId,
+                                  String elementName,
+                                  RejectionContext rejectionContext,
+                                  boolean enableExceptionOptimization) {
+    super(callId,
+        CODE,
+        elementName,
+        InqElementType.BULKHEAD,
+        "Bulkhead '" + elementName + "' rejected: " + rejectionContext,
+        null,
+        enableExceptionOptimization);
     this.rejectionContext = rejectionContext;
-  }
-
-  /**
-   * Creates a new exception with explicit concurrency values.
-   *
-   * @param callId             the call identifier
-   * @param elementName        the bulkhead instance name
-   * @param concurrentCalls    the current number of in-flight calls
-   * @param maxConcurrentCalls the configured maximum
-   * @deprecated Use {@link #InqBulkheadFullException(String, String, RejectionContext)} instead.
-   * The explicit values are typically read after the rejection decision and may
-   * already be stale. The RejectionContext captures them at the exact moment
-   * of rejection.
-   */
-  @Deprecated(since = "0.3.0", forRemoval = true)
-  public InqBulkheadFullException(String callId, String elementName,
-                                  int concurrentCalls, int maxConcurrentCalls) {
-    super(callId, CODE, elementName, InqElementType.BULKHEAD,
-        "Bulkhead '" + elementName + "' is full (" + concurrentCalls + "/" + maxConcurrentCalls + " concurrent calls)");
-    this.rejectionContext = RejectionContext.capacityReached(maxConcurrentCalls, concurrentCalls);
   }
 
   /**

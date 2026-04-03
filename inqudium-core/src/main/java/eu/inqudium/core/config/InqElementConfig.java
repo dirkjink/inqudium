@@ -9,4 +9,6 @@ public interface InqElementConfig {
   InqElementType elementType();
 
   InqEventPublisher eventPublisher();
+
+  Boolean enableExceptionOptimization();
 }

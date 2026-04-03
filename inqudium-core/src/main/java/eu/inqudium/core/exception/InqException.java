@@ -36,28 +36,6 @@ public abstract class InqException extends RuntimeException {
   private final boolean enableExceptionOptimization;
 
   /**
-   * Creates a new exception with call identity, error code, and element context.
-   *
-   * @param callId      the unique call identifier, or {@link InqCallIdGenerator#NONE} for standalone use
-   * @param code        the structured error code (e.g. "INQ-CB-001")
-   * @param elementName the name of the element instance (e.g. "paymentService")
-   * @param elementType the type of the element
-   * @param message     the detail message (without code/callId prefix — prepended automatically)
-   */
-  protected InqException(String callId,
-                         String code,
-                         String elementName,
-                         InqElementType elementType,
-                         String message) {
-    super(formatMessage(callId, code, message));
-    this.callId = callId;
-    this.code = code;
-    this.elementName = elementName;
-    this.elementType = elementType;
-    this.enableExceptionOptimization = false;
-  }
-
-  /**
    * Creates a new exception with call identity, error code, element context, and a cause.
    *
    * @param callId                      the unique call identifier, or {@link InqCallIdGenerator#NONE} for standalone use

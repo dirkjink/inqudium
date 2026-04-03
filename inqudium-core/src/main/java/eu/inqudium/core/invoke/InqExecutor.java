@@ -9,13 +9,15 @@ import java.util.concurrent.Callable;
 import java.util.function.Supplier;
 
 public interface InqExecutor extends InqElement {
+  boolean enableExceptionOptimization = false;
+
   static <R> R executeCallable(Callable<R> callable, String name, InqElementType type, String callId) {
     try {
       return callable.call();
     } catch (RuntimeException re) {
       throw re;
     } catch (Exception e) {
-      throw new InqRuntimeException(callId, name, type, e);
+      throw new InqRuntimeException(callId, name, type, e, enableExceptionOptimization);
     }
   }
 

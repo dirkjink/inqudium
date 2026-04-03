@@ -170,12 +170,12 @@ public final class CompletableFutureAsyncExecutor implements InqAsyncExecutor {
     } catch (InterruptedException e) {
       Thread.currentThread().interrupt();
       publishRejectionEvent(null);
-      throw new InqBulkheadInterruptedException("async", ctx.bulkheadName());
+      throw new InqBulkheadInterruptedException("async", ctx.bulkheadName(), ctx.isEnableExceptionOptimization());
     }
 
     if (rejection != null) {
       publishRejectionEvent(rejection);
-      throw new InqBulkheadFullException("async", ctx.bulkheadName(), rejection);
+      throw new InqBulkheadFullException("async", ctx.bulkheadName(), rejection, ctx.isEnableExceptionOptimization());
     }
 
     publishAcquireEvent();

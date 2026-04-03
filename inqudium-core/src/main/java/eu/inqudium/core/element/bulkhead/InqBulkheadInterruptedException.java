@@ -36,28 +36,17 @@ public class InqBulkheadInterruptedException extends InqException {
    *
    * @param callId      the call identifier
    * @param elementName the bulkhead instance name
+   * @param enableExceptionOptimization whether suppression is enabled or disabled, and whether the stack trace
+   *                                    should be writable.
    */
-  public InqBulkheadInterruptedException(String callId, String elementName) {
-    super(callId, CODE, elementName, InqElementType.BULKHEAD,
-        "Thread interrupted while waiting for Bulkhead '" + elementName + "' permit");
-  }
-
-  /**
-   * Creates a new exception with explicit concurrency values.
-   *
-   * @param callId             the call identifier
-   * @param elementName        the bulkhead instance name
-   * @param concurrentCalls    the number of in-flight calls at the time of interruption
-   * @param maxConcurrentCalls the configured maximum
-   * @deprecated Use {@link #InqBulkheadInterruptedException(String, String)} instead.
-   * The concurrency values are read after the interrupt and are already stale —
-   * they do not represent the state at the moment the interrupt occurred.
-   */
-  @Deprecated(since = "0.3.0", forRemoval = true)
-  public InqBulkheadInterruptedException(String callId, String elementName,
-                                         int concurrentCalls, int maxConcurrentCalls) {
-    super(callId, CODE, elementName, InqElementType.BULKHEAD,
-        "Thread interrupted while waiting for Bulkhead '" + elementName
-            + "' permit (" + concurrentCalls + "/" + maxConcurrentCalls + " concurrent calls)");
+  public InqBulkheadInterruptedException(String callId, String elementName, boolean enableExceptionOptimization) {
+    super(callId,
+        CODE,
+        elementName,
+        InqElementType.BULKHEAD,
+        "Thread interrupted while waiting for Bulkhead '" + elementName + "' permit",
+        null,
+        enableExceptionOptimization
+    );
   }
 }

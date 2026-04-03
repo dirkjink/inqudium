@@ -24,6 +24,8 @@ import java.time.Duration;
  */
 interface BulkheadContext {
 
+  boolean isEnableExceptionOptimization();
+
   /**
    * The bulkhead instance name, used for events, exceptions, and logging.
    */

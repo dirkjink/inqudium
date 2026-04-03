@@ -83,6 +83,7 @@ public final class ImperativeBulkhead implements Bulkhead, InqAsyncExecutor, Bul
   private final InqNanoTimeSource nanoTimeSource;
   private final InqClock clock;
   private final CompletableFutureAsyncExecutor asyncExecutor;
+  private final boolean enableExceptionOptimization;
 
   public ImperativeBulkhead(InqImperativeBulkheadConfig config, BulkheadStrategy strategy) {
     Objects.requireNonNull(config, "config must not be null");
@@ -103,6 +104,7 @@ public final class ImperativeBulkhead implements Bulkhead, InqAsyncExecutor, Bul
     this.eventPublisher = InqEventPublisher.create(name, InqElementType.BULKHEAD);
     this.clock = config.general().clock();
     this.asyncExecutor = new CompletableFutureAsyncExecutor(this);
+    this.enableExceptionOptimization = config.enableExceptionOptimization();
   }
 
   // ======================== Bulkhead facade ========================
@@ -145,7 +147,11 @@ public final class ImperativeBulkhead implements Bulkhead, InqAsyncExecutor, Bul
       } catch (RuntimeException re) {
         throw re;
       } catch (Exception e) {
-        throw new InqRuntimeException(InqCallIdGenerator.NONE, getName(), getElementType(), e);
+        throw new InqRuntimeException(InqCallIdGenerator.NONE,
+            getName(),
+            getElementType(),
+            e,
+            enableExceptionOptimization);
       }
     };
   }
@@ -165,12 +171,12 @@ public final class ImperativeBulkhead implements Bulkhead, InqAsyncExecutor, Bul
       } catch (InterruptedException e) {
         Thread.currentThread().interrupt();
         handleAcquireFailure(call.callId(), startWait, null);
-        throw new InqBulkheadInterruptedException(call.callId(), name);
+        throw new InqBulkheadInterruptedException(call.callId(), name, enableExceptionOptimization);
       }
 
       if (rejection != null) {
         handleAcquireFailure(call.callId(), startWait, rejection);
-        throw new InqBulkheadFullException(call.callId(), name, rejection);
+        throw new InqBulkheadFullException(call.callId(), name, rejection, enableExceptionOptimization);
       }
 
       // Diagnostic events (acquire) — no-op in standard mode
@@ -190,6 +196,11 @@ public final class ImperativeBulkhead implements Bulkhead, InqAsyncExecutor, Bul
         releaseAndReport(call.callId(), rttNanos, businessError);
       }
     });
+  }
+
+  @Override
+  public boolean isEnableExceptionOptimization() {
+    return enableExceptionOptimization;
   }
 
   @Override
