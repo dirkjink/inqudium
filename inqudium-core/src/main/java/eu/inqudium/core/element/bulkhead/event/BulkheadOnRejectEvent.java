@@ -42,7 +42,7 @@ public class BulkheadOnRejectEvent extends BulkheadEvent {
    * @param concurrentCalls the number of concurrent calls at rejection time
    * @param timestamp       the event timestamp
    * @deprecated Use {@link #BulkheadOnRejectEvent(String, String, RejectionContext, Instant)}.
-   *             The explicit value is a post-hoc snapshot that may already be stale.
+   * The explicit value is a post-hoc snapshot that may already be stale.
    */
   @Deprecated(since = "0.3.0", forRemoval = true)
   public BulkheadOnRejectEvent(String callId, String elementName,

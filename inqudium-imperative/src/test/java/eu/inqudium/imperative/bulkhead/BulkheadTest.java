@@ -125,7 +125,6 @@ class BulkheadTest {
           .satisfies(ex -> {
             var bfe = (InqBulkheadFullException) ex;
             assertThat(bfe.getCode()).isEqualTo("INQ-BH-001");
-            assertThat(bfe.getMaxConcurrentCalls()).isEqualTo(1);
           });
 
       release.countDown();

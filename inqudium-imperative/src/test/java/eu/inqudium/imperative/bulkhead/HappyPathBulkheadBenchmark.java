@@ -1,17 +1,26 @@
 package eu.inqudium.imperative.bulkhead;
 
 import eu.inqudium.core.config.InqConfig;
-import org.openjdk.jmh.annotations.*;
+import org.openjdk.jmh.annotations.Benchmark;
+import org.openjdk.jmh.annotations.BenchmarkMode;
+import org.openjdk.jmh.annotations.Fork;
+import org.openjdk.jmh.annotations.Level;
+import org.openjdk.jmh.annotations.Measurement;
+import org.openjdk.jmh.annotations.Mode;
+import org.openjdk.jmh.annotations.OutputTimeUnit;
+import org.openjdk.jmh.annotations.Scope;
+import org.openjdk.jmh.annotations.Setup;
+import org.openjdk.jmh.annotations.State;
+import org.openjdk.jmh.annotations.Threads;
+import org.openjdk.jmh.annotations.Warmup;
 import org.openjdk.jmh.infra.Blackhole;
 import org.openjdk.jmh.runner.Runner;
 import org.openjdk.jmh.runner.RunnerException;
 import org.openjdk.jmh.runner.options.Options;
 import org.openjdk.jmh.runner.options.OptionsBuilder;
 
-import java.time.Duration;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 import static eu.inqudium.imperative.bulkhead.config.InqImperativeBulkheadConfigBuilder.bulkhead;
 
@@ -23,11 +32,10 @@ import static eu.inqudium.imperative.bulkhead.config.InqImperativeBulkheadConfig
 @Fork(1)
 public class HappyPathBulkheadBenchmark {
 
-  private Semaphore semaphore;
-  private Bulkhead bulkhead;
-
   // We set the Bulkhead limit to 10 for all tests
   private static final int BULKHEAD_LIMIT = 10;
+  private Semaphore semaphore;
+  private Bulkhead bulkhead;
 
   public static void main(String[] args) throws RunnerException {
     Options opt = new OptionsBuilder()
@@ -41,9 +49,9 @@ public class HappyPathBulkheadBenchmark {
     var config = InqConfig.configure()
         .general()
         .with(bulkhead(), c -> c
-            .name("test")
-            .maxConcurrentCalls(10)
-            .maxWaitDuration(Duration.ofMillis(1))
+                .name("test")
+                .maxConcurrentCalls(10)
+            //  .maxWaitDuration(Duration.ofMillis(5))
         ).build();
     bulkhead = Bulkhead.of(config);
   }

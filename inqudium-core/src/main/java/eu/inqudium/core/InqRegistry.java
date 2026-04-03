@@ -1,7 +1,7 @@
 package eu.inqudium.core;
 
-import eu.inqudium.core.element.InqElement;
 import eu.inqudium.core.config.InqElementConfig;
+import eu.inqudium.core.element.InqElement;
 
 import java.util.Map;
 import java.util.Optional;

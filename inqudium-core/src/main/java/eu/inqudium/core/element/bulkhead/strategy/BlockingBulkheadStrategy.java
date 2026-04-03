@@ -32,7 +32,7 @@ public interface BlockingBulkheadStrategy extends BulkheadStrategy {
    * @param timeout the maximum duration to wait; {@link Duration#ZERO} for a non-blocking
    *                attempt (returns immediately if no permit is available)
    * @return {@code null} if a permit was acquired, or a {@link RejectionContext}
-   *         describing why the request was rejected
+   * describing why the request was rejected
    * @throws InterruptedException if the thread is interrupted while waiting
    */
   RejectionContext tryAcquire(Duration timeout) throws InterruptedException;

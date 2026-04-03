@@ -32,7 +32,7 @@ public interface NonBlockingBulkheadStrategy extends BulkheadStrategy {
    * moment of rejection is returned.
    *
    * @return {@code null} if a permit was acquired, or a {@link RejectionContext}
-   *         describing why the request was rejected
+   * describing why the request was rejected
    */
   RejectionContext tryAcquire();
 }

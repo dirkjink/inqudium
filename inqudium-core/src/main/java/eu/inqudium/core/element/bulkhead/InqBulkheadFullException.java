@@ -48,27 +48,6 @@ public class InqBulkheadFullException extends InqException {
   }
 
   /**
-   * Creates a new exception with explicit concurrency values.
-   *
-   * @param callId             the call identifier
-   * @param elementName        the bulkhead instance name
-   * @param concurrentCalls    the current number of in-flight calls
-   * @param maxConcurrentCalls the configured maximum
-   * @deprecated Use {@link #InqBulkheadFullException(String, String, RejectionContext)} instead.
-   *             The explicit values are typically read after the rejection decision and may
-   *             already be stale. The RejectionContext captures them at the exact moment
-   *             of rejection.
-   */
-  @Deprecated(since = "0.3.0", forRemoval = true)
-  public InqBulkheadFullException(String callId, String elementName,
-                                  int concurrentCalls, int maxConcurrentCalls) {
-    super(callId, CODE, elementName, InqElementType.BULKHEAD,
-        String.format(Locale.ROOT, "Bulkhead '%s' is full (%d/%d concurrent calls)",
-            elementName, concurrentCalls, maxConcurrentCalls));
-    this.rejectionContext = RejectionContext.capacityReached(maxConcurrentCalls, concurrentCalls);
-  }
-
-  /**
    * Returns the rejection context captured at the exact moment of rejection.
    *
    * @return the immutable rejection snapshot, never {@code null}
@@ -94,28 +73,6 @@ public class InqBulkheadFullException extends InqException {
    * @return the limit at decision time
    */
   public int getLimitAtDecision() {
-    return rejectionContext.limitAtDecision();
-  }
-
-  /**
-   * Returns the number of concurrent calls at the moment of rejection.
-   *
-   * @return the active call count at decision time
-   * @deprecated Use {@link #getRejectionContext()} for the full snapshot.
-   */
-  @Deprecated(since = "0.3.0", forRemoval = true)
-  public int getConcurrentCalls() {
-    return rejectionContext.activeCallsAtDecision();
-  }
-
-  /**
-   * Returns the concurrency limit at the moment of rejection.
-   *
-   * @return the limit at decision time
-   * @deprecated Use {@link #getLimitAtDecision()} or {@link #getRejectionContext()}.
-   */
-  @Deprecated(since = "0.3.0", forRemoval = true)
-  public int getMaxConcurrentCalls() {
     return rejectionContext.limitAtDecision();
   }
 }

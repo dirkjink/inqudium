@@ -1,7 +1,6 @@
 package eu.inqudium.imperative.bulkhead.config;
 
 import eu.inqudium.core.element.bulkhead.config.InqBulkheadConfigBuilder;
-import eu.inqudium.imperative.bulkhead.strategy.SemaphoreBulkheadStrategy;
 
 import java.time.Duration;
 

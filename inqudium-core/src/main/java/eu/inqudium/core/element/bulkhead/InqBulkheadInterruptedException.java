@@ -53,8 +53,8 @@ public class InqBulkheadInterruptedException extends InqException {
    * @param concurrentCalls    the number of in-flight calls at the time of interruption
    * @param maxConcurrentCalls the configured maximum
    * @deprecated Use {@link #InqBulkheadInterruptedException(String, String)} instead.
-   *             The concurrency values are read after the interrupt and are already stale —
-   *             they do not represent the state at the moment the interrupt occurred.
+   * The concurrency values are read after the interrupt and are already stale —
+   * they do not represent the state at the moment the interrupt occurred.
    */
   @Deprecated(since = "0.3.0", forRemoval = true)
   public InqBulkheadInterruptedException(String callId, String elementName,

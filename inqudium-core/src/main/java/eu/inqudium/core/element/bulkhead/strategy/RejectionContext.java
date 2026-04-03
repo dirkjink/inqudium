@@ -93,6 +93,13 @@ public record RejectionContext(
   // Formatting
   // ──────────────────────────────────────────────────────────────────────────
 
+  private static String formatNanos(long nanos) {
+    if (nanos < 1_000_000L) {
+      return nanos / 1_000L + "µs";
+    }
+    return nanos / 1_000_000L + "ms";
+  }
+
   /**
    * Human-readable summary suitable for exception messages and log output.
    *
@@ -119,12 +126,5 @@ public record RejectionContext(
           reason, activeCallsAtDecision, limitAtDecision,
           formatNanos(sojournNanos), formatNanos(waitedNanos));
     };
-  }
-
-  private static String formatNanos(long nanos) {
-    if (nanos < 1_000_000L) {
-      return nanos / 1_000L + "µs";
-    }
-    return nanos / 1_000_000L + "ms";
   }
 }

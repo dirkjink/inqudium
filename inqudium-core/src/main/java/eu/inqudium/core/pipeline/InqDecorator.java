@@ -1,8 +1,8 @@
 package eu.inqudium.core.pipeline;
 
 import eu.inqudium.core.callid.InqCallIdGenerator;
-import eu.inqudium.core.element.InqElement;
 import eu.inqudium.core.config.InqElementConfig;
+import eu.inqudium.core.element.InqElement;
 import eu.inqudium.core.exception.InqException;
 import eu.inqudium.core.exception.InqRuntimeException;
 import eu.inqudium.core.invoke.InqCall;

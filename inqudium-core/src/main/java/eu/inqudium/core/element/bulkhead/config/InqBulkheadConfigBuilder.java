@@ -11,8 +11,6 @@ import eu.inqudium.core.event.InqEventPublisher;
 
 import java.time.Duration;
 import java.util.Objects;
-import java.util.Optional;
-import java.util.function.IntFunction;
 
 public abstract class InqBulkheadConfigBuilder
     <B extends InqBulkheadConfigBuilder<B, E>, E extends ConfigExtension<E>>
