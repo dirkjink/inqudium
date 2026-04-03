@@ -1,7 +1,6 @@
 package eu.inqudium.imperative.bulkhead;
 
 import dev.failsafe.Failsafe;
-import dev.failsafe.FailsafeExecutor;
 import eu.inqudium.core.config.InqConfig;
 import eu.inqudium.core.element.bulkhead.config.BulkheadEventConfig;
 import io.github.resilience4j.bulkhead.BulkheadConfig;
@@ -184,17 +183,12 @@ public class HappyPathBulkheadBenchmarkTwo {
   // ── Raw Semaphore (baseline, no metrics) ──
   private Semaphore semaphore;
 
-  // ── Inqudium: all events enabled (fair comparison with R4j internal events) ──
-  private Bulkhead inqBulkheadAllEvents;
-
-  // ── Inqudium: rejections only (optimized, shows ceiling) ──
-  private Bulkhead inqBulkheadOptimized;
-
-  // ── Resilience4j with Micrometer (production Spring Boot setup) ──
-  private io.github.resilience4j.bulkhead.Bulkhead r4jBulkhead;
-
-  // ── Failsafe with event listeners (only metrics mechanism available) ──
-  private FailsafeExecutor<Void> failsafeExecutor;
+  // ── Pre-decorated wrappers (created once in setUp, invoked per iteration) ──
+  private Runnable decoratedSemaphore;
+  private Runnable decoratedInqDiagnostic;
+  private Runnable decoratedInqOptimized;
+  private Runnable decoratedR4j;
+  private Runnable decoratedFailsafe;
 
   // ── Failsafe metrics counters ──
   private final LongAdder failsafeSuccess = new LongAdder();
@@ -227,7 +221,7 @@ public class HappyPathBulkheadBenchmarkTwo {
             .eventConfig(BulkheadEventConfig.diagnostic())
             .maxWaitDuration(Duration.ofMillis(WAIT_MILLIS))
         ).build();
-    inqBulkheadAllEvents = Bulkhead.of(allEventsConfig);
+    var inqBulkheadAllEvents = Bulkhead.of(allEventsConfig);
 
     // ── Inqudium: rejections only (optimized) ──
     var optimizedConfig = InqConfig.configure()
@@ -238,7 +232,7 @@ public class HappyPathBulkheadBenchmarkTwo {
             .eventConfig(BulkheadEventConfig.standard())
             .maxWaitDuration(Duration.ofMillis(WAIT_MILLIS))
         ).build();
-    inqBulkheadOptimized = Bulkhead.of(optimizedConfig);
+    var inqBulkheadOptimized = Bulkhead.of(optimizedConfig);
 
     // ── Resilience4j: BulkheadRegistry + Micrometer (production setup) ──
     //
@@ -254,7 +248,7 @@ public class HappyPathBulkheadBenchmarkTwo {
         .writableStackTraceEnabled(false)
         .build();
     BulkheadRegistry r4jRegistry = BulkheadRegistry.of(r4jConfig);
-    r4jBulkhead = r4jRegistry.bulkhead("r4j-test");
+    var r4jBulkhead = r4jRegistry.bulkhead("r4j-test");
 
     MeterRegistry meterRegistry = new SimpleMeterRegistry();
     TaggedBulkheadMetrics.ofBulkheadRegistry(r4jRegistry).bindTo(meterRegistry);
@@ -265,7 +259,30 @@ public class HappyPathBulkheadBenchmarkTwo {
         .onSuccess(event -> failsafeSuccess.increment())
         .onFailure(event -> failsafeFailure.increment())
         .build();
-    failsafeExecutor = Failsafe.with(failsafeBulkhead);
+    var failsafeExecutor = Failsafe.with(failsafeBulkhead);
+
+    // ── Decorate once — all wrappers are created here, not per invocation ──
+
+    decoratedSemaphore = () -> {
+      try {
+        if (semaphore.tryAcquire(WAIT_MILLIS, TimeUnit.MILLISECONDS)) {
+          try { simulateWork(); }
+          finally { semaphore.release(); }
+        }
+      } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+    };
+
+    decoratedInqDiagnostic = inqBulkheadAllEvents.decorateRunnable(
+        HappyPathBulkheadBenchmarkTwo::simulateWork);
+
+    decoratedInqOptimized = inqBulkheadOptimized.decorateRunnable(
+        HappyPathBulkheadBenchmarkTwo::simulateWork);
+
+    decoratedR4j = io.github.resilience4j.bulkhead.Bulkhead.decorateRunnable(
+        r4jBulkhead, HappyPathBulkheadBenchmarkTwo::simulateWork);
+
+    decoratedFailsafe = () -> failsafeExecutor.run(
+        HappyPathBulkheadBenchmarkTwo::simulateWork);
   }
 
   // ════════════════════════════════════════════════════════════════════
@@ -274,93 +291,84 @@ public class HappyPathBulkheadBenchmarkTwo {
 
   @Benchmark
   @Threads(10)
-  public void baselineNoBulkhead(Blackhole blackhole) {
-    simulateWork(blackhole);
+  public void baselineNoBulkhead() {
+    simulateWork();
   }
 
   // ════════════════════════════════════════════════════════════════════
   // PURE OVERHEAD — Threads (10) == Permits (10), no contention
+  // Wrappers are pre-created in setUp — the benchmark measures only
+  // the .run() invocation (acquire → work → release), not decoration.
   // ════════════════════════════════════════════════════════════════════
 
   @Benchmark
   @Threads(10)
-  public void measurePureOverheadSemaphore(Blackhole blackhole) throws InterruptedException {
-    if (semaphore.tryAcquire(WAIT_MILLIS, TimeUnit.MILLISECONDS)) {
-      try {
-        simulateWork(blackhole);
-      } finally {
-        semaphore.release();
-      }
-    }
+  public void measurePureOverheadSemaphore() {
+    decoratedSemaphore.run();
   }
 
   @Benchmark
   @Threads(10)
-  public void measurePureOverheadInqudium(Blackhole blackhole) throws InterruptedException {
-    inqBulkheadAllEvents.executeRunnable(() -> simulateWork(blackhole));
+  public void measurePureOverheadInqudium() {
+    decoratedInqDiagnostic.run();
   }
 
   @Benchmark
   @Threads(10)
-  public void measurePureOverheadInqudiumOptimized(Blackhole blackhole) throws InterruptedException {
-    inqBulkheadOptimized.executeRunnable(() -> simulateWork(blackhole));
+  public void measurePureOverheadInqudiumOptimized() {
+    decoratedInqOptimized.run();
   }
 
   @Benchmark
   @Threads(10)
-  public void measurePureOverheadResilience4j(Blackhole blackhole) {
-    r4jBulkhead.executeRunnable(() -> simulateWork(blackhole));
+  public void measurePureOverheadResilience4j() {
+    decoratedR4j.run();
   }
 
   @Benchmark
   @Threads(10)
-  public void measurePureOverheadFailsafe(Blackhole blackhole) {
-    failsafeExecutor.run(() -> simulateWork(blackhole));
+  public void measurePureOverheadFailsafe() {
+    decoratedFailsafe.run();
   }
 
   // ════════════════════════════════════════════════════════════════════
   // CONTENTION — Threads (20) > Permits (10), no rejections
+  // Same pre-created wrappers, more threads than permits.
   // ════════════════════════════════════════════════════════════════════
 
   @Benchmark
   @Threads(20)
-  public void measureContentionSemaphore(Blackhole blackhole) throws InterruptedException {
-    if (semaphore.tryAcquire(WAIT_MILLIS, TimeUnit.MILLISECONDS)) {
-      try {
-        simulateWork(blackhole);
-      } finally {
-        semaphore.release();
-      }
-    }
+  public void measureContentionSemaphore() {
+    decoratedSemaphore.run();
   }
 
   @Benchmark
   @Threads(20)
-  public void measureContentionInqudium(Blackhole blackhole) throws InterruptedException {
-    inqBulkheadAllEvents.executeRunnable(() -> simulateWork(blackhole));
+  public void measureContentionInqudium() {
+    decoratedInqDiagnostic.run();
   }
 
   @Benchmark
   @Threads(20)
-  public void measureContentionInqudiumOptimized(Blackhole blackhole) throws InterruptedException {
-    inqBulkheadOptimized.executeRunnable(() -> simulateWork(blackhole));
+  public void measureContentionInqudiumOptimized() {
+    decoratedInqOptimized.run();
   }
 
   @Benchmark
   @Threads(20)
-  public void measureContentionResilience4j(Blackhole blackhole) {
-    r4jBulkhead.executeRunnable(() -> simulateWork(blackhole));
+  public void measureContentionResilience4j() {
+    decoratedR4j.run();
   }
 
   @Benchmark
   @Threads(20)
-  public void measureContentionFailsafe(Blackhole blackhole) {
-    failsafeExecutor.run(() -> simulateWork(blackhole));
+  public void measureContentionFailsafe() {
+    decoratedFailsafe.run();
   }
 
   // ════════════════════════════════════════════════════════════════════
 
-  private void simulateWork(Blackhole blackhole) {
+  private static void simulateWork() {
     Blackhole.consumeCPU(100);
   }
 }
