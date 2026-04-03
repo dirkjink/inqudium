@@ -1,5 +1,7 @@
 package eu.inqudium.core.pipeline;
 
+import java.util.concurrent.CompletionException;
+
 /**
  * Wrapper for dynamic proxies and Spring AOP JoinPoints.
  * Implements {@link ProxyExecution} to allow homogeneous chaining.
@@ -31,7 +33,7 @@ package eu.inqudium.core.pipeline;
  *   <li><b>Full Transparency:</b> The {@code toStringHierarchy()} will list
  *       the AOP proxy as a named layer.</li>
  *   <li><b>Exception Safety:</b> Throwable exceptions from {@code proceed()}
- *       are passed through transparently via {@link WrappedCheckedException}.</li>
+ *       are passed through transparently via {@link CompletionException}.</li>
  * </ul>
  *
  * @param <R> the return type of the join point execution
@@ -48,7 +50,7 @@ public class JoinPointWrapper<R>
   public R proceed() throws Throwable {
     try {
       return initiateChain(null);
-    } catch (WrappedCheckedException e) {
+    } catch (CompletionException e) {
       // Only unwrap exceptions that were explicitly wrapped by invokeCore
       throw e.getCause();
     }
@@ -66,7 +68,7 @@ public class JoinPointWrapper<R>
       throw e;
     } catch (Throwable t) {
       // Wrap only checked exceptions/throwables for transport through the InternalExecutor chain
-      throw new WrappedCheckedException(t);
+      throw new CompletionException(t);
     }
   }
 

@@ -1,6 +1,7 @@
 package eu.inqudium.core.pipeline;
 
 import java.util.concurrent.Callable;
+import java.util.concurrent.CompletionException;
 
 /**
  * A homogeneous wrapper for the {@link Callable} interface.
@@ -20,7 +21,7 @@ public class CallableWrapper<V>
   public V call() throws Exception {
     try {
       return initiateChain(null);
-    } catch (WrappedCheckedException e) {
+    } catch (CompletionException e) {
       // Only unwrap exceptions that were explicitly wrapped by invokeCore
       Throwable cause = e.getCause();
       if (cause instanceof Exception) {
@@ -43,7 +44,7 @@ public class CallableWrapper<V>
       throw e;
     } catch (Exception e) {
       // Wrap only checked exceptions for transport through the InternalExecutor chain
-      throw new WrappedCheckedException(e);
+      throw new CompletionException(e);
     }
   }
 
