@@ -1,7 +1,9 @@
 package eu.inqudium.core.pipeline;
 
 /**
- * Wraps a Spring AOP {@code ProceedingJoinPoint} into the hierarchical wrapper structure.
+ * Wrapper for dynamic proxies and Spring AOP JoinPoints.
+ * Implements ProxyExecution to allow homogeneous chaining.
+ * Since the proxy encapsulates its own arguments, the chain argument type is Void.
  * <p>
  * This method creates a {@link JoinPointWrapper} around the intercepted join point.
  * By doing so, the AOP execution becomes a formal layer in the static wrapper stack.
@@ -37,38 +39,42 @@ package eu.inqudium.core.pipeline;
  *
  */
 public class JoinPointWrapper<R>
-    extends BaseWrapper<ProxyExecution<R>, R, JoinPointWrapper<R>>
-    implements ProxyExecution<R> { // <-- Hier liegt die Lösung
+    extends BaseWrapper<ProxyExecution<R>, Void, R, JoinPointWrapper<R>>
+    implements ProxyExecution<R> {
 
   public JoinPointWrapper(String name, ProxyExecution<R> delegate) {
     super(name, delegate);
   }
 
   /**
-   * Der Einstiegspunkt. Ersetzt die alte execute() Methode.
+   * The entry point replacing the old execute() method.
    */
   @Override
-  public R proceed() throws Throwable { // <-- Implementiert das Interface
+  public R proceed() throws Throwable {
     try {
-      return initiateChain();
+      // Starts the chain without an argument (Void -> null)
+      return initiateChain(null);
     } catch (RuntimeException e) {
-      // Entpacken der Exception, falls sie vom Kern geworfen wurde
-      if (e.getCause() != null) throw e.getCause();
+      // Unpack the exception if it was thrown by the core
+      if (e.getCause() != null) {
+        throw e.getCause();
+      }
       throw e;
     }
   }
 
   @Override
-  protected R invokeCore() {
+  protected R invokeCore(Void argument) {
     try {
       return getDelegate().proceed();
     } catch (Throwable t) {
+      // Wrap checked exceptions or throwables for transport through the InternalExecutor chain
       throw new RuntimeException(t);
     }
   }
 
   @Override
-  protected void handleLayer(String callId) {
-    // Optional: Logging context updates
+  protected void handleLayer(String callId, Void argument) {
+    // Optional: Logging context updates using the callId
   }
 }

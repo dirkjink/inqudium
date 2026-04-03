@@ -1,91 +1,73 @@
 package eu.inqudium.core.pipeline;
-
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
 
-import java.util.concurrent.Callable;
-import java.util.function.Supplier;
 import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-@DisplayName("Parameterized Tests for all Wrapper Types")
+@DisplayName("Parameterized Tests for all Wrapper Types including Function")
 class FinalWrapperHierarchyTest {
 
+  // Helper interface to unify the execution of different functional types
+  interface WrapperTestBridge {
+    void executeRoot() throws Exception;
+    void triggerInner() throws Exception;
+    BaseWrapper<?, ?, ?, ?> getWrapper();
+  }
+
   /**
-   * Datenquelle für alle Wrapper-Typen.
-   * Erzeugt für jeden Typ eine "Bridge", die im Test aufgerufen wird.
+   * Data source for all wrapper types.
+   * Generates a "Bridge" for each type, making them uniformly testable.
    */
   static Stream<WrapperTestBridge> wrapperProvider() {
     return Stream.of(
+        // --- Supplier Bridge ---
         new WrapperTestBridge() {
-          private final SupplierWrapper<String> w = new SupplierWrapper<>("Supplier-Root",
-              new SupplierWrapper<>("Supplier-Inner", () -> "val"));
+          private final SupplierWrapper<String> inner = new SupplierWrapper<>("Supplier-Inner", () -> "val");
+          private final SupplierWrapper<String> root = new SupplierWrapper<>("Supplier-Root", inner);
 
-          @Override
-          public void execute() {
-            w.get();
-          }
-
-          @Override
-          public BaseWrapper<?, ?, ?> getWrapper() {
-            return w;
-          }
-
-          @Override
-          public String toString() {
-            return "SupplierWrapper";
-          }
+          @Override public void executeRoot() { root.get(); }
+          @Override public void triggerInner() { inner.get(); }
+          @Override public BaseWrapper<?, ?, ?, ?> getWrapper() { return root; }
+          @Override public String toString() { return "SupplierWrapper"; }
         },
+
+        // --- Runnable Bridge ---
         new WrapperTestBridge() {
-          private final RunnableWrapper w = new RunnableWrapper("Runnable-Root",
-              new RunnableWrapper("Runnable-Inner", () -> {
-              }));
+          private final RunnableWrapper inner = new RunnableWrapper("Runnable-Inner", () -> {});
+          private final RunnableWrapper root = new RunnableWrapper("Runnable-Root", inner);
 
-          @Override
-          public void execute() {
-            w.run();
-          }
-
-          @Override
-          public BaseWrapper<?, ?, ?> getWrapper() {
-            return w;
-          }
-
-          @Override
-          public String toString() {
-            return "RunnableWrapper";
-          }
+          @Override public void executeRoot() { root.run(); }
+          @Override public void triggerInner() { inner.run(); }
+          @Override public BaseWrapper<?, ?, ?, ?> getWrapper() { return root; }
+          @Override public String toString() { return "RunnableWrapper"; }
         },
+
+        // --- Callable Bridge ---
         new WrapperTestBridge() {
-          private final CallableWrapper<String> w = new CallableWrapper<>("Callable-Root",
-              new CallableWrapper<>("Callable-Inner", () -> "val"));
+          private final CallableWrapper<String> inner = new CallableWrapper<>("Callable-Inner", () -> "val");
+          private final CallableWrapper<String> root = new CallableWrapper<>("Callable-Root", inner);
 
-          @Override
-          public void execute() throws Exception {
-            w.call();
-          }
+          @Override public void executeRoot() throws Exception { root.call(); }
+          @Override public void triggerInner() throws Exception { inner.call(); }
+          @Override public BaseWrapper<?, ?, ?, ?> getWrapper() { return root; }
+          @Override public String toString() { return "CallableWrapper"; }
+        },
 
-          @Override
-          public BaseWrapper<?, ?, ?> getWrapper() {
-            return w;
-          }
+        // --- Function Bridge ---
+        new WrapperTestBridge() {
+          private final FunctionWrapper<String, String> inner = new FunctionWrapper<>("Function-Inner", (arg) -> arg + "-processed");
+          private final FunctionWrapper<String, String> root = new FunctionWrapper<>("Function-Root", inner);
 
-          @Override
-          public String toString() {
-            return "CallableWrapper";
-          }
+          @Override public void executeRoot() { root.apply("Test-Input"); }
+          @Override public void triggerInner() { inner.apply("Test-Input"); }
+          @Override public BaseWrapper<?, ?, ?, ?> getWrapper() { return root; }
+          @Override public String toString() { return "FunctionWrapper"; }
         }
     );
-  }
-
-  // Hilfs-Interface, um die Ausführung der verschiedenen Typen zu vereinheitlichen
-  interface WrapperTestBridge {
-    void execute() throws Exception;
-
-    BaseWrapper<?, ?, ?> getWrapper();
   }
 
   @Nested
@@ -97,15 +79,16 @@ class FinalWrapperHierarchyTest {
     @DisplayName("Every wrapper type must correctly represent the hierarchy string without a leading symbol at root")
     void hierarchyStringMustBeCorrect(WrapperTestBridge bridge) {
       // Given
-      BaseWrapper<?, ?, ?> wrapper = bridge.getWrapper();
+      BaseWrapper<?, ?, ?, ?> wrapper = bridge.getWrapper();
 
       // When
       String hierarchy = wrapper.toStringHierarchy();
       String[] lines = hierarchy.split("\n");
 
       // Then
+      // Expected format:
       // Line 0: Chain-ID: ...
-      // Line 1: <Name>-Root (Ohne └──)
+      // Line 1: <Name>-Root (Without └──)
       // Line 2:   └── <Name>-Inner
       assertThat(lines[1])
           .as("Root layer should not have a leading tree symbol")
@@ -123,10 +106,10 @@ class FinalWrapperHierarchyTest {
     @DisplayName("The Chain-ID must be stable and shared between layers")
     void chainIdMustBeStable(WrapperTestBridge bridge) {
       // Given
-      BaseWrapper<?, ?, ?> root = bridge.getWrapper();
-      BaseWrapper<?, ?, ?> inner = root.getInner();
+      BaseWrapper<?, ?, ?, ?> root = bridge.getWrapper();
+      BaseWrapper<?, ?, ?, ?> inner = (BaseWrapper<?, ?, ?, ?>) root.getInner();
 
-      // Then
+      // When & Then
       assertThat(root.getChainId())
           .as("Chain-ID must be non-null and identical across the hierarchy")
           .isNotNull()
@@ -140,26 +123,20 @@ class FinalWrapperHierarchyTest {
 
     @ParameterizedTest(name = "Testing execution for {0}")
     @MethodSource("eu.inqudium.core.pipeline.FinalWrapperHierarchyTest#wrapperProvider")
-    @DisplayName("Executing any layer must trigger the full chain starting from the outermost")
-    void executionShouldStartAtOutermost(WrapperTestBridge bridge) {
+    @DisplayName("Executing any inner layer must trigger the full chain starting from the outermost")
+    void executionShouldStartAtOutermost(WrapperTestBridge bridge) throws Exception {
       // Given
-      BaseWrapper<?, ?, ?> inner = bridge.getWrapper().getInner();
+      BaseWrapper<?, ?, ?, ?> root = bridge.getWrapper();
+      BaseWrapper<?, ?, ?, ?> inner = (BaseWrapper<?, ?, ?, ?>) root.getInner();
 
       // When
-      // Wir führen den Test über den inneren Layer aus
-      if (inner instanceof Supplier) ((Supplier<?>) inner).get();
-      else if (inner instanceof Runnable) ((Runnable) inner).run();
-      else if (inner instanceof Callable) {
-        try {
-          ((Callable<?>) inner).call();
-        } catch (Exception e) {
-          throw new RuntimeException(e);
-        }
-      }
+      // Calling the core execution directly on the inner layer
+      bridge.triggerInner();
 
       // Then
-      // getOutermost() sorgt dafür, dass die Kette immer oben beginnt.
-      assertThat(inner.getOutermost()).isEqualTo(bridge.getWrapper());
+      assertThat(inner.getOutermost())
+          .as("The execution must always resolve to the outermost layer")
+          .isEqualTo(root);
     }
   }
 }

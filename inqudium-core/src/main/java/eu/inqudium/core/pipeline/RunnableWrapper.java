@@ -1,7 +1,10 @@
 package eu.inqudium.core.pipeline;
-
+/**
+ * Ein homogener Wrapper für das Runnable-Interface.
+ * Nimmt keine Argumente (Void) und gibt nichts zurück (Void).
+ */
 public class RunnableWrapper
-    extends BaseWrapper<Runnable, Void, RunnableWrapper>
+    extends BaseWrapper<Runnable, Void, Void, RunnableWrapper>
     implements Runnable {
 
   public RunnableWrapper(String name, Runnable delegate) {
@@ -10,17 +13,17 @@ public class RunnableWrapper
 
   @Override
   public void run() {
-    initiateChain();
+    initiateChain(null);
   }
 
   @Override
-  protected Void invokeCore() {
+  protected Void invokeCore(Void argument) {
     getDelegate().run();
-    return null;
+    return null; // Java verlangt eine Rückgabe für den generischen Typ Void
   }
 
   @Override
-  protected void handleLayer(String callId) {
-    // Optional: Logging mit callId
+  protected void handleLayer(String callId, Void argument) {
+    // Schichtspezifische Logik mit Zugriff auf die Call-ID
   }
 }

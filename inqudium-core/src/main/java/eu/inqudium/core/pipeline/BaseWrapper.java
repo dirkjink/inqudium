@@ -2,8 +2,8 @@ package eu.inqudium.core.pipeline;
 
 import java.util.UUID;
 
-public abstract class BaseWrapper<T, R, S extends BaseWrapper<T, R, S>>
-    implements Wrapper<S>, InternalExecutor<R> {
+public abstract class BaseWrapper<T, A, R, S extends BaseWrapper<T, A, R, S>>
+    implements Wrapper<S>, InternalExecutor<A, R> {
 
   private final T delegate;
   private final String name;
@@ -14,7 +14,6 @@ public abstract class BaseWrapper<T, R, S extends BaseWrapper<T, R, S>>
   protected BaseWrapper(String name, T delegate) {
     this.name = name;
     this.delegate = delegate;
-
     if (delegate instanceof BaseWrapper) {
       S inner = (S) delegate;
       this.chainId = inner.getChainId();
@@ -25,58 +24,32 @@ public abstract class BaseWrapper<T, R, S extends BaseWrapper<T, R, S>>
   }
 
   /**
-   * Absolut typsicherer Einstieg.
+   * Initiates the chain and passes the argument top-down.
    */
-  protected R initiateChain() {
-    // Da S eine Unterklasse von BaseWrapper ist,
-    // ist S automatisch ein InternalExecutor<R>.
+  protected R initiateChain(A argument) {
     S root = getOutermost();
-    return root.executeWithId(UUID.randomUUID().toString());
+    return root.executeWithId(UUID.randomUUID().toString(), argument);
   }
 
   @Override
-  public R executeWithId(String callId) {
-    handleLayer(callId);
+  public R executeWithId(String callId, A argument) {
+    handleLayer(callId, argument);
     if (delegate instanceof InternalExecutor) {
       @SuppressWarnings("unchecked")
-      InternalExecutor<R> internalInner = (InternalExecutor<R>) delegate;
-      return internalInner.executeWithId(callId);
+      InternalExecutor<A, R> internalInner = (InternalExecutor<A, R>) delegate;
+      return internalInner.executeWithId(callId, argument);
     }
-    return invokeCore();
+    return invokeCore(argument);
   }
 
-  protected abstract void handleLayer(String callId);
+  protected abstract void handleLayer(String callId, A argument);
+  protected abstract R invokeCore(A argument);
 
-  protected abstract R invokeCore();
-
-  // --- Struktur-Methoden ---
-  @Override
-  public String getChainId() {
-    return chainId;
-  }
-
-  @Override
-  public String getLayerDescription() {
-    return name;
-  }
-
+  @Override public String getChainId() { return chainId; }
+  @Override public String getLayerDescription() { return name; }
   @SuppressWarnings("unchecked")
-  @Override
-  public S getInner() {
-    return (delegate instanceof BaseWrapper) ? (S) delegate : null;
-  }
-
-  @Override
-  public S getOuter() {
-    return outer;
-  }
-
-  @Override
-  public void setOuter(S outer) {
-    this.outer = outer;
-  }
-
-  protected T getDelegate() {
-    return delegate;
-  }
+  @Override public S getInner() { return (delegate instanceof BaseWrapper) ? (S) delegate : null; }
+  @Override public S getOuter() { return outer; }
+  @Override public void setOuter(S outer) { this.outer = outer; }
+  protected T getDelegate() { return delegate; }
 }
