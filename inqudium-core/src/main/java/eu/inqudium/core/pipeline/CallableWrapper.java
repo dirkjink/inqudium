@@ -58,7 +58,8 @@ public class CallableWrapper<V>
    * <p>If the core delegate throws a checked exception, it arrives here as a
    * {@link CompletionException} (wrapped by {@link #invokeCore}). This method
    * extracts the original cause and re-throws it as an {@link Exception}, preserving
-   * the caller's expectation that {@code call()} may throw checked exceptions.</p>
+   * the caller's expectation that {@code call()} may throw checked exceptions.
+   * All other {@link RuntimeException}s are re-thrown as-is.</p>
    *
    * @return the value produced by the core callable
    * @throws Exception the original checked exception from the delegate, if any
@@ -68,14 +69,18 @@ public class CallableWrapper<V>
     try {
       // Void argument type — pass null to start the chain
       return initiateChain(null);
-    } catch (CompletionException e) {
-      // Unwrap the checked exception that was wrapped by invokeCore for transport
-      Throwable cause = e.getCause();
-      if (cause instanceof Exception) {
-        throw (Exception) cause;
+    } catch (RuntimeException e) {
+      if (e instanceof CompletionException) {
+        // Unwrap the checked exception that was wrapped by invokeCore for transport
+        Throwable cause = e.getCause();
+        if (cause instanceof Exception) {
+          throw (Exception) cause;
+        }
+        // Defensive fallback — should not happen since invokeCore only wraps Exceptions
+        throw new CompletionException(cause);
       }
-      // Defensive fallback — should not happen since invokeCore only wraps Exceptions
-      throw new RuntimeException(cause);
+      // All other RuntimeExceptions pass through unchanged
+      throw e;
     }
   }
 

@@ -74,7 +74,8 @@ public class JoinPointWrapper<R>
    * <p>If the core delegate throws a checked exception or a non-standard
    * {@link Throwable}, it arrives here as a {@link CompletionException} (wrapped by
    * {@link #invokeCore}). This method extracts the original cause and re-throws it,
-   * preserving the exception contract of the underlying proxy.</p>
+   * preserving the exception contract of the underlying proxy. All other
+   * {@link RuntimeException}s are re-thrown as-is.</p>
    *
    * @return the result of the proxied execution
    * @throws Throwable the original exception from the delegate, if any
@@ -84,9 +85,13 @@ public class JoinPointWrapper<R>
     try {
       // Void argument type — pass null to start the chain
       return initiateChain(null);
-    } catch (CompletionException e) {
-      // Unwrap the checked exception/throwable that was wrapped by invokeCore
-      throw e.getCause();
+    } catch (RuntimeException e) {
+      if (e instanceof CompletionException) {
+        // Unwrap the checked exception/throwable that was wrapped by invokeCore
+        throw e.getCause();
+      }
+      // All other RuntimeExceptions pass through unchanged
+      throw e;
     }
   }
 
