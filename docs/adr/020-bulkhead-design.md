@@ -2,6 +2,7 @@
 
 **Status:** Accepted  
 **Date:** 2026-03-28  
+**Last updated:** 2026-04-03  
 **Deciders:** Core team
 
 ## Context
@@ -85,6 +86,7 @@ Inqudium separates the **decision** (is a permit available?) from the **waiting*
 public record BulkheadConfig(
     int maxConcurrentCalls,            // maximum number of concurrent calls permitted
     Duration maxWaitDuration,          // how long to wait for a permit (0 = fail immediately)
+    BulkheadEventConfig eventConfig,   // controls diagnostic event emission (ADR-003)
     InqCompatibility compatibility     // behavioral flags (ADR-013)
 ) {
     public static BulkheadConfig ofDefaults() {
@@ -101,6 +103,7 @@ Default values:
 |---|---|---|
 | `maxConcurrentCalls` | 25 | Limits concurrent calls to a single downstream service. 25 is conservative for most services — high enough for normal throughput, low enough to prevent thread/connection exhaustion under failure. |
 | `maxWaitDuration` | 0 (no wait) | Fail immediately when the bulkhead is full. Waiting is opt-in because it adds latency. |
+| `eventConfig` | `BulkheadEventConfig.standard()` | Only rejection events enabled. Lifecycle and trace events are diagnostic tools, disabled by default to avoid per-call allocation overhead (~80 B/op). See "Observability" section below and ADR-003. |
 
 ### BulkheadBehavior
 
@@ -230,15 +233,38 @@ When a TimeLimiter fires and the caller moves on, the orphaned call still holds 
 
 This means: under sustained timeouts, the Bulkhead may fill up with orphaned calls. This is by design — it is exactly the "TimeLimiter + Bulkhead" mitigation pattern from ADR-010. The Bulkhead caps the number of orphaned calls. Once full, new calls are rejected immediately, preventing unbounded resource consumption.
 
-### Metrics
+### Observability
 
-The Bulkhead emits events (ADR-003) for every acquisition and release when diagnostic events are enabled:
+The Bulkhead follows the two-tier observability model defined in ADR-003.
 
-- `BulkheadOnAcquireEvent` — permit acquired, `concurrentCalls` after acquisition
-- `BulkheadOnRejectEvent` — permit denied, `concurrentCalls` at rejection time
-- `BulkheadOnReleaseEvent` — permit released, `concurrentCalls` after release
+#### Tier 1: Polling-based metrics (always on, zero per-call overhead)
 
-The `concurrentCalls` field on each event enables real-time monitoring of bulkhead utilization. A Micrometer gauge can expose `current / max` as a saturation metric.
+Production metrics are delivered via gauges that read the strategy's introspection methods at scrape time:
+
+| Metric | Source | Type |
+|---|---|---|
+| `inqudium.bulkhead.concurrent.calls` | `strategy.concurrentCalls()` | Gauge |
+| `inqudium.bulkhead.available.permits` | `strategy.availablePermits()` | Gauge |
+| `inqudium.bulkhead.max.concurrent.calls` | `strategy.maxConcurrentCalls()` | Gauge |
+| `inqudium.bulkhead.rejections.total` | `LongAdder` in rejection path | Counter |
+
+These gauges cost nothing on the hot path — no event objects, no `Instant` allocation, no publisher dispatch. A Micrometer `MeterBinder` (in `inqudium-micrometer`) registers them once at construction and the values are read from the strategy's atomic state when Prometheus scrapes.
+
+This approach was validated by benchmarks: polling-based metrics achieve 0 B/op on the happy path, matching Resilience4j's `TaggedBulkheadMetrics` approach.
+
+#### Tier 2: Diagnostic events (off by default, enable for troubleshooting)
+
+Per-call events provide detailed tracing for incident analysis. Controlled by `BulkheadEventConfig`:
+
+| Event | Category | When emitted |
+|---|---|---|
+| `BulkheadOnAcquireEvent` | `LIFECYCLE` | Permit granted — includes `concurrentCalls` at acquisition |
+| `BulkheadOnReleaseEvent` | `LIFECYCLE` | Permit released — includes `concurrentCalls` after release |
+| `BulkheadOnRejectEvent` | `REJECTION` | Permit denied — includes `RejectionContext` with reason, limit, active calls, and timing |
+| `BulkheadWaitTraceEvent` | `TRACE` | Wait duration for acquire attempt (success or failure) |
+| `BulkheadRollbackTraceEvent` | `TRACE` | Permit rolled back due to event publisher failure |
+
+In the `standard()` configuration (the default), only `REJECTION` events are enabled. The `LIFECYCLE` and `TRACE` categories are activated via `BulkheadEventConfig.diagnostic()` when investigating concurrency issues, unexpected rejections, or latency anomalies. See ADR-003 for the full two-tier rationale.
 
 ## Consequences
 
@@ -248,13 +274,16 @@ The `concurrentCalls` field on each event enables real-time monitoring of bulkhe
 - O(1) acquire/release — single counter increment/decrement.
 - Pure behavioral contract — paradigm modules own the synchronization.
 - The acquire/release lifecycle integrates naturally with the TimeLimiter + Bulkhead mitigation pattern (ADR-010).
-- Metrics on every acquire/reject/release enable real-time saturation monitoring.
+- Two-tier observability (ADR-003): polling-based metrics achieve 0 B/op on the happy path while diagnostic events provide per-call tracing depth on demand.
+- The `standard()` event default means the Bulkhead adds zero allocation overhead beyond the strategy's own primitives — competitive with Resilience4j's Micrometer integration.
 
 **Negative:**
 - Semaphore isolation does not protect against caller-thread exhaustion in non-virtual-thread environments. If all 25 caller threads are blocked on slow downstream calls, the application has 25 stuck threads. Mitigation: use virtual threads (ADR-008) or combine with TimeLimiter (ADR-010).
 - The polling wait mechanism (when `maxWaitDuration > 0`) adds a small check interval latency. The check interval is a trade-off between responsiveness and CPU usage.
 - Permit leakage (failing to call `release()`) is a fatal correctness bug. Every paradigm module must guarantee `finally`-based release — this is enforced by behavioral contract tests.
+- Switching from `standard()` to `diagnostic()` event mode introduces ~80 B/op allocation overhead from lifecycle events. This is acceptable for short troubleshooting sessions but must not be left enabled in production inadvertently.
 
 **Neutral:**
 - No thread-pool isolation option. If a project requires strict thread-pool isolation (e.g., for regulatory reasons), it should use a dedicated `ExecutorService` outside of Inqudium. The Bulkhead is a concurrency counter, not a thread pool manager.
 - `maxConcurrentCalls` does not account for the weight of individual calls. A bulkhead of 25 treats a lightweight read and a heavyweight batch operation as equal. Weighted bulkheads are a potential future enhancement but not in scope for the initial release.
+- Production metrics (utilization, rejection rate) are not derived from events but from polling gauges. This means a Micrometer binder is required for dashboard visibility — the event system alone does not provide continuous metrics in `standard()` mode.
