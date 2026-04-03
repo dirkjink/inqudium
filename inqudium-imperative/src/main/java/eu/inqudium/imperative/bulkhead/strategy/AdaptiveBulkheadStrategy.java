@@ -106,21 +106,21 @@ public final class AdaptiveBulkheadStrategy implements BlockingBulkheadStrategy 
    * the permit is released, and that the permit is always released even if the
    * algorithm update throws.
    *
-   * @param rtt       the round-trip time of the completed call
+   * @param rttNanos  the round-trip time of the completed call in nanoseconds
    * @param isSuccess {@code true} if the call succeeded
    */
-  public void completeAndRelease(Duration rtt, boolean isSuccess) {
+  public void completeAndRelease(long rttNanos, boolean isSuccess) {
     try {
-      onCallComplete(rtt, isSuccess);
+      onCallComplete(rttNanos, isSuccess);
     } finally {
       release();
     }
   }
 
   @Override
-  public void onCallComplete(Duration rtt, boolean isSuccess) {
+  public void onCallComplete(long rttNanos, boolean isSuccess) {
     // Step 1: Feed the algorithm (outside lock — algorithm is CAS-based)
-    limitAlgorithm.update(rtt, isSuccess, activeCalls);
+    limitAlgorithm.update(rttNanos, isSuccess, activeCalls);
 
     // Step 2: Detect and react to limit changes (under lock)
     lock.lock();

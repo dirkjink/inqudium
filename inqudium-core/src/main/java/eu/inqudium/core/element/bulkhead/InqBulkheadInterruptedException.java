@@ -3,8 +3,6 @@ package eu.inqudium.core.element.bulkhead;
 import eu.inqudium.core.element.InqElementType;
 import eu.inqudium.core.exception.InqException;
 
-import java.util.Locale;
-
 /**
  * Thrown when a thread is interrupted while waiting for a bulkhead permit.
  *
@@ -41,8 +39,7 @@ public class InqBulkheadInterruptedException extends InqException {
    */
   public InqBulkheadInterruptedException(String callId, String elementName) {
     super(callId, CODE, elementName, InqElementType.BULKHEAD,
-        String.format(Locale.ROOT,
-            "Thread interrupted while waiting for Bulkhead '%s' permit", elementName));
+        "Thread interrupted while waiting for Bulkhead '" + elementName + "' permit");
   }
 
   /**
@@ -53,15 +50,14 @@ public class InqBulkheadInterruptedException extends InqException {
    * @param concurrentCalls    the number of in-flight calls at the time of interruption
    * @param maxConcurrentCalls the configured maximum
    * @deprecated Use {@link #InqBulkheadInterruptedException(String, String)} instead.
-   * The concurrency values are read after the interrupt and are already stale —
-   * they do not represent the state at the moment the interrupt occurred.
+   *             The concurrency values are read after the interrupt and are already stale —
+   *             they do not represent the state at the moment the interrupt occurred.
    */
   @Deprecated(since = "0.3.0", forRemoval = true)
   public InqBulkheadInterruptedException(String callId, String elementName,
                                          int concurrentCalls, int maxConcurrentCalls) {
     super(callId, CODE, elementName, InqElementType.BULKHEAD,
-        String.format(Locale.ROOT,
-            "Thread interrupted while waiting for Bulkhead '%s' permit (%d/%d concurrent calls)",
-            elementName, concurrentCalls, maxConcurrentCalls));
+        "Thread interrupted while waiting for Bulkhead '" + elementName
+            + "' permit (" + concurrentCalls + "/" + maxConcurrentCalls + " concurrent calls)");
   }
 }

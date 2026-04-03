@@ -4,7 +4,6 @@ import eu.inqudium.core.element.bulkhead.algo.AimdLimitAlgorithm;
 import eu.inqudium.core.element.bulkhead.algo.InqLimitAlgorithm;
 import eu.inqudium.core.element.bulkhead.algo.VegasLimitAlgorithm;
 
-import java.time.Duration;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -24,7 +23,7 @@ import java.util.concurrent.atomic.AtomicInteger;
  * a {@link java.util.concurrent.locks.Condition} to wake parked threads on limit changes.
  *
  * <h2>Feedback loop</h2>
- * <p>The reactive facade must call {@link #onCallComplete(Duration, boolean)} after every
+ * <p>The reactive facade must call {@link #onCallComplete(long, boolean)} after every
  * completed request to feed the algorithm:
  * <pre>{@code
  * // Reactor example (pseudo-code)
@@ -36,10 +35,10 @@ import java.util.concurrent.atomic.AtomicInteger;
  *     long start = System.nanoTime();
  *     return upstream
  *         .doOnSuccess(v -> {
- *             strategy.completeAndRelease(Duration.ofNanos(System.nanoTime() - start), true);
+ *             strategy.completeAndRelease(System.nanoTime() - start, true);
  *         })
  *         .doOnError(e -> {
- *             strategy.completeAndRelease(Duration.ofNanos(System.nanoTime() - start), false);
+ *             strategy.completeAndRelease(System.nanoTime() - start, false);
  *         })
  *         .doOnCancel(() -> strategy.release());
  * });
@@ -122,18 +121,18 @@ public final class AdaptiveNonBlockingBulkheadStrategy implements NonBlockingBul
    * the algorithm never updates and the strategy behaves like a static limiter
    * at the algorithm's initial limit.
    *
-   * <p>The algorithm's {@link InqLimitAlgorithm#update(Duration, boolean, int)} is
+   * <p>The algorithm's {@link InqLimitAlgorithm#update(long, boolean, int)} is
    * CAS-based internally — no lock needed. The updated limit is visible to
    * concurrent {@link #tryAcquire()} calls on the next CAS iteration.
    *
    * <p><b>Important:</b> This method must be called <em>before</em> {@link #release()},
    * so the in-flight count passed to the algorithm includes this call. Prefer
-   * {@link #completeAndRelease(Duration, boolean)} which guarantees the correct
+   * {@link #completeAndRelease(long, boolean)} which guarantees the correct
    * ordering.
    */
   @Override
-  public void onCallComplete(Duration rtt, boolean isSuccess) {
-    limitAlgorithm.update(rtt, isSuccess, activeCalls.get());
+  public void onCallComplete(long rttNanos, boolean isSuccess) {
+    limitAlgorithm.update(rttNanos, isSuccess, activeCalls.get());
   }
 
   /**
@@ -146,18 +145,18 @@ public final class AdaptiveNonBlockingBulkheadStrategy implements NonBlockingBul
    *   <li>The permit is always released, even if the algorithm update throws.</li>
    * </ol>
    *
-   * <p>Using {@link #onCallComplete(Duration, boolean)} and {@link #release()} separately
+   * <p>Using {@link #onCallComplete(long, boolean)} and {@link #release()} separately
    * is error-prone: if the caller reverses the order, the algorithm sees an artificially
    * low in-flight count, which can suppress limit increases when
    * {@code minUtilizationThreshold > 0}. If the caller forgets {@code onCallComplete}
    * entirely, the strategy silently degrades to a static limiter.
    *
-   * @param rtt       the round-trip time of the completed call
+   * @param rttNanos  the round-trip time of the completed call in nanoseconds
    * @param isSuccess {@code true} if the call succeeded
    */
-  public void completeAndRelease(Duration rtt, boolean isSuccess) {
+  public void completeAndRelease(long rttNanos, boolean isSuccess) {
     try {
-      onCallComplete(rtt, isSuccess);
+      onCallComplete(rttNanos, isSuccess);
     } finally {
       release();
     }

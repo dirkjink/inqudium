@@ -5,8 +5,6 @@ import eu.inqudium.core.element.bulkhead.strategy.RejectionContext;
 import eu.inqudium.core.element.bulkhead.strategy.RejectionReason;
 import eu.inqudium.core.exception.InqException;
 
-import java.util.Locale;
-
 /**
  * Thrown when a bulkhead rejects a call because the maximum number of concurrent
  * calls has been reached, the wait timeout has expired, or the CoDel algorithm
@@ -43,8 +41,53 @@ public class InqBulkheadFullException extends InqException {
    */
   public InqBulkheadFullException(String callId, String elementName, RejectionContext rejectionContext) {
     super(callId, CODE, elementName, InqElementType.BULKHEAD,
-        String.format(Locale.ROOT, "Bulkhead '%s' rejected: %s", elementName, rejectionContext));
+        "Bulkhead '" + elementName + "' rejected: " + rejectionContext);
     this.rejectionContext = rejectionContext;
+  }
+
+  /**
+   * Creates a new exception with explicit concurrency values.
+   *
+   * @param callId             the call identifier
+   * @param elementName        the bulkhead instance name
+   * @param concurrentCalls    the current number of in-flight calls
+   * @param maxConcurrentCalls the configured maximum
+   * @deprecated Use {@link #InqBulkheadFullException(String, String, RejectionContext)} instead.
+   *             The explicit values are typically read after the rejection decision and may
+   *             already be stale. The RejectionContext captures them at the exact moment
+   *             of rejection.
+   */
+  @Deprecated(since = "0.3.0", forRemoval = true)
+  public InqBulkheadFullException(String callId, String elementName,
+                                  int concurrentCalls, int maxConcurrentCalls) {
+    super(callId, CODE, elementName, InqElementType.BULKHEAD,
+        "Bulkhead '" + elementName + "' is full (" + concurrentCalls + "/" + maxConcurrentCalls + " concurrent calls)");
+    this.rejectionContext = RejectionContext.capacityReached(maxConcurrentCalls, concurrentCalls);
+  }
+
+  /**
+   * Suppresses stack trace generation.
+   *
+   * <p>A bulkhead rejection is an expected flow-control signal, not a programming error.
+   * The {@link #getRejectionContext()} already contains all diagnostic information
+   * (reason, limit, active calls, timing). A stack trace would only tell the caller
+   * "you were rejected inside the bulkhead facade" — which they already know.
+   *
+   * <p>The cost of {@code fillInStackTrace()} is substantial: it walks the entire call
+   * stack, allocates {@code StackTraceElement[]} arrays, and resolves method names via
+   * native calls. Under high rejection rates (which is exactly when bulkheads are doing
+   * their job), this dominates the rejection path's CPU and allocation cost.
+   *
+   * <p>If a stack trace is needed for debugging, wrap the catch site:
+   * <pre>{@code
+   * catch (InqBulkheadFullException e) {
+   *     throw new RuntimeException("unexpected rejection", e); // gets its own stack trace
+   * }
+   * }</pre>
+   */
+  @Override
+  public synchronized Throwable fillInStackTrace() {
+    return this;
   }
 
   /**
@@ -73,6 +116,28 @@ public class InqBulkheadFullException extends InqException {
    * @return the limit at decision time
    */
   public int getLimitAtDecision() {
+    return rejectionContext.limitAtDecision();
+  }
+
+  /**
+   * Returns the number of concurrent calls at the moment of rejection.
+   *
+   * @return the active call count at decision time
+   * @deprecated Use {@link #getRejectionContext()} for the full snapshot.
+   */
+  @Deprecated(since = "0.3.0", forRemoval = true)
+  public int getConcurrentCalls() {
+    return rejectionContext.activeCallsAtDecision();
+  }
+
+  /**
+   * Returns the concurrency limit at the moment of rejection.
+   *
+   * @return the limit at decision time
+   * @deprecated Use {@link #getLimitAtDecision()} or {@link #getRejectionContext()}.
+   */
+  @Deprecated(since = "0.3.0", forRemoval = true)
+  public int getMaxConcurrentCalls() {
     return rejectionContext.limitAtDecision();
   }
 }

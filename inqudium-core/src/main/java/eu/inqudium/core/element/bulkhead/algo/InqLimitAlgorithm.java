@@ -1,7 +1,5 @@
 package eu.inqudium.core.element.bulkhead.algo;
 
-import java.time.Duration;
-
 /**
  * Strategy for dynamically calculating concurrency limits based on telemetry.
  */
@@ -15,8 +13,9 @@ public interface InqLimitAlgorithm {
   /**
    * Updates the internal mathematical model based on the result of a completed call.
    *
-   * @param rtt       the round-trip time of the call
+   * @param rttNanos  the round-trip time of the call in nanoseconds
    * @param isSuccess true if no business or technical error occurred
+   * @param inFlightCalls the number of calls currently in flight
    */
-  void update(Duration rtt, boolean isSuccess, int inFlightCalls);
+  void update(long rttNanos, boolean isSuccess, int inFlightCalls);
 }

@@ -116,11 +116,11 @@ public final class ImperativeBulkhead implements Bulkhead {
         businessError = t;
         throw t;
       } finally {
-        // Duty 3 (end): Measurement
-        Duration rtt = Duration.ofNanos(nanoTimeSource.now() - startNanos);
+        // Duty 3 (end): Measurement — raw nanos, no Duration allocation
+        long rttNanos = nanoTimeSource.now() - startNanos;
 
         // Duty 2: Guaranteed release
-        releaseAndReport(call.callId(), rtt, businessError);
+        releaseAndReport(call.callId(), rttNanos, businessError);
       }
     });
   }
@@ -197,11 +197,11 @@ public final class ImperativeBulkhead implements Bulkhead {
 
   // ======================== Telemetry — release ========================
 
-  private void releaseAndReport(String callId, Duration rtt, Throwable businessError) {
+  private void releaseAndReport(String callId, long rttNanos, Throwable businessError) {
     RuntimeException releaseError = null;
 
     try {
-      strategy.onCallComplete(rtt, businessError == null);
+      strategy.onCallComplete(rttNanos, businessError == null);
     } catch (RuntimeException algorithmError) {
       logger.error().log("Adaptive algorithm hook failed for bulkhead '{}', callId='{}'. "
           + "Permit will still be released.", name, callId, algorithmError);
