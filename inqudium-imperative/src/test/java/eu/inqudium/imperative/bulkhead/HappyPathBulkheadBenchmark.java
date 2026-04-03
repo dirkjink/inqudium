@@ -60,7 +60,7 @@ import static eu.inqudium.imperative.bulkhead.config.InqImperativeBulkheadConfig
  *       counters — the only metrics mechanism available.</li>
  *   <li><b>Inqudium (allEnabled):</b> Full lifecycle events (acquire + release) for
  *       fair comparison with R4j's internal event creation.</li>
- *   <li><b>Inqudium (optimized):</b> {@link BulkheadEventConfig#rejectionsOnly()} —
+ *   <li><b>Inqudium (optimized):</b> {@link BulkheadEventConfig#standard()} ()} —
  *       demonstrates the performance ceiling when lifecycle events are disabled.</li>
  * </ul>
  *
@@ -70,39 +70,6 @@ import static eu.inqudium.imperative.bulkhead.config.InqImperativeBulkheadConfig
  * io.github.resilience4j:resilience4j-micrometer:2.4.0
  * io.micrometer:micrometer-core:1.14.5
  * dev.failsafe:failsafe:3.3.2
- * </pre>
- * <p>
- * Benchmark results:
- * <pre>
- *   ### Pure Overhead (kein Warten, keine Contention)
- *
- * | Library | ops/ms | B/op | GC | vs. Semaphore |
- * |---|---|---|---|---|
- * | Semaphore (raw) | 8.623 | 0.009 | 0 | 1.0× |
- * | **R4j + Micrometer** | **7.043** | **0.011** | **0** | **0.82×** |
- * | **Inqudium optimized** | **5.743** | **0.013** | **0** | **0.67×** |
- * | Inqudium allEnabled | 3.857 | 80 | 32 | 0.45× |
- * | Failsafe | 2.068 | 440 | 80 | 0.24× |
- *
- * ### Contention (20 Threads, 10 Permits)
- *
- * | Library | ops/ms | B/op | GC |
- * |---|---|---|---|
- * | Semaphore | 216 | 6 | 3 |
- * | Inqudium optimized | 209 | 82 | 7 |
- * | R4j + Micrometer | 205 | 14 | 2 |
- * | Inqudium allEnabled | 200 | 94 | 5 |
- * | Failsafe | 725 | 503 | 36 |
- *
- * ### Analyse
- *
- * Das zentrale Ergebnis: **R4j's Micrometer-Integration ist praktisch kostenlos** — 0 B/op, 0 GC, und trotzdem hat man in Produktion Metriken. Der Grund: `TaggedBulkheadMetrics` registriert nur Gauges, die bei Prometheus-Scrape gepollt werden. Kein Event-Objekt wird pro Call erzeugt. R4j's interne `publishBulkheadEvent`-Methode prüft offenbar, ob Consumer registriert sind, und überspringt die Event-Erzeugung wenn nicht.
- *
- * Das ist ein grundlegender Architekturvorteil: **Polling-basierte Metriken (Gauges) vs. Push-basierte Metriken (Events).** R4j exportiert `available_concurrent_calls` und `max_allowed_concurrent_calls` als Gauges, die bei Bedarf den aktuellen Zustand der Semaphore lesen. Inqudium erzeugt bei `allEnabled` pro Call zwei Event-Objekte + zwei Instants = 80 B/op.
- *
- * **Der Hebel für Inqudium ist klar:** Wenn du Metriken auch polling-basiert realisierst (z.B. der MeterRegistry-Binder liest `strategy.concurrentCalls()` und `strategy.maxConcurrentCalls()` als Gauges), entfällt die Notwendigkeit für Lifecycle-Events komplett — und `rejectionsOnly()` wird zum sinnvollen Default statt zur Optimierung.
- *
- * Unter Contention konvergieren alle Fair-Semaphore-Implementierungen auf ~200–216 ops/ms. Die Facade-Kosten sind dort irrelevant.
  * </pre>
  */
 @BenchmarkMode(Mode.Throughput)
@@ -114,20 +81,26 @@ import static eu.inqudium.imperative.bulkhead.config.InqImperativeBulkheadConfig
 public class HappyPathBulkheadBenchmark {
 
   private static final int BULKHEAD_LIMIT = 10;
-  private static final int WAIT_MILLIS = 10;
+  private static final int WAIT_MILLIS = 5;
+
+  // ── Raw Semaphore (baseline, no metrics) ──
+  private Semaphore semaphore;
+
+  // ── Inqudium: all events enabled (fair comparison with R4j internal events) ──
+  private eu.inqudium.imperative.bulkhead.Bulkhead inqBulkheadAllEvents;
+
+  // ── Inqudium: rejections only (optimized, shows ceiling) ──
+  private eu.inqudium.imperative.bulkhead.Bulkhead inqBulkheadOptimized;
+
+  // ── Resilience4j with Micrometer (production Spring Boot setup) ──
+  private io.github.resilience4j.bulkhead.Bulkhead r4jBulkhead;
+
+  // ── Failsafe with event listeners (only metrics mechanism available) ──
+  private FailsafeExecutor<Void> failsafeExecutor;
+
   // ── Failsafe metrics counters ──
   private final LongAdder failsafeSuccess = new LongAdder();
   private final LongAdder failsafeFailure = new LongAdder();
-  // ── Raw Semaphore (baseline, no metrics) ──
-  private Semaphore semaphore;
-  // ── Inqudium: all events enabled (fair comparison with R4j internal events) ──
-  private eu.inqudium.imperative.bulkhead.Bulkhead inqBulkheadAllEvents;
-  // ── Inqudium: rejections only (optimized, shows ceiling) ──
-  private eu.inqudium.imperative.bulkhead.Bulkhead inqBulkheadOptimized;
-  // ── Resilience4j with Micrometer (production Spring Boot setup) ──
-  private io.github.resilience4j.bulkhead.Bulkhead r4jBulkhead;
-  // ── Failsafe with event listeners (only metrics mechanism available) ──
-  private FailsafeExecutor<Void> failsafeExecutor;
 
   public static void main(String[] args) throws RunnerException {
     Options opt = new OptionsBuilder()
@@ -146,7 +119,7 @@ public class HappyPathBulkheadBenchmark {
     var allEventsConfig = InqConfig.configure()
         .general()
         .with(bulkhead(), c -> c
-            .name("test-all-events")
+            .name("inq-test-all-events")
             .maxConcurrentCalls(BULKHEAD_LIMIT)
             .eventConfig(BulkheadEventConfig.diagnostic())
             .maxWaitDuration(Duration.ofMillis(WAIT_MILLIS))
@@ -157,7 +130,7 @@ public class HappyPathBulkheadBenchmark {
     var optimizedConfig = InqConfig.configure()
         .general()
         .with(bulkhead(), c -> c
-            .name("test-optimized")
+            .name("inq-test-optimized")
             .maxConcurrentCalls(BULKHEAD_LIMIT)
             .eventConfig(BulkheadEventConfig.standard())
             .maxWaitDuration(Duration.ofMillis(WAIT_MILLIS))
@@ -233,8 +206,7 @@ public class HappyPathBulkheadBenchmark {
   @Benchmark
   @Threads(10)
   public void measurePureOverheadResilience4j(Blackhole blackhole) {
-    io.github.resilience4j.bulkhead.Bulkhead.decorateRunnable(r4jBulkhead,
-        () -> simulateWork(blackhole)).run();
+    r4jBulkhead.executeRunnable(() -> simulateWork(blackhole));
   }
 
   @Benchmark
@@ -274,8 +246,7 @@ public class HappyPathBulkheadBenchmark {
   @Benchmark
   @Threads(20)
   public void measureContentionResilience4j(Blackhole blackhole) {
-    io.github.resilience4j.bulkhead.Bulkhead.decorateRunnable(r4jBulkhead,
-        () -> simulateWork(blackhole)).run();
+    r4jBulkhead.executeRunnable(() -> simulateWork(blackhole));
   }
 
   @Benchmark

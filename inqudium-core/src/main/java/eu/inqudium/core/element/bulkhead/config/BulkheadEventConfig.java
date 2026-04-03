@@ -2,6 +2,7 @@ package eu.inqudium.core.element.bulkhead.config;
 
 import eu.inqudium.core.element.bulkhead.event.BulkheadEventCategory;
 
+import java.util.Collections;
 import java.util.EnumSet;
 import java.util.Set;
 
@@ -47,8 +48,7 @@ import java.util.Set;
  */
 public final class BulkheadEventConfig {
 
-  private static final BulkheadEventConfig STANDARD = new BulkheadEventConfig(
-      EnumSet.of(BulkheadEventCategory.REJECTION));
+  private static final BulkheadEventConfig STANDARD = new BulkheadEventConfig(Collections.emptySet());
 
   private static final BulkheadEventConfig DIAGNOSTIC = new BulkheadEventConfig(
       EnumSet.allOf(BulkheadEventCategory.class));
