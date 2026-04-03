@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="48" height="48">
+  <rect x="4" y="4" width="56" height="56" rx="12" fill="#0f1620"/>
+  <rect x="4" y="4" width="56" height="56" rx="12" fill="none" stroke="#1d9e75" stroke-width="2.5"/>
+  <rect x="4" y="4" width="56" height="3" rx="1.5" fill="#1d9e75" opacity="0.8"/>
+  <text x="32" y="45" text-anchor="middle" font-family="'Outfit','Helvetica Neue',sans-serif" font-size="32" font-weight="600" fill="#e8e6e1" letter-spacing="-1">Iq</text>
+</svg>
