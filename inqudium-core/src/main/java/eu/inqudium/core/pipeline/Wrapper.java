@@ -2,26 +2,19 @@ package eu.inqudium.core.pipeline;
 
 public interface Wrapper<S extends Wrapper<S>> {
   S getInner();
-  S getOuter();
-  void setOuter(S outer);
   String getChainId();
   String getLayerDescription();
 
-  @SuppressWarnings("unchecked")
-  default S getOutermost() {
-    S current = (S) this;
-    while (current.getOuter() != null) {
-      current = current.getOuter();
-    }
-    return current;
-  }
-
+  /**
+   * Renders the wrapper hierarchy from this layer inward.
+   * Since there is no outer reference, the caller determines the starting point.
+   * Typically called on the outermost wrapper known to the caller.
+   */
   default String toStringHierarchy() {
     StringBuilder sb = new StringBuilder();
-    Wrapper<?> root = getOutermost();
-    sb.append("Chain-ID: ").append(root.getChainId()).append("\n");
+    sb.append("Chain-ID: ").append(getChainId()).append("\n");
 
-    Wrapper<?> current = root;
+    Wrapper<?> current = this;
     int depth = 0;
     while (current != null) {
       if (depth > 0) {

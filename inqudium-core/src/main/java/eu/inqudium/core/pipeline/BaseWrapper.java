@@ -8,27 +8,29 @@ public abstract class BaseWrapper<T, A, R, S extends BaseWrapper<T, A, R, S>>
   private final T delegate;
   private final String name;
   private final String chainId;
-  private volatile S outer;
 
-  @SuppressWarnings("unchecked")
   protected BaseWrapper(String name, T delegate) {
+    if (name == null) {
+      throw new IllegalArgumentException("Name must not be null");
+    }
+    if (delegate == null) {
+      throw new IllegalArgumentException("Delegate must not be null");
+    }
     this.name = name;
     this.delegate = delegate;
     if (delegate instanceof BaseWrapper) {
-      S inner = (S) delegate;
-      this.chainId = inner.getChainId();
-      inner.setOuter((S) this);
+      this.chainId = ((BaseWrapper<?, ?, ?, ?>) delegate).getChainId();
     } else {
       this.chainId = UUID.randomUUID().toString();
     }
   }
 
   /**
-   * Initiates the chain and passes the argument top-down.
+   * Initiates the chain starting from this layer and propagating inward.
+   * Each call receives a unique call ID for tracing purposes.
    */
   protected R initiateChain(A argument) {
-    S root = getOutermost();
-    return root.executeWithId(UUID.randomUUID().toString(), argument);
+    return this.executeWithId(UUID.randomUUID().toString(), argument);
   }
 
   @Override
@@ -47,9 +49,11 @@ public abstract class BaseWrapper<T, A, R, S extends BaseWrapper<T, A, R, S>>
 
   @Override public String getChainId() { return chainId; }
   @Override public String getLayerDescription() { return name; }
+
   @SuppressWarnings("unchecked")
-  @Override public S getInner() { return (delegate instanceof BaseWrapper) ? (S) delegate : null; }
-  @Override public S getOuter() { return outer; }
-  @Override public void setOuter(S outer) { this.outer = outer; }
+  @Override public S getInner() {
+    return (delegate instanceof BaseWrapper) ? (S) delegate : null;
+  }
+
   protected T getDelegate() { return delegate; }
 }

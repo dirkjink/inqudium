@@ -93,27 +93,4 @@ class DynamicProxyWrapperTest {
           .contains("Nested\n  └── Inspector");
     }
   }
-
-  @Nested
-  @DisplayName("Outermost Navigation in Proxies")
-  class OutermostProxyTests {
-
-    @Test
-    @DisplayName("The getOutermost method must correctly resolve the entry point even through proxy layers")
-    void shouldResolveOutermostThroughProxies() {
-      // Given
-      JoinPointWrapper<String> inner = new JoinPointWrapper<>("Inner-Layer", () -> "A");
-      JoinPointWrapper<String> outer = new JoinPointWrapper<>("Outer-Layer", inner);
-
-      // When
-      Wrapper foundRoot = inner.getOutermost();
-
-      // Then
-      assertThat(foundRoot)
-          .as("Even the inner layer must know its outer proxy shell")
-          .isEqualTo(outer);
-
-      assertThat(foundRoot.getLayerDescription()).isEqualTo("Outer-Layer");
-    }
-  }
 }
