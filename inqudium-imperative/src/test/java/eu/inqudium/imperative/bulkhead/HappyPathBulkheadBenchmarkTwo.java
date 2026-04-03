@@ -26,7 +26,6 @@ import org.openjdk.jmh.profile.GCProfiler;
 import org.openjdk.jmh.profile.MemPoolProfiler;
 import org.openjdk.jmh.profile.PausesProfiler;
 import org.openjdk.jmh.profile.StackProfiler;
-import org.openjdk.jmh.results.format.ResultFormatType;
 import org.openjdk.jmh.runner.Runner;
 import org.openjdk.jmh.runner.RunnerException;
 import org.openjdk.jmh.runner.options.Options;
@@ -41,6 +40,10 @@ import static eu.inqudium.imperative.bulkhead.config.InqImperativeBulkheadConfig
 
 /**
  * Comparative bulkhead benchmark: raw Semaphore vs Inqudium vs Resilience4j vs Failsafe.
+ * <p>
+ * This benchmark uses a **decorate-then-invoke** pattern where `decorateRunnable()` first
+ * allocates a wrapper Runnable that embeds the acquire/release logic,
+ * and the caller then invokes `.run()` on that wrapper.*
  *
  * <h2>Configuration</h2>
  * <p>All bulkheads are configured identically:
@@ -173,7 +176,7 @@ import static eu.inqudium.imperative.bulkhead.config.InqImperativeBulkheadConfig
 @Warmup(iterations = 3, time = 1)
 @Measurement(iterations = 5, time = 1)
 @Fork(3)
-public class HappyPathBulkheadBenchmark {
+public class HappyPathBulkheadBenchmarkTwo {
 
   private static final int BULKHEAD_LIMIT = 10;
   private static final int WAIT_MILLIS = 150;
@@ -182,10 +185,10 @@ public class HappyPathBulkheadBenchmark {
   private Semaphore semaphore;
 
   // ── Inqudium: all events enabled (fair comparison with R4j internal events) ──
-  private eu.inqudium.imperative.bulkhead.Bulkhead inqBulkheadAllEvents;
+  private Bulkhead inqBulkheadAllEvents;
 
   // ── Inqudium: rejections only (optimized, shows ceiling) ──
-  private eu.inqudium.imperative.bulkhead.Bulkhead inqBulkheadOptimized;
+  private Bulkhead inqBulkheadOptimized;
 
   // ── Resilience4j with Micrometer (production Spring Boot setup) ──
   private io.github.resilience4j.bulkhead.Bulkhead r4jBulkhead;
@@ -203,7 +206,7 @@ public class HappyPathBulkheadBenchmark {
         .addProfiler(GCProfiler.class)
         .addProfiler(PausesProfiler.class)
         .addProfiler(MemPoolProfiler.class)
-        .include(HappyPathBulkheadBenchmark.class.getSimpleName())
+        .include(HappyPathBulkheadBenchmarkTwo.class.getSimpleName())
         //.resultFormat(ResultFormatType.CSV)
         //.result("ergebnisse.csv")
         .build();
@@ -224,7 +227,7 @@ public class HappyPathBulkheadBenchmark {
             .eventConfig(BulkheadEventConfig.diagnostic())
             .maxWaitDuration(Duration.ofMillis(WAIT_MILLIS))
         ).build();
-    inqBulkheadAllEvents = eu.inqudium.imperative.bulkhead.Bulkhead.of(allEventsConfig);
+    inqBulkheadAllEvents = Bulkhead.of(allEventsConfig);
 
     // ── Inqudium: rejections only (optimized) ──
     var optimizedConfig = InqConfig.configure()
@@ -235,7 +238,7 @@ public class HappyPathBulkheadBenchmark {
             .eventConfig(BulkheadEventConfig.standard())
             .maxWaitDuration(Duration.ofMillis(WAIT_MILLIS))
         ).build();
-    inqBulkheadOptimized = eu.inqudium.imperative.bulkhead.Bulkhead.of(optimizedConfig);
+    inqBulkheadOptimized = Bulkhead.of(optimizedConfig);
 
     // ── Resilience4j: BulkheadRegistry + Micrometer (production setup) ──
     //
