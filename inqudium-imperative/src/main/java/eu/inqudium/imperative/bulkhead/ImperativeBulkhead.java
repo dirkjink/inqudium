@@ -23,6 +23,9 @@ import eu.inqudium.imperative.core.pipeline.InternalAsyncExecutor;
 
 import java.time.Duration;
 import java.util.Objects;
+import java.util.concurrent.CancellationException;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 import java.util.concurrent.CompletionStage;
 
 /**
@@ -196,6 +199,8 @@ public final class ImperativeBulkhead<A, R> implements Bulkhead<A, R> {
                                          long callId,
                                          A argument,
                                          InternalAsyncExecutor<A, R> next) {
+    String callIdStr = Long.toString(callId);
+
     // ── Start phase: acquire permit (synchronous) ──
     long startWait = eventConfig.isTraceEnabled() ? nanoTimeSource.now() : 0L;
 
@@ -227,7 +232,7 @@ public final class ImperativeBulkhead<A, R> implements Bulkhead<A, R> {
       throw t;
     }
 
-    // ── End phase: attach permit-release as side-effect, preserve pipeline identity ──
+    // ── End phase: attach permit-release, preserve pipeline identity ──
     //
     // GUARANTEED PROPERTY: The CompletionStage returned to the caller is the exact same
     // object that the downstream business operation produced. This is a contract — callers
@@ -235,12 +240,22 @@ public final class ImperativeBulkhead<A, R> implements Bulkhead<A, R> {
     // dependent actions, or pass the future to APIs that require identity preservation
     // (e.g., reactive frameworks, response pipelines).
     //
-    // Implementation: whenComplete() attaches the release callback to the original stage
-    // as a side-effect. The new stage that whenComplete() returns is intentionally discarded.
-    stage.whenComplete((result, error) -> {
+    // Fast path: if the future is already completed (common for sync-wrapped-as-async,
+    // caching, validation failures), invoke the release callback inline — no intermediate
+    // CompletionStage created, zero allocation.
+    //
+    // Slow path: if the future is still pending (real async operation), attach the release
+    // callback via whenComplete(). The new stage returned by whenComplete() is intentionally
+    // discarded to preserve pipeline identity.
+    if (stage instanceof CompletableFuture<?> cf && cf.isDone()) {
       long rttNanos = nanoTimeSource.now() - startNanos;
-      releaseAndReport(chainId, callId, rttNanos, error);
-    });
+      releaseAndReport(chainId, callId, rttNanos, completionError(cf));
+    } else {
+      stage.whenComplete((result, error) -> {
+        long rttNanos = nanoTimeSource.now() - startNanos;
+        releaseAndReport(chainId, callId, rttNanos, error);
+      });
+    }
     return stage;
   }
 
@@ -398,6 +413,24 @@ public final class ImperativeBulkhead<A, R> implements Bulkhead<A, R> {
             acquired,
             clock.instant()));
       }
+    }
+  }
+
+  /**
+   * Extracts the error from an already-completed {@link CompletableFuture}.
+   * Returns {@code null} if the future completed successfully.
+   *
+   * <p>Only called on the fast path when {@code cf.isDone()} is {@code true} —
+   * {@code getNow()} returns immediately without blocking.</p>
+   */
+  private static Throwable completionError(CompletableFuture<?> cf) {
+    try {
+      cf.getNow(null);
+      return null;
+    } catch (CompletionException e) {
+      return e.getCause();
+    } catch (CancellationException e) {
+      return e;
     }
   }
 }
