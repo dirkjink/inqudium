@@ -1,6 +1,6 @@
 package eu.inqudium.imperative.core.pipeline;
 
-import eu.inqudium.core.pipeline.ProxyExecution;
+import eu.inqudium.core.pipeline.JoinPointExecutor;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -147,7 +147,7 @@ class AsyncWrapperPipelineTest {
     static final AsyncWrapperScenario ASYNC_JOINPOINT_SCENARIO = new AsyncWrapperScenario() {
         @Override String displayName() { return "AsyncJoinPointWrapper"; }
         @Override AsyncBaseWrapper<?, ?, ?, ?> createSingle(String name, ExecutionLog log) {
-            ProxyExecution<CompletionStage<String>> core;
+            JoinPointExecutor<CompletionStage<String>> core;
           core = () -> {
               log.coreInvoked.set(true);
               return CompletableFuture.completedFuture("result");
@@ -160,7 +160,7 @@ class AsyncWrapperPipelineTest {
         }
         @Override @SuppressWarnings("unchecked")
         CompletionStage<?> invoke(AsyncBaseWrapper<?, ?, ?, ?> wrapper) throws Throwable {
-            return ((ProxyExecution<CompletionStage<String>>) wrapper).proceed();
+            return ((JoinPointExecutor<CompletionStage<String>>) wrapper).proceed();
         }
     };
 

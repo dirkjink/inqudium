@@ -110,7 +110,7 @@ public interface InqDecorator<A, R> extends InqElement, LayerAction<A, R> {
   }
 
   /**
-   * Wraps a {@link ProxyExecution} (e.g. a Spring AOP join point) in a
+   * Wraps a {@link JoinPointExecutor} (e.g. a Spring AOP join point) in a
    * {@link JoinPointWrapper} using this decorator's name and around-advice.
    *
    * <p>Intended for decorators with type parameters {@code <Void, T>}.</p>
@@ -120,7 +120,7 @@ public interface InqDecorator<A, R> extends InqElement, LayerAction<A, R> {
    * @return a decorated join point that applies this decorator's logic on every {@code proceed()}
    */
   @SuppressWarnings("unchecked")
-  default <T> ProxyExecution<T> decorateJoinPoint(ProxyExecution<T> delegate) {
+  default <T> JoinPointExecutor<T> decorateJoinPoint(JoinPointExecutor<T> delegate) {
     return new JoinPointWrapper<>((InqDecorator<Void, T>) this, delegate);
   }
 }

@@ -157,7 +157,7 @@ class WrapperPipelineTest {
     @Override
     @SuppressWarnings("unchecked")
     Object invoke(BaseWrapper<?, ?, ?, ?> wrapper) throws Throwable {
-      return ((ProxyExecution<String>) wrapper).proceed();
+      return ((JoinPointExecutor<String>) wrapper).proceed();
     }
   };
 

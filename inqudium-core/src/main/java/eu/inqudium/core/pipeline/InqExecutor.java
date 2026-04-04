@@ -145,7 +145,7 @@ public interface InqExecutor<A, R> extends LayerAction<A, R> {
   }
 
   /**
-   * Executes a {@link ProxyExecution} directly through this layer's around-advice
+   * Executes a {@link JoinPointExecutor} directly through this layer's around-advice
    * and returns its result. All throwable types are preserved.
    *
    * <p>Intended for executors with type parameters {@code <Void, T>}.</p>
@@ -156,7 +156,7 @@ public interface InqExecutor<A, R> extends LayerAction<A, R> {
    * @throws Throwable the original exception from the proxy execution, if any
    */
   @SuppressWarnings("unchecked")
-  default <T> T executeJoinPoint(ProxyExecution<T> execution) throws Throwable {
+  default <T> T executeJoinPoint(JoinPointExecutor<T> execution) throws Throwable {
     try {
       return ((LayerAction<Void, T>) this).execute(
           StandaloneIdGenerator.nextChainId(),

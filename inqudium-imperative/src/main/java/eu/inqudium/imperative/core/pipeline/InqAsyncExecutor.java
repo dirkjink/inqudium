@@ -1,7 +1,7 @@
 package eu.inqudium.imperative.core.pipeline;
 
 import eu.inqudium.core.pipeline.InqExecutor;
-import eu.inqudium.core.pipeline.ProxyExecution;
+import eu.inqudium.core.pipeline.JoinPointExecutor;
 import eu.inqudium.core.pipeline.StandaloneIdGenerator;
 
 import java.util.concurrent.Callable;
@@ -111,7 +111,7 @@ public interface InqAsyncExecutor<A, R> extends AsyncLayerAction<A, R> {
    */
   @SuppressWarnings("unchecked")
   default <T> CompletionStage<T> executeAsyncJoinPoint(
-      ProxyExecution<CompletionStage<T>> execution) throws Throwable {
+      JoinPointExecutor<CompletionStage<T>> execution) throws Throwable {
     try {
       return ((AsyncLayerAction<Void, T>) this).executeAsync(
           StandaloneIdGenerator.nextChainId(),

@@ -16,8 +16,8 @@ import java.lang.reflect.Proxy;
  * <p>Subclassed by the async variant in the imperative artifact to add
  * {@link java.util.concurrent.CompletionStage} routing.</p>
  *
- * <h3>Why this does not use {@link ProxyExecution} / {@link JoinPointWrapper}</h3>
- * <p>{@link JoinPointWrapper} binds its {@link ProxyExecution} delegate once at construction
+ * <h3>Why this does not use {@link JoinPointExecutor} / {@link JoinPointWrapper}</h3>
+ * <p>{@link JoinPointWrapper} binds its {@link JoinPointExecutor} delegate once at construction
  * time — ideal for AOP where the target method is known upfront. A dynamic proxy, however,
  * receives a different {@code Method} and {@code args} on every {@code invoke()} call.
  * Using {@code JoinPointWrapper} would require creating a new {@code ProxyExecution} lambda
@@ -166,7 +166,7 @@ public class PipelineInvocationHandler
   /**
    * Builds the per-invocation terminal step that calls the real target method.
    * This is the only object created per invocation — it replaces what would be
-   * a {@link ProxyExecution} delegate in {@link JoinPointWrapper}, but without
+   * a {@link JoinPointExecutor} delegate in {@link JoinPointWrapper}, but without
    * the wrapper object overhead.
    */
   protected InternalExecutor<Void, Object> buildSyncTerminal(Method method, Object[] args) {

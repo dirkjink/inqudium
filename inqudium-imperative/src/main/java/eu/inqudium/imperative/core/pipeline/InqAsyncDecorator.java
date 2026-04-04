@@ -2,7 +2,7 @@ package eu.inqudium.imperative.core.pipeline;
 
 import eu.inqudium.core.element.InqElement;
 import eu.inqudium.core.pipeline.InqDecorator;
-import eu.inqudium.core.pipeline.ProxyExecution;
+import eu.inqudium.core.pipeline.JoinPointExecutor;
 
 import java.util.concurrent.Callable;
 import java.util.concurrent.CompletionStage;
@@ -105,8 +105,8 @@ public interface InqAsyncDecorator<A, R> extends InqElement, AsyncLayerAction<A,
    * @return a decorated proxy execution that returns {@code CompletionStage<T>} on each {@code proceed()}
    */
   @SuppressWarnings("unchecked")
-  default <T> ProxyExecution<CompletionStage<T>> decorateAsyncJoinPoint(
-      ProxyExecution<CompletionStage<T>> delegate) {
+  default <T> JoinPointExecutor<CompletionStage<T>> decorateAsyncJoinPoint(
+      JoinPointExecutor<CompletionStage<T>> delegate) {
     return new AsyncJoinPointWrapper<>((InqAsyncDecorator<Void, T>) this, delegate);
   }
 }

@@ -4,7 +4,7 @@
  * <p>This package provides a decorator-based pipeline that wraps standard Java functional
  * interfaces ({@link java.lang.Runnable}, {@link java.util.function.Supplier},
  * {@link java.util.concurrent.Callable}, {@link java.util.function.Function}) and
- * AOP proxy executions ({@link eu.inqudium.core.pipeline.ProxyExecution}) in a chain
+ * AOP proxy executions ({@link eu.inqudium.core.pipeline.JoinPointExecutor}) in a chain
  * of layers with <strong>around-semantics</strong>.</p>
  *
  * <h2>Architecture Overview</h2>

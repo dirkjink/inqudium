@@ -11,31 +11,31 @@ import java.util.concurrent.CompletionException;
  * @param <R> the return type of the join point execution
  */
 public class JoinPointWrapper<R>
-    extends BaseWrapper<ProxyExecution<R>, Void, R, JoinPointWrapper<R>>
-    implements ProxyExecution<R> {
+    extends BaseWrapper<JoinPointExecutor<R>, Void, R, JoinPointWrapper<R>>
+    implements JoinPointExecutor<R> {
 
   /**
    * Creates a wrapper with a {@link InqDecorator} providing name and around-advice.
    */
-  public JoinPointWrapper(InqDecorator<Void, R> decorator, ProxyExecution<R> delegate) {
+  public JoinPointWrapper(InqDecorator<Void, R> decorator, JoinPointExecutor<R> delegate) {
     super(decorator, delegate, coreFor(delegate));
   }
 
   /**
    * Creates a wrapper with a custom {@link LayerAction}.
    */
-  public JoinPointWrapper(String name, ProxyExecution<R> delegate, LayerAction<Void, R> layerAction) {
+  public JoinPointWrapper(String name, JoinPointExecutor<R> delegate, LayerAction<Void, R> layerAction) {
     super(name, delegate, coreFor(delegate), layerAction);
   }
 
   /**
    * Creates a wrapper with pass-through behavior.
    */
-  public JoinPointWrapper(String name, ProxyExecution<R> delegate) {
+  public JoinPointWrapper(String name, JoinPointExecutor<R> delegate) {
     super(name, delegate, coreFor(delegate));
   }
 
-  private static <R> InternalExecutor<Void, R> coreFor(ProxyExecution<R> delegate) {
+  private static <R> InternalExecutor<Void, R> coreFor(JoinPointExecutor<R> delegate) {
     return (chainId, callId, arg) -> {
       try {
         return delegate.proceed();

@@ -1,7 +1,7 @@
 package eu.inqudium.imperative.core.pipeline;
 
 import eu.inqudium.core.pipeline.JoinPointWrapper;
-import eu.inqudium.core.pipeline.ProxyExecution;
+import eu.inqudium.core.pipeline.JoinPointExecutor;
 
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.CompletionStage;
@@ -16,21 +16,21 @@ import java.util.concurrent.CompletionStage;
  * @param <R> the result type carried by the CompletionStage
  */
 public class AsyncJoinPointWrapper<R>
-    extends AsyncBaseWrapper<ProxyExecution<CompletionStage<R>>, Void, R, AsyncJoinPointWrapper<R>>
-    implements ProxyExecution<CompletionStage<R>> {
+    extends AsyncBaseWrapper<JoinPointExecutor<CompletionStage<R>>, Void, R, AsyncJoinPointWrapper<R>>
+    implements JoinPointExecutor<CompletionStage<R>> {
 
   /**
    * Creates a wrapper with an {@link InqAsyncDecorator} providing name and around-advice.
    */
   public AsyncJoinPointWrapper(InqAsyncDecorator<Void, R> decorator,
-                               ProxyExecution<CompletionStage<R>> delegate) {
+                               JoinPointExecutor<CompletionStage<R>> delegate) {
     super(decorator, delegate, coreFor(delegate));
   }
 
   /**
    * Creates a wrapper with a custom {@link AsyncLayerAction}.
    */
-  public AsyncJoinPointWrapper(String name, ProxyExecution<CompletionStage<R>> delegate,
+  public AsyncJoinPointWrapper(String name, JoinPointExecutor<CompletionStage<R>> delegate,
                                AsyncLayerAction<Void, R> layerAction) {
     super(name, delegate, coreFor(delegate), layerAction);
   }
@@ -38,11 +38,11 @@ public class AsyncJoinPointWrapper<R>
   /**
    * Creates a wrapper with pass-through behavior.
    */
-  public AsyncJoinPointWrapper(String name, ProxyExecution<CompletionStage<R>> delegate) {
+  public AsyncJoinPointWrapper(String name, JoinPointExecutor<CompletionStage<R>> delegate) {
     super(name, delegate, coreFor(delegate));
   }
 
-  private static <R> InternalAsyncExecutor<Void, R> coreFor(ProxyExecution<CompletionStage<R>> delegate) {
+  private static <R> InternalAsyncExecutor<Void, R> coreFor(JoinPointExecutor<CompletionStage<R>> delegate) {
     return (chainId, callId, arg) -> {
       try {
         return delegate.proceed();

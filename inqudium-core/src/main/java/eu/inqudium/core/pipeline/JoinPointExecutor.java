@@ -17,7 +17,7 @@ package eu.inqudium.core.pipeline;
  * @param <R> the return type of the proxy execution
  */
 @FunctionalInterface
-public interface ProxyExecution<R> {
+public interface JoinPointExecutor<R> {
 
   /**
    * Executes the proxied operation and returns its result.
