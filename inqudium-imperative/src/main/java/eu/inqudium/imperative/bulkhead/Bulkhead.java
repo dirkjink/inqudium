@@ -2,7 +2,6 @@ package eu.inqudium.imperative.bulkhead;
 
 import eu.inqudium.core.config.InqConfig;
 import eu.inqudium.core.element.InqElementType;
-import eu.inqudium.core.element.bulkhead.strategy.BlockingBulkheadStrategy;
 import eu.inqudium.core.pipeline.InqDecorator;
 import eu.inqudium.core.pipeline.InqExecutor;
 import eu.inqudium.imperative.bulkhead.config.InqImperativeBulkheadConfig;
