@@ -35,9 +35,9 @@ public class InqBulkheadFullException extends InqException {
    * the limit, the active call count, and timing information — all captured inside the
    * strategy's decision logic where they are guaranteed accurate.
    *
-   * @param callId           the call identifier
-   * @param elementName      the bulkhead instance name
-   * @param rejectionContext the rejection snapshot from the strategy
+   * @param callId                      the call identifier
+   * @param elementName                 the bulkhead instance name
+   * @param rejectionContext            the rejection snapshot from the strategy
    * @param enableExceptionOptimization whether suppression is enabled or disabled, and whether the stack trace
    *                                    should be writable.
    */

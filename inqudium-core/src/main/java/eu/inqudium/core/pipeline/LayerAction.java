@@ -1,6 +1,19 @@
 package eu.inqudium.core.pipeline;
 
 /**
+ * Package-private holder for the shared pass-through singleton.
+ * Separated into its own class to keep the {@link LayerAction} interface clean.
+ */
+enum PassThrough implements LayerAction<Object, Object> {
+  INSTANCE;
+
+  @Override
+  public Object execute(long chainId, long callId, Object argument, InternalExecutor<Object, Object> next) {
+    return next.execute(chainId, callId, argument);
+  }
+}
+
+/**
  * Functional interface defining the behavior of a single layer in the wrapper chain.
  *
  * <p>A {@code LayerAction} has <strong>around-semantics</strong>, similar to a Servlet Filter
@@ -58,17 +71,6 @@ package eu.inqudium.core.pipeline;
 public interface LayerAction<A, R> {
 
   /**
-   * Executes this layer's logic, deciding when and whether to invoke the next step.
-   *
-   * @param chainId  identifies the wrapper chain (shared across all layers)
-   * @param callId   identifies this particular invocation (unique per call)
-   * @param argument the argument flowing through the chain
-   * @param next     the next step in the chain — call {@code next.execute(...)} to proceed
-   * @return the result, either from the next step or produced/modified by this layer
-   */
-  R execute(long chainId, long callId, A argument, InternalExecutor<A, R> next);
-
-  /**
    * Returns a pass-through action that simply forwards to the next step.
    * Uses a shared singleton instance to avoid unnecessary lambda allocations.
    *
@@ -80,17 +82,15 @@ public interface LayerAction<A, R> {
   static <A, R> LayerAction<A, R> passThrough() {
     return (LayerAction<A, R>) PassThrough.INSTANCE;
   }
-}
 
-/**
- * Package-private holder for the shared pass-through singleton.
- * Separated into its own class to keep the {@link LayerAction} interface clean.
- */
-enum PassThrough implements LayerAction<Object, Object> {
-  INSTANCE;
-
-  @Override
-  public Object execute(long chainId, long callId, Object argument, InternalExecutor<Object, Object> next) {
-    return next.execute(chainId, callId, argument);
-  }
+  /**
+   * Executes this layer's logic, deciding when and whether to invoke the next step.
+   *
+   * @param chainId  identifies the wrapper chain (shared across all layers)
+   * @param callId   identifies this particular invocation (unique per call)
+   * @param argument the argument flowing through the chain
+   * @param next     the next step in the chain — call {@code next.execute(...)} to proceed
+   * @return the result, either from the next step or produced/modified by this layer
+   */
+  R execute(long chainId, long callId, A argument, InternalExecutor<A, R> next);
 }

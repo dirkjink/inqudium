@@ -49,8 +49,8 @@ public abstract class AsyncBaseWrapper<T, A, R, S extends AsyncBaseWrapper<T, A,
    */
   @SuppressWarnings("unchecked")
   protected AsyncBaseWrapper(String name, T delegate,
-                              InternalAsyncExecutor<A, R> coreExecution,
-                              AsyncLayerAction<A, R> layerAction) {
+                             InternalAsyncExecutor<A, R> coreExecution,
+                             AsyncLayerAction<A, R> layerAction) {
     if (name == null) {
       throw new IllegalArgumentException("Name must not be null");
     }
@@ -61,7 +61,7 @@ public abstract class AsyncBaseWrapper<T, A, R, S extends AsyncBaseWrapper<T, A,
     this.delegate = delegate;
     this.layerAction = layerAction;
 
-    if (delegate instanceof AsyncBaseWrapper<?,?,?,?> innerWrapper) {
+    if (delegate instanceof AsyncBaseWrapper<?, ?, ?, ?> innerWrapper) {
       this.chainId = innerWrapper.getChainId();
       this.callIdCounter = innerWrapper.callIdCounter;
       this.nextStep = (InternalAsyncExecutor<A, R>) delegate;
@@ -76,7 +76,7 @@ public abstract class AsyncBaseWrapper<T, A, R, S extends AsyncBaseWrapper<T, A,
    * Constructor with pass-through behavior.
    */
   protected AsyncBaseWrapper(String name, T delegate,
-                              InternalAsyncExecutor<A, R> coreExecution) {
+                             InternalAsyncExecutor<A, R> coreExecution) {
     this(name, delegate, coreExecution, AsyncLayerAction.passThrough());
   }
 
@@ -84,7 +84,7 @@ public abstract class AsyncBaseWrapper<T, A, R, S extends AsyncBaseWrapper<T, A,
    * Constructor using an {@link InqAsyncDecorator} for both name and around-advice.
    */
   protected AsyncBaseWrapper(InqAsyncDecorator<A, R> decorator, T delegate,
-                              InternalAsyncExecutor<A, R> coreExecution) {
+                             InternalAsyncExecutor<A, R> coreExecution) {
     this(decorator.getName(), delegate, coreExecution, decorator);
   }
 
@@ -107,11 +107,19 @@ public abstract class AsyncBaseWrapper<T, A, R, S extends AsyncBaseWrapper<T, A,
     return callIdCounter.incrementAndGet();
   }
 
-  @Override public long getChainId() { return chainId; }
-  @Override public String getLayerDescription() { return name; }
+  @Override
+  public long getChainId() {
+    return chainId;
+  }
+
+  @Override
+  public String getLayerDescription() {
+    return name;
+  }
 
   @SuppressWarnings("unchecked")
-  @Override public S getInner() {
+  @Override
+  public S getInner() {
     return (delegate instanceof AsyncBaseWrapper) ? (S) delegate : null;
   }
 }

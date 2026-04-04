@@ -18,25 +18,31 @@ public class AsyncFunctionWrapper<I, O>
     extends AsyncBaseWrapper<Function<I, CompletionStage<O>>, I, O, AsyncFunctionWrapper<I, O>>
     implements Function<I, CompletionStage<O>> {
 
-  private static <I, O> InternalAsyncExecutor<I, O> coreFor(Function<I, CompletionStage<O>> delegate) {
-    return (chainId, callId, input) -> delegate.apply(input);
-  }
-
-  /** Creates a wrapper with an {@link InqAsyncDecorator} providing name and around-advice. */
+  /**
+   * Creates a wrapper with an {@link InqAsyncDecorator} providing name and around-advice.
+   */
   public AsyncFunctionWrapper(InqAsyncDecorator<I, O> decorator,
-                               Function<I, CompletionStage<O>> delegate) {
+                              Function<I, CompletionStage<O>> delegate) {
     super(decorator, delegate, coreFor(delegate));
   }
 
-  /** Creates a wrapper with a custom {@link AsyncLayerAction}. */
+  /**
+   * Creates a wrapper with a custom {@link AsyncLayerAction}.
+   */
   public AsyncFunctionWrapper(String name, Function<I, CompletionStage<O>> delegate,
-                               AsyncLayerAction<I, O> layerAction) {
+                              AsyncLayerAction<I, O> layerAction) {
     super(name, delegate, coreFor(delegate), layerAction);
   }
 
-  /** Creates a wrapper with pass-through behavior. */
+  /**
+   * Creates a wrapper with pass-through behavior.
+   */
   public AsyncFunctionWrapper(String name, Function<I, CompletionStage<O>> delegate) {
     super(name, delegate, coreFor(delegate));
+  }
+
+  private static <I, O> InternalAsyncExecutor<I, O> coreFor(Function<I, CompletionStage<O>> delegate) {
+    return (chainId, callId, input) -> delegate.apply(input);
   }
 
   @Override

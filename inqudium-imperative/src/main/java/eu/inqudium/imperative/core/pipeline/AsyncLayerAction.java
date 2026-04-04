@@ -5,6 +5,19 @@ import eu.inqudium.core.pipeline.LayerAction;
 import java.util.concurrent.CompletionStage;
 
 /**
+ * Package-private singleton for the async pass-through.
+ */
+enum AsyncPassThrough implements AsyncLayerAction<Object, Object> {
+  INSTANCE;
+
+  @Override
+  public CompletionStage<Object> executeAsync(long chainId, long callId, Object argument,
+                                              InternalAsyncExecutor<Object, Object> next) {
+    return next.executeAsync(chainId, callId, argument);
+  }
+}
+
+/**
  * Functional interface defining the behavior of a single layer in an async wrapper chain.
  *
  * <p>The async counterpart to {@link LayerAction}. Has the same <strong>around-semantics</strong>,
@@ -50,6 +63,14 @@ import java.util.concurrent.CompletionStage;
 public interface AsyncLayerAction<A, R> {
 
   /**
+   * Returns a pass-through action that simply forwards to the next step.
+   */
+  @SuppressWarnings("unchecked")
+  static <A, R> AsyncLayerAction<A, R> passThrough() {
+    return (AsyncLayerAction<A, R>) AsyncPassThrough.INSTANCE;
+  }
+
+  /**
    * Executes this layer's async logic.
    *
    * @param chainId  identifies the wrapper chain
@@ -59,26 +80,5 @@ public interface AsyncLayerAction<A, R> {
    * @return a CompletionStage, optionally enriched with completion handlers
    */
   CompletionStage<R> executeAsync(long chainId, long callId, A argument,
-                              InternalAsyncExecutor<A, R> next);
-
-  /**
-   * Returns a pass-through action that simply forwards to the next step.
-   */
-  @SuppressWarnings("unchecked")
-  static <A, R> AsyncLayerAction<A, R> passThrough() {
-    return (AsyncLayerAction<A, R>) AsyncPassThrough.INSTANCE;
-  }
-}
-
-/**
- * Package-private singleton for the async pass-through.
- */
-enum AsyncPassThrough implements AsyncLayerAction<Object, Object> {
-  INSTANCE;
-
-  @Override
-  public CompletionStage<Object> executeAsync(long chainId, long callId, Object argument,
-                                          InternalAsyncExecutor<Object, Object> next) {
-    return next.executeAsync(chainId, callId, argument);
-  }
+                                  InternalAsyncExecutor<A, R> next);
 }

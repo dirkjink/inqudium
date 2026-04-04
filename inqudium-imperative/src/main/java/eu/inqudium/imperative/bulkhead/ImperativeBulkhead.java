@@ -10,7 +10,6 @@ import eu.inqudium.core.element.bulkhead.event.BulkheadOnReleaseEvent;
 import eu.inqudium.core.element.bulkhead.event.BulkheadRollbackTraceEvent;
 import eu.inqudium.core.element.bulkhead.event.BulkheadWaitTraceEvent;
 import eu.inqudium.core.element.bulkhead.strategy.BlockingBulkheadStrategy;
-import eu.inqudium.core.element.bulkhead.strategy.BulkheadStrategy;
 import eu.inqudium.core.element.bulkhead.strategy.RejectionContext;
 import eu.inqudium.core.event.InqEventPublisher;
 import eu.inqudium.core.log.Logger;

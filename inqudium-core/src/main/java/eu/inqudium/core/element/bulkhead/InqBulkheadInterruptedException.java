@@ -34,8 +34,8 @@ public class InqBulkheadInterruptedException extends InqException {
    * rejection decision — reading them after the interrupt would produce stale
    * snapshots that misrepresent the cause.
    *
-   * @param callId      the call identifier
-   * @param elementName the bulkhead instance name
+   * @param callId                      the call identifier
+   * @param elementName                 the bulkhead instance name
    * @param enableExceptionOptimization whether suppression is enabled or disabled, and whether the stack trace
    *                                    should be writable.
    */

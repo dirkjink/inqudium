@@ -17,23 +17,29 @@ public class SupplierWrapper<T>
     extends BaseWrapper<Supplier<T>, Void, T, SupplierWrapper<T>>
     implements Supplier<T> {
 
-  private static <T> InternalExecutor<Void, T> coreFor(Supplier<T> delegate) {
-    return (chainId, callId, arg) -> delegate.get();
-  }
-
-  /** Creates a wrapper with a {@link InqDecorator} providing name and around-advice. */
+  /**
+   * Creates a wrapper with a {@link InqDecorator} providing name and around-advice.
+   */
   public SupplierWrapper(InqDecorator<Void, T> decorator, Supplier<T> delegate) {
     super(decorator, delegate, coreFor(delegate));
   }
 
-  /** Creates a wrapper with a custom {@link LayerAction}. */
+  /**
+   * Creates a wrapper with a custom {@link LayerAction}.
+   */
   public SupplierWrapper(String name, Supplier<T> delegate, LayerAction<Void, T> layerAction) {
     super(name, delegate, coreFor(delegate), layerAction);
   }
 
-  /** Creates a wrapper with pass-through behavior. */
+  /**
+   * Creates a wrapper with pass-through behavior.
+   */
   public SupplierWrapper(String name, Supplier<T> delegate) {
     super(name, delegate, coreFor(delegate));
+  }
+
+  private static <T> InternalExecutor<Void, T> coreFor(Supplier<T> delegate) {
+    return (chainId, callId, arg) -> delegate.get();
   }
 
   @Override

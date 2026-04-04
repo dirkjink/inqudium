@@ -14,23 +14,32 @@ public class RunnableWrapper
     extends BaseWrapper<Runnable, Void, Void, RunnableWrapper>
     implements Runnable {
 
-  private static InternalExecutor<Void, Void> coreFor(Runnable delegate) {
-    return (chainId, callId, arg) -> { delegate.run(); return null; };
-  }
-
-  /** Creates a wrapper with a {@link InqDecorator} providing name and around-advice. */
+  /**
+   * Creates a wrapper with a {@link InqDecorator} providing name and around-advice.
+   */
   public RunnableWrapper(InqDecorator<Void, Void> decorator, Runnable delegate) {
     super(decorator, delegate, coreFor(delegate));
   }
 
-  /** Creates a wrapper with a custom {@link LayerAction}. */
+  /**
+   * Creates a wrapper with a custom {@link LayerAction}.
+   */
   public RunnableWrapper(String name, Runnable delegate, LayerAction<Void, Void> layerAction) {
     super(name, delegate, coreFor(delegate), layerAction);
   }
 
-  /** Creates a wrapper with pass-through behavior. */
+  /**
+   * Creates a wrapper with pass-through behavior.
+   */
   public RunnableWrapper(String name, Runnable delegate) {
     super(name, delegate, coreFor(delegate));
+  }
+
+  private static InternalExecutor<Void, Void> coreFor(Runnable delegate) {
+    return (chainId, callId, arg) -> {
+      delegate.run();
+      return null;
+    };
   }
 
   @Override

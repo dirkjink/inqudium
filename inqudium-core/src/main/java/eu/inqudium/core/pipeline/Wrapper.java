@@ -45,7 +45,7 @@ public interface Wrapper<S extends Wrapper<S>> {
     while (current != null) {
       if (depth >= maxDepth) {
         sb.append("  ".repeat(depth - 1)).append("  └── ... (chain truncated at depth ")
-          .append(maxDepth).append(")\n");
+            .append(maxDepth).append(")\n");
         break;
       }
       if (depth > 0) {

@@ -59,7 +59,10 @@ public interface InqExecutor<A, R> extends LayerAction<A, R> {
         StandaloneIdGenerator.nextChainId(),
         StandaloneIdGenerator.nextCallId(),
         null,
-        (chainId, callId, arg) -> { runnable.run(); return null; }
+        (chainId, callId, arg) -> {
+          runnable.run();
+          return null;
+        }
     );
   }
 

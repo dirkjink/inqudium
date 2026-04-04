@@ -19,6 +19,29 @@ public class AsyncJoinPointWrapper<R>
     extends AsyncBaseWrapper<ProxyExecution<CompletionStage<R>>, Void, R, AsyncJoinPointWrapper<R>>
     implements ProxyExecution<CompletionStage<R>> {
 
+  /**
+   * Creates a wrapper with an {@link InqAsyncDecorator} providing name and around-advice.
+   */
+  public AsyncJoinPointWrapper(InqAsyncDecorator<Void, R> decorator,
+                               ProxyExecution<CompletionStage<R>> delegate) {
+    super(decorator, delegate, coreFor(delegate));
+  }
+
+  /**
+   * Creates a wrapper with a custom {@link AsyncLayerAction}.
+   */
+  public AsyncJoinPointWrapper(String name, ProxyExecution<CompletionStage<R>> delegate,
+                               AsyncLayerAction<Void, R> layerAction) {
+    super(name, delegate, coreFor(delegate), layerAction);
+  }
+
+  /**
+   * Creates a wrapper with pass-through behavior.
+   */
+  public AsyncJoinPointWrapper(String name, ProxyExecution<CompletionStage<R>> delegate) {
+    super(name, delegate, coreFor(delegate));
+  }
+
   private static <R> InternalAsyncExecutor<Void, R> coreFor(ProxyExecution<CompletionStage<R>> delegate) {
     return (chainId, callId, arg) -> {
       try {
@@ -29,23 +52,6 @@ public class AsyncJoinPointWrapper<R>
         throw new CompletionException(t);
       }
     };
-  }
-
-  /** Creates a wrapper with an {@link InqAsyncDecorator} providing name and around-advice. */
-  public AsyncJoinPointWrapper(InqAsyncDecorator<Void, R> decorator,
-                                ProxyExecution<CompletionStage<R>> delegate) {
-    super(decorator, delegate, coreFor(delegate));
-  }
-
-  /** Creates a wrapper with a custom {@link AsyncLayerAction}. */
-  public AsyncJoinPointWrapper(String name, ProxyExecution<CompletionStage<R>> delegate,
-                                AsyncLayerAction<Void, R> layerAction) {
-    super(name, delegate, coreFor(delegate), layerAction);
-  }
-
-  /** Creates a wrapper with pass-through behavior. */
-  public AsyncJoinPointWrapper(String name, ProxyExecution<CompletionStage<R>> delegate) {
-    super(name, delegate, coreFor(delegate));
   }
 
   @Override

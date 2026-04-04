@@ -1,4 +1,5 @@
 package eu.inqudium.core.pipeline;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -10,15 +11,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 @DisplayName("Parameterized Tests for all Wrapper Types including Function")
 class FinalWrapperHierarchyTest {
-
-  // Helper interface to unify the execution of different functional types
-  interface WrapperTestBridge {
-    void executeRoot() throws Exception;
-
-    void triggerInner() throws Exception;
-
-    BaseWrapper<?, ?, ?, ?> getWrapper();
-  }
 
   /**
    * Data source for all wrapper types.
@@ -131,6 +123,15 @@ class FinalWrapperHierarchyTest {
           }
         }
     );
+  }
+
+  // Helper interface to unify the execution of different functional types
+  interface WrapperTestBridge {
+    void executeRoot() throws Exception;
+
+    void triggerInner() throws Exception;
+
+    BaseWrapper<?, ?, ?, ?> getWrapper();
   }
 
   @Nested

@@ -14,6 +14,27 @@ public class JoinPointWrapper<R>
     extends BaseWrapper<ProxyExecution<R>, Void, R, JoinPointWrapper<R>>
     implements ProxyExecution<R> {
 
+  /**
+   * Creates a wrapper with a {@link InqDecorator} providing name and around-advice.
+   */
+  public JoinPointWrapper(InqDecorator<Void, R> decorator, ProxyExecution<R> delegate) {
+    super(decorator, delegate, coreFor(delegate));
+  }
+
+  /**
+   * Creates a wrapper with a custom {@link LayerAction}.
+   */
+  public JoinPointWrapper(String name, ProxyExecution<R> delegate, LayerAction<Void, R> layerAction) {
+    super(name, delegate, coreFor(delegate), layerAction);
+  }
+
+  /**
+   * Creates a wrapper with pass-through behavior.
+   */
+  public JoinPointWrapper(String name, ProxyExecution<R> delegate) {
+    super(name, delegate, coreFor(delegate));
+  }
+
   private static <R> InternalExecutor<Void, R> coreFor(ProxyExecution<R> delegate) {
     return (chainId, callId, arg) -> {
       try {
@@ -24,21 +45,6 @@ public class JoinPointWrapper<R>
         throw new CompletionException(t);
       }
     };
-  }
-
-  /** Creates a wrapper with a {@link InqDecorator} providing name and around-advice. */
-  public JoinPointWrapper(InqDecorator<Void, R> decorator, ProxyExecution<R> delegate) {
-    super(decorator, delegate, coreFor(delegate));
-  }
-
-  /** Creates a wrapper with a custom {@link LayerAction}. */
-  public JoinPointWrapper(String name, ProxyExecution<R> delegate, LayerAction<Void, R> layerAction) {
-    super(name, delegate, coreFor(delegate), layerAction);
-  }
-
-  /** Creates a wrapper with pass-through behavior. */
-  public JoinPointWrapper(String name, ProxyExecution<R> delegate) {
-    super(name, delegate, coreFor(delegate));
   }
 
   @Override

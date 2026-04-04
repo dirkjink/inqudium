@@ -23,25 +23,31 @@ public class AsyncRunnableWrapper
     extends AsyncBaseWrapper<Supplier<CompletionStage<Void>>, Void, Void, AsyncRunnableWrapper>
     implements Supplier<CompletionStage<Void>> {
 
-  private static InternalAsyncExecutor<Void, Void> coreFor(Supplier<CompletionStage<Void>> delegate) {
-    return (chainId, callId, arg) -> delegate.get();
-  }
-
-  /** Creates a wrapper with an {@link InqAsyncDecorator} providing name and around-advice. */
+  /**
+   * Creates a wrapper with an {@link InqAsyncDecorator} providing name and around-advice.
+   */
   public AsyncRunnableWrapper(InqAsyncDecorator<Void, Void> decorator,
-                               Supplier<CompletionStage<Void>> delegate) {
+                              Supplier<CompletionStage<Void>> delegate) {
     super(decorator, delegate, coreFor(delegate));
   }
 
-  /** Creates a wrapper with a custom {@link AsyncLayerAction}. */
+  /**
+   * Creates a wrapper with a custom {@link AsyncLayerAction}.
+   */
   public AsyncRunnableWrapper(String name, Supplier<CompletionStage<Void>> delegate,
-                               AsyncLayerAction<Void, Void> layerAction) {
+                              AsyncLayerAction<Void, Void> layerAction) {
     super(name, delegate, coreFor(delegate), layerAction);
   }
 
-  /** Creates a wrapper with pass-through behavior. */
+  /**
+   * Creates a wrapper with pass-through behavior.
+   */
   public AsyncRunnableWrapper(String name, Supplier<CompletionStage<Void>> delegate) {
     super(name, delegate, coreFor(delegate));
+  }
+
+  private static InternalAsyncExecutor<Void, Void> coreFor(Supplier<CompletionStage<Void>> delegate) {
+    return (chainId, callId, arg) -> delegate.get();
   }
 
   @Override

@@ -11,14 +11,14 @@ public final class StandaloneIdGenerator {
   private static final AtomicLong CHAIN_ID = new AtomicLong();
   private static final AtomicLong CALL_ID = new AtomicLong();
 
+  private StandaloneIdGenerator() {
+  }
+
   public static long nextChainId() {
     return CHAIN_ID.incrementAndGet();
   }
 
   public static long nextCallId() {
     return CALL_ID.incrementAndGet();
-  }
-
-  private StandaloneIdGenerator() {
   }
 }

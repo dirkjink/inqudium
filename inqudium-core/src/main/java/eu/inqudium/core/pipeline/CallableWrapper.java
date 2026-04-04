@@ -15,6 +15,27 @@ public class CallableWrapper<V>
     extends BaseWrapper<Callable<V>, Void, V, CallableWrapper<V>>
     implements Callable<V> {
 
+  /**
+   * Creates a wrapper with a {@link InqDecorator} providing name and around-advice.
+   */
+  public CallableWrapper(InqDecorator<Void, V> decorator, Callable<V> delegate) {
+    super(decorator, delegate, coreFor(delegate));
+  }
+
+  /**
+   * Creates a wrapper with a custom {@link LayerAction}.
+   */
+  public CallableWrapper(String name, Callable<V> delegate, LayerAction<Void, V> layerAction) {
+    super(name, delegate, coreFor(delegate), layerAction);
+  }
+
+  /**
+   * Creates a wrapper with pass-through behavior.
+   */
+  public CallableWrapper(String name, Callable<V> delegate) {
+    super(name, delegate, coreFor(delegate));
+  }
+
   private static <V> InternalExecutor<Void, V> coreFor(Callable<V> delegate) {
     return (chainId, callId, arg) -> {
       try {
@@ -25,21 +46,6 @@ public class CallableWrapper<V>
         throw new CompletionException(e);
       }
     };
-  }
-
-  /** Creates a wrapper with a {@link InqDecorator} providing name and around-advice. */
-  public CallableWrapper(InqDecorator<Void, V> decorator, Callable<V> delegate) {
-    super(decorator, delegate, coreFor(delegate));
-  }
-
-  /** Creates a wrapper with a custom {@link LayerAction}. */
-  public CallableWrapper(String name, Callable<V> delegate, LayerAction<Void, V> layerAction) {
-    super(name, delegate, coreFor(delegate), layerAction);
-  }
-
-  /** Creates a wrapper with pass-through behavior. */
-  public CallableWrapper(String name, Callable<V> delegate) {
-    super(name, delegate, coreFor(delegate));
   }
 
   @Override

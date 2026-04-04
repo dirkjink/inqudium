@@ -44,7 +44,9 @@ import java.util.concurrent.atomic.AtomicLong;
 public abstract class BaseWrapper<T, A, R, S extends BaseWrapper<T, A, R, S>>
     implements Wrapper<S>, InternalExecutor<A, R> {
 
-  /** Global counter for chain IDs — unique per JVM, monotonically increasing. */
+  /**
+   * Global counter for chain IDs — unique per JVM, monotonically increasing.
+   */
   private static final AtomicLong CHAIN_ID_COUNTER = new AtomicLong();
 
   private final T delegate;
@@ -85,7 +87,7 @@ public abstract class BaseWrapper<T, A, R, S extends BaseWrapper<T, A, R, S>>
     this.delegate = delegate;
     this.layerAction = layerAction;
 
-    if (delegate instanceof BaseWrapper<?,?,?,?> innerWrapper) {
+    if (delegate instanceof BaseWrapper<?, ?, ?, ?> innerWrapper) {
       this.chainId = innerWrapper.getChainId();
       this.callIdCounter = innerWrapper.callIdCounter;
       this.nextStep = (InternalExecutor<A, R>) delegate;
@@ -158,11 +160,19 @@ public abstract class BaseWrapper<T, A, R, S extends BaseWrapper<T, A, R, S>>
     return callIdCounter.incrementAndGet();
   }
 
-  @Override public long getChainId() { return chainId; }
-  @Override public String getLayerDescription() { return name; }
+  @Override
+  public long getChainId() {
+    return chainId;
+  }
+
+  @Override
+  public String getLayerDescription() {
+    return name;
+  }
 
   @SuppressWarnings("unchecked")
-  @Override public S getInner() {
+  @Override
+  public S getInner() {
     return (delegate instanceof BaseWrapper) ? (S) delegate : null;
   }
 }
