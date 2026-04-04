@@ -2,7 +2,6 @@ package eu.inqudium.core.pipeline;
 
 import java.util.concurrent.Callable;
 import java.util.concurrent.CompletionException;
-import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Function;
 import java.util.function.Supplier;
 
@@ -179,17 +178,3 @@ public interface InqExecutor<A, R> extends LayerAction<A, R> {
   }
 }
 
-/**
- * Package-private ID generator for standalone executions (not part of a wrapper chain).
- * Uses static counters — one CAS per call, zero object allocation.
- */
-final class StandaloneIdGenerator {
-
-  private static final AtomicLong CHAIN_ID = new AtomicLong();
-  private static final AtomicLong CALL_ID = new AtomicLong();
-
-  static long nextChainId() { return CHAIN_ID.incrementAndGet(); }
-  static long nextCallId() { return CALL_ID.incrementAndGet(); }
-
-  private StandaloneIdGenerator() {}
-}
