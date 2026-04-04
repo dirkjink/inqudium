@@ -1,39 +1,104 @@
 /**
- * Pipeline composition — fluent API for combining resilience elements with
- * explicit, validated ordering.
+ * Unified wrapper pipeline for cross-cutting concerns around functional interfaces.
  *
- * <p>The pipeline solves a specific problem: composing multiple elements into a
- * single decoration chain where the ordering is explicit, readable, and validated
- * for known anti-patterns (ADR-017).
+ * <p>This package provides a decorator-based pipeline that wraps standard Java functional
+ * interfaces ({@link java.lang.Runnable}, {@link java.util.function.Supplier},
+ * {@link java.util.concurrent.Callable}, {@link java.util.function.Function}) and
+ * AOP proxy executions ({@link eu.inqudium.core.pipeline.ProxyExecution}) in a chain
+ * of layers with <strong>around-semantics</strong>.</p>
  *
- * <h2>Key types</h2>
- * <ul>
- *   <li>{@code InqPipeline} — fluent builder: {@code InqPipeline.of(supplier).shield(cb).shield(retry).decorate()}.
- *       Elements can be added in any order when a {@code PipelineOrder} is set — the
- *       pipeline sorts them.</li>
- *   <li>{@code InqDecorator} — decoration contract implemented by each element.</li>
- *   <li>{@code PipelineOrder} — predefined orderings:
- *       <ul>
- *         <li>{@code INQUDIUM} — canonical: Cache → TimeLimiter → RateLimiter → Bulkhead → CircuitBreaker → Retry</li>
- *         <li>{@code RESILIENCE4J} — compatible: Retry → CircuitBreaker → RateLimiter → TimeLimiter → Bulkhead</li>
- *         <li>{@code custom(...)} — fully custom order via {@code InqElementType} sequence</li>
- *       </ul>
- *   </li>
- * </ul>
+ * <h2>Architecture Overview</h2>
+ * <pre>{@code
+ *                  LayerAction<A, R>                   // around-advice (functional interface)
+ *                  ┌────────┴────────┐
+ *                  │                 │
+ *          InqExecutor<A, R>   InqDecorator<A, R>      // + executeXxx()  │  + InqElement (name, type, events)
+ *                              ┌────┤                  //                 │  + decorateXxx()
+ *                              │    │
+ *                       Bulkhead<A,R>  (other decorators...)              // concrete resilience elements
+ *                              │
+ *               ┌──────────────┼──────────────┐
+ *               │              │              │
+ *              Wrapper<S>   BaseWrapper    InternalExecutor<A, R>         // chain infrastructure
+ *                           ┌──┴──┐
+ *          RunnableWrapper  SupplierWrapper  CallableWrapper  FunctionWrapper  JoinPointWrapper
+ * }</pre>
  *
- * <h2>Pipeline responsibilities beyond ordering</h2>
- * <ul>
- *   <li>Generates the {@code callId} (ADR-003) at the outermost element.</li>
- *   <li>Orchestrates context propagation (ADR-011) across all elements.</li>
- *   <li>Emits startup warnings for known anti-patterns (e.g. Retry outside CircuitBreaker).</li>
- * </ul>
+ * <h2>Core Concepts</h2>
  *
- * <h2>Annotation-driven pipelines</h2>
- * <p>In Spring Boot, the {@code @InqShield} annotation controls ordering while
- * element annotations ({@code @InqCircuitBreaker}, {@code @InqRetry}, etc.) declare
- * which elements to apply. Without {@code @InqShield}, the canonical order is used
- * implicitly (ADR-017).
+ * <h3>LayerAction — Around-Advice</h3>
+ * <p>A {@link eu.inqudium.core.pipeline.LayerAction} is a functional interface that receives
+ * the chain ID, call ID, argument, and a reference to the next step. It decides when,
+ * whether, and how to invoke the next step — enabling pre-processing, post-processing,
+ * exception handling, caching, retries, and conditional execution.</p>
  *
- * @see eu.inqudium.core.element.InqElementType
+ * <h3>InqExecutor — Immediate Execution</h3>
+ * <p>{@link eu.inqudium.core.pipeline.InqExecutor} extends {@code LayerAction} with
+ * {@code executeXxx()} methods that invoke the around-advice immediately without creating
+ * wrapper objects. One {@link eu.inqudium.core.pipeline.InternalExecutor} lambda per call,
+ * two primitive IDs — zero other allocation on the hot path.</p>
+ *
+ * <h3>InqDecorator — Self-Describing Pipeline Element</h3>
+ * <p>{@link eu.inqudium.core.pipeline.Decorator InqDecorator} combines
+ * {@link eu.inqudium.core.element.InqElement} (name, type, event publisher) with
+ * {@code LayerAction} (around-advice) and adds {@code decorateXxx()} factory methods
+ * that create reusable wrapper objects for deferred execution. {@code InqDecorator} and
+ * {@code InqExecutor} are independent siblings — both extend {@code LayerAction}, but
+ * neither depends on the other.</p>
+ *
+ * <h3>Wrapper Chain — Immutable Layer Stack</h3>
+ * <p>{@link eu.inqudium.core.pipeline.BaseWrapper} links layers into an immutable chain.
+ * Each wrapper holds a pre-resolved {@code nextStep} reference (no runtime
+ * {@code instanceof} checks), a shared per-chain call ID counter
+ * ({@link java.util.concurrent.atomic.AtomicLong}), and a chain ID (primitive
+ * {@code long}). The chain is safe to share across threads without synchronization.</p>
+ *
+ * <h2>Two Execution Modes</h2>
+ *
+ * <table>
+ *   <tr><th></th><th>{@code decorateXxx()}</th><th>{@code executeXxx()}</th></tr>
+ *   <tr><td><b>Timing</b></td><td>Deferred — returns a wrapper</td><td>Immediate — returns the result</td></tr>
+ *   <tr><td><b>Allocation</b></td><td>Wrapper + core lambda + nextStep</td><td>One InternalExecutor lambda only</td></tr>
+ *   <tr><td><b>Reusable</b></td><td>Yes — call the wrapper repeatedly</td><td>No — one-shot execution</td></tr>
+ * </table>
+ *
+ * <h2>Usage Examples</h2>
+ *
+ * <h3>Immediate execution (no wrapper objects)</h3>
+ * <pre>{@code
+ * Bulkhead<Void, String> bulkhead = Bulkhead.of(config);
+ * String result = bulkhead.executeSupplier(() -> callApi());
+ * }</pre>
+ *
+ * <h3>Deferred execution (reusable wrapper)</h3>
+ * <pre>{@code
+ * Supplier<String> protected = bulkhead.decorateSupplier(() -> callApi());
+ * protected.get();  // can call multiple times
+ * }</pre>
+ *
+ * <h3>Composing multiple decorators</h3>
+ * <pre>{@code
+ * Supplier<String> resilient = retry.decorateSupplier(
+ *     bulkhead.decorateSupplier(() -> callApi())
+ * );
+ * }</pre>
+ *
+ * <h3>Custom LayerAction lambda</h3>
+ * <pre>{@code
+ * new SupplierWrapper<>("timing", delegate, (chainId, callId, arg, next) -> {
+ *     long start = System.nanoTime();
+ *     String result = next.execute(chainId, callId, arg);
+ *     metrics.record(System.nanoTime() - start);
+ *     return result;
+ * });
+ * }</pre>
+ *
+ * <h2>Zero-Allocation Tracing</h2>
+ * <p>Both chain IDs and call IDs are primitive {@code long} values generated by
+ * {@link java.util.concurrent.atomic.AtomicLong} counters — one global counter for
+ * chain IDs, one shared counter per chain for call IDs. No {@link java.util.UUID}
+ * objects, no strings, no boxing on the hot path.</p>
+ *
+ * @since 0.4.0
  */
 package eu.inqudium.core.pipeline;
