@@ -1,11 +1,13 @@
 package eu.inqudium.imperative.core.pipeline;
 
+import eu.inqudium.core.pipeline.BaseWrapper;
 import eu.inqudium.core.pipeline.InternalExecutor;
 import eu.inqudium.core.pipeline.LayerAction;
-import eu.inqudium.core.pipeline.StandaloneIdGenerator;
+import eu.inqudium.core.pipeline.Wrapper;
 
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
 import java.util.concurrent.CompletionStage;
 
@@ -13,29 +15,26 @@ import java.util.concurrent.CompletionStage;
  * Factory for creating dynamic proxies that wrap service method invocations
  * through pipeline decorators.
  *
- * <p>Every method call on the returned proxy flows through the decorator's
- * around-advice — no wrapper objects are created per invocation, only a single
- * {@link InternalExecutor} (or {@link InternalAsyncExecutor}) lambda.</p>
- *
- * <h3>Usage</h3>
+ * <h3>Chain-capable proxies</h3>
+ * <p>Proxies created by this factory implement the {@link Wrapper} interface and are
+ * chain-aware. The {@link PipelineInvocationHandler} extends {@link BaseWrapper},
+ * so all chain mechanics (chainId inheritance, shared callIdCounter, hierarchy
+ * visualization) come for free:</p>
  * <pre>{@code
- * // From a sync decorator (all methods go through LayerAction.execute)
- * InqProxyFactory factory = InqProxyFactory.fromSync(bulkhead);
- * PaymentService protected = factory.protect(PaymentService.class, realService);
- * protected.charge(order);  // → bulkhead.execute → realService.charge(order)
+ * PaymentService withBulkhead = bulkheadFactory.protect(PaymentService.class, real);
+ * PaymentService withRetry    = retryFactory.protect(PaymentService.class, withBulkhead);
  *
- * // From sync + async decorators (routes by return type)
- * InqProxyFactory factory = InqProxyFactory.from(bulkhead, bulkhead);
- * PaymentService protected = factory.protect(PaymentService.class, realService);
- * protected.charge(order);                  // sync  → LayerAction.execute
- * protected.chargeAsync(order);             // async → AsyncLayerAction.executeAsync
+ * // Chain traversal with shared IDs — same pattern as wrapper chains
+ * withRetry.charge(order);
+ * // → retry.execute(chainId=47, callId=1) → bulkhead.execute(chainId=47, callId=1) → real
+ *
+ * // Hierarchy visualization via Wrapper interface
+ * Wrapper<?> chain = (Wrapper<?>) withRetry;
+ * System.out.println(chain.toStringHierarchy());
+ * // Chain-ID: 47
+ * //   └─ retry
+ * //       └─ bulkhead
  * }</pre>
- *
- * <h3>Async Routing</h3>
- * <p>When an async decorator is provided, methods whose return type is assignable to
- * {@link CompletionStage} are automatically routed through
- * {@link AsyncLayerAction#executeAsync}. All other methods go through
- * {@link LayerAction#execute}.</p>
  *
  * @since 0.4.0
  */
@@ -43,54 +42,54 @@ import java.util.concurrent.CompletionStage;
 public interface InqProxyFactory {
 
   /**
-   * Creates a dynamic proxy that wraps every method invocation on the target
-   * through the decorator's around-advice.
-   *
-   * @param serviceInterface the interface to proxy (must be an interface)
-   * @param target           the real implementation to delegate to
-   * @param <T>              the service interface type
-   * @return a proxy that applies the decorator's logic on every method call
-   * @throws IllegalArgumentException if {@code serviceInterface} is not an interface
-   */
-  <T> T protect(Class<T> serviceInterface, T target);
-
-  /**
    * Creates a factory that routes all method calls through a sync {@link LayerAction}.
-   *
-   * @param action the around-advice to apply on every method call
-   * @return a proxy factory
    */
-  static InqProxyFactory fromSync(LayerAction<?, ?> action) {
+  static InqProxyFactory fromSync(String name, LayerAction<?, ?> action) {
+    @SuppressWarnings("unchecked")
+    LayerAction<Void, Object> sync = (LayerAction<Void, Object>) action;
     return new InqProxyFactory() {
       @Override
       public <T> T protect(Class<T> serviceInterface, T target) {
         validateInterface(serviceInterface);
-        return createProxy(serviceInterface, target, action, null);
+        return createProxy(serviceInterface, target, name, sync, null);
       }
     };
+  }
+
+  /**
+   * Creates a sync-only factory with a default layer name.
+   */
+  static InqProxyFactory fromSync(LayerAction<?, ?> action) {
+    return fromSync("proxy", action);
   }
 
   /**
    * Creates a factory that routes sync methods through a {@link LayerAction}
    * and async methods (returning {@link CompletionStage}) through an
    * {@link AsyncLayerAction}.
-   *
-   * @param syncAction  the around-advice for sync methods
-   * @param asyncAction the around-advice for async methods
-   * @return a proxy factory
    */
-  static InqProxyFactory from(LayerAction<?, ?> syncAction,
-                               AsyncLayerAction<?, ?> asyncAction) {
+  static InqProxyFactory from(String name, LayerAction<?, ?> syncAction,
+                              AsyncLayerAction<?, ?> asyncAction) {
+    @SuppressWarnings("unchecked")
+    LayerAction<Void, Object> sync = (LayerAction<Void, Object>) syncAction;
+    @SuppressWarnings("unchecked")
+    AsyncLayerAction<Void, Object> async = (AsyncLayerAction<Void, Object>) asyncAction;
     return new InqProxyFactory() {
       @Override
       public <T> T protect(Class<T> serviceInterface, T target) {
         validateInterface(serviceInterface);
-        return createProxy(serviceInterface, target, syncAction, asyncAction);
+        return createProxy(serviceInterface, target, name, sync, async);
       }
     };
   }
 
-  // ======================== Internal ========================
+  /**
+   * Creates a sync+async factory with a default layer name.
+   */
+  static InqProxyFactory from(LayerAction<?, ?> syncAction,
+                              AsyncLayerAction<?, ?> asyncAction) {
+    return from("proxy", syncAction, asyncAction);
+  }
 
   private static void validateInterface(Class<?> type) {
     if (!type.isInterface()) {
@@ -99,68 +98,211 @@ public interface InqProxyFactory {
     }
   }
 
+  // ======================== Internal ========================
+
   @SuppressWarnings("unchecked")
-  private static <T> T createProxy(Class<T> serviceInterface, T target,
-                                    LayerAction<?, ?> syncAction,
-                                    AsyncLayerAction<?, ?> asyncAction) {
+  private static <T> T createProxy(Class<T> serviceInterface, T target, String name,
+                                   LayerAction<Void, Object> syncAction,
+                                   AsyncLayerAction<Void, Object> asyncAction) {
 
-    // Single cast point — safe because the proxy handler always passes null as argument
-    // and works with Object for return values (reflection-based invocation).
-    LayerAction<Void, Object> sync = (LayerAction<Void, Object>) syncAction;
-    AsyncLayerAction<Void, Object> async =
-        asyncAction != null ? (AsyncLayerAction<Void, Object>) asyncAction : null;
+    PipelineInvocationHandler handler;
 
-    InvocationHandler handler = (proxy, method, args) -> {
-
-      // Route async methods through the async decorator when available
-      if (async != null
-          && CompletionStage.class.isAssignableFrom(method.getReturnType())) {
-        return async.executeAsync(
-            StandaloneIdGenerator.nextChainId(),
-            StandaloneIdGenerator.nextCallId(),
-            null,
-            (chainId, callId, arg) -> {
-              try {
-                return (CompletionStage<Object>) method.invoke(target, args);
-              } catch (InvocationTargetException e) {
-                throw rethrow(e.getCause());
-              } catch (IllegalAccessException e) {
-                throw new RuntimeException(e);
-              }
-            }
-        );
+    // Detect existing pipeline proxy — stack on top (like BaseWrapper detects inner wrappers)
+    if (Proxy.isProxyClass(target.getClass())) {
+      InvocationHandler h = Proxy.getInvocationHandler(target);
+      if (h instanceof PipelineInvocationHandler inner) {
+        handler = new PipelineInvocationHandler(name, inner, syncAction, asyncAction);
+      } else {
+        handler = new PipelineInvocationHandler(name, target, syncAction, asyncAction);
       }
+    } else {
+      handler = new PipelineInvocationHandler(name, target, syncAction, asyncAction);
+    }
 
-      // Sync path
-      return sync.execute(
-          StandaloneIdGenerator.nextChainId(),
-          StandaloneIdGenerator.nextCallId(),
-          null,
-          (chainId, callId, arg) -> {
-            try {
-              return method.invoke(target, args);
-            } catch (InvocationTargetException e) {
-              throw rethrow(e.getCause());
-            } catch (IllegalAccessException e) {
-              throw new RuntimeException(e);
-            }
-          }
-      );
-    };
-
+    // Proxy implements the service interface AND Wrapper for chain visualization
     return (T) Proxy.newProxyInstance(
         serviceInterface.getClassLoader(),
-        new Class<?>[]{ serviceInterface },
-        handler
-    );
+        new Class<?>[]{serviceInterface, Wrapper.class},
+        handler);
   }
 
-  /**
-   * Rethrows any Throwable as an unchecked exception without wrapping.
-   * Uses the compiler trick to bypass checked exception enforcement.
-   */
   @SuppressWarnings("unchecked")
   private static <E extends Throwable> RuntimeException rethrow(Throwable t) throws E {
     throw (E) t;
+  }
+
+  /**
+   * Creates a dynamic proxy that wraps every method invocation on the target
+   * through the decorator's around-advice.
+   *
+   * <p>The returned proxy implements both the service interface and {@link Wrapper}.
+   * If the target is itself a pipeline proxy, the new handler is stacked on top —
+   * inheriting the inner handler's chainId and callIdCounter.</p>
+   *
+   * @param serviceInterface the interface to proxy (must be an interface)
+   * @param target           the real implementation (or another pipeline proxy)
+   * @param <T>              the service interface type
+   * @return a chain-aware proxy implementing both {@code T} and {@link Wrapper}
+   */
+  <T> T protect(Class<T> serviceInterface, T target);
+
+  // ======================== Pipeline Invocation Handler ========================
+
+  /**
+   * Invocation handler that extends {@link BaseWrapper} — inheriting chain metadata,
+   * ID management, hierarchy visualization, and the {@link Wrapper} interface.
+   *
+   * <p>When stacked on top of another {@code PipelineInvocationHandler}, the inner handler
+   * is passed as the delegate to {@link BaseWrapper}'s constructor, which automatically
+   * detects it as a {@link BaseWrapper} and inherits {@code chainId} and
+   * {@code callIdCounter}.</p>
+   *
+   * <p>The actual proxy dispatch uses {@link #executeSyncChain} / {@link #executeAsyncChain}
+   * instead of {@link BaseWrapper#execute}, because the terminal step
+   * ({@code method.invoke}) is per-invocation and must be passed through the chain.</p>
+   */
+  final class PipelineInvocationHandler
+      extends BaseWrapper<Object, Void, Object, PipelineInvocationHandler>
+      implements InvocationHandler {
+
+    /**
+     * Placeholder core execution — never called. The actual terminal is built
+     * per invocation in {@link #invoke} and passed through the chain walk.
+     */
+    private static final InternalExecutor<Void, Object> PROXY_CORE =
+        (chainId, callId, arg) -> {
+          throw new UnsupportedOperationException(
+              "Direct execute() not supported on proxy handlers — use invoke()");
+        };
+
+    private final Object realTarget;
+    private final LayerAction<Void, Object> syncAction;
+    private final AsyncLayerAction<Void, Object> asyncAction;
+
+    /**
+     * Wrapping a real target — creates new chain metadata.
+     */
+    PipelineInvocationHandler(String name, Object target,
+                              LayerAction<Void, Object> syncAction,
+                              AsyncLayerAction<Void, Object> asyncAction) {
+      super(name, target, PROXY_CORE);
+      this.realTarget = target;
+      this.syncAction = syncAction;
+      this.asyncAction = asyncAction;
+    }
+
+    /**
+     * Wrapping another handler — BaseWrapper inherits chainId and callIdCounter.
+     */
+    PipelineInvocationHandler(String name, PipelineInvocationHandler inner,
+                              LayerAction<Void, Object> syncAction,
+                              AsyncLayerAction<Void, Object> asyncAction) {
+      super(name, inner, PROXY_CORE);
+      this.realTarget = inner.realTarget;
+      this.syncAction = syncAction;
+      this.asyncAction = asyncAction;
+    }
+
+    @Override
+    public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
+
+      // Delegate Wrapper interface methods to this handler (which IS a Wrapper via BaseWrapper)
+      if (method.getParameterCount() == 0) {
+        switch (method.getName()) {
+          case "getChainId" -> {
+            return getChainId();
+          }
+          case "getLayerDescription" -> {
+            return getLayerDescription();
+          }
+          case "getInner" -> {
+            return getInner();
+          }
+          case "toStringHierarchy" -> {
+            return toStringHierarchy();
+          }
+        }
+      }
+
+      // Delegate Object methods (toString, hashCode, equals)
+      if (method.getDeclaringClass() == Object.class) {
+        return method.invoke(this, args);
+      }
+
+      // ── Proxy dispatch ──
+      long callId = generateCallId();
+
+      if (asyncAction != null
+          && CompletionStage.class.isAssignableFrom(method.getReturnType())) {
+        return executeAsyncChain(getChainId(), callId, buildAsyncTerminal(method, args));
+      }
+      return executeSyncChain(getChainId(), callId, buildSyncTerminal(method, args));
+    }
+
+    /**
+     * Recursive sync chain walk — mirrors {@link BaseWrapper#execute}.
+     * Each handler applies its LayerAction, with {@code next} pointing to the
+     * inner handler's chain walk (or the terminal at the bottom).
+     */
+    Object executeSyncChain(long chainId, long callId,
+                            InternalExecutor<Void, Object> terminal) {
+      PipelineInvocationHandler inner = getInner();
+      InternalExecutor<Void, Object> next = (inner != null)
+          ? (cid, caid, a) -> inner.executeSyncChain(cid, caid, terminal)
+          : terminal;
+      return syncAction.execute(chainId, callId, null, next);
+    }
+
+    /**
+     * Recursive async chain walk — same pattern, returns CompletionStage.
+     */
+    @SuppressWarnings("unchecked")
+    CompletionStage<Object> executeAsyncChain(long chainId, long callId,
+                                              InternalAsyncExecutor<Void, Object> terminal) {
+      if (asyncAction != null) {
+        InternalAsyncExecutor<Void, Object> next = (inner() != null)
+            ? (cid, caid, a) -> inner().executeAsyncChain(cid, caid, terminal)
+            : terminal;
+        return asyncAction.executeAsync(chainId, callId, null, next);
+      }
+      // Fallback: adapt sync action for async return type
+      InternalExecutor<Void, Object> syncNext = (inner() != null)
+          ? (cid, caid, a) -> (CompletionStage<Object>) inner().executeSyncChain(cid, caid,
+          (c2, ca2, a2) -> terminal.executeAsync(c2, ca2, a2))
+          : (cid, caid, a) -> terminal.executeAsync(cid, caid, a);
+      return (CompletionStage<Object>) syncAction.execute(chainId, callId, null, syncNext);
+    }
+
+    /**
+     * Typed accessor to avoid cast noise in chain walk.
+     */
+    private PipelineInvocationHandler inner() {
+      return getInner();
+    }
+
+    private InternalExecutor<Void, Object> buildSyncTerminal(Method method, Object[] args) {
+      return (chainId, callId, arg) -> {
+        try {
+          return method.invoke(realTarget, args);
+        } catch (InvocationTargetException e) {
+          throw rethrow(e.getCause());
+        } catch (IllegalAccessException e) {
+          throw new RuntimeException(e);
+        }
+      };
+    }
+
+    @SuppressWarnings("unchecked")
+    private InternalAsyncExecutor<Void, Object> buildAsyncTerminal(Method method, Object[] args) {
+      return (chainId, callId, arg) -> {
+        try {
+          return (CompletionStage<Object>) method.invoke(realTarget, args);
+        } catch (InvocationTargetException e) {
+          throw rethrow(e.getCause());
+        } catch (IllegalAccessException e) {
+          throw new RuntimeException(e);
+        }
+      };
+    }
   }
 }

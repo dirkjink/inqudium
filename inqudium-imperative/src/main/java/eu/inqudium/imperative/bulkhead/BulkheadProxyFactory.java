@@ -6,22 +6,20 @@ import eu.inqudium.imperative.core.pipeline.InqProxyFactory;
 /**
  * Factory that creates dynamic proxies protecting service methods with a bulkhead.
  *
- * <p>Routes method calls by return type:</p>
- * <ul>
- *   <li><b>Sync methods</b> → {@code LayerAction.execute} (acquire permit, execute, release in finally)</li>
- *   <li><b>Async methods</b> (returning {@link java.util.concurrent.CompletionStage}) →
- *       {@code AsyncLayerAction.executeAsync} (acquire sync, release on completion)</li>
- * </ul>
+ * <p>The returned proxies implement the {@link eu.inqudium.core.pipeline.Wrapper} interface,
+ * enabling chain visualization via {@code toStringHierarchy()}.</p>
  *
  * <h3>Usage</h3>
  * <pre>{@code
- * // Works with any Bulkhead type parameterization
  * Bulkhead<Void, String> bulkhead = Bulkhead.of(config);
  * BulkheadProxyFactory factory = new BulkheadProxyFactory(bulkhead);
  *
- * PaymentService protected = factory.protect(PaymentService.class, realService);
- * protected.charge(order);                                // sync path
- * CompletionStage<Receipt> r = protected.chargeAsync(o);  // async path
+ * PaymentService proxy = factory.protect(PaymentService.class, realService);
+ * proxy.charge(order);
+ *
+ * // Chain visualization
+ * Wrapper<?> chain = (Wrapper<?>) proxy;
+ * System.out.println(chain.toStringHierarchy());
  * }</pre>
  *
  * @since 0.4.0
@@ -33,17 +31,13 @@ public class BulkheadProxyFactory implements InqProxyFactory {
   /**
    * Creates a factory that protects services with the given bulkhead.
    *
-   * <p>Accepts any {@code Bulkhead<?, ?>}. If the bulkhead also implements
-   * {@link InqAsyncDecorator}, async methods are automatically routed through
-   * the two-phase async pipeline.</p>
-   *
    * @param bulkhead the bulkhead to protect services with
    */
   public BulkheadProxyFactory(Bulkhead<?, ?> bulkhead) {
     if (bulkhead instanceof InqAsyncDecorator<?, ?> async) {
-      this.delegate = InqProxyFactory.from(bulkhead, async);
+      this.delegate = InqProxyFactory.from(bulkhead.getName(), bulkhead, async);
     } else {
-      this.delegate = InqProxyFactory.fromSync(bulkhead);
+      this.delegate = InqProxyFactory.fromSync(bulkhead.getName(), bulkhead);
     }
   }
 
