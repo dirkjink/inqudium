@@ -193,7 +193,7 @@ public class HappyPathBulkheadBenchmarkTwo {
 
   public static void main(String[] args) throws RunnerException {
     Options opt = new OptionsBuilder()
-        .addProfiler(StackProfiler.class)
+        //.addProfiler(StackProfiler.class)
         .addProfiler(GCProfiler.class)
         .addProfiler(PausesProfiler.class)
         .addProfiler(MemPoolProfiler.class)
