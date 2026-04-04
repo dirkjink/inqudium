@@ -1,26 +1,15 @@
 package eu.inqudium.imperative.bulkhead;
 
+import eu.inqudium.core.pipeline.InqProxyFactory;
 import eu.inqudium.imperative.core.pipeline.InqAsyncDecorator;
-import eu.inqudium.imperative.core.pipeline.InqProxyFactory;
+import eu.inqudium.imperative.core.pipeline.InqAsyncProxyFactory;
 
 /**
  * Factory that creates dynamic proxies protecting service methods with a bulkhead.
  *
- * <p>The returned proxies implement the {@link eu.inqudium.core.pipeline.Wrapper} interface,
- * enabling chain visualization via {@code toStringHierarchy()}.</p>
- *
- * <h3>Usage</h3>
- * <pre>{@code
- * Bulkhead<Void, String> bulkhead = Bulkhead.of(config);
- * BulkheadProxyFactory factory = new BulkheadProxyFactory(bulkhead);
- *
- * PaymentService proxy = factory.protect(PaymentService.class, realService);
- * proxy.charge(order);
- *
- * // Chain visualization
- * Wrapper<?> chain = (Wrapper<?>) proxy;
- * System.out.println(chain.toStringHierarchy());
- * }</pre>
+ * <p>If the bulkhead implements {@link InqAsyncDecorator}, an {@link InqAsyncProxyFactory}
+ * is used — routing async methods through the two-phase async pipeline. Otherwise,
+ * a sync-only {@link InqProxyFactory} is used.</p>
  *
  * @since 0.4.0
  */
@@ -28,16 +17,11 @@ public class BulkheadProxyFactory implements InqProxyFactory {
 
   private final InqProxyFactory delegate;
 
-  /**
-   * Creates a factory that protects services with the given bulkhead.
-   *
-   * @param bulkhead the bulkhead to protect services with
-   */
   public BulkheadProxyFactory(Bulkhead<?, ?> bulkhead) {
     if (bulkhead instanceof InqAsyncDecorator<?, ?> async) {
-      this.delegate = InqProxyFactory.from(bulkhead.getName(), bulkhead, async);
+      this.delegate = InqAsyncProxyFactory.of(bulkhead.getName(), bulkhead, async);
     } else {
-      this.delegate = InqProxyFactory.fromSync(bulkhead.getName(), bulkhead);
+      this.delegate = InqProxyFactory.of(bulkhead.getName(), bulkhead);
     }
   }
 

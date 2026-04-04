@@ -1,5 +1,6 @@
 package eu.inqudium.imperative.core.pipeline;
 
+import eu.inqudium.core.pipeline.InqProxyFactory;
 import eu.inqudium.core.pipeline.Wrapper;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -29,7 +30,7 @@ class InqProxyFactoryTest {
   // Test service interfaces
   // =========================================================================
 
-  interface CalculatorService {
+  public interface CalculatorService {
     int add(int a, int b);
 
     String concat(String a, String b);
@@ -37,7 +38,7 @@ class InqProxyFactoryTest {
     void fire(String event);
   }
 
-  interface AsyncService {
+  public interface AsyncService {
     CompletionStage<String> fetchAsync(String key);
 
     CompletableFuture<Integer> computeAsync(int input);
@@ -45,7 +46,7 @@ class InqProxyFactoryTest {
     String fetchSync(String key);
   }
 
-  interface FailingService {
+  public interface FailingService {
     String riskyCall() throws IOException;
   }
 
@@ -97,7 +98,7 @@ class InqProxyFactoryTest {
     @DisplayName("should reject a non-interface class")
     void should_reject_a_non_interface_class() {
       // Given
-      InqProxyFactory factory = InqProxyFactory.fromSync(
+      InqProxyFactory factory = InqProxyFactory.of(
           (chainId, callId, arg, next) -> next.execute(chainId, callId, arg));
 
       // When / Then
@@ -115,7 +116,7 @@ class InqProxyFactoryTest {
     @DisplayName("should proxy method calls and return correct results")
     void should_proxy_method_calls_and_return_correct_results() {
       // Given
-      InqProxyFactory factory = InqProxyFactory.fromSync(
+      InqProxyFactory factory = InqProxyFactory.of(
           (chainId, callId, arg, next) -> next.execute(chainId, callId, arg));
       CalculatorService proxy = factory.protect(CalculatorService.class, new RealCalculator());
 
@@ -129,7 +130,7 @@ class InqProxyFactoryTest {
     void should_proxy_void_methods_without_errors() {
       // Given
       AtomicBoolean intercepted = new AtomicBoolean(false);
-      InqProxyFactory factory = InqProxyFactory.fromSync(
+      InqProxyFactory factory = InqProxyFactory.of(
           (chainId, callId, arg, next) -> {
             intercepted.set(true);
             return next.execute(chainId, callId, arg);
@@ -148,7 +149,7 @@ class InqProxyFactoryTest {
     void should_execute_around_advice_before_and_after_the_method_call() {
       // Given
       List<String> events = Collections.synchronizedList(new ArrayList<>());
-      InqProxyFactory factory = InqProxyFactory.fromSync(
+      InqProxyFactory factory = InqProxyFactory.of(
           (chainId, callId, arg, next) -> {
             events.add("before");
             Object result = next.execute(chainId, callId, arg);
@@ -170,7 +171,7 @@ class InqProxyFactoryTest {
     void should_intercept_every_method_call_independently() {
       // Given
       AtomicInteger callCount = new AtomicInteger();
-      InqProxyFactory factory = InqProxyFactory.fromSync(
+      InqProxyFactory factory = InqProxyFactory.of(
           (chainId, callId, arg, next) -> {
             callCount.incrementAndGet();
             return next.execute(chainId, callId, arg);
@@ -206,7 +207,7 @@ class InqProxyFactoryTest {
         }
       };
 
-      InqProxyFactory factory = InqProxyFactory.fromSync(
+      InqProxyFactory factory = InqProxyFactory.of(
           (chainId, callId, arg, next) -> {
             try {
               return next.execute(chainId, callId, arg);
@@ -241,7 +242,7 @@ class InqProxyFactoryTest {
         }
       };
 
-      InqProxyFactory factory = InqProxyFactory.fromSync(
+      InqProxyFactory factory = InqProxyFactory.of(
           (chainId, callId, arg, next) -> next.execute(chainId, callId, arg));
       CalculatorService proxy = factory.protect(CalculatorService.class, failing);
 
@@ -258,7 +259,7 @@ class InqProxyFactoryTest {
         throw expected;
       };
 
-      InqProxyFactory factory = InqProxyFactory.fromSync(
+      InqProxyFactory factory = InqProxyFactory.of(
           (chainId, callId, arg, next) -> next.execute(chainId, callId, arg));
       FailingService proxy = factory.protect(FailingService.class, failing);
 
@@ -271,7 +272,7 @@ class InqProxyFactoryTest {
     void should_provide_unique_call_ids_for_each_invocation() {
       // Given
       List<Long> callIds = Collections.synchronizedList(new ArrayList<>());
-      InqProxyFactory factory = InqProxyFactory.fromSync(
+      InqProxyFactory factory = InqProxyFactory.of(
           (chainId, callId, arg, next) -> {
             callIds.add(callId);
             return next.execute(chainId, callId, arg);
@@ -299,7 +300,7 @@ class InqProxyFactoryTest {
       AtomicBoolean asyncPathUsed = new AtomicBoolean(false);
       AtomicBoolean syncPathUsed = new AtomicBoolean(false);
 
-      InqProxyFactory factory = InqProxyFactory.from(
+      InqProxyFactory factory = InqAsyncProxyFactory.of(
           // Sync path
           (chainId, callId, arg, next) -> {
             syncPathUsed.set(true);
@@ -328,7 +329,7 @@ class InqProxyFactoryTest {
       AtomicBoolean asyncPathUsed = new AtomicBoolean(false);
       AtomicBoolean syncPathUsed = new AtomicBoolean(false);
 
-      InqProxyFactory factory = InqProxyFactory.from(
+      InqProxyFactory factory = InqAsyncProxyFactory.of(
           (chainId, callId, arg, next) -> {
             syncPathUsed.set(true);
             return next.execute(chainId, callId, arg);
@@ -354,7 +355,7 @@ class InqProxyFactoryTest {
       // Given — CompletableFuture is a subtype of CompletionStage
       AtomicBoolean asyncPathUsed = new AtomicBoolean(false);
 
-      InqProxyFactory factory = InqProxyFactory.from(
+      InqProxyFactory factory = InqAsyncProxyFactory.of(
           (chainId, callId, arg, next) -> next.execute(chainId, callId, arg),
           (chainId, callId, arg, next) -> {
             asyncPathUsed.set(true);
@@ -375,7 +376,7 @@ class InqProxyFactoryTest {
     @DisplayName("should return the correct async result through the decorator")
     void should_return_the_correct_async_result_through_the_decorator() {
       // Given
-      InqProxyFactory factory = InqProxyFactory.from(
+      InqProxyFactory factory = InqAsyncProxyFactory.of(
           (chainId, callId, arg, next) -> next.execute(chainId, callId, arg),
           (chainId, callId, arg, next) -> next.executeAsync(chainId, callId, arg)
       );
@@ -394,7 +395,7 @@ class InqProxyFactoryTest {
       // Given
       AtomicBoolean released = new AtomicBoolean(false);
 
-      InqProxyFactory factory = InqProxyFactory.from(
+      InqProxyFactory factory = InqAsyncProxyFactory.of(
           (chainId, callId, arg, next) -> next.execute(chainId, callId, arg),
           (chainId, callId, arg, next) -> {
             return next.executeAsync(chainId, callId, arg)
@@ -434,7 +435,7 @@ class InqProxyFactoryTest {
         }
       };
 
-      InqProxyFactory factory = InqProxyFactory.from(
+      InqProxyFactory factory = InqAsyncProxyFactory.of(
           (chainId, callId, arg, next) -> next.execute(chainId, callId, arg),
           (chainId, callId, arg, next) -> {
             return next.executeAsync(chainId, callId, arg)
@@ -461,7 +462,7 @@ class InqProxyFactoryTest {
     void should_protect_multiple_services_with_the_same_factory() {
       // Given
       AtomicInteger callCount = new AtomicInteger();
-      InqProxyFactory factory = InqProxyFactory.fromSync(
+      InqProxyFactory factory = InqProxyFactory.of(
           (chainId, callId, arg, next) -> {
             callCount.incrementAndGet();
             return next.execute(chainId, callId, arg);
@@ -490,7 +491,7 @@ class InqProxyFactoryTest {
       List<String> events = Collections.synchronizedList(new ArrayList<>());
       AtomicInteger permits = new AtomicInteger(1);
 
-      InqProxyFactory factory = InqProxyFactory.fromSync(
+      InqProxyFactory factory = InqProxyFactory.of(
           (chainId, callId, arg, next) -> {
             if (permits.decrementAndGet() < 0) {
               permits.incrementAndGet();
@@ -522,7 +523,7 @@ class InqProxyFactoryTest {
       List<String> events = Collections.synchronizedList(new ArrayList<>());
       AtomicInteger permits = new AtomicInteger(1);
 
-      InqProxyFactory factory = InqProxyFactory.from(
+      InqProxyFactory factory = InqAsyncProxyFactory.of(
           // Sync path (not used in this test)
           (chainId, callId, arg, next) -> next.execute(chainId, callId, arg),
           // Async path — acquire sync, release async
@@ -570,12 +571,12 @@ class InqProxyFactoryTest {
       List<Long> outerChainIds = Collections.synchronizedList(new ArrayList<>());
       List<Long> innerChainIds = Collections.synchronizedList(new ArrayList<>());
 
-      InqProxyFactory outerFactory = InqProxyFactory.fromSync(
+      InqProxyFactory outerFactory = InqProxyFactory.of(
           (chainId, callId, arg, next) -> {
             outerChainIds.add(chainId);
             return next.execute(chainId, callId, arg);
           });
-      InqProxyFactory innerFactory = InqProxyFactory.fromSync(
+      InqProxyFactory innerFactory = InqProxyFactory.of(
           (chainId, callId, arg, next) -> {
             innerChainIds.add(chainId);
             return next.execute(chainId, callId, arg);
@@ -600,12 +601,12 @@ class InqProxyFactoryTest {
       List<Long> outerCallIds = Collections.synchronizedList(new ArrayList<>());
       List<Long> innerCallIds = Collections.synchronizedList(new ArrayList<>());
 
-      InqProxyFactory outerFactory = InqProxyFactory.fromSync(
+      InqProxyFactory outerFactory = InqProxyFactory.of(
           (chainId, callId, arg, next) -> {
             outerCallIds.add(callId);
             return next.execute(chainId, callId, arg);
           });
-      InqProxyFactory innerFactory = InqProxyFactory.fromSync(
+      InqProxyFactory innerFactory = InqProxyFactory.of(
           (chainId, callId, arg, next) -> {
             innerCallIds.add(callId);
             return next.execute(chainId, callId, arg);
@@ -629,14 +630,14 @@ class InqProxyFactoryTest {
       // Given
       List<String> events = Collections.synchronizedList(new ArrayList<>());
 
-      InqProxyFactory retryFactory = InqProxyFactory.fromSync(
+      InqProxyFactory retryFactory = InqProxyFactory.of(
           (chainId, callId, arg, next) -> {
             events.add("retry-before");
             Object result = next.execute(chainId, callId, arg);
             events.add("retry-after");
             return result;
           });
-      InqProxyFactory bulkheadFactory = InqProxyFactory.fromSync(
+      InqProxyFactory bulkheadFactory = InqProxyFactory.of(
           (chainId, callId, arg, next) -> {
             events.add("bulkhead-before");
             Object result = next.execute(chainId, callId, arg);
@@ -665,19 +666,19 @@ class InqProxyFactoryTest {
       List<Long> chainIds = Collections.synchronizedList(new ArrayList<>());
       List<Long> callIds = Collections.synchronizedList(new ArrayList<>());
 
-      InqProxyFactory f1 = InqProxyFactory.fromSync((chainId, callId, arg, next) -> {
+      InqProxyFactory f1 = InqProxyFactory.of((chainId, callId, arg, next) -> {
         layers.add("L1");
         chainIds.add(chainId);
         callIds.add(callId);
         return next.execute(chainId, callId, arg);
       });
-      InqProxyFactory f2 = InqProxyFactory.fromSync((chainId, callId, arg, next) -> {
+      InqProxyFactory f2 = InqProxyFactory.of((chainId, callId, arg, next) -> {
         layers.add("L2");
         chainIds.add(chainId);
         callIds.add(callId);
         return next.execute(chainId, callId, arg);
       });
-      InqProxyFactory f3 = InqProxyFactory.fromSync((chainId, callId, arg, next) -> {
+      InqProxyFactory f3 = InqProxyFactory.of((chainId, callId, arg, next) -> {
         layers.add("L3");
         chainIds.add(chainId);
         callIds.add(callId);
@@ -703,11 +704,11 @@ class InqProxyFactoryTest {
       // Given
       List<Long> callIds = Collections.synchronizedList(new ArrayList<>());
 
-      InqProxyFactory outer = InqProxyFactory.fromSync((chainId, callId, arg, next) -> {
+      InqProxyFactory outer = InqProxyFactory.of((chainId, callId, arg, next) -> {
         callIds.add(callId);
         return next.execute(chainId, callId, arg);
       });
-      InqProxyFactory inner = InqProxyFactory.fromSync(
+      InqProxyFactory inner = InqProxyFactory.of(
           (chainId, callId, arg, next) -> next.execute(chainId, callId, arg));
 
       CalculatorService proxy = outer.protect(CalculatorService.class,
@@ -729,14 +730,14 @@ class InqProxyFactoryTest {
       List<String> events = Collections.synchronizedList(new ArrayList<>());
       List<Long> asyncChainIds = Collections.synchronizedList(new ArrayList<>());
 
-      InqProxyFactory outerFactory = InqProxyFactory.from(
+      InqProxyFactory outerFactory = InqAsyncProxyFactory.of(
           (chainId, callId, arg, next) -> next.execute(chainId, callId, arg),
           (chainId, callId, arg, next) -> {
             events.add("outer-async");
             asyncChainIds.add(chainId);
             return next.executeAsync(chainId, callId, arg);
           });
-      InqProxyFactory innerFactory = InqProxyFactory.from(
+      InqProxyFactory innerFactory = InqAsyncProxyFactory.of(
           (chainId, callId, arg, next) -> next.execute(chainId, callId, arg),
           (chainId, callId, arg, next) -> {
             events.add("inner-async");
@@ -768,7 +769,7 @@ class InqProxyFactoryTest {
       );
 
       List<String> events = Collections.synchronizedList(new ArrayList<>());
-      InqProxyFactory factory = InqProxyFactory.fromSync(
+      InqProxyFactory factory = InqProxyFactory.of(
           (chainId, callId, arg, next) -> {
             events.add("intercepted");
             return next.execute(chainId, callId, arg);
@@ -792,7 +793,7 @@ class InqProxyFactoryTest {
     @DisplayName("should expose the chain id through the Wrapper interface on the proxy")
     void should_expose_the_chain_id_through_the_Wrapper_interface_on_the_proxy() {
       // Given
-      InqProxyFactory factory = InqProxyFactory.fromSync("my-layer",
+      InqProxyFactory factory = InqProxyFactory.of("my-layer",
           (chainId, callId, arg, next) -> next.execute(chainId, callId, arg));
       CalculatorService proxy = factory.protect(CalculatorService.class, new RealCalculator());
 
@@ -807,7 +808,7 @@ class InqProxyFactoryTest {
     @DisplayName("should expose the layer description through the Wrapper interface")
     void should_expose_the_layer_description_through_the_Wrapper_interface() {
       // Given
-      InqProxyFactory factory = InqProxyFactory.fromSync("bulkhead",
+      InqProxyFactory factory = InqProxyFactory.of("bulkhead",
           (chainId, callId, arg, next) -> next.execute(chainId, callId, arg));
       CalculatorService proxy = factory.protect(CalculatorService.class, new RealCalculator());
 
@@ -822,7 +823,7 @@ class InqProxyFactoryTest {
     @DisplayName("should return null for getInner when proxy wraps a real target")
     void should_return_null_for_getInner_when_proxy_wraps_a_real_target() {
       // Given
-      InqProxyFactory factory = InqProxyFactory.fromSync("layer",
+      InqProxyFactory factory = InqProxyFactory.of("layer",
           (chainId, callId, arg, next) -> next.execute(chainId, callId, arg));
       CalculatorService proxy = factory.protect(CalculatorService.class, new RealCalculator());
 
@@ -834,9 +835,9 @@ class InqProxyFactoryTest {
     @DisplayName("should return the inner handler via getInner when proxies are nested")
     void should_return_the_inner_handler_via_getInner_when_proxies_are_nested() {
       // Given
-      InqProxyFactory outer = InqProxyFactory.fromSync("retry",
+      InqProxyFactory outer = InqProxyFactory.of("retry",
           (chainId, callId, arg, next) -> next.execute(chainId, callId, arg));
-      InqProxyFactory inner = InqProxyFactory.fromSync("bulkhead",
+      InqProxyFactory inner = InqProxyFactory.of("bulkhead",
           (chainId, callId, arg, next) -> next.execute(chainId, callId, arg));
 
       CalculatorService innerProxy = inner.protect(CalculatorService.class, new RealCalculator());
@@ -856,11 +857,11 @@ class InqProxyFactoryTest {
     @DisplayName("should render a multi-layer hierarchy through toStringHierarchy")
     void should_render_a_multi_layer_hierarchy_through_toStringHierarchy() {
       // Given
-      InqProxyFactory f1 = InqProxyFactory.fromSync("retry",
+      InqProxyFactory f1 = InqProxyFactory.of("retry",
           (chainId, callId, arg, next) -> next.execute(chainId, callId, arg));
-      InqProxyFactory f2 = InqProxyFactory.fromSync("bulkhead",
+      InqProxyFactory f2 = InqProxyFactory.of("bulkhead",
           (chainId, callId, arg, next) -> next.execute(chainId, callId, arg));
-      InqProxyFactory f3 = InqProxyFactory.fromSync("timeout",
+      InqProxyFactory f3 = InqProxyFactory.of("timeout",
           (chainId, callId, arg, next) -> next.execute(chainId, callId, arg));
 
       CalculatorService p3 = f3.protect(CalculatorService.class, new RealCalculator());
@@ -884,9 +885,9 @@ class InqProxyFactoryTest {
     @DisplayName("should share the chain id between proxy and its inner in the hierarchy")
     void should_share_the_chain_id_between_proxy_and_its_inner_in_the_hierarchy() {
       // Given
-      InqProxyFactory outer = InqProxyFactory.fromSync("outer",
+      InqProxyFactory outer = InqProxyFactory.of("outer",
           (chainId, callId, arg, next) -> next.execute(chainId, callId, arg));
-      InqProxyFactory inner = InqProxyFactory.fromSync("inner",
+      InqProxyFactory inner = InqProxyFactory.of("inner",
           (chainId, callId, arg, next) -> next.execute(chainId, callId, arg));
 
       CalculatorService proxy = outer.protect(CalculatorService.class,
