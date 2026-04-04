@@ -99,9 +99,7 @@ public abstract class BaseWrapper<T, A, R, S extends BaseWrapper<T, A, R, S>>
   /**
    * Constructs a new wrapper layer with pass-through behavior (no around-advice).
    *
-   * <p>Equivalent to calling the full constructor with {@link LayerAction#passThrough()}.
-   * Use this when the layer exists only for structural purposes (e.g. chain visualization)
-   * or when the behavior will be added via subclassing.</p>
+   * <p>Equivalent to calling the full constructor with {@link LayerAction#passThrough()}.</p>
    *
    * @param name          a descriptive name for this layer
    * @param delegate      the target to wrap
@@ -109,6 +107,22 @@ public abstract class BaseWrapper<T, A, R, S extends BaseWrapper<T, A, R, S>>
    */
   protected BaseWrapper(String name, T delegate, InternalExecutor<A, R> coreExecution) {
     this(name, delegate, coreExecution, LayerAction.passThrough());
+  }
+
+  /**
+   * Constructs a new wrapper layer using a {@link Decorator} for both name and around-advice.
+   *
+   * <p>The decorator provides its name via {@link Decorator#getName()} and its
+   * around-advice via its {@link LayerAction#execute} implementation. This is the
+   * preferred constructor when plugging reusable resilience elements (bulkhead,
+   * circuit breaker, retry, etc.) into the chain.</p>
+   *
+   * @param decorator     the decorator providing name and around-advice
+   * @param delegate      the target to wrap
+   * @param coreExecution the terminal execution logic
+   */
+  protected BaseWrapper(Decorator<A, R> decorator, T delegate, InternalExecutor<A, R> coreExecution) {
+    this(decorator.getName(), delegate, coreExecution, decorator);
   }
 
   /**

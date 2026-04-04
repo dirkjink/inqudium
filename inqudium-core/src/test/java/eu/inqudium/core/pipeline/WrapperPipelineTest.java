@@ -155,11 +155,11 @@ class WrapperPipelineTest {
         void should_reject_a_null_name_for_all_wrapper_types(WrapperScenario scenario) {
             assertThatThrownBy(() -> {
                 switch (scenario.displayName()) {
-                    case "RunnableWrapper" -> new RunnableWrapper(null, () -> {});
-                    case "SupplierWrapper" -> new SupplierWrapper<>(null, () -> "x");
-                    case "CallableWrapper" -> new CallableWrapper<>(null, () -> "x");
-                    case "FunctionWrapper" -> new FunctionWrapper<>(null, Function.identity());
-                    case "JoinPointWrapper" -> new JoinPointWrapper<>(null, () -> "x");
+                    case "RunnableWrapper" -> new RunnableWrapper((String) null, () -> {});
+                    case "SupplierWrapper" -> new SupplierWrapper<>((String) null, () -> "x");
+                    case "CallableWrapper" -> new CallableWrapper<>((String) null, () -> "x");
+                    case "FunctionWrapper" -> new FunctionWrapper<>((String) null, Function.identity());
+                    case "JoinPointWrapper" -> new JoinPointWrapper<>((String) null, () -> "x");
                     default -> throw new IllegalStateException("Unknown scenario");
                 }
             }).isInstanceOf(IllegalArgumentException.class)

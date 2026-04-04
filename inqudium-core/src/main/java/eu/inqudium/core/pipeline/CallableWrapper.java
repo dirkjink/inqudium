@@ -9,22 +9,6 @@ import java.util.concurrent.CompletionException;
  * <p>Checked exceptions from the delegate are wrapped in {@link CompletionException}
  * for transport through the chain and unwrapped in {@link #call()}.</p>
  *
- * <h3>Usage with LayerAction</h3>
- * <pre>{@code
- * Callable<String> core = () -> readFile(path);
- *
- * // Retry layer
- * CallableWrapper<String> retried = new CallableWrapper<>("retry", core,
- *     (chainId, callId, arg, next) -> {
- *         try {
- *             return next.execute(chainId, callId, arg);
- *         } catch (Exception e) {
- *             return next.execute(chainId, callId, arg); // one retry
- *         }
- *     }
- * );
- * }</pre>
- *
  * @param <V> the return type of the callable
  */
 public class CallableWrapper<V>
@@ -43,16 +27,17 @@ public class CallableWrapper<V>
     };
   }
 
-  /**
-   * Creates a wrapper with a custom {@link LayerAction} defining this layer's behavior.
-   */
+  /** Creates a wrapper with a {@link Decorator} providing name and around-advice. */
+  public CallableWrapper(Decorator<Void, V> decorator, Callable<V> delegate) {
+    super(decorator, delegate, coreFor(delegate));
+  }
+
+  /** Creates a wrapper with a custom {@link LayerAction}. */
   public CallableWrapper(String name, Callable<V> delegate, LayerAction<Void, V> layerAction) {
     super(name, delegate, coreFor(delegate), layerAction);
   }
 
-  /**
-   * Creates a wrapper with pass-through behavior (no around-advice).
-   */
+  /** Creates a wrapper with pass-through behavior. */
   public CallableWrapper(String name, Callable<V> delegate) {
     super(name, delegate, coreFor(delegate));
   }

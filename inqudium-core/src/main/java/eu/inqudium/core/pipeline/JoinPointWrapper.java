@@ -8,27 +8,6 @@ import java.util.concurrent.CompletionException;
  * <p>Integrates AOP proxy executions into the wrapper chain. Checked exceptions
  * are transported via {@link CompletionException} and unwrapped in {@link #proceed()}.</p>
  *
- * <h3>Usage with LayerAction</h3>
- * <pre>{@code
- * @Around("@annotation(Traced)")
- * public Object trace(ProceedingJoinPoint pjp) throws Throwable {
- *     JoinPointWrapper<Object> wrapper = new JoinPointWrapper<>(
- *         pjp.getSignature().toShortString(),
- *         pjp::proceed,
- *         (chainId, callId, arg, next) -> {
- *             MDC.put("chainId", Long.toString(chainId));
- *             MDC.put("callId", Long.toString(callId));
- *             try {
- *                 return next.execute(chainId, callId, arg);
- *             } finally {
- *                 MDC.clear();
- *             }
- *         }
- *     );
- *     return wrapper.proceed();
- * }
- * }</pre>
- *
  * @param <R> the return type of the join point execution
  */
 public class JoinPointWrapper<R>
@@ -47,16 +26,17 @@ public class JoinPointWrapper<R>
     };
   }
 
-  /**
-   * Creates a wrapper with a custom {@link LayerAction} defining this layer's behavior.
-   */
+  /** Creates a wrapper with a {@link Decorator} providing name and around-advice. */
+  public JoinPointWrapper(Decorator<Void, R> decorator, ProxyExecution<R> delegate) {
+    super(decorator, delegate, coreFor(delegate));
+  }
+
+  /** Creates a wrapper with a custom {@link LayerAction}. */
   public JoinPointWrapper(String name, ProxyExecution<R> delegate, LayerAction<Void, R> layerAction) {
     super(name, delegate, coreFor(delegate), layerAction);
   }
 
-  /**
-   * Creates a wrapper with pass-through behavior (no around-advice).
-   */
+  /** Creates a wrapper with pass-through behavior. */
   public JoinPointWrapper(String name, ProxyExecution<R> delegate) {
     super(name, delegate, coreFor(delegate));
   }
