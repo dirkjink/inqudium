@@ -38,18 +38,19 @@ public abstract class BaseWrapper<T, A, R, S extends BaseWrapper<T, A, R, S>>
   private final InternalExecutor<A, R> nextStep;
 
   /**
-   * Per-instance counter for call IDs — avoids contention on a global static counter.
-   * Only concurrent calls on the same wrapper instance compete for this counter.
+   * Shared call ID counter for this chain. Created once by the innermost wrapper
+   * and inherited by every outer wrapper, just like the {@link #chainId}.
+   * Only concurrent invocations of the same chain compete for this counter.
    */
-  private final AtomicLong callIdCounter = new AtomicLong();
+  private final AtomicLong callIdCounter;
 
   /**
    * Constructs a new wrapper layer around the given delegate.
    *
    * <p>If the delegate is itself a {@code BaseWrapper}, this layer joins the same chain
-   * by inheriting the delegate's {@link #chainId}, and {@code coreExecution} is ignored.
-   * Otherwise, a new chain ID is generated and {@code coreExecution} becomes the terminal
-   * step in the chain.</p>
+   * by inheriting the delegate's {@link #chainId} and {@link #callIdCounter}.
+   * Otherwise, a new chain ID and counter are created, marking this as the innermost
+   * wrapper in a new chain.</p>
    *
    * @param name          a descriptive name for this layer (must not be {@code null})
    * @param delegate      the target to wrap (must not be {@code null})
@@ -68,9 +69,11 @@ public abstract class BaseWrapper<T, A, R, S extends BaseWrapper<T, A, R, S>>
 
     if (delegate instanceof BaseWrapper<?,?,?,?> innerWrapper) {
       this.chainId = innerWrapper.getChainId();
+      this.callIdCounter = innerWrapper.callIdCounter;
       this.nextStep = (InternalExecutor<A, R>) delegate;
     } else {
       this.chainId = CHAIN_ID_COUNTER.incrementAndGet();
+      this.callIdCounter = new AtomicLong();
       this.nextStep = coreExecution;
     }
   }
