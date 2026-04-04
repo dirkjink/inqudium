@@ -57,26 +57,10 @@ public interface InqProxyFactory {
   /**
    * Creates a factory that routes all method calls through a sync {@link LayerAction}.
    *
-   * @param asyncAction the around-advice for async methods
-   * @return a proxy factory
-   */
-  static InqProxyFactory fromAsync(AsyncLayerAction<Void, Object> asyncAction) {
-    return new InqProxyFactory() {
-      @Override
-      public <T> T protect(Class<T> serviceInterface, T target) {
-        validateInterface(serviceInterface);
-        return createProxy(serviceInterface, target, null, asyncAction);
-      }
-    };
-  }
-
-  /**
-   * Creates a factory that routes all method calls through a sync {@link LayerAction}.
-   *
    * @param action the around-advice to apply on every method call
    * @return a proxy factory
    */
-  static InqProxyFactory fromSync(LayerAction<Void, Object> action) {
+  static InqProxyFactory fromSync(LayerAction<?, ?> action) {
     return new InqProxyFactory() {
       @Override
       public <T> T protect(Class<T> serviceInterface, T target) {
@@ -95,8 +79,8 @@ public interface InqProxyFactory {
    * @param asyncAction the around-advice for async methods
    * @return a proxy factory
    */
-  static InqProxyFactory from(LayerAction<Void, Object> syncAction,
-                               AsyncLayerAction<Void, Object> asyncAction) {
+  static InqProxyFactory from(LayerAction<?, ?> syncAction,
+                               AsyncLayerAction<?, ?> asyncAction) {
     return new InqProxyFactory() {
       @Override
       public <T> T protect(Class<T> serviceInterface, T target) {
@@ -116,17 +100,22 @@ public interface InqProxyFactory {
   }
 
   @SuppressWarnings("unchecked")
-  private static <T> T createProxy(Class<T> serviceInterface,
-                                   T target,
-                                   LayerAction<Void, Object> syncAction,
-                                   AsyncLayerAction<Void, Object> asyncAction) {
+  private static <T> T createProxy(Class<T> serviceInterface, T target,
+                                    LayerAction<?, ?> syncAction,
+                                    AsyncLayerAction<?, ?> asyncAction) {
+
+    // Single cast point — safe because the proxy handler always passes null as argument
+    // and works with Object for return values (reflection-based invocation).
+    LayerAction<Void, Object> sync = (LayerAction<Void, Object>) syncAction;
+    AsyncLayerAction<Void, Object> async =
+        asyncAction != null ? (AsyncLayerAction<Void, Object>) asyncAction : null;
 
     InvocationHandler handler = (proxy, method, args) -> {
 
       // Route async methods through the async decorator when available
-      if (asyncAction != null
+      if (async != null
           && CompletionStage.class.isAssignableFrom(method.getReturnType())) {
-        return asyncAction.executeAsync(
+        return async.executeAsync(
             StandaloneIdGenerator.nextChainId(),
             StandaloneIdGenerator.nextCallId(),
             null,
@@ -143,7 +132,7 @@ public interface InqProxyFactory {
       }
 
       // Sync path
-      return syncAction.execute(
+      return sync.execute(
           StandaloneIdGenerator.nextChainId(),
           StandaloneIdGenerator.nextCallId(),
           null,
