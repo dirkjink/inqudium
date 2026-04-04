@@ -12,7 +12,7 @@ import java.util.function.Supplier;
 /**
  * A self-describing, pluggable async pipeline element with around-semantics.
  *
- * <p>The async counterpart to {@link InqDecorator}. Combines
+ * <p>The async counterpart to {@link InqDecorator InqDecorator}. Combines
  * {@link InqElement} (name, type, event publisher) with {@link AsyncLayerAction}
  * (async around-advice) and provides {@code decorateAsyncXxx()} factory methods
  * that create reusable async wrapper objects for deferred execution.</p>
@@ -44,11 +44,18 @@ public interface InqAsyncDecorator<A, R> extends InqElement, AsyncLayerAction<A,
    * Wraps an async runnable in an {@link AsyncRunnableWrapper}.
    *
    * @param delegate the async operation to protect
+  /**
+   * Wraps a {@link Runnable} in an {@link AsyncRunnableWrapper}.
+   *
+   * <p>The Runnable executes synchronously at the core of the chain. The async
+   * behavior comes from the surrounding {@link AsyncLayerAction} layers (e.g.
+   * acquire permit synchronously, release on stage completion).</p>
+   *
+   * @param delegate the operation to protect
    * @return a decorated supplier that returns {@code CompletionStage<Void>} on each {@code get()}
    */
   @SuppressWarnings("unchecked")
-  default Supplier<CompletionStage<Void>> decorateAsyncRunnable(
-      Supplier<CompletionStage<Void>> delegate) {
+  default Supplier<CompletionStage<Void>> decorateAsyncRunnable(Runnable delegate) {
     return new AsyncRunnableWrapper((InqAsyncDecorator<Void, Void>) this, delegate);
   }
 

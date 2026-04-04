@@ -193,8 +193,6 @@ public final class ImperativeBulkhead<A, R> implements Bulkhead<A, R> {
                                          long callId,
                                          A argument,
                                          InternalAsyncExecutor<A, R> next) {
-    String callIdStr = Long.toString(callId);
-
     // ── Start phase: acquire permit (synchronous) ──
     long startWait = eventConfig.isTraceEnabled() ? nanoTimeSource.now() : 0L;
 

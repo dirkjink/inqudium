@@ -37,12 +37,12 @@ public interface InqAsyncExecutor<A, R> extends AsyncLayerAction<A, R> {
    * Executes an async runnable directly through this layer's around-advice.
    */
   @SuppressWarnings("unchecked")
-  default CompletionStage<Void> executeAsyncRunnable(Supplier<CompletionStage<Void>> supplier) {
+  default CompletionStage<Void> executeAsyncRunnable(Runnable runnable) {
     return ((AsyncLayerAction<Void, Void>) this).executeAsync(
         StandaloneIdGenerator.nextChainId(),
         StandaloneIdGenerator.nextCallId(),
         null,
-        (chainId, callId, arg) -> supplier.get()
+        (chainId, callId, arg) -> {runnable.run(); return null;}
     );
   }
 
