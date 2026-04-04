@@ -81,19 +81,13 @@ public final class ImperativeBulkhead<A, R> implements Bulkhead<A, R>, InqAsyncE
   private final CompletableFutureAsyncExecutor asyncExecutor;
   private final boolean enableExceptionOptimization;
 
-  public ImperativeBulkhead(InqImperativeBulkheadConfig config, BulkheadStrategy strategy) {
+  public ImperativeBulkhead(InqImperativeBulkheadConfig config, BlockingBulkheadStrategy strategy) {
     Objects.requireNonNull(config, "config must not be null");
     Objects.requireNonNull(strategy, "strategy must not be null");
-    if (!(strategy instanceof BlockingBulkheadStrategy blocking)) {
-      throw new IllegalArgumentException(
-          "ImperativeBulkhead requires a BlockingBulkheadStrategy, but received: "
-              + strategy.getClass().getName()
-              + ". Use the reactive bulkhead facade for NonBlockingBulkheadStrategy.");
-    }
     this.logger = config.general().loggerFactory().getLogger(getClass());
     this.name = config.name();
     this.config = config;
-    this.strategy = blocking;
+    this.strategy = strategy;
     this.eventConfig = config.eventConfig();
     this.maxWaitDuration = config.maxWaitDuration();
     this.nanoTimeSource = config.general().nanoTimesource();
