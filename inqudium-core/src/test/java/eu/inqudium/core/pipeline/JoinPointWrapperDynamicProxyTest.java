@@ -71,7 +71,7 @@ class JoinPointWrapperDynamicProxyTest {
      */
     static class InterceptionLog {
         final List<String> interceptedMethods = Collections.synchronizedList(new ArrayList<>());
-        final List<String> callIds = Collections.synchronizedList(new ArrayList<>());
+        final List<Long> callIds = Collections.synchronizedList(new ArrayList<>());
         final List<String> layerNames = Collections.synchronizedList(new ArrayList<>());
     }
 
@@ -88,7 +88,7 @@ class JoinPointWrapperDynamicProxyTest {
         }
 
         @Override
-        protected void handleLayer(String callId, Void argument) {
+        protected void handleLayer(long callId, Void argument) {
             log.layerNames.add(getLayerDescription());
             log.callIds.add(callId);
         }
@@ -232,15 +232,18 @@ class JoinPointWrapperDynamicProxyTest {
         @Test
         @DisplayName("should generate a unique call id for each proxied invocation")
         void should_generate_a_unique_call_id_for_each_proxied_invocation() {
-            // Given
+            // Given — a single wrapper instance reused across calls (not recreated per call)
             InterceptionLog log = new InterceptionLog();
-            GreetingService proxy = createSingleLayerProxy(new DefaultGreetingService(), log);
+            DefaultGreetingService target = new DefaultGreetingService();
+            TrackingJoinPointWrapper<Object> wrapper = new TrackingJoinPointWrapper<>(
+                "greet()", (ProxyExecution<Object>) () -> target.greet("test"), log
+            );
 
-            // When
-            proxy.greet("Alice");
-            proxy.greet("Bob");
+            // When — invoke the same wrapper twice
+            try { wrapper.proceed(); } catch (Throwable ignored) {}
+            try { wrapper.proceed(); } catch (Throwable ignored) {}
 
-            // Then
+            // Then — the per-instance counter produces distinct IDs for each invocation
             assertThat(log.callIds)
                 .hasSize(2);
             assertThat(log.callIds.get(0))

@@ -5,10 +5,6 @@ import java.util.function.Function;
 /**
  * A homogeneous wrapper for the {@link Function} interface.
  *
- * <p>Unlike the other wrappers in this package, {@code FunctionWrapper} carries a
- * non-void argument type. The input value passed to {@link #apply} flows through
- * every layer's {@link #handleLayer} method before reaching the core delegate.</p>
- *
  * @param <I> the input type of the function
  * @param <O> the output type of the function
  */

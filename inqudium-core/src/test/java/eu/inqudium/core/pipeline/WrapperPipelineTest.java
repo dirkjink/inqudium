@@ -43,7 +43,7 @@ class WrapperPipelineTest {
      */
     static class ExecutionLog {
         final List<String> layerNames = Collections.synchronizedList(new ArrayList<>());
-        final List<String> callIds = Collections.synchronizedList(new ArrayList<>());
+        final List<Long> callIds = Collections.synchronizedList(new ArrayList<>());
         final AtomicBoolean coreInvoked = new AtomicBoolean(false);
     }
 
@@ -80,7 +80,7 @@ class WrapperPipelineTest {
         }
 
         @Override
-        protected void handleLayer(String callId, Void argument) {
+        protected void handleLayer(long callId, Void argument) {
             log.layerNames.add(getLayerDescription());
             log.callIds.add(callId);
         }
@@ -95,7 +95,7 @@ class WrapperPipelineTest {
         }
 
         @Override
-        protected void handleLayer(String callId, Void argument) {
+        protected void handleLayer(long callId, Void argument) {
             log.layerNames.add(getLayerDescription());
             log.callIds.add(callId);
         }
@@ -110,7 +110,7 @@ class WrapperPipelineTest {
         }
 
         @Override
-        protected void handleLayer(String callId, Void argument) {
+        protected void handleLayer(long callId, Void argument) {
             log.layerNames.add(getLayerDescription());
             log.callIds.add(callId);
         }
@@ -125,7 +125,7 @@ class WrapperPipelineTest {
         }
 
         @Override
-        protected void handleLayer(String callId, I input) {
+        protected void handleLayer(long callId, I input) {
             log.layerNames.add(getLayerDescription());
             log.callIds.add(callId);
         }
@@ -140,7 +140,7 @@ class WrapperPipelineTest {
         }
 
         @Override
-        protected void handleLayer(String callId, Void argument) {
+        protected void handleLayer(long callId, Void argument) {
             log.layerNames.add(getLayerDescription());
             log.callIds.add(callId);
         }
@@ -330,8 +330,7 @@ class WrapperPipelineTest {
 
             // Then
             assertThat(wrapper.getChainId())
-                .isNotNull()
-                .isNotEmpty();
+                .isGreaterThan(0L);
         }
 
         @ParameterizedTest(name = "{0}")
@@ -454,10 +453,10 @@ class WrapperPipelineTest {
 
             // When
             scenario.invoke(wrapper);
-            String firstCallId = log.callIds.get(0);
+            long firstCallId = log.callIds.get(0);
             log.callIds.clear();
             scenario.invoke(wrapper);
-            String secondCallId = log.callIds.get(0);
+            long secondCallId = log.callIds.get(0);
 
             // Then
             assertThat(firstCallId)
@@ -818,7 +817,7 @@ class WrapperPipelineTest {
             // Then
             assertThat(hierarchy)
                 .startsWith("Chain-ID: ")
-                .contains(wrapper.getChainId())
+                .contains(Long.toString(wrapper.getChainId()))
                 .contains("my-layer");
         }
 
@@ -905,21 +904,21 @@ class WrapperPipelineTest {
         /** A RunnableWrapper that uses a custom call ID generator for testing. */
         static class CustomIdRunnableWrapper extends RunnableWrapper {
             private final ExecutionLog log;
-            private final String fixedCallId;
+            private final long fixedCallId;
 
-            CustomIdRunnableWrapper(String name, Runnable delegate, ExecutionLog log, String fixedCallId) {
+            CustomIdRunnableWrapper(String name, Runnable delegate, ExecutionLog log, long fixedCallId) {
                 super(name, delegate);
                 this.log = log;
                 this.fixedCallId = fixedCallId;
             }
 
             @Override
-            protected String generateCallId() {
+            protected long generateCallId() {
                 return fixedCallId;
             }
 
             @Override
-            protected void handleLayer(String callId, Void argument) {
+            protected void handleLayer(long callId, Void argument) {
                 log.layerNames.add(getLayerDescription());
                 log.callIds.add(callId);
             }
@@ -930,7 +929,7 @@ class WrapperPipelineTest {
         void should_use_the_custom_call_id_generator_when_overridden() {
             // Given
             ExecutionLog log = new ExecutionLog();
-            String customId = "MY-CUSTOM-TRACE-ID-001";
+            long customId = 999_001L;
             RunnableWrapper wrapper = new CustomIdRunnableWrapper("layer", () -> {}, log, customId);
 
             // When
@@ -947,7 +946,7 @@ class WrapperPipelineTest {
         void should_propagate_the_custom_call_id_through_all_layers_in_a_chain() {
             // Given
             ExecutionLog log = new ExecutionLog();
-            String customId = "CORRELATION-42";
+            long customId = 42L;
             // Only the outermost wrapper needs to override generateCallId,
             // since initiateChain is called on the outermost layer
             RunnableWrapper inner = new TrackingRunnableWrapper("inner", () -> {}, log);
@@ -966,21 +965,21 @@ class WrapperPipelineTest {
         @DisplayName("should call generateCallId once per invocation not once per layer")
         void should_call_generateCallId_once_per_invocation_not_once_per_layer() {
             // Given
-            List<String> generatedIds = Collections.synchronizedList(new ArrayList<>());
+            List<Long> generatedIds = Collections.synchronizedList(new ArrayList<>());
             ExecutionLog log = new ExecutionLog();
 
             RunnableWrapper inner = new TrackingRunnableWrapper("inner", () -> {}, log);
             RunnableWrapper outer = new RunnableWrapper("outer", inner) {
-                private int counter = 0;
+                private long counter = 0;
                 @Override
-                protected String generateCallId() {
-                    String id = "id-" + (++counter);
+                protected long generateCallId() {
+                    long id = ++counter;
                     generatedIds.add(id);
                     return id;
                 }
 
                 @Override
-                protected void handleLayer(String callId, Void argument) {
+                protected void handleLayer(long callId, Void argument) {
                     log.layerNames.add(getLayerDescription());
                     log.callIds.add(callId);
                 }
@@ -992,7 +991,7 @@ class WrapperPipelineTest {
             // Then — generateCallId was called exactly once (by initiateChain)
             assertThat(generatedIds).hasSize(1);
             // But the same id reached both layers
-            assertThat(log.callIds).hasSize(2).containsOnly("id-1");
+            assertThat(log.callIds).hasSize(2).containsOnly(1L);
         }
     }
 }
