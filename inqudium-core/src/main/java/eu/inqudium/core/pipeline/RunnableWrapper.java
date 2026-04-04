@@ -23,47 +23,12 @@ public class RunnableWrapper
     extends BaseWrapper<Runnable, Void, Void, RunnableWrapper>
     implements Runnable {
 
-  /**
-   * Creates a new wrapper layer around the given {@link Runnable}.
-   *
-   * @param name     a descriptive name for this layer (e.g. "logging", "metrics")
-   * @param delegate the runnable to wrap (another wrapper or the core target)
-   */
   public RunnableWrapper(String name, Runnable delegate) {
-    super(name, delegate);
+    super(name, delegate, (callId, arg) -> { delegate.run(); return null; });
   }
 
-  /**
-   * Implements {@link Runnable#run()} by initiating the wrapper chain.
-   * The chain traverses all layers and ultimately calls the core delegate's
-   * {@code run()} method.
-   */
   @Override
   public void run() {
-    // Void argument type — pass null to start the chain
     initiateChain(null);
-  }
-
-  /**
-   * {@inheritDoc}
-   *
-   * <p>Invokes the core delegate's {@code run()} method. Returns {@code null} because
-   * Java requires a return value for the generic type {@code Void}.</p>
-   */
-  @Override
-  protected Void invokeCore(Void argument) {
-    getDelegate().run();
-    return null;
-  }
-
-  /**
-   * {@inheritDoc}
-   *
-   * <p>Override this method in a subclass to add cross-cutting behavior
-   * (e.g. logging, timing, or context propagation) to the runnable execution.</p>
-   */
-  @Override
-  protected void handleLayer(String callId, Void argument) {
-    // No-op by default — extend and override to add behavior
   }
 }

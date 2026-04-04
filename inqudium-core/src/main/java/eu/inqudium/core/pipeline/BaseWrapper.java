@@ -10,9 +10,7 @@ import java.util.UUID;
  * on the outermost wrapper, it calls {@link #initiateChain}, which generates a unique
  * call ID and begins a top-down traversal through every layer via
  * {@link #executeWithId}. Each layer executes its cross-cutting concern in
- * {@link #handleLayer} before forwarding the call to the next inner layer. The
- * innermost layer — whose delegate is the actual target, not another wrapper —
- * finally invokes the real logic through {@link #invokeCore}.</p>
+ * {@link #handleLayer} before forwarding the call to the next inner layer.</p>
  *
  * <h3>Execution Flow</h3>
  * <pre>{@code
@@ -20,7 +18,7 @@ import java.util.UUID;
  *   └── initiateChain(null)                      // generates callId
  *         └── outerWrapper.executeWithId(callId)  // handleLayer → forward
  *               └── innerWrapper.executeWithId(callId)  // handleLayer → forward
- *                     └── invokeCore(null)        // calls delegate.run()
+ *                     └── coreExecution            // calls delegate.run()
  * }</pre>
  *
  * <h3>Immutable Chain Structure</h3>
@@ -30,16 +28,12 @@ import java.util.UUID;
  * share across threads without synchronization. A single inner wrapper can even be
  * reused in multiple independent chains.</p>
  *
- * <h3>Type Parameters</h3>
- * <ul>
- *   <li>{@code T} — the type of the delegate (e.g. {@code Runnable}, {@code Supplier<V>},
- *       or another {@code BaseWrapper})</li>
- *   <li>{@code A} — the argument type passed through the chain
- *       ({@code Void} for no-arg interfaces)</li>
- *   <li>{@code R} — the return type produced at the end of the chain
- *       ({@code Void} for fire-and-forget interfaces)</li>
- *   <li>{@code S} — the recursive self-type, ensuring type-safe chain navigation</li>
- * </ul>
+ * <h3>Core Execution</h3>
+ * <p>Subclasses provide their terminal execution logic as an {@link InternalExecutor}
+ * lambda passed to the constructor. This lambda is only invoked when the delegate is
+ * not another wrapper (i.e. this is the innermost layer). The lambda captures the
+ * delegate directly, eliminating the need for a separate {@code invokeCore()} method
+ * and a {@code getDelegate()} accessor.</p>
  *
  * @param <T> the delegate type this wrapper wraps around
  * @param <A> the argument type flowing through the chain
@@ -66,31 +60,28 @@ public abstract class BaseWrapper<T, A, R, S extends BaseWrapper<T, A, R, S>>
   /**
    * The next step in the execution chain, resolved once at construction time.
    * Points to the inner wrapper's {@code executeWithId} if the delegate is another
-   * {@link BaseWrapper}, or to this layer's {@link #invokeCore} if the delegate
-   * is the terminal target. This eliminates the need for a runtime
-   * {@code instanceof} check on every invocation.
+   * {@link BaseWrapper}, or to the subclass-provided core execution lambda if the
+   * delegate is the terminal target. This eliminates the need for runtime
+   * {@code instanceof} checks and abstract {@code invokeCore()} methods.
    */
   private final InternalExecutor<A, R> nextStep;
-
-  /**
-   * Cached reference to the inner wrapper, or {@code null} if the delegate is the
-   * terminal target. Resolved once at construction time since the chain is immutable.
-   */
-  private final S inner;
 
   /**
    * Constructs a new wrapper layer around the given delegate.
    *
    * <p>If the delegate is itself a {@code BaseWrapper}, this layer joins the same chain
-   * by inheriting the delegate's {@link #chainId}. Otherwise, a new chain ID is generated,
-   * marking this as the innermost wrapper in a new chain.</p>
+   * by inheriting the delegate's {@link #chainId}, and the {@code coreExecution} parameter
+   * is ignored (the chain forwards to the inner wrapper instead). Otherwise, a new chain ID
+   * is generated and {@code coreExecution} becomes the terminal step in the chain.</p>
    *
-   * @param name     a descriptive name for this layer (must not be {@code null})
-   * @param delegate the target to wrap (must not be {@code null})
+   * @param name          a descriptive name for this layer (must not be {@code null})
+   * @param delegate      the target to wrap (must not be {@code null})
+   * @param coreExecution the terminal execution logic, invoked when the delegate is not a wrapper.
+   *                      Typically a lambda like {@code (callId, arg) -> delegate.run()}
    * @throws IllegalArgumentException if {@code name} or {@code delegate} is {@code null}
    */
   @SuppressWarnings("unchecked")
-  protected BaseWrapper(String name, T delegate) {
+  protected BaseWrapper(String name, T delegate, InternalExecutor<A, R> coreExecution) {
     if (name == null) {
       throw new IllegalArgumentException("Name must not be null");
     }
@@ -101,15 +92,12 @@ public abstract class BaseWrapper<T, A, R, S extends BaseWrapper<T, A, R, S>>
     this.delegate = delegate;
 
     // Resolve chain structure once — the chain is immutable after construction
-    if (delegate instanceof BaseWrapper) {
-      this.inner = (S) delegate;
-      this.chainId = this.inner.getChainId();
+    if (delegate instanceof BaseWrapper<?,?,?,?> innerWrapper) {
+      this.chainId = innerWrapper.getChainId();
       this.nextStep = (InternalExecutor<A, R>) delegate;
     } else {
-      this.inner = null;
       this.chainId = UUID.randomUUID().toString();
-      // Terminal delegate — forward directly to invokeCore, skipping the callId
-      this.nextStep = (callId, argument) -> invokeCore(argument);
+      this.nextStep = coreExecution;
     }
   }
 
@@ -118,9 +106,7 @@ public abstract class BaseWrapper<T, A, R, S extends BaseWrapper<T, A, R, S>>
    * (e.g. {@code run()}, {@code get()}, {@code call()}).
    *
    * <p>Generates a fresh call ID via {@link #generateCallId()} and starts the
-   * top-down traversal from this layer inward. The call ID is passed to every
-   * layer's {@link #handleLayer} method, enabling end-to-end tracing of a single
-   * logical invocation.</p>
+   * top-down traversal from this layer inward.</p>
    *
    * @param argument the argument to pass through the chain ({@code null} for Void types)
    * @return the result of the core delegate's execution
@@ -132,11 +118,8 @@ public abstract class BaseWrapper<T, A, R, S extends BaseWrapper<T, A, R, S>>
   /**
    * Processes this layer and propagates the call to the next step in the chain.
    *
-   * <p>The execution is straightforward: first this layer's {@link #handleLayer} runs,
-   * then the pre-resolved {@code nextStep} is invoked. The {@code nextStep} was
-   * determined at construction time — it either forwards to the inner wrapper's
-   * {@code executeWithId}, or calls {@link #invokeCore} on the terminal delegate.
-   * No runtime type checks are needed.</p>
+   * <p>First this layer's {@link #handleLayer} runs, then the pre-resolved
+   * {@code nextStep} is invoked. No runtime type checks are needed.</p>
    *
    * @param callId   the unique identifier for this invocation
    * @param argument the argument flowing through the chain
@@ -152,47 +135,24 @@ public abstract class BaseWrapper<T, A, R, S extends BaseWrapper<T, A, R, S>>
    * Hook for layer-specific cross-cutting logic, called once per layer during
    * each chain invocation.
    *
-   * <p>This is the primary extension point for subclasses. Typical uses include
-   * logging, metrics collection, MDC context propagation, security checks, or
-   * transaction management. The {@code callId} can be used to correlate log entries
-   * across all layers of a single invocation.</p>
-   *
-   * <p>The default concrete wrappers (e.g. {@link RunnableWrapper}) leave this method
-   * empty. Extend them and override this method to add behavior.</p>
+   * <p>The default implementation is a no-op. Override this in a subclass to add
+   * behavior such as logging, metrics collection, MDC context propagation,
+   * security checks, or transaction management. The {@code callId} can be used
+   * to correlate log entries across all layers of a single invocation.</p>
    *
    * @param callId   unique identifier for this particular invocation, shared across all layers
    * @param argument the argument passed through the chain ({@code null} for Void types)
    */
-  protected abstract void handleLayer(String callId, A argument);
-
-  /**
-   * Executes the actual core logic by delegating to the wrapped target.
-   *
-   * <p><strong>Important:</strong> This method is only invoked on the innermost wrapper —
-   * the one whose delegate is the real target (e.g. a plain {@code Runnable}), not another
-   * {@code BaseWrapper}. Outer wrappers must still implement this method because it is
-   * abstract, but their implementation will never be called during normal chain execution.
-   * It serves as a safety net in case a wrapper is used standalone without being part of
-   * a chain.</p>
-   *
-   * @param argument the argument passed through the chain
-   * @return the result of the core delegate execution
-   */
-  protected abstract R invokeCore(A argument);
+  protected void handleLayer(String callId, A argument) {
+    // No-op by default — override in subclasses to add cross-cutting behavior
+  }
 
   /**
    * Factory method for creating unique call identifiers.
    *
-   * <p>The default implementation uses {@link UUID#randomUUID()}, which provides strong
-   * uniqueness guarantees but may be a bottleneck under very high throughput due to its
-   * reliance on {@code SecureRandom}.</p>
-   *
-   * <p>Override this method to supply alternative ID strategies, such as:</p>
-   * <ul>
-   *   <li>Sequential counters (e.g. {@code AtomicLong}) for higher throughput</li>
-   *   <li>Shorter random IDs when full UUID uniqueness is not required</li>
-   *   <li>Externally provided correlation IDs (e.g. from HTTP headers or messaging systems)</li>
-   * </ul>
+   * <p>The default implementation uses {@link UUID#randomUUID()}. Override this
+   * to supply alternative ID strategies (e.g. sequential counters, shorter IDs,
+   * or externally provided correlation IDs).</p>
    *
    * @return a new unique call ID string
    */
@@ -209,17 +169,11 @@ public abstract class BaseWrapper<T, A, R, S extends BaseWrapper<T, A, R, S>>
   /**
    * {@inheritDoc}
    *
-   * <p>Returns the cached inner wrapper reference, or {@code null} if the delegate
-   * is the terminal target. Resolved once at construction time.</p>
+   * <p>Returns the delegate cast to the self-type if it is a {@code BaseWrapper},
+   * or {@code null} if the delegate is the terminal target.</p>
    */
-  @Override public S getInner() { return inner; }
-
-  /**
-   * Provides subclasses with access to the wrapped delegate for use in
-   * {@link #invokeCore}. This is the raw delegate — it may be another
-   * {@code BaseWrapper} or the actual target.
-   *
-   * @return the wrapped delegate
-   */
-  protected T getDelegate() { return delegate; }
+  @SuppressWarnings("unchecked")
+  @Override public S getInner() {
+    return (delegate instanceof BaseWrapper) ? (S) delegate : null;
+  }
 }
