@@ -85,7 +85,7 @@ public abstract class BaseWrapper<T, A, R, S extends BaseWrapper<T, A, R, S>>
     this.layerAction = layerAction;
 
     if (delegate instanceof BaseWrapper<?, ?, ?, ?> innerWrapper) {
-      this.chainId = innerWrapper.getChainId();
+      this.chainId = innerWrapper.chainId();
       this.callIdCounter = innerWrapper.callIdCounter;
       this.nextStep = (InternalExecutor<A, R>) delegate;
     } else {
@@ -162,18 +162,23 @@ public abstract class BaseWrapper<T, A, R, S extends BaseWrapper<T, A, R, S>>
   }
 
   @Override
-  public long getChainId() {
+  public long currentCallId() {
+    return callIdCounter.get();
+  }
+
+  @Override
+  public long chainId() {
     return chainId;
   }
 
   @Override
-  public String getLayerDescription() {
+  public String layerDescription() {
     return name;
   }
 
   @SuppressWarnings("unchecked")
   @Override
-  public S getInner() {
+  public S inner() {
     return (delegate instanceof BaseWrapper) ? (S) delegate : null;
   }
 }

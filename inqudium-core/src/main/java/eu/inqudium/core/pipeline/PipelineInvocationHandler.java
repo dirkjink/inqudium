@@ -141,7 +141,7 @@ public class PipelineInvocationHandler
    */
   protected Object dispatchServiceMethod(Method method, Object[] args) throws Throwable {
     long callId = generateCallId();
-    return executeSyncChain(getChainId(), callId, buildSyncTerminal(method, args));
+    return executeSyncChain(chainId(), callId, buildSyncTerminal(method, args));
   }
 
   /**
@@ -156,7 +156,7 @@ public class PipelineInvocationHandler
    */
   public final Object executeSyncChain(long chainId, long callId,
                                        InternalExecutor<Void, Object> terminal) {
-    PipelineInvocationHandler inner = getInner();
+    PipelineInvocationHandler inner = inner();
     InternalExecutor<Void, Object> next = (inner != null)
         ? (cid, caid, a) -> inner.executeSyncChain(cid, caid, terminal)
         : terminal;
@@ -185,7 +185,7 @@ public class PipelineInvocationHandler
     if (method.getDeclaringClass() == Object.class) return true;
     if (method.getParameterCount() == 0) {
       return switch (method.getName()) {
-        case "getChainId", "getLayerDescription", "getInner", "toStringHierarchy" -> true;
+        case "chainId", "currentCallId", "layerDescription", "inner", "toStringHierarchy" -> true;
         default -> false;
       };
     }
@@ -195,14 +195,17 @@ public class PipelineInvocationHandler
   private Object handleInfrastructureMethod(Method method, Object[] args) throws Throwable {
     if (method.getParameterCount() == 0) {
       switch (method.getName()) {
-        case "getChainId" -> {
-          return getChainId();
+        case "currentCallId" -> {
+          return currentCallId();
         }
-        case "getLayerDescription" -> {
-          return getLayerDescription();
+        case "chainId" -> {
+          return chainId();
         }
-        case "getInner" -> {
-          return getInner();
+        case "layerDescription" -> {
+          return layerDescription();
+        }
+        case "inner" -> {
+          return inner();
         }
         case "toStringHierarchy" -> {
           return toStringHierarchy();

@@ -445,11 +445,12 @@ class BulkheadTest {
       // Then
       assertThat(decorated)
           .isInstanceOfSatisfying(Wrapper.class, wrapper -> {
-            long chainId = wrapper.getChainId();
-            String layerDescription = wrapper.getLayerDescription();
+            long chainId = wrapper.chainId();
+            String layerDescription = wrapper.layerDescription();
+            long currentCallId = wrapper.currentCallId();
             assertThat(layerDescription).isEqualTo("BULKHEAD(sync-reuse)");
             assertThat(wrapper.toStringHierarchy()).isEqualToIgnoringNewLines(
-                "Chain-ID: " + chainId + layerDescription);
+                "Chain-ID: " + chainId + " (current call-ID: " + currentCallId + ")" + layerDescription);
           });
       assertThat(first).isEqualTo(1);
       assertThat(second).isEqualTo(2);
@@ -571,11 +572,12 @@ class BulkheadTest {
       // Then
       assertThat(decorated)
           .isInstanceOfSatisfying(Wrapper.class, wrapper -> {
-            long chainId = wrapper.getChainId();
-            String layerDescription = wrapper.getLayerDescription();
+            long chainId = wrapper.chainId();
+            String layerDescription = wrapper.layerDescription();
+            long currentCallId = wrapper.currentCallId();
             assertThat(layerDescription).isEqualTo("async-reuse");
             assertThat(wrapper.toStringHierarchy()).isEqualToIgnoringNewLines(
-                "Chain-ID: " + chainId + layerDescription);
+                "Chain-ID: " + chainId + " (current call-ID: " + currentCallId + ")" + layerDescription);
           });
       assertThat(first).isEqualTo(1);
       assertThat(second).isEqualTo(2);
@@ -605,11 +607,12 @@ class BulkheadTest {
       // Then
       assertThat(proxy)
           .isInstanceOfSatisfying(Wrapper.class, wrapper -> {
-            long chainId = wrapper.getChainId();
-            String layerDescription = wrapper.getLayerDescription();
+            long chainId = wrapper.chainId();
+            String layerDescription = wrapper.layerDescription();
+            long currentCallId = wrapper.currentCallId();
             assertThat(layerDescription).isEqualTo("proxy-sync");
             assertThat(wrapper.toStringHierarchy()).isEqualToIgnoringNewLines(
-                "Chain-ID: " + chainId + layerDescription);
+                "Chain-ID: " + chainId + " (current call-ID: " + currentCallId + ")" + layerDescription);
           });
       assertThat(result).isEqualTo("in-stock:SKU-001");
       assertThat(bh.getAvailablePermits()).isEqualTo(5);
@@ -728,8 +731,8 @@ class BulkheadTest {
       Wrapper<?> wrapper = (Wrapper<?>) proxy;
 
       // Then
-      assertThat(wrapper.getChainId()).isGreaterThan(0L);
-      assertThat(wrapper.getLayerDescription()).isEqualTo("proxy-wrapper");
+      assertThat(wrapper.chainId()).isGreaterThan(0L);
+      assertThat(wrapper.layerDescription()).isEqualTo("proxy-wrapper");
       assertThat(wrapper.toStringHierarchy()).contains("proxy-wrapper");
     }
 
@@ -761,10 +764,10 @@ class BulkheadTest {
 
       // Chain shares the same chain ID
       Wrapper<?> outerWrapper = (Wrapper<?>) outer;
-      Wrapper<?> innerWrapper = outerWrapper.getInner();
-      assertThat(outerWrapper.getChainId()).isEqualTo(innerWrapper.getChainId());
-      assertThat(outerWrapper.getLayerDescription()).isEqualTo("logging");
-      assertThat(innerWrapper.getLayerDescription()).isEqualTo("proxy-stack");
+      Wrapper<?> innerWrapper = outerWrapper.inner();
+      assertThat(outerWrapper.chainId()).isEqualTo(innerWrapper.chainId());
+      assertThat(outerWrapper.layerDescription()).isEqualTo("logging");
+      assertThat(innerWrapper.layerDescription()).isEqualTo("proxy-stack");
     }
   }
 
@@ -791,11 +794,12 @@ class BulkheadTest {
       // Then
       assertThat(proxy)
           .isInstanceOfSatisfying(Wrapper.class, wrapper -> {
-            long chainId = wrapper.getChainId();
-            String layerDescription = wrapper.getLayerDescription();
+            long chainId = wrapper.chainId();
+            String layerDescription = wrapper.layerDescription();
+            long currentCallId = wrapper.currentCallId();
             assertThat(layerDescription).isEqualTo("proxy-async");
             assertThat(wrapper.toStringHierarchy()).isEqualToIgnoringNewLines(
-                "Chain-ID: " + chainId + layerDescription);
+                "Chain-ID: " + chainId + " (current call-ID: " + currentCallId + ")" + layerDescription);
           });
       assertThat(result).isEqualTo("async-in-stock:SKU-001");
       assertThat(bh.getAvailablePermits()).isEqualTo(5);
@@ -910,8 +914,8 @@ class BulkheadTest {
 
       // Chain shares the same chain ID
       Wrapper<?> outerWrapper = (Wrapper<?>) outer;
-      Wrapper<?> innerWrapper = outerWrapper.getInner();
-      assertThat(outerWrapper.getChainId()).isEqualTo(innerWrapper.getChainId());
+      Wrapper<?> innerWrapper = outerWrapper.inner();
+      assertThat(outerWrapper.chainId()).isEqualTo(innerWrapper.chainId());
     }
   }
 }

@@ -96,7 +96,7 @@ public class AsyncPipelineInvocationHandler extends PipelineInvocationHandler {
   protected Object dispatchServiceMethod(Method method, Object[] args) throws Throwable {
     if (CompletionStage.class.isAssignableFrom(method.getReturnType())) {
       long callId = generateCallId();
-      return executeAsyncChain(getChainId(), callId, buildAsyncTerminal(method, args));
+      return executeAsyncChain(chainId(), callId, buildAsyncTerminal(method, args));
     }
     return super.dispatchServiceMethod(method, args);
   }

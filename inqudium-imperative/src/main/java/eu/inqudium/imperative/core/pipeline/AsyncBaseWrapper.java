@@ -62,7 +62,7 @@ public abstract class AsyncBaseWrapper<T, A, R, S extends AsyncBaseWrapper<T, A,
     this.layerAction = layerAction;
 
     if (delegate instanceof AsyncBaseWrapper<?, ?, ?, ?> innerWrapper) {
-      this.chainId = innerWrapper.getChainId();
+      this.chainId = innerWrapper.chainId();
       this.callIdCounter = innerWrapper.callIdCounter;
       this.nextStep = (InternalAsyncExecutor<A, R>) delegate;
     } else {
@@ -108,18 +108,23 @@ public abstract class AsyncBaseWrapper<T, A, R, S extends AsyncBaseWrapper<T, A,
   }
 
   @Override
-  public long getChainId() {
+  public long currentCallId() {
+    return callIdCounter.get();
+  }
+
+  @Override
+  public long chainId() {
     return chainId;
   }
 
   @Override
-  public String getLayerDescription() {
+  public String layerDescription() {
     return name;
   }
 
   @SuppressWarnings("unchecked")
   @Override
-  public S getInner() {
+  public S inner() {
     return (delegate instanceof AsyncBaseWrapper) ? (S) delegate : null;
   }
 }

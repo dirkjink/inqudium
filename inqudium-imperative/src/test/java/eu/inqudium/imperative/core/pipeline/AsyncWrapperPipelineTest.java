@@ -191,7 +191,7 @@ class AsyncWrapperPipelineTest {
             AsyncBaseWrapper<?, ?, ?, ?> wrapper = scenario.createSingle("layer", log);
 
             // Then
-            assertThat(wrapper.getChainId()).isGreaterThan(0L);
+            assertThat(wrapper.chainId()).isGreaterThan(0L);
         }
 
         @ParameterizedTest(name = "{0}")
@@ -206,7 +206,7 @@ class AsyncWrapperPipelineTest {
             AsyncBaseWrapper<?, ?, ?, ?> outer = scenario.wrapAround("outer", inner, log);
 
             // Then
-            assertThat(outer.getChainId()).isEqualTo(inner.getChainId());
+            assertThat(outer.chainId()).isEqualTo(inner.chainId());
         }
 
         @ParameterizedTest(name = "{0}")
@@ -220,7 +220,7 @@ class AsyncWrapperPipelineTest {
             AsyncBaseWrapper<?, ?, ?, ?> chain2 = scenario.createSingle("chain2", log2);
 
             // Then
-            assertThat(chain1.getChainId()).isNotEqualTo(chain2.getChainId());
+            assertThat(chain1.chainId()).isNotEqualTo(chain2.chainId());
         }
 
         @ParameterizedTest(name = "{0}")
@@ -232,7 +232,7 @@ class AsyncWrapperPipelineTest {
             AsyncBaseWrapper<?, ?, ?, ?> wrapper = scenario.createSingle("my-async-layer", log);
 
             // Then
-            assertThat(wrapper.getLayerDescription()).isEqualTo("my-async-layer");
+            assertThat(wrapper.layerDescription()).isEqualTo("my-async-layer");
         }
     }
 
@@ -539,7 +539,7 @@ class AsyncWrapperPipelineTest {
             join(wrapper.get());
 
             // Then
-            assertThat(capturedChainId.get()).isEqualTo(wrapper.getChainId());
+            assertThat(capturedChainId.get()).isEqualTo(wrapper.chainId());
             assertThat(capturedCallId.get()).isGreaterThan(0L);
         }
     }
@@ -587,9 +587,9 @@ class AsyncWrapperPipelineTest {
             AsyncBaseWrapper<?, ?, ?, ?> outerB = scenario.wrapAround("B", shared, log);
 
             // Then
-            assertThat(outerA.getChainId())
-                .isEqualTo(outerB.getChainId())
-                .isEqualTo(shared.getChainId());
+            assertThat(outerA.chainId())
+                .isEqualTo(outerB.chainId())
+                .isEqualTo(shared.chainId());
         }
     }
 
@@ -698,7 +698,7 @@ class AsyncWrapperPipelineTest {
             // Then
             assertThat(hierarchy)
                 .startsWith("Chain-ID: ")
-                .contains(Long.toString(wrapper.getChainId()))
+                .contains(Long.toString(wrapper.chainId()))
                 .contains("my-async-layer");
         }
 
@@ -731,7 +731,7 @@ class AsyncWrapperPipelineTest {
             AsyncBaseWrapper<?, ?, ?, ?> wrapper = scenario.createSingle("leaf", log);
 
             // Then
-            assertThat(wrapper.getInner()).isNull();
+            assertThat(wrapper.inner()).isNull();
         }
 
         @ParameterizedTest(name = "{0}")
@@ -745,7 +745,7 @@ class AsyncWrapperPipelineTest {
             AsyncBaseWrapper<?, ?, ?, ?> outer = scenario.wrapAround("outer", inner, log);
 
             // When / Then
-            assertThat(outer.getInner()).isSameAs(inner);
+            assertThat(outer.inner()).isSameAs(inner);
         }
     }
 

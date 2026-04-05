@@ -85,7 +85,7 @@ class InqProxyFactorySyncTest {
       GreetingService proxy = factory.protect(GreetingService.class, new RealGreetingService());
 
       // Then
-      assertThat(((Wrapper<?>) proxy).getLayerDescription()).isEqualTo("my-layer");
+      assertThat(((Wrapper<?>) proxy).layerDescription()).isEqualTo("my-layer");
     }
 
     @Test
@@ -97,7 +97,7 @@ class InqProxyFactorySyncTest {
       GreetingService proxy = factory.protect(GreetingService.class, new RealGreetingService());
 
       // Then
-      assertThat(((Wrapper<?>) proxy).getLayerDescription()).isEqualTo("proxy");
+      assertThat(((Wrapper<?>) proxy).layerDescription()).isEqualTo("proxy");
     }
   }
 
@@ -417,7 +417,7 @@ class InqProxyFactorySyncTest {
       GreetingService proxy = factory.protect(GreetingService.class, new RealGreetingService());
 
       // When / Then
-      assertThat(((Wrapper<?>) proxy).getChainId()).isGreaterThan(0L);
+      assertThat(((Wrapper<?>) proxy).chainId()).isGreaterThan(0L);
     }
 
     @Test
@@ -429,7 +429,7 @@ class InqProxyFactorySyncTest {
       GreetingService proxy = factory.protect(GreetingService.class, new RealGreetingService());
 
       // When / Then
-      assertThat(((Wrapper<?>) proxy).getLayerDescription()).isEqualTo("bulkhead");
+      assertThat(((Wrapper<?>) proxy).layerDescription()).isEqualTo("bulkhead");
     }
 
     @Test
@@ -441,7 +441,7 @@ class InqProxyFactorySyncTest {
       GreetingService proxy = factory.protect(GreetingService.class, new RealGreetingService());
 
       // When / Then
-      assertThat(((Wrapper<?>) proxy).getInner()).isNull();
+      assertThat(((Wrapper<?>) proxy).inner()).isNull();
     }
 
     @Test
@@ -624,13 +624,13 @@ class InqProxyFactorySyncTest {
 
       // When
       Wrapper<?> outerWrapper = (Wrapper<?>) proxy;
-      Wrapper<?> innerWrapper = outerWrapper.getInner();
+      Wrapper<?> innerWrapper = outerWrapper.inner();
 
       // Then
-      assertThat(outerWrapper.getLayerDescription()).isEqualTo("retry");
+      assertThat(outerWrapper.layerDescription()).isEqualTo("retry");
       assertThat(innerWrapper).isNotNull();
-      assertThat(innerWrapper.getLayerDescription()).isEqualTo("bulkhead");
-      assertThat(innerWrapper.getInner()).isNull();
+      assertThat(innerWrapper.layerDescription()).isEqualTo("bulkhead");
+      assertThat(innerWrapper.inner()).isNull();
     }
 
     @Test
@@ -657,7 +657,7 @@ class InqProxyFactorySyncTest {
       // Then
       assertThat(result).isEqualTo("Hello, World!");
       assertThat(intercepted).isTrue();
-      assertThat(((Wrapper<?>) wrapped).getInner()).isNull();
+      assertThat(((Wrapper<?>) wrapped).inner()).isNull();
     }
 
     @Test
@@ -725,8 +725,8 @@ class InqProxyFactorySyncTest {
       GreetingService proxy2 = factory.protect(GreetingService.class, new RealGreetingService());
 
       // When / Then
-      long chainId1 = ((Wrapper<?>) proxy1).getChainId();
-      long chainId2 = ((Wrapper<?>) proxy2).getChainId();
+      long chainId1 = ((Wrapper<?>) proxy1).chainId();
+      long chainId2 = ((Wrapper<?>) proxy2).chainId();
       assertThat(chainId1).isNotEqualTo(chainId2);
     }
   }

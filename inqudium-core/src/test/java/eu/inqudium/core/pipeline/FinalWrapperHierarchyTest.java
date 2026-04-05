@@ -171,13 +171,13 @@ class FinalWrapperHierarchyTest {
     void chainIdMustBeStable(WrapperTestBridge bridge) {
       // Given
       BaseWrapper<?, ?, ?, ?> root = bridge.getWrapper();
-      BaseWrapper<?, ?, ?, ?> inner = root.getInner();
+      BaseWrapper<?, ?, ?, ?> inner = root.inner();
 
       // When & Then
-      assertThat(root.getChainId())
+      assertThat(root.chainId())
           .as("Chain-ID must be non-null and identical across the hierarchy")
           .isNotNull()
-          .isEqualTo(inner.getChainId());
+          .isEqualTo(inner.chainId());
     }
   }
 }

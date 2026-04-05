@@ -279,7 +279,7 @@ class JoinPointWrapperDynamicProxyTest {
       JoinPointWrapper<Object> outer = new JoinPointWrapper<>("outer", inner);
 
       // When / Then
-      assertThat(outer.getChainId()).isEqualTo(inner.getChainId());
+      assertThat(outer.chainId()).isEqualTo(inner.chainId());
     }
 
     @Test

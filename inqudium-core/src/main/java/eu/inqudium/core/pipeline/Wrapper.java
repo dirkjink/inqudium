@@ -18,18 +18,23 @@ public interface Wrapper<S extends Wrapper<S>> {
   /**
    * Returns the next inner layer, or {@code null} at the end of the chain.
    */
-  S getInner();
+  S inner();
 
   /**
    * Returns the unique chain identifier shared by all layers wrapping the same core delegate.
    * Uses a primitive {@code long} counter for zero-allocation identification.
    */
-  long getChainId();
+  long chainId();
 
   /**
    * Returns a human-readable description of this layer.
    */
-  String getLayerDescription();
+  String layerDescription();
+
+  /**
+   * Returns the current unique call identifier using the chain's shared counter.
+   */
+  long currentCallId();
 
   /**
    * Renders the wrapper hierarchy as a formatted tree string, starting from this layer inward.
@@ -38,7 +43,12 @@ public interface Wrapper<S extends Wrapper<S>> {
   default String toStringHierarchy() {
     int maxDepth = 100;
     StringBuilder sb = new StringBuilder();
-    sb.append("Chain-ID: ").append(getChainId()).append("\n");
+    sb.append("Chain-ID: ")
+        .append(chainId())
+        .append(" (current call-ID: ")
+        .append(currentCallId())
+        .append(")")
+        .append("\n");
 
     Wrapper<?> current = this;
     int depth = 0;
@@ -51,8 +61,8 @@ public interface Wrapper<S extends Wrapper<S>> {
       if (depth > 0) {
         sb.append("  ".repeat(depth - 1)).append("  └── ");
       }
-      sb.append(current.getLayerDescription()).append("\n");
-      current = current.getInner();
+      sb.append(current.layerDescription()).append("\n");
+      current = current.inner();
       depth++;
     }
     return sb.toString();

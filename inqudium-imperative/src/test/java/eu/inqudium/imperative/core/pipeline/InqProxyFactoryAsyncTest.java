@@ -801,7 +801,7 @@ class InqProxyFactoryAsyncTest {
       Wrapper<?> wrapper = (Wrapper<?>) proxy;
 
       // Then
-      assertThat(wrapper.getChainId()).isGreaterThan(0L);
+      assertThat(wrapper.chainId()).isGreaterThan(0L);
     }
 
     @Test
@@ -816,7 +816,7 @@ class InqProxyFactoryAsyncTest {
       Wrapper<?> wrapper = (Wrapper<?>) proxy;
 
       // Then
-      assertThat(wrapper.getLayerDescription()).isEqualTo("bulkhead");
+      assertThat(wrapper.layerDescription()).isEqualTo("bulkhead");
     }
 
     @Test
@@ -828,7 +828,7 @@ class InqProxyFactoryAsyncTest {
       CalculatorService proxy = factory.protect(CalculatorService.class, new RealCalculator());
 
       // When / Then
-      assertThat(((Wrapper<?>) proxy).getInner()).isNull();
+      assertThat(((Wrapper<?>) proxy).inner()).isNull();
     }
 
     @Test
@@ -845,12 +845,12 @@ class InqProxyFactoryAsyncTest {
 
       // When
       Wrapper<?> outerWrapper = (Wrapper<?>) outerProxy;
-      Wrapper<?> innerWrapper = outerWrapper.getInner();
+      Wrapper<?> innerWrapper = outerWrapper.inner();
 
       // Then
       assertThat(innerWrapper).isNotNull();
-      assertThat(innerWrapper.getLayerDescription()).isEqualTo("bulkhead");
-      assertThat(innerWrapper.getInner()).isNull();
+      assertThat(innerWrapper.layerDescription()).isEqualTo("bulkhead");
+      assertThat(innerWrapper.inner()).isNull();
     }
 
     @Test
@@ -895,10 +895,10 @@ class InqProxyFactoryAsyncTest {
 
       // When
       Wrapper<?> outerWrapper = (Wrapper<?>) proxy;
-      Wrapper<?> innerWrapper = outerWrapper.getInner();
+      Wrapper<?> innerWrapper = outerWrapper.inner();
 
       // Then
-      assertThat(outerWrapper.getChainId()).isEqualTo(innerWrapper.getChainId());
+      assertThat(outerWrapper.chainId()).isEqualTo(innerWrapper.chainId());
     }
   }
 }
