@@ -1,7 +1,7 @@
 package eu.inqudium.imperative.core.pipeline;
 
 import eu.inqudium.core.pipeline.LayerAction;
-import eu.inqudium.core.pipeline.PipelineInvocationHandler;
+import eu.inqudium.core.pipeline.ProxyWrapper;
 import eu.inqudium.core.pipeline.Wrapper;
 
 import java.lang.reflect.Method;
@@ -10,7 +10,7 @@ import java.util.concurrent.CompletionStage;
 import java.util.function.Function;
 
 /**
- * Async extension of {@link PipelineInvocationHandler} that routes methods returning
+ * Async extension of {@link ProxyWrapper} that routes methods returning
  * {@link CompletionStage} through an {@link AsyncLayerAction}.
  *
  * <p>Overrides {@link #dispatchServiceMethod} to check the method's return type:
@@ -26,7 +26,7 @@ import java.util.function.Function;
  *
  * @since 0.4.0
  */
-public class AsyncPipelineInvocationHandler extends PipelineInvocationHandler {
+public class AsyncProxyWrapper extends ProxyWrapper {
 
   private final AsyncLayerAction<Void, Object> asyncAction;
 
@@ -41,9 +41,9 @@ public class AsyncPipelineInvocationHandler extends PipelineInvocationHandler {
   /**
    * Wrapping a real target — no inner handler, terminal goes directly to asyncAction.
    */
-  public AsyncPipelineInvocationHandler(String name, Object target,
-                                        LayerAction<Void, Object> syncAction,
-                                        AsyncLayerAction<Void, Object> asyncAction) {
+  public AsyncProxyWrapper(String name, Object target,
+                           LayerAction<Void, Object> syncAction,
+                           AsyncLayerAction<Void, Object> asyncAction) {
     super(name, target, syncAction);
     this.asyncAction = asyncAction;
     this.nextStepFactory = Function.identity();
@@ -53,13 +53,13 @@ public class AsyncPipelineInvocationHandler extends PipelineInvocationHandler {
    * Wrapping another handler — resolves next-step strategy based on inner handler type.
    */
   @SuppressWarnings("unchecked")
-  public AsyncPipelineInvocationHandler(String name, PipelineInvocationHandler inner,
-                                        LayerAction<Void, Object> syncAction,
-                                        AsyncLayerAction<Void, Object> asyncAction) {
+  public AsyncProxyWrapper(String name, ProxyWrapper inner,
+                           LayerAction<Void, Object> syncAction,
+                           AsyncLayerAction<Void, Object> asyncAction) {
     super(name, inner, syncAction);
     this.asyncAction = asyncAction;
 
-    if (inner instanceof AsyncPipelineInvocationHandler asyncInner) {
+    if (inner instanceof AsyncProxyWrapper asyncInner) {
       // Inner has async — delegate to its async chain
       this.nextStepFactory = terminal ->
           (cid, caid, a) -> asyncInner.executeAsyncChain(cid, caid, terminal);
@@ -78,10 +78,10 @@ public class AsyncPipelineInvocationHandler extends PipelineInvocationHandler {
   public static <T> T createProxy(Class<T> serviceInterface, T target, String name,
                                   LayerAction<Void, Object> syncAction,
                                   AsyncLayerAction<Void, Object> asyncAction) {
-    PipelineInvocationHandler inner = resolveInner(target);
-    AsyncPipelineInvocationHandler handler = (inner != null)
-        ? new AsyncPipelineInvocationHandler(name, inner, syncAction, asyncAction)
-        : new AsyncPipelineInvocationHandler(name, target, syncAction, asyncAction);
+    ProxyWrapper inner = resolveInner(target);
+    AsyncProxyWrapper handler = (inner != null)
+        ? new AsyncProxyWrapper(name, inner, syncAction, asyncAction)
+        : new AsyncProxyWrapper(name, target, syncAction, asyncAction);
 
     return (T) Proxy.newProxyInstance(
         serviceInterface.getClassLoader(),

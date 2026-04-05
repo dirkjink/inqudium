@@ -32,8 +32,8 @@ import java.lang.reflect.Proxy;
  *
  * @since 0.4.0
  */
-public class PipelineInvocationHandler
-    extends BaseWrapper<Object, Void, Object, PipelineInvocationHandler>
+public class ProxyWrapper
+    extends BaseWrapper<Object, Void, Object, ProxyWrapper>
     implements InvocationHandler {
 
   /**
@@ -52,8 +52,8 @@ public class PipelineInvocationHandler
   /**
    * Wrapping a real target — creates new chain metadata.
    */
-  public PipelineInvocationHandler(String name, Object target,
-                                   LayerAction<Void, Object> syncAction) {
+  public ProxyWrapper(String name, Object target,
+                      LayerAction<Void, Object> syncAction) {
     super(name, target, PROXY_CORE);
     this.realTarget = target;
     this.syncAction = syncAction;
@@ -62,8 +62,8 @@ public class PipelineInvocationHandler
   /**
    * Wrapping another handler — BaseWrapper inherits chainId and callIdCounter.
    */
-  public PipelineInvocationHandler(String name, PipelineInvocationHandler inner,
-                                   LayerAction<Void, Object> syncAction) {
+  public ProxyWrapper(String name, ProxyWrapper inner,
+                      LayerAction<Void, Object> syncAction) {
     super(name, inner, PROXY_CORE);
     this.realTarget = inner.realTarget;
     this.syncAction = syncAction;
@@ -87,7 +87,7 @@ public class PipelineInvocationHandler
   @SuppressWarnings("unchecked")
   public static <T> T createProxy(Class<T> serviceInterface, T target, String name,
                                   LayerAction<Void, Object> syncAction) {
-    PipelineInvocationHandler handler = resolveHandler(target, name, syncAction);
+    ProxyWrapper handler = resolveHandler(target, name, syncAction);
     return (T) Proxy.newProxyInstance(
         serviceInterface.getClassLoader(),
         new Class<?>[]{serviceInterface, Wrapper.class},
@@ -98,22 +98,22 @@ public class PipelineInvocationHandler
    * Resolves the inner handler if the target is a pipeline proxy, then creates a new handler.
    * Protected so that async subclasses can reuse the detection logic.
    */
-  protected static PipelineInvocationHandler resolveInner(Object target) {
+  protected static ProxyWrapper resolveInner(Object target) {
     if (Proxy.isProxyClass(target.getClass())) {
       InvocationHandler h = Proxy.getInvocationHandler(target);
-      if (h instanceof PipelineInvocationHandler inner) {
+      if (h instanceof ProxyWrapper inner) {
         return inner;
       }
     }
     return null;
   }
 
-  private static PipelineInvocationHandler resolveHandler(Object target, String name,
-                                                          LayerAction<Void, Object> syncAction) {
-    PipelineInvocationHandler inner = resolveInner(target);
+  private static ProxyWrapper resolveHandler(Object target, String name,
+                                             LayerAction<Void, Object> syncAction) {
+    ProxyWrapper inner = resolveInner(target);
     return (inner != null)
-        ? new PipelineInvocationHandler(name, inner, syncAction)
-        : new PipelineInvocationHandler(name, target, syncAction);
+        ? new ProxyWrapper(name, inner, syncAction)
+        : new ProxyWrapper(name, target, syncAction);
   }
 
   // ======================== Infrastructure dispatch ========================
@@ -156,7 +156,7 @@ public class PipelineInvocationHandler
    */
   public final Object executeSyncChain(long chainId, long callId,
                                        InternalExecutor<Void, Object> terminal) {
-    PipelineInvocationHandler inner = inner();
+    ProxyWrapper inner = inner();
     InternalExecutor<Void, Object> next = (inner != null)
         ? (cid, caid, a) -> inner.executeSyncChain(cid, caid, terminal)
         : terminal;

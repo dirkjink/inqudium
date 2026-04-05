@@ -18,8 +18,8 @@ public interface InqProxyFactory {
     return new InqProxyFactory() {
       @Override
       public <T> T protect(Class<T> serviceInterface, T target) {
-        PipelineInvocationHandler.validateInterface(serviceInterface);
-        return PipelineInvocationHandler.createProxy(serviceInterface, target, name, sync);
+        ProxyWrapper.validateInterface(serviceInterface);
+        return ProxyWrapper.createProxy(serviceInterface, target, name, sync);
       }
     };
   }

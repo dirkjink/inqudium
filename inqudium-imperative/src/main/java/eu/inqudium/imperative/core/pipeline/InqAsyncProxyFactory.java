@@ -2,7 +2,7 @@ package eu.inqudium.imperative.core.pipeline;
 
 import eu.inqudium.core.pipeline.InqProxyFactory;
 import eu.inqudium.core.pipeline.LayerAction;
-import eu.inqudium.core.pipeline.PipelineInvocationHandler;
+import eu.inqudium.core.pipeline.ProxyWrapper;
 import eu.inqudium.core.pipeline.Wrapper;
 
 import java.util.concurrent.CompletionStage;
@@ -50,8 +50,8 @@ public interface InqAsyncProxyFactory extends InqProxyFactory {
     return new InqAsyncProxyFactory() {
       @Override
       public <T> T protect(Class<T> serviceInterface, T target) {
-        PipelineInvocationHandler.validateInterface(serviceInterface);
-        return AsyncPipelineInvocationHandler.createProxy(serviceInterface, target, name, sync, async);
+        ProxyWrapper.validateInterface(serviceInterface);
+        return AsyncProxyWrapper.createProxy(serviceInterface, target, name, sync, async);
       }
     };
   }
