@@ -890,17 +890,14 @@ class ProxyWrapperTest {
   class EdgeCases {
 
     @Test
-    @DisplayName("should throw UnsupportedOperationException when no extension matches")
-    void should_throw_UnsupportedOperationException_when_no_extension_matches() {
-      // Given — only async extension, no sync catch-all
-      OrderService proxy = ProxyWrapper.createProxy(
+    @DisplayName("should throw No catch-all DispatchExtension found")
+    void should_throw_no_catch_all_DispatchExtension_found() {
+      // Given / When / Then — sync method has no matching extension
+      assertThatThrownBy(() -> ProxyWrapper.createProxy(
           OrderService.class, target, "async-only",
-          new AsyncDispatchExtension(AsyncLayerAction.passThrough()));
-
-      // When / Then — sync method has no matching extension
-      assertThatThrownBy(() -> proxy.getOrder(1))
-          .isInstanceOf(UnsupportedOperationException.class)
-          .hasMessageContaining("No dispatch extension");
+          new AsyncDispatchExtension(AsyncLayerAction.passThrough())))
+          .isInstanceOf(IllegalArgumentException.class)
+          .hasMessageContaining("No catch-all DispatchExtension found. Register a catch-all");
     }
 
     @Test

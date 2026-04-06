@@ -1,5 +1,7 @@
 package eu.inqudium.core.pipeline;
 
+import org.junit.jupiter.api.DisplayNameGeneration;
+import org.junit.jupiter.api.DisplayNameGenerator;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
@@ -17,11 +19,12 @@ import static org.assertj.core.api.Assertions.assertThat;
  * the inner proxy's extension type, calls still pass through the inner proxy
  * instead of jumping directly to the real target.
  */
+@DisplayNameGeneration(DisplayNameGenerator.ReplaceUnderscores.class)
 class ProxyChainCompositionTest {
 
     // ======================== Test doubles ========================
 
-    public interface GreetingService {
+    interface GreetingService {
         String greet(String name);
     }
 
@@ -41,6 +44,11 @@ class ProxyChainCompositionTest {
 
         @Override
         public boolean canHandle(Method method) {
+            return true;
+        }
+
+        @Override
+        public boolean isCatchAll() {
             return true;
         }
 

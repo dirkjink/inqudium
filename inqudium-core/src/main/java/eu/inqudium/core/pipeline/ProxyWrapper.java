@@ -73,6 +73,9 @@ public class ProxyWrapper extends AbstractProxyWrapper {
   @SuppressWarnings("unchecked")
   public static <T> T createProxy(Class<T> serviceInterface, T target, String name,
                                   DispatchExtension... extensions) {
+    validateInterface(serviceInterface);
+    validateExtensions(extensions);
+
     AbstractProxyWrapper inner = resolveInner(target);
     Object delegate = (inner != null) ? inner : target;
     ProxyWrapper handler = new ProxyWrapper(name, delegate, target, extensions);
@@ -80,6 +83,52 @@ public class ProxyWrapper extends AbstractProxyWrapper {
         serviceInterface.getClassLoader(),
         new Class<?>[]{serviceInterface, Wrapper.class},
         handler);
+  }
+
+  /**
+   * Validates the extension array at construction time.
+   *
+   * <p>Ensures that at least one extension is provided, that a catch-all
+   * extension is present, and that the catch-all is registered last (so
+   * that more specific extensions get first match).</p>
+   *
+   * @throws IllegalArgumentException if any validation rule is violated
+   */
+  private static void validateExtensions(DispatchExtension[] extensions) {
+    if (extensions == null || extensions.length == 0) {
+      throw new IllegalArgumentException(
+          "At least one DispatchExtension is required. "
+              + "Register a catch-all (e.g. SyncDispatchExtension) to handle all methods.");
+    }
+
+    for (int i = 0; i < extensions.length; i++) {
+      if (extensions[i] == null) {
+        throw new IllegalArgumentException(
+            "DispatchExtension at index " + i + " must not be null.");
+      }
+    }
+
+    // Catch-all must exist and must be last
+    int catchAllIndex = -1;
+    for (int i = 0; i < extensions.length; i++) {
+      if (extensions[i].isCatchAll()) {
+        catchAllIndex = i;
+      }
+    }
+
+    if (catchAllIndex == -1) {
+      throw new IllegalArgumentException(
+          "No catch-all DispatchExtension found. "
+              + "Register a catch-all (e.g. SyncDispatchExtension) as the last extension "
+              + "to ensure every method can be dispatched.");
+    }
+
+    if (catchAllIndex != extensions.length - 1) {
+      throw new IllegalArgumentException(
+          "Catch-all extension " + extensions[catchAllIndex].getClass().getSimpleName()
+              + " is at index " + catchAllIndex + " but must be the last extension (index "
+              + (extensions.length - 1) + "). Extensions after a catch-all are unreachable.");
+    }
   }
 
   // ======================== Factory methods ========================

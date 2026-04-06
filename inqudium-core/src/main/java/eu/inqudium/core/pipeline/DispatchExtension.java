@@ -64,4 +64,20 @@ public interface DispatchExtension {
   default DispatchExtension linkInner(DispatchExtension[] innerExtensions) {
     return this;
   }
+
+  /**
+   * Returns {@code true} if this extension handles <em>every</em> method
+   * regardless of signature or return type.
+   *
+   * <p>Catch-all extensions must be registered last in the extension array
+   * so that more specific extensions get first match.
+   * {@link ProxyWrapper#createProxy} validates at construction time that the
+   * last extension is a catch-all; if none is present, proxy creation fails
+   * immediately rather than deferring the error to the first method call.</p>
+   *
+   * @return {@code true} if this extension is a catch-all
+   */
+  default boolean isCatchAll() {
+    return false;
+  }
 }

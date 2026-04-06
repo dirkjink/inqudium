@@ -95,6 +95,11 @@ public class SyncDispatchExtension implements DispatchExtension {
     return true;
   }
 
+  @Override
+  public boolean isCatchAll() {
+    return true;
+  }
+
   /**
    * Dispatches the call through the action chain.
    *
