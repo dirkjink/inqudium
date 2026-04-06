@@ -897,7 +897,7 @@ class ProxyWrapperTest {
           OrderService.class, target, "async-only",
           new AsyncDispatchExtension(AsyncLayerAction.passThrough())))
           .isInstanceOf(IllegalArgumentException.class)
-          .hasMessageContaining("No catch-all DispatchExtension found. Register a catch-all");
+          .hasMessageContaining("No valid catch-all DispatchExtension found at the end of the chain");
     }
 
     @Test
