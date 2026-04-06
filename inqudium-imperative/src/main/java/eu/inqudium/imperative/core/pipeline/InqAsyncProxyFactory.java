@@ -23,6 +23,15 @@ public interface InqAsyncProxyFactory extends InqProxyFactory {
   static InqAsyncProxyFactory of(String name,
                                  LayerAction<?, ?> syncAction,
                                  AsyncLayerAction<?, ?> asyncAction) {
+    if (syncAction == null) {
+      throw new IllegalArgumentException("syncAction must not be null.");
+    }
+    if (asyncAction == null) {
+      throw new IllegalArgumentException("asyncAction must not be null.");
+    }
+    // Safe at runtime: AsyncDispatchExtension always passes null as the first
+    // generic parameter and forwards the raw Object result. The unchecked casts
+    // are unavoidable due to type erasure but guarded by the dispatch contract.
     AsyncDispatchExtension asyncExt =
         new AsyncDispatchExtension((AsyncLayerAction<Void, Object>) asyncAction);
     SyncDispatchExtension syncExt =
