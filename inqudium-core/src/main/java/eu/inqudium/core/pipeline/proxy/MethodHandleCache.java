@@ -69,7 +69,7 @@ public final class MethodHandleCache {
    * @param method the reflected method (must not be {@code null})
    * @return a reusable {@code MethodHandle}
    */
-  public MethodHandle resolve(Method method) {
+  MethodHandle resolve(Method method) {
     return cache.computeIfAbsent(method, MethodHandleCache::unreflect);
   }
 
@@ -100,7 +100,6 @@ public final class MethodHandleCache {
       case 3 -> mh.invoke(target, args[0], args[1], args[2]);
       case 4 -> mh.invoke(target, args[0], args[1], args[2], args[3]);
       case 5 -> mh.invoke(target, args[0], args[1], args[2], args[3], args[4]);
-      case 6 -> mh.invoke(target, args[0], args[1], args[2], args[3], args[4], args[5]);
       default -> resolveSpreader(method, mh, arity).invoke(target, args);
     };
   }

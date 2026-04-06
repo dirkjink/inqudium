@@ -84,8 +84,6 @@ public class AsyncDispatchExtension implements DispatchExtension {
   @SuppressWarnings("unchecked")
   private InternalAsyncExecutor<Void, Object> buildTerminal(Method method, Object[] args,
                                                             Object target) {
-    // Eagerly resolve so the handle is cached before the first hot-path call
-    handleCache.resolve(method);
     return (chainId, callId, arg) -> {
       try {
         Object result = handleCache.invoke(method, target, args);
