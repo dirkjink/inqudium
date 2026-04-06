@@ -9,7 +9,6 @@ package eu.inqudium.core.pipeline;
  *
  * @since 0.4.0
  */
-@FunctionalInterface
 public interface InqProxyFactory {
 
   @SuppressWarnings("unchecked")
@@ -19,7 +18,8 @@ public interface InqProxyFactory {
       @Override
       public <T> T protect(Class<T> serviceInterface, T target) {
         ProxyWrapper.validateInterface(serviceInterface);
-        return ProxyWrapper.createProxy(serviceInterface, target, name, sync);
+        return ProxyWrapper.createProxy(serviceInterface, target, name,
+            new SyncDispatchExtension(sync));
       }
     };
   }
