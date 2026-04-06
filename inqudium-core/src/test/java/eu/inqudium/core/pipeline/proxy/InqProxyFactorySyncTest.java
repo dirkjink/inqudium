@@ -1,5 +1,7 @@
-package eu.inqudium.core.pipeline;
+package eu.inqudium.core.pipeline.proxy;
 
+import eu.inqudium.core.pipeline.Wrapper;
+import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -85,7 +87,7 @@ class InqProxyFactorySyncTest {
       GreetingService proxy = factory.protect(GreetingService.class, new RealGreetingService());
 
       // Then
-      assertThat(((Wrapper<?>) proxy).layerDescription()).isEqualTo("my-layer");
+      Assertions.assertThat(((Wrapper<?>) proxy).layerDescription()).isEqualTo("my-layer");
     }
 
     @Test

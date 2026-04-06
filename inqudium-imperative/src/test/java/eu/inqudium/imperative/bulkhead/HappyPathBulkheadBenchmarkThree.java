@@ -3,7 +3,7 @@ package eu.inqudium.imperative.bulkhead;
 import dev.failsafe.Failsafe;
 import eu.inqudium.core.config.InqConfig;
 import eu.inqudium.core.element.bulkhead.config.BulkheadEventConfig;
-import eu.inqudium.core.pipeline.InqProxyFactory;
+import eu.inqudium.core.pipeline.proxy.InqProxyFactory;
 import io.github.resilience4j.bulkhead.BulkheadConfig;
 import io.github.resilience4j.bulkhead.BulkheadRegistry;
 import io.github.resilience4j.micrometer.tagged.TaggedBulkheadMetrics;

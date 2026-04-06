@@ -1,8 +1,8 @@
 package eu.inqudium.imperative.core.pipeline;
 
-import eu.inqudium.core.pipeline.DispatchExtension;
-import eu.inqudium.core.pipeline.MethodHandleCache;
 import eu.inqudium.core.pipeline.Throws;
+import eu.inqudium.core.pipeline.proxy.DispatchExtension;
+import eu.inqudium.core.pipeline.proxy.MethodHandleCache;
 
 import java.lang.reflect.Method;
 import java.util.concurrent.CompletionStage;
@@ -11,7 +11,7 @@ import java.util.function.Function;
 /**
  * Dispatch extension for methods returning {@link CompletionStage}.
  *
- * <p>Plugs into {@link eu.inqudium.core.pipeline.ProxyWrapper ProxyWrapper} via the
+ * <p>Plugs into {@link eu.inqudium.core.pipeline.proxy.ProxyWrapper ProxyWrapper} via the
  * {@link DispatchExtension} SPI. Maintains its own async chain walk, independent
  * from other extensions.</p>
  *
@@ -19,7 +19,7 @@ import java.util.function.Function;
  * <p>When {@link #linkInner} finds a type-compatible {@code AsyncDispatchExtension}
  * in the inner proxy, a direct chain walk is wired and the terminal invokes the
  * deep {@code realTarget}. When no counterpart exists, the terminal invokes the
- * proxy target provided by {@link eu.inqudium.core.pipeline.ProxyWrapper}, ensuring
+ * proxy target provided by {@link eu.inqudium.core.pipeline.proxy.ProxyWrapper}, ensuring
  * the inner proxy's extensions are still executed.</p>
  *
  * @since 0.5.0

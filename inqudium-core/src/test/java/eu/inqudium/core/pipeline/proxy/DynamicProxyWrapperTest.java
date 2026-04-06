@@ -1,5 +1,6 @@
-package eu.inqudium.core.pipeline;
+package eu.inqudium.core.pipeline.proxy;
 
+import eu.inqudium.core.pipeline.JoinPointWrapper;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;

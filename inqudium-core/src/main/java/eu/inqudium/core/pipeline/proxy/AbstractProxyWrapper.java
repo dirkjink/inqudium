@@ -1,4 +1,7 @@
-package eu.inqudium.core.pipeline;
+package eu.inqudium.core.pipeline.proxy;
+
+import eu.inqudium.core.pipeline.AbstractBaseWrapper;
+import eu.inqudium.core.pipeline.Wrapper;
 
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Method;

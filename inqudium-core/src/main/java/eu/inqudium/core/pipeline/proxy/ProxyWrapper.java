@@ -1,4 +1,6 @@
-package eu.inqudium.core.pipeline;
+package eu.inqudium.core.pipeline.proxy;
+
+import eu.inqudium.core.pipeline.Wrapper;
 
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;

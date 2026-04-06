@@ -1,4 +1,8 @@
-package eu.inqudium.core.pipeline;
+package eu.inqudium.core.pipeline.proxy;
+
+import eu.inqudium.core.pipeline.InternalExecutor;
+import eu.inqudium.core.pipeline.LayerAction;
+import eu.inqudium.core.pipeline.Throws;
 
 import java.lang.reflect.Method;
 import java.util.function.Function;

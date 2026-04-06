@@ -1,6 +1,6 @@
 package eu.inqudium.imperative.bulkhead;
 
-import eu.inqudium.core.pipeline.InqProxyFactory;
+import eu.inqudium.core.pipeline.proxy.InqProxyFactory;
 import eu.inqudium.imperative.core.pipeline.InqAsyncDecorator;
 import eu.inqudium.imperative.core.pipeline.InqAsyncProxyFactory;
 

@@ -1,9 +1,9 @@
 package eu.inqudium.imperative.core.pipeline;
 
-import eu.inqudium.core.pipeline.InqProxyFactory;
 import eu.inqudium.core.pipeline.LayerAction;
-import eu.inqudium.core.pipeline.ProxyWrapper;
-import eu.inqudium.core.pipeline.SyncDispatchExtension;
+import eu.inqudium.core.pipeline.proxy.InqProxyFactory;
+import eu.inqudium.core.pipeline.proxy.ProxyWrapper;
+import eu.inqudium.core.pipeline.proxy.SyncDispatchExtension;
 
 import java.util.concurrent.CompletionStage;
 

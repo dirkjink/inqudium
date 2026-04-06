@@ -1,4 +1,7 @@
-package eu.inqudium.core.pipeline;
+package eu.inqudium.core.pipeline.proxy;
+
+import eu.inqudium.core.pipeline.LayerAction;
+import eu.inqudium.core.pipeline.Wrapper;
 
 /**
  * Factory for creating sync dynamic proxies that wrap service method invocations

@@ -1,5 +1,6 @@
-package eu.inqudium.core.pipeline;
+package eu.inqudium.core.pipeline.proxy;
 
+import eu.inqudium.core.pipeline.LayerAction;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayNameGeneration;
 import org.junit.jupiter.api.DisplayNameGenerator;
