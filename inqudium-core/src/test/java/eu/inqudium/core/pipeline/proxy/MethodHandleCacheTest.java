@@ -138,11 +138,11 @@ class MethodHandleCacheTest {
     @Test
     void dispatches_a_zero_arg_method_correctly() throws Throwable {
       // Given
-      Method m = method("zeroArgs");
+      Method method = method("zeroArgs");
       Target target = new Target();
 
       // When
-      Object result = cache.invoke(m, target, null);
+      Object result = cache.invoke(target, method, null);
 
       // Then
       assertThat(result).isEqualTo("zero");
@@ -151,11 +151,11 @@ class MethodHandleCacheTest {
     @Test
     void dispatches_a_zero_arg_method_when_args_is_empty_array() throws Throwable {
       // Given
-      Method m = method("zeroArgs");
+      Method method = method("zeroArgs");
       Target target = new Target();
 
       // When
-      Object result = cache.invoke(m, target, new Object[0]);
+      Object result = cache.invoke(target, method, new Object[0]);
 
       // Then
       assertThat(result).isEqualTo("zero");
@@ -164,11 +164,11 @@ class MethodHandleCacheTest {
     @Test
     void handles_void_return_type() throws Throwable {
       // Given
-      Method m = method("voidMethod");
+      Method method = method("voidMethod");
       Target target = new Target();
 
       // When
-      Object result = cache.invoke(m, target, null);
+      Object result = cache.invoke(target, method, null);
 
       // Then
       assertThat(result).isNull();
@@ -177,11 +177,11 @@ class MethodHandleCacheTest {
     @Test
     void handles_null_return_value() throws Throwable {
       // Given
-      Method m = method("returnsNull");
+      Method method = method("returnsNull");
       Target target = new Target();
 
       // When
-      Object result = cache.invoke(m, target, null);
+      Object result = cache.invoke(target, method, null);
 
       // Then
       assertThat(result).isNull();
@@ -194,11 +194,11 @@ class MethodHandleCacheTest {
     @Test
     void dispatches_a_single_arg_method_correctly() throws Throwable {
       // Given
-      Method m = method("oneArg", String.class);
+      Method method = method("oneArg", String.class);
       Target target = new Target();
 
       // When
-      Object result = cache.invoke(m, target, new Object[]{"hello"});
+      Object result = cache.invoke(target, method, new Object[]{"hello"});
 
       // Then
       assertThat(result).isEqualTo("one:hello");
@@ -211,11 +211,11 @@ class MethodHandleCacheTest {
     @Test
     void dispatches_a_two_arg_method_correctly() throws Throwable {
       // Given
-      Method m = method("twoArgs", String.class, String.class);
+      Method method = method("twoArgs", String.class, String.class);
       Target target = new Target();
 
       // When
-      Object result = cache.invoke(m, target, new Object[]{"a", "b"});
+      Object result = cache.invoke(target, method, new Object[]{"a", "b"});
 
       // Then
       assertThat(result).isEqualTo("two:a,b");
@@ -224,11 +224,11 @@ class MethodHandleCacheTest {
     @Test
     void dispatches_primitive_args_with_correct_boxing() throws Throwable {
       // Given
-      Method m = method("add", int.class, int.class);
+      Method method = method("add", int.class, int.class);
       Target target = new Target();
 
       // When
-      Object result = cache.invoke(m, target, new Object[]{3, 7});
+      Object result = cache.invoke(target, method, new Object[]{3, 7});
 
       // Then
       assertThat(result).isEqualTo(10);
@@ -241,11 +241,11 @@ class MethodHandleCacheTest {
     @Test
     void dispatches_a_three_arg_method_correctly() throws Throwable {
       // Given
-      Method m = method("threeArgs", String.class, String.class, String.class);
+      Method method = method("threeArgs", String.class, String.class, String.class);
       Target target = new Target();
 
       // When
-      Object result = cache.invoke(m, target, new Object[]{"a", "b", "c"});
+      Object result = cache.invoke(target, method, new Object[]{"a", "b", "c"});
 
       // Then
       assertThat(result).isEqualTo("three:a,b,c");
@@ -258,11 +258,11 @@ class MethodHandleCacheTest {
     @Test
     void dispatches_a_four_arg_method_through_the_spreader_path() throws Throwable {
       // Given
-      Method m = method("fourArgs", String.class, String.class, String.class, String.class);
+      Method method = method("fourArgs", String.class, String.class, String.class, String.class);
       Target target = new Target();
 
       // When
-      Object result = cache.invoke(m, target, new Object[]{"a", "b", "c", "d"});
+      Object result = cache.invoke(target, method, new Object[]{"a", "b", "c", "d"});
 
       // Then
       assertThat(result).isEqualTo("four:a,b,c,d");
@@ -271,11 +271,11 @@ class MethodHandleCacheTest {
     @Test
     void dispatches_a_five_arg_method_through_the_spreader_path() throws Throwable {
       // Given
-      Method m = method("fiveArgs", String.class, String.class, String.class, String.class, String.class);
+      Method method = method("fiveArgs", String.class, String.class, String.class, String.class, String.class);
       Target target = new Target();
 
       // When
-      Object result = cache.invoke(m, target, new Object[]{"a", "b", "c", "d", "e"});
+      Object result = cache.invoke(target, method, new Object[]{"a", "b", "c", "d", "e"});
 
       // Then
       assertThat(result).isEqualTo("five:a,b,c,d,e");
@@ -284,12 +284,12 @@ class MethodHandleCacheTest {
     @Test
     void caches_the_spreader_handle_across_invocations() throws Throwable {
       // Given
-      Method m = method("fourArgs", String.class, String.class, String.class, String.class);
+      Method method = method("fourArgs", String.class, String.class, String.class, String.class);
       Target target = new Target();
 
       // When — invoke twice to ensure spreader is reused
-      Object first = cache.invoke(m, target, new Object[]{"a", "b", "c", "d"});
-      Object second = cache.invoke(m, target, new Object[]{"w", "x", "y", "z"});
+      Object first = cache.invoke(target, method, new Object[]{"a", "b", "c", "d"});
+      Object second = cache.invoke(target, method, new Object[]{"w", "x", "y", "z"});
 
       // Then
       assertThat(first).isEqualTo("four:a,b,c,d");
@@ -303,11 +303,11 @@ class MethodHandleCacheTest {
     @Test
     void propagates_runtime_exceptions_from_the_target_method() {
       // Given
-      Method m = method("throwsException");
+      Method method = method("throwsException");
       Target target = new Target();
 
       // When / Then
-      assertThatThrownBy(() -> cache.invoke(m, target, null))
+      assertThatThrownBy(() -> cache.invoke(target, method, null))
           .isInstanceOf(IllegalStateException.class)
           .hasMessage("boom");
     }
@@ -315,11 +315,11 @@ class MethodHandleCacheTest {
     @Test
     void propagates_checked_exceptions_from_the_target_method() {
       // Given
-      Method m = method("throwsChecked");
+      Method method = method("throwsChecked");
       Target target = new Target();
 
       // When / Then
-      assertThatThrownBy(() -> cache.invoke(m, target, null))
+      assertThatThrownBy(() -> cache.invoke(target, method, null))
           .isInstanceOf(Exception.class)
           .hasMessage("checked-boom");
     }
@@ -360,7 +360,7 @@ class MethodHandleCacheTest {
     @Test
     void concurrent_invoke_calls_produce_correct_results() throws InterruptedException {
       // Given
-      Method m = method("oneArg", String.class);
+      Method method = method("oneArg", String.class);
       Target target = new Target();
       int threadCount = 16;
       ExecutorService pool = Executors.newFixedThreadPool(threadCount);
@@ -373,7 +373,7 @@ class MethodHandleCacheTest {
         pool.submit(() -> {
           try {
             latch.await();
-            results.add(cache.invoke(m, target, new Object[]{"t" + idx}));
+            results.add(cache.invoke(target, method, new Object[]{"t" + idx}));
           } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
           } catch (Throwable e) {

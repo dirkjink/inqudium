@@ -86,7 +86,7 @@ public class AsyncDispatchExtension implements DispatchExtension {
                                                             Object target) {
     return (chainId, callId, arg) -> {
       try {
-        Object result = handleCache.invoke(method, target, args);
+        Object result = handleCache.invoke(target, method, args);
         if (result == null) {
           throw new IllegalStateException(
               "Method " + method.getName() + " returned null, expected a CompletionStage. "

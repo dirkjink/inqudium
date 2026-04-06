@@ -87,13 +87,14 @@ public class SyncDispatchExtension implements DispatchExtension {
     return null;
   }
 
-  private InternalExecutor<Void, Object> buildTerminal(Method method, Object[] args,
+  private InternalExecutor<Void, Object> buildTerminal(Method method,
+                                                       Object[] args,
                                                        Object target) {
     // Eagerly resolve so the handle is cached before the first hot-path call
     handleCache.resolve(method);
     return (chainId, callId, arg) -> {
       try {
-        return handleCache.invoke(method, target, args);
+        return handleCache.invoke(target, method, args);
       } catch (RuntimeException | Error e) {
         throw e;
       } catch (Throwable e) {
@@ -149,16 +150,6 @@ public class SyncDispatchExtension implements DispatchExtension {
       return new SyncDispatchExtension(this.action, inner, realTarget, this.handleCache);
     }
     return new SyncDispatchExtension(this.action);
-  }
-
-  /**
-   * Legacy linking — kept for backward compatibility.
-   *
-   * @deprecated use {@link #linkInner(DispatchExtension[], Object)} instead
-   */
-  @Override
-  public DispatchExtension linkInner(DispatchExtension[] innerExtensions) {
-    return linkInner(innerExtensions, null);
   }
 
   // ======================== Internal ========================

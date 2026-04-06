@@ -147,7 +147,7 @@ class MethodHandleDispatchTest {
       SimpleGreeter target = new SimpleGreeter();
 
       // When
-      Object result = cache.invoke(method, target, new Object[]{"World"});
+      Object result = cache.invoke(target, method, new Object[]{"World"});
 
       // Then
       assertThat(result).isEqualTo("Hello, World!");
@@ -160,7 +160,7 @@ class MethodHandleDispatchTest {
       SimpleGreeter target = new SimpleGreeter();
 
       // When
-      Object result = cache.invoke(method, target, new Object[]{3, 4});
+      Object result = cache.invoke(target, method, new Object[]{3, 4});
 
       // Then
       assertThat(result).isEqualTo(7);
@@ -173,7 +173,7 @@ class MethodHandleDispatchTest {
       SimpleGreeter target = new SimpleGreeter();
 
       // When — InvocationHandler passes null for zero-arg methods
-      Object result = cache.invoke(method, target, null);
+      Object result = cache.invoke(target, method, null);
 
       // Then
       assertThat(result).isEqualTo("no-args");
@@ -186,7 +186,7 @@ class MethodHandleDispatchTest {
       SimpleGreeter target = new SimpleGreeter();
 
       // When
-      Object result = cache.invoke(method, target, new Object[0]);
+      Object result = cache.invoke(target, method, new Object[0]);
 
       // Then
       assertThat(result).isEqualTo("no-args");
@@ -199,7 +199,7 @@ class MethodHandleDispatchTest {
       SimpleGreeter target = new SimpleGreeter();
 
       // When
-      Object result = cache.invoke(method, target, null);
+      Object result = cache.invoke(target, method, null);
 
       // Then — void methods return null via MethodHandle.invoke
       assertThat(result).isNull();
@@ -217,7 +217,7 @@ class MethodHandleDispatchTest {
       };
 
       // When / Then
-      assertThatThrownBy(() -> cache.invoke(method, target, new Object[]{"X"}))
+      assertThatThrownBy(() -> cache.invoke(target, method, new Object[]{"X"}))
           .isInstanceOf(IllegalArgumentException.class)
           .hasMessageContaining("bad name: X");
     }

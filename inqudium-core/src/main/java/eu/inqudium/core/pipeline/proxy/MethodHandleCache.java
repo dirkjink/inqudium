@@ -3,6 +3,7 @@ package eu.inqudium.core.pipeline.proxy;
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
+import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Method;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -88,7 +89,7 @@ public final class MethodHandleCache {
    * @return the method's return value
    * @throws Throwable if the underlying method throws
    */
-  public Object invoke(Method method, Object target, Object[] args) throws Throwable {
+  public Object invoke(Object target, Method method, Object[] args) throws Throwable {
     int arity = (args == null) ? 0 : args.length;
 
     if (arity < 6) {
