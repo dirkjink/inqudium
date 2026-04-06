@@ -1,6 +1,10 @@
 package eu.inqudium.core.pipeline.proxy;
 
+import eu.inqudium.core.pipeline.Throws;
+
+import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
+import java.lang.reflect.UndeclaredThrowableException;
 
 /**
  * SPI for pluggable dispatch strategies inside a {@link ProxyWrapper}.
@@ -80,4 +84,41 @@ public interface DispatchExtension {
   default boolean isCatchAll() {
     return false;
   }
+
+  /**
+   * Unwraps reflection wrappers and classifies the exception.
+   *
+   * <p>{@link UndeclaredThrowableException} and {@link InvocationTargetException}
+   * are common reflection artefacts that hide the real cause. This method peels
+   * them off before deciding how to propagate, so callers always see the
+   * original exception type.</p>
+   */
+  default RuntimeException handleException(Method method, Throwable e) {
+    // Unwrap reflection wrappers to expose the real cause
+    Throwable cause = e;
+    while (cause instanceof UndeclaredThrowableException
+        || cause instanceof InvocationTargetException) {
+      Throwable next = cause.getCause();
+      if (next == null) break;
+      cause = next;
+    }
+
+    // Runtime exceptions and errors propagate directly
+    if (cause instanceof RuntimeException re) throw re;
+    if (cause instanceof Error err) throw err;
+
+    // Declared checked exceptions are rethrown via sneaky-throw
+    for (Class<?> declared : method.getExceptionTypes()) {
+      if (declared.isInstance(cause)) {
+        throw Throws.rethrow(cause);
+      }
+    }
+
+    // Undeclared checked exception — wrap with context for diagnosis
+    throw new IllegalStateException(
+        "Undeclared checked exception from "
+            + method.getDeclaringClass().getSimpleName()
+            + "." + method.getName(), cause);
+  }
+
 }

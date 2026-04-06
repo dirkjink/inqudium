@@ -4,7 +4,9 @@ import eu.inqudium.core.pipeline.InternalExecutor;
 import eu.inqudium.core.pipeline.LayerAction;
 import eu.inqudium.core.pipeline.Throws;
 
+import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
+import java.lang.reflect.UndeclaredThrowableException;
 import java.util.function.Function;
 
 /**
@@ -95,20 +97,8 @@ public class SyncDispatchExtension implements DispatchExtension {
     return (chainId, callId, arg) -> {
       try {
         return handleCache.invoke(target, method, args);
-      } catch (RuntimeException | Error e) {
-        throw e;
       } catch (Throwable e) {
-        // Preserve declared checked exceptions from the service interface
-        // so that callers can catch them by their original type.
-        for (Class<?> declared : method.getExceptionTypes()) {
-          if (declared.isInstance(e)) {
-            throw Throws.rethrow(e);
-          }
-        }
-        // Undeclared checked exception — wrap with context for diagnosis
-        throw new IllegalStateException(
-            "Undeclared checked exception from " + method.getDeclaringClass().getSimpleName()
-                + "." + method.getName(), e);
+        throw handleException(method, e);
       }
     };
   }

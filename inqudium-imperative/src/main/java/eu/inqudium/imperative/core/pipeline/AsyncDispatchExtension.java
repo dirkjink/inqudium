@@ -99,10 +99,8 @@ public class AsyncDispatchExtension implements DispatchExtension {
                   + "This method should not be routed through AsyncDispatchExtension.");
         }
         return (CompletionStage<Object>) result;
-      } catch (RuntimeException | Error e) {
-        throw e;
       } catch (Throwable e) {
-        throw Throws.rethrow(e);
+        throw handleException(method, e);
       }
     };
   }
