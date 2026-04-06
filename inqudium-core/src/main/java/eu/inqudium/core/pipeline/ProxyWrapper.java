@@ -9,26 +9,9 @@ import java.lang.reflect.Proxy;
  * Sync invocation handler that extends {@link BaseWrapper} — inheriting chain metadata,
  * ID management, hierarchy visualization, and the {@link Wrapper} interface.
  *
- * <p>When stacked on top of another {@code PipelineInvocationHandler}, the inner handler
+ * <p>When stacked on top of another {@code ProxyWrapper}, the inner handler
  * is passed as the delegate to {@link BaseWrapper}'s constructor, which automatically
  * inherits {@code chainId} and {@code callIdCounter}.</p>
- *
- * <p>Subclassed by the async variant in the imperative artifact to add
- * {@link java.util.concurrent.CompletionStage} routing.</p>
- *
- * <h3>Why this does not use {@link JoinPointExecutor} / {@link JoinPointWrapper}</h3>
- * <p>{@link JoinPointWrapper} binds its {@link JoinPointExecutor} delegate once at construction
- * time — ideal for AOP where the target method is known upfront. A dynamic proxy, however,
- * receives a different {@code Method} and {@code args} on every {@code invoke()} call.
- * Using {@code JoinPointWrapper} would require creating a new {@code ProxyExecution} lambda
- * and a new {@code JoinPointWrapper} instance per invocation — only to use them once and
- * discard them immediately.</p>
- *
- * <p>Instead, this handler creates only a lightweight {@link InternalExecutor} lambda as
- * the per-invocation terminal and passes it through the existing chain via
- * {@link #executeSyncChain}. No wrapper objects, no {@code initiateChain()} traversal,
- * no redundant {@code callId} generation — the proxy controls the ID lifecycle directly
- * in {@link #invoke}.</p>
  *
  * @since 0.4.0
  */
@@ -50,22 +33,14 @@ public class ProxyWrapper
   private final LayerAction<Void, Object> syncAction;
 
   /**
-   * Wrapping a real target — creates new chain metadata.
+   * Unified constructor — works for both real targets and inner ProxyWrapper delegates.
+   * When wrapping another ProxyWrapper, BaseWrapper inherits chainId and callIdCounter;
+   * realTarget is resolved from the inner handler.
    */
-  public ProxyWrapper(String name, Object target,
-                      LayerAction<Void, Object> syncAction) {
-    super(name, target, PROXY_CORE);
-    this.realTarget = target;
-    this.syncAction = syncAction;
-  }
-
-  /**
-   * Wrapping another handler — BaseWrapper inherits chainId and callIdCounter.
-   */
-  public ProxyWrapper(String name, ProxyWrapper inner,
-                      LayerAction<Void, Object> syncAction) {
-    super(name, inner, PROXY_CORE);
-    this.realTarget = inner.realTarget;
+  protected ProxyWrapper(String name, Object delegate,
+                         LayerAction<Void, Object> syncAction) {
+    super(name, delegate, PROXY_CORE);
+    this.realTarget = (delegate instanceof ProxyWrapper inner) ? inner.realTarget : delegate;
     this.syncAction = syncAction;
   }
 
@@ -87,7 +62,9 @@ public class ProxyWrapper
   @SuppressWarnings("unchecked")
   public static <T> T createProxy(Class<T> serviceInterface, T target, String name,
                                   LayerAction<Void, Object> syncAction) {
-    ProxyWrapper handler = resolveHandler(target, name, syncAction);
+    ProxyWrapper inner = resolveInner(target);
+    Object delegate = (inner != null) ? inner : target;
+    ProxyWrapper handler = new ProxyWrapper(name, delegate, syncAction);
     return (T) Proxy.newProxyInstance(
         serviceInterface.getClassLoader(),
         new Class<?>[]{serviceInterface, Wrapper.class},
@@ -95,7 +72,7 @@ public class ProxyWrapper
   }
 
   /**
-   * Resolves the inner handler if the target is a pipeline proxy, then creates a new handler.
+   * Resolves the inner handler if the target is a pipeline proxy.
    * Protected so that async subclasses can reuse the detection logic.
    */
   protected static ProxyWrapper resolveInner(Object target) {
@@ -108,19 +85,6 @@ public class ProxyWrapper
     return null;
   }
 
-  private static ProxyWrapper resolveHandler(Object target, String name,
-                                             LayerAction<Void, Object> syncAction) {
-    ProxyWrapper inner = resolveInner(target);
-    return (inner != null)
-        ? new ProxyWrapper(name, inner, syncAction)
-        : new ProxyWrapper(name, target, syncAction);
-  }
-
-  // ======================== Infrastructure dispatch ========================
-
-  /**
-   * The unwrapped real target at the bottom of the chain.
-   */
   protected Object realTarget() {
     return realTarget;
   }
@@ -133,11 +97,8 @@ public class ProxyWrapper
     return dispatchServiceMethod(method, args);
   }
 
-  // ======================== Utilities ========================
-
   /**
    * Dispatches a service method call. Override in subclasses to add async routing.
-   * Called after infrastructure methods (Wrapper, Object) have been handled.
    */
   protected Object dispatchServiceMethod(Method method, Object[] args) throws Throwable {
     long callId = generateCallId();
@@ -146,13 +107,9 @@ public class ProxyWrapper
 
   /**
    * Recursive sync chain walk — mirrors {@link BaseWrapper#execute}.
-   * Each handler applies its LayerAction, with {@code next} pointing to the
-   * inner handler's chain walk (or the terminal at the bottom).
    *
    * <p>Public visibility is required because the async subclass in the imperative
-   * artifact calls this method on inner handlers typed as {@code PipelineInvocationHandler}
-   * — Java's protected access rules do not permit cross-package access through a
-   * parent-class reference.</p>
+   * artifact calls this method on inner handlers typed as {@code ProxyWrapper}.</p>
    */
   public final Object executeSyncChain(long chainId, long callId,
                                        InternalExecutor<Void, Object> terminal) {
@@ -165,9 +122,6 @@ public class ProxyWrapper
 
   /**
    * Builds the per-invocation terminal step that calls the real target method.
-   * This is the only object created per invocation — it replaces what would be
-   * a {@link JoinPointExecutor} delegate in {@link JoinPointWrapper}, but without
-   * the wrapper object overhead.
    */
   protected InternalExecutor<Void, Object> buildSyncTerminal(Method method, Object[] args) {
     return (chainId, callId, arg) -> {
@@ -194,23 +148,14 @@ public class ProxyWrapper
 
   private Object handleInfrastructureMethod(Method method, Object[] args) throws Throwable {
     if (method.getParameterCount() == 0) {
-      switch (method.getName()) {
-        case "currentCallId" -> {
-          return currentCallId();
-        }
-        case "chainId" -> {
-          return chainId();
-        }
-        case "layerDescription" -> {
-          return layerDescription();
-        }
-        case "inner" -> {
-          return inner();
-        }
-        case "toStringHierarchy" -> {
-          return toStringHierarchy();
-        }
-      }
+      return switch (method.getName()) {
+        case "currentCallId"     -> currentCallId();
+        case "chainId"           -> chainId();
+        case "layerDescription"  -> layerDescription();
+        case "inner"             -> inner();
+        case "toStringHierarchy" -> toStringHierarchy();
+        default                  -> method.invoke(this, args);
+      };
     }
     // Object methods (toString, hashCode, equals)
     return method.invoke(this, args);

@@ -15,25 +15,16 @@ public class CallableWrapper<V>
     extends BaseWrapper<Callable<V>, Void, V, CallableWrapper<V>>
     implements Callable<V> {
 
-  /**
-   * Creates a wrapper with a {@link InqDecorator} providing name and around-advice.
-   */
   public CallableWrapper(InqDecorator<Void, V> decorator, Callable<V> delegate) {
     super(decorator, delegate, coreFor(delegate));
   }
 
-  /**
-   * Creates a wrapper with a custom {@link LayerAction}.
-   */
   public CallableWrapper(String name, Callable<V> delegate, LayerAction<Void, V> layerAction) {
     super(name, delegate, coreFor(delegate), layerAction);
   }
 
-  /**
-   * Creates a wrapper with pass-through behavior.
-   */
   public CallableWrapper(String name, Callable<V> delegate) {
-    super(name, delegate, coreFor(delegate));
+    this(name, delegate, LayerAction.passThrough());
   }
 
   private static <V> InternalExecutor<Void, V> coreFor(Callable<V> delegate) {
@@ -52,15 +43,12 @@ public class CallableWrapper<V>
   public V call() throws Exception {
     try {
       return initiateChain(null);
-    } catch (RuntimeException e) {
-      if (e instanceof CompletionException) {
-        Throwable cause = e.getCause();
-        if (cause instanceof Exception) {
-          throw (Exception) cause;
-        }
-        throw new CompletionException(cause);
+    } catch (CompletionException e) {
+      Throwable cause = e.getCause();
+      if (cause instanceof Exception ex) {
+        throw ex;
       }
-      throw e;
+      throw new CompletionException(cause);
     }
   }
 }

@@ -14,25 +14,16 @@ public class RunnableWrapper
     extends BaseWrapper<Runnable, Void, Void, RunnableWrapper>
     implements Runnable {
 
-  /**
-   * Creates a wrapper with a {@link InqDecorator} providing name and around-advice.
-   */
   public RunnableWrapper(InqDecorator<Void, Void> decorator, Runnable delegate) {
     super(decorator, delegate, coreFor(delegate));
   }
 
-  /**
-   * Creates a wrapper with a custom {@link LayerAction}.
-   */
   public RunnableWrapper(String name, Runnable delegate, LayerAction<Void, Void> layerAction) {
     super(name, delegate, coreFor(delegate), layerAction);
   }
 
-  /**
-   * Creates a wrapper with pass-through behavior.
-   */
   public RunnableWrapper(String name, Runnable delegate) {
-    super(name, delegate, coreFor(delegate));
+    this(name, delegate, LayerAction.passThrough());
   }
 
   private static InternalExecutor<Void, Void> coreFor(Runnable delegate) {
