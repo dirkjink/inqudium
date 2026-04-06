@@ -1,5 +1,7 @@
 package eu.inqudium.imperative.circuitbreaker;
 
+import eu.inqudium.core.element.InqElement;
+import eu.inqudium.core.element.InqElementType;
 import eu.inqudium.core.element.circuitbreaker.CircuitBreakerConfig;
 import eu.inqudium.core.element.circuitbreaker.CircuitBreakerCore;
 import eu.inqudium.core.element.circuitbreaker.CircuitBreakerException;
@@ -8,6 +10,9 @@ import eu.inqudium.core.element.circuitbreaker.CircuitState;
 import eu.inqudium.core.element.circuitbreaker.PermissionResult;
 import eu.inqudium.core.element.circuitbreaker.StateTransition;
 import eu.inqudium.core.element.circuitbreaker.metrics.FailureMetrics;
+import eu.inqudium.core.event.InqEventPublisher;
+import eu.inqudium.core.pipeline.InqDecorator;
+import eu.inqudium.core.pipeline.InternalExecutor;
 
 import java.time.Clock;
 import java.time.Instant;
@@ -28,8 +33,11 @@ import java.util.logging.Logger;
  * <p>Designed for use with virtual threads (Project Loom) or traditional
  * platform threads. Uses lock-free CAS operations for high-throughput fast-paths
  * and a {@link ReentrantLock} exclusively to serialize state transitions.
+ *
+ * <p>Implements {@link InqDecorator} to participate in the pipeline as a
+ * self-describing, pluggable decorator with around-semantics.
  */
-public class ImperativeCircuitBreaker {
+public class ImperativeCircuitBreaker implements InqDecorator<Void, Object> {
 
   private static final Logger LOG = Logger.getLogger(ImperativeCircuitBreaker.class.getName());
 
@@ -40,6 +48,7 @@ public class ImperativeCircuitBreaker {
   private final AtomicReference<CircuitBreakerSnapshot> snapshotRef;
   private final Clock clock;
   private final List<Consumer<StateTransition>> transitionListeners;
+  private final InqEventPublisher eventPublisher;
 
   // Lock exclusively used to serialize state transitions (NOT for event emissions)
   private final ReentrantLock transitionLock = new ReentrantLock();
@@ -49,14 +58,72 @@ public class ImperativeCircuitBreaker {
   }
 
   public ImperativeCircuitBreaker(CircuitBreakerConfig config, Clock clock) {
+    this(config, clock, InqEventPublisher.create(config.name(), InqElementType.CIRCUIT_BREAKER));
+  }
+
+  public ImperativeCircuitBreaker(CircuitBreakerConfig config, Clock clock, InqEventPublisher eventPublisher) {
     this.config = Objects.requireNonNull(config, "config must not be null");
     this.clock = Objects.requireNonNull(clock, "clock must not be null");
+    this.eventPublisher = Objects.requireNonNull(eventPublisher, "eventPublisher must not be null");
 
     Instant now = clock.instant();
     FailureMetrics initialMetrics = config.metricsFactory().apply(now);
 
     this.snapshotRef = new AtomicReference<>(CircuitBreakerSnapshot.initial(now, initialMetrics));
     this.transitionListeners = new CopyOnWriteArrayList<>();
+  }
+
+  // ======================== InqElement ========================
+
+  @Override
+  public String getName() {
+    return config.name();
+  }
+
+  @Override
+  public InqElementType getElementType() {
+    return InqElementType.CIRCUIT_BREAKER;
+  }
+
+  @Override
+  public InqEventPublisher getEventPublisher() {
+    return eventPublisher;
+  }
+
+  // ======================== LayerAction ========================
+
+  /**
+   * Around-advice implementation for the pipeline chain.
+   *
+   * <p>Acquires permission from the circuit breaker, delegates to the next
+   * step in the chain, and records the outcome (success, failure, or ignored).
+   */
+  @Override
+  @SuppressWarnings("unchecked")
+  public Object execute(long chainId, long callId, Void argument, InternalExecutor<Void, Object> next) {
+    acquirePermissionOrThrow();
+    boolean outcomeRecorded = false;
+    try {
+      Object result = next.execute(chainId, callId, argument);
+      recordSuccess();
+      outcomeRecorded = true;
+      return result;
+    } catch (Exception e) {
+      if (e instanceof InterruptedException) {
+        Thread.currentThread().interrupt();
+      }
+      handleThrowable(e);
+      outcomeRecorded = true;
+      throw e instanceof RuntimeException re ? re : new RuntimeException(e);
+    } catch (Error e) {
+      recordIgnored();
+      outcomeRecorded = true;
+      throw e;
+    } finally {
+      if (!outcomeRecorded) {
+        recordIgnored();
+      }
+    }
   }
 
   // ======================== Execution ========================
@@ -94,8 +161,6 @@ public class ImperativeCircuitBreaker {
       outcomeRecorded = true;
       return result;
     } catch (Exception e) {
-      // Fix 2b: Only Exceptions reach handleThrowable — the predicate decides
-      // whether to record as failure or ignore.
       if (e instanceof InterruptedException) {
         Thread.currentThread().interrupt();
       }
@@ -103,15 +168,10 @@ public class ImperativeCircuitBreaker {
       outcomeRecorded = true;
       throw e;
     } catch (Error e) {
-      // Fix 2b: JVM-level errors are never downstream failures.
-      // Release the HALF_OPEN slot if applicable.
       recordIgnored();
       outcomeRecorded = true;
       throw e;
     } finally {
-      // Fix 3: Safety net — if no outcome was recorded (e.g., due to an unexpected
-      // Throwable subclass or a bug in handleThrowable), release the slot to prevent
-      // permanent HALF_OPEN starvation.
       if (!outcomeRecorded) {
         recordIgnored();
       }
@@ -123,8 +183,6 @@ public class ImperativeCircuitBreaker {
    * rejects the call (i.e., circuit is OPEN or HALF_OPEN with no remaining slots).
    *
    * <p>Business exceptions thrown by the callable are NOT caught — they propagate normally.
-   * Use {@link #executeWithFallbackOnAny(Callable, Supplier)} if you want the fallback
-   * to also cover business exceptions.
    */
   public <T> T executeWithFallback(Callable<T> callable, Supplier<T> fallback) throws Exception {
     try {
@@ -138,9 +196,6 @@ public class ImperativeCircuitBreaker {
    * Executes the callable with a fallback that activates on ANY exception,
    * including business exceptions thrown by the callable and circuit breaker rejections.
    *
-   * <p>This matches the bulkhead developer expectation that "fallback" means
-   * "alternative result when the primary path fails for any reason".
-   *
    * <p><strong>Bonus fix:</strong> If the fallback itself throws, the original exception
    * is attached as a suppressed exception for debugging.
    */
@@ -148,12 +203,8 @@ public class ImperativeCircuitBreaker {
     try {
       return execute(callable);
     } catch (InterruptedException e) {
-      // Do not mask thread interrupts by executing a fallback.
-      // The interrupt status was already restored in execute(), but we must re-throw
-      // to ensure the calling context can abort properly.
       throw e;
     } catch (Exception e) {
-      // Bonus: Preserve the original cause if the fallback also fails
       try {
         return fallback.get();
       } catch (Exception fallbackException) {
@@ -162,8 +213,6 @@ public class ImperativeCircuitBreaker {
       }
     }
   }
-
-  // ======================== Permission ========================
 
   /**
    * Executes the runnable, recording the outcome with the circuit breaker.
@@ -179,8 +228,6 @@ public class ImperativeCircuitBreaker {
       recordSuccess();
       outcomeRecorded = true;
     } catch (Exception e) {
-      // Runnable.run() cannot throw checked exceptions,
-      // so anything caught here is an unchecked exception.
       if (e instanceof InterruptedException) {
         Thread.currentThread().interrupt();
       }
@@ -198,26 +245,22 @@ public class ImperativeCircuitBreaker {
     }
   }
 
-  // ======================== Recording ========================
+  // ======================== Permission ========================
 
   private void acquirePermissionOrThrow() {
     int retries = 0;
     while (true) {
-      // Fix 6: Yield after too many CAS retries to prevent CPU spin
       retries = yieldIfExcessiveRetries(retries);
 
-      // Fix 5: Refresh timestamp on every CAS retry to avoid stale time comparisons
       Instant now = clock.instant();
       CircuitBreakerSnapshot current = snapshotRef.get();
       PermissionResult result = CircuitBreakerCore.tryAcquirePermission(current, config, now);
 
       if (!result.permitted()) {
-        // Fix 5: Use state from result, not from the potentially stale 'current'
         throw new CircuitBreakerException(config.name(), result.snapshot().state());
       }
 
       if (result.snapshot().state() != current.state()) {
-        // Slow-path: state transition requires lock
         StateTransition transition = null;
         transitionLock.lock();
         try {
@@ -226,11 +269,9 @@ public class ImperativeCircuitBreaker {
           result = CircuitBreakerCore.tryAcquirePermission(current, config, now);
 
           if (!result.permitted()) {
-            // Fix 5: Use state from result
             throw new CircuitBreakerException(config.name(), result.snapshot().state());
           }
 
-          // Bail out early if another thread already transitioned
           if (result.snapshot().state() == current.state()) {
             continue;
           }
@@ -239,23 +280,22 @@ public class ImperativeCircuitBreaker {
             transition = CircuitBreakerCore.detectTransition(
                 config.name(), current, result.snapshot(), now).orElse(null);
           } else {
-            continue; // CAS failed, retry
+            continue;
           }
         } finally {
           transitionLock.unlock();
         }
-        // Listener notification outside the lock to prevent deadlocks
         notifyListeners(transition);
         return;
       } else {
-        // Fast-path: simple state increment, no lock needed
         if (snapshotRef.compareAndSet(current, result.snapshot())) {
           return;
         }
       }
-      // CAS failed, retry loop
     }
   }
+
+  // ======================== Recording ========================
 
   private void recordSuccess() {
     int retries = 0;
@@ -274,7 +314,6 @@ public class ImperativeCircuitBreaker {
           current = snapshotRef.get();
           updated = CircuitBreakerCore.recordSuccess(current, config, now);
 
-          // Bail out early if another thread already transitioned
           if (updated.state() == current.state()) {
             continue;
           }
@@ -320,7 +359,6 @@ public class ImperativeCircuitBreaker {
           current = snapshotRef.get();
           updated = CircuitBreakerCore.recordFailure(current, config, now);
 
-          // Bail out early if another thread already completed the state transition
           if (updated.state() == current.state()) {
             continue;
           }
@@ -344,12 +382,6 @@ public class ImperativeCircuitBreaker {
     }
   }
 
-  // ======================== Fix 6: CAS starvation guard ========================
-
-  /**
-   * Records an ignored call outcome.
-   * In HALF_OPEN, releases the attempt slot so it can be reused.
-   */
   private void recordIgnored() {
     int retries = 0;
     while (true) {
@@ -374,8 +406,6 @@ public class ImperativeCircuitBreaker {
   public Runnable onStateTransition(Consumer<StateTransition> listener) {
     Objects.requireNonNull(listener, "listener must not be null");
     transitionListeners.add(listener);
-
-    // Return a disposable handle to allow removing the listener
     return () -> transitionListeners.remove(listener);
   }
 
@@ -428,8 +458,6 @@ public class ImperativeCircuitBreaker {
       Instant now = clock.instant();
       CircuitBreakerSnapshot current = snapshotRef.get();
 
-      // Fix 10: Skip transition event if already in a clean initial state.
-      // The metrics are still refreshed to clear the sliding window.
       if (current.state() == CircuitState.CLOSED
           && current.successCount() == 0
           && current.halfOpenAttempts() == 0) {

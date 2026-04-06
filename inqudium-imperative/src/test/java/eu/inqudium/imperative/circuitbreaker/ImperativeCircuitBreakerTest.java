@@ -1,9 +1,12 @@
 package eu.inqudium.imperative.circuitbreaker;
 
+import eu.inqudium.core.element.InqElementType;
 import eu.inqudium.core.element.circuitbreaker.CircuitBreakerConfig;
 import eu.inqudium.core.element.circuitbreaker.CircuitBreakerException;
 import eu.inqudium.core.element.circuitbreaker.CircuitState;
 import eu.inqudium.core.element.circuitbreaker.StateTransition;
+import eu.inqudium.core.pipeline.InqDecorator;
+import eu.inqudium.core.pipeline.InternalExecutor;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -16,10 +19,12 @@ import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.Callable;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Supplier;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -84,6 +89,188 @@ class ImperativeCircuitBreakerTest {
     @Override
     public Clock withZone(ZoneId zone) {
       return this;
+    }
+  }
+
+  // ================================================================
+  // InqDecorator Contract
+  // ================================================================
+
+  @Nested
+  @DisplayName("InqDecorator Contract")
+  class InqDecoratorContract {
+
+    @Test
+    @DisplayName("should implement InqDecorator interface")
+    void should_implement_inq_decorator_interface() {
+      // Given
+      ImperativeCircuitBreaker cb = createBreaker();
+
+      // When / Then
+      assertThat(cb).isInstanceOf(InqDecorator.class);
+    }
+
+    @Test
+    @DisplayName("should return the config name as element name")
+    void should_return_the_config_name_as_element_name() {
+      // Given
+      ImperativeCircuitBreaker cb = createBreaker();
+
+      // When
+      String name = cb.getName();
+
+      // Then
+      assertThat(name).isEqualTo("test-service");
+    }
+
+    @Test
+    @DisplayName("should return CIRCUIT_BREAKER as element type")
+    void should_return_circuit_breaker_as_element_type() {
+      // Given
+      ImperativeCircuitBreaker cb = createBreaker();
+
+      // When
+      InqElementType type = cb.getElementType();
+
+      // Then
+      assertThat(type).isEqualTo(InqElementType.CIRCUIT_BREAKER);
+    }
+
+    @Test
+    @DisplayName("should provide a non-null event publisher")
+    void should_provide_a_non_null_event_publisher() {
+      // Given
+      ImperativeCircuitBreaker cb = createBreaker();
+
+      // When / Then
+      assertThat(cb.getEventPublisher()).isNotNull();
+    }
+
+    @Test
+    @DisplayName("should delegate to the next step in the chain on success")
+    void should_delegate_to_the_next_step_in_the_chain_on_success() {
+      // Given
+      ImperativeCircuitBreaker cb = createBreaker();
+      InternalExecutor<Void, Object> next = (chainId, callId, arg) -> "chain-result";
+
+      // When
+      Object result = cb.execute(1L, 1L, null, next);
+
+      // Then
+      assertThat(result).isEqualTo("chain-result");
+    }
+
+    @Test
+    @DisplayName("should record success and remain closed after chain execution")
+    void should_record_success_and_remain_closed_after_chain_execution() {
+      // Given
+      ImperativeCircuitBreaker cb = createBreaker();
+      InternalExecutor<Void, Object> next = (chainId, callId, arg) -> "ok";
+
+      // When
+      for (int i = 0; i < 5; i++) {
+        cb.execute(1L, (long) i, null, next);
+      }
+
+      // Then
+      assertThat(cb.getState()).isEqualTo(CircuitState.CLOSED);
+    }
+
+    @Test
+    @DisplayName("should transition to OPEN when chain failures exceed the threshold")
+    void should_transition_to_open_when_chain_failures_exceed_the_threshold() {
+      // Given
+      ImperativeCircuitBreaker cb = createBreaker();
+      InternalExecutor<Void, Object> failingNext = (chainId, callId, arg) -> {
+        throw new RuntimeException("chain-fail");
+      };
+
+      // When
+      for (int i = 0; i < 3; i++) {
+        try {
+          cb.execute(1L, (long) i, null, failingNext);
+        } catch (RuntimeException ignored) {
+        }
+      }
+
+      // Then
+      assertThat(cb.getState()).isEqualTo(CircuitState.OPEN);
+    }
+
+    @Test
+    @DisplayName("should reject chain execution with CircuitBreakerException when open")
+    void should_reject_chain_execution_with_circuit_breaker_exception_when_open() {
+      // Given
+      ImperativeCircuitBreaker cb = createBreaker();
+      InternalExecutor<Void, Object> failingNext = (chainId, callId, arg) -> {
+        throw new RuntimeException("fail");
+      };
+      // Open the circuit
+      for (int i = 0; i < 3; i++) {
+        try {
+          cb.execute(1L, (long) i, null, failingNext);
+        } catch (RuntimeException ignored) {
+        }
+      }
+
+      // When / Then
+      InternalExecutor<Void, Object> shouldNotReach = (chainId, callId, arg) -> "unreachable";
+      assertThatThrownBy(() -> cb.execute(1L, 99L, null, shouldNotReach))
+          .isInstanceOf(CircuitBreakerException.class)
+          .hasMessageContaining("test-service");
+    }
+  }
+
+  // ================================================================
+  // Decorator Factory Methods
+  // ================================================================
+
+  @Nested
+  @DisplayName("Decorator Factory Methods")
+  class DecoratorFactoryMethods {
+
+    @Test
+    @DisplayName("should create a decorated supplier that applies circuit breaker logic")
+    void should_create_a_decorated_supplier_that_applies_circuit_breaker_logic() {
+      // Given
+      ImperativeCircuitBreaker cb = createBreaker();
+
+      // When
+      Supplier<String> decorated = cb.decorateSupplier(() -> "supplier-result");
+
+      // Then
+      assertThat(decorated.get()).isEqualTo("supplier-result");
+      assertThat(cb.getState()).isEqualTo(CircuitState.CLOSED);
+    }
+
+    @Test
+    @DisplayName("should create a decorated runnable that applies circuit breaker logic")
+    void should_create_a_decorated_runnable_that_applies_circuit_breaker_logic() {
+      // Given
+      ImperativeCircuitBreaker cb = createBreaker();
+      AtomicInteger counter = new AtomicInteger(0);
+
+      // When
+      Runnable decorated = cb.decorateRunnable(counter::incrementAndGet);
+      decorated.run();
+
+      // Then
+      assertThat(counter.get()).isEqualTo(1);
+      assertThat(cb.getState()).isEqualTo(CircuitState.CLOSED);
+    }
+
+    @Test
+    @DisplayName("should create a decorated callable that applies circuit breaker logic")
+    void should_create_a_decorated_callable_that_applies_circuit_breaker_logic() throws Exception {
+      // Given
+      ImperativeCircuitBreaker cb = createBreaker();
+
+      // When
+      Callable<String> decorated = cb.decorateCallable(() -> "callable-result");
+
+      // Then
+      assertThat(decorated.call()).isEqualTo("callable-result");
+      assertThat(cb.getState()).isEqualTo(CircuitState.CLOSED);
     }
   }
 
@@ -250,7 +437,7 @@ class ImperativeCircuitBreakerTest {
   }
 
   // ================================================================
-  // Fallback
+  // Fallback Execution
   // ================================================================
 
   @Nested
@@ -532,7 +719,7 @@ class ImperativeCircuitBreakerTest {
   }
 
   // ================================================================
-  // Reset
+  // Manual Reset
   // ================================================================
 
   @Nested
