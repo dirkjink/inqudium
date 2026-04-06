@@ -2,53 +2,50 @@ package eu.inqudium.core.pipeline;
 
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
-import java.util.ArrayList;
-import java.util.List;
 
 /**
  * Invocation handler that dispatches service methods through composable
  * {@link DispatchExtension} layers.
  *
  * <p>{@code ProxyWrapper} itself contains no sync/async logic — all dispatch
- * modes are pluggable extensions. The extensions are checked in registration
- * order; the first extension whose {@link DispatchExtension#canHandle} returns
- * {@code true} receives the call. A {@link SyncDispatchExtension} registered last
- * serves as the catch-all fallback.</p>
+ * modes are pluggable extensions. Extensions are checked in registration order;
+ * the first whose {@link DispatchExtension#canHandle} returns {@code true}
+ * receives the call.</p>
  *
- * <h3>Extension chaining</h3>
- * <p>When wrapping another {@code ProxyWrapper}, each extension is linked to its
- * counterpart on the inner handler via {@link DispatchExtension#linkInner}. Each
- * extension type maintains its own independent chain — parallel to every other
- * extension's chain.</p>
- *
- * <h3>Adding new dispatch modes</h3>
- * <p>Implementing a new mode (e.g. reactive) requires only a new
- * {@link DispatchExtension} — this class remains unchanged.</p>
+ * <h3>Performance</h3>
+ * <p>Extensions are stored as a plain array — no {@code List} wrapper, no iterator
+ * allocation. The dispatch loop on the hot path is a simple indexed {@code for} with
+ * zero object allocation beyond the per-invocation terminal lambda.</p>
  *
  * @since 0.5.0
  */
 public class ProxyWrapper extends AbstractProxyWrapper {
 
-  private final List<DispatchExtension> extensions;
+  private static final DispatchExtension[] EMPTY = new DispatchExtension[0];
+
+  private final DispatchExtension[] extensions;
 
   // ======================== Constructors ========================
 
-  protected ProxyWrapper(String name, Object delegate, List<DispatchExtension> extensions) {
+  protected ProxyWrapper(String name, Object delegate, DispatchExtension[] extensions) {
     super(name, delegate);
 
     if (delegate instanceof ProxyWrapper inner) {
-      this.extensions = extensions.stream()
-          .map(ext -> ext.linkInner(inner.extensions()))
-          .toList();
+      DispatchExtension[] innerExts = inner.extensions;
+      DispatchExtension[] linked = new DispatchExtension[extensions.length];
+      for (int i = 0; i < extensions.length; i++) {
+        linked[i] = extensions[i].linkInner(innerExts);
+      }
+      this.extensions = linked;
     } else {
-      this.extensions = List.copyOf(extensions);
+      this.extensions = extensions.clone();
     }
   }
 
   // ======================== Accessors ========================
 
   /** Returns the extensions on this handler (for inner-resolution during chaining). */
-  List<DispatchExtension> extensions() {
+  DispatchExtension[] extensions() {
     return extensions;
   }
 
@@ -63,20 +60,11 @@ public class ProxyWrapper extends AbstractProxyWrapper {
                                   DispatchExtension... extensions) {
     AbstractProxyWrapper inner = resolveInner(target);
     Object delegate = (inner != null) ? inner : target;
-    ProxyWrapper handler = new ProxyWrapper(name, delegate, List.of(extensions));
+    ProxyWrapper handler = new ProxyWrapper(name, delegate, extensions);
     return (T) Proxy.newProxyInstance(
         serviceInterface.getClassLoader(),
         new Class<?>[]{serviceInterface, Wrapper.class},
         handler);
-  }
-
-  /**
-   * Convenience: creates a sync-only proxy with a {@link SyncDispatchExtension}.
-   */
-  public static <T> T createSyncProxy(Class<T> serviceInterface, T target, String name,
-                                      LayerAction<Void, Object> syncAction) {
-    return createProxy(serviceInterface, target, name,
-        new SyncDispatchExtension(syncAction));
   }
 
   // ======================== Dispatch ========================
@@ -86,7 +74,8 @@ public class ProxyWrapper extends AbstractProxyWrapper {
     long chainId = chainId();
     long callId = generateCallId();
 
-    for (DispatchExtension ext : extensions) {
+    for (int i = 0; i < extensions.length; i++) {
+      DispatchExtension ext = extensions[i];
       if (ext.canHandle(method)) {
         return ext.dispatch(chainId, callId, method, args, realTarget());
       }

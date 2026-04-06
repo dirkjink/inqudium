@@ -5,7 +5,6 @@ import eu.inqudium.core.pipeline.Throws;
 
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
-import java.util.List;
 import java.util.concurrent.CompletionStage;
 import java.util.function.Function;
 
@@ -13,15 +12,8 @@ import java.util.function.Function;
  * Dispatch extension for methods returning {@link CompletionStage}.
  *
  * <p>Plugs into {@link eu.inqudium.core.pipeline.ProxyWrapper ProxyWrapper} via the
- * {@link DispatchExtension} SPI. Maintains its own async chain walk, independent from
- * the sync chain.</p>
- *
- * <h3>Usage</h3>
- * <pre>{@code
- * ProxyWrapper.createProxy(OrderService.class, target, "bulkhead",
- *     new AsyncDispatchExtension(asyncBulkheadAction),
- *     new SyncDispatchExtension(syncBulkheadAction));
- * }</pre>
+ * {@link DispatchExtension} SPI. Maintains its own async chain walk, independent
+ * from other extensions.</p>
  *
  * @since 0.5.0
  */
@@ -32,17 +24,11 @@ public class AsyncDispatchExtension implements DispatchExtension {
   private final Function<InternalAsyncExecutor<Void, Object>,
       InternalAsyncExecutor<Void, Object>> nextStepFactory;
 
-  /**
-   * Creates an unlinked async extension (no inner counterpart).
-   */
   public AsyncDispatchExtension(AsyncLayerAction<Void, Object> action) {
     this.action = action;
     this.nextStepFactory = Function.identity();
   }
 
-  /**
-   * Internal constructor with a resolved inner counterpart.
-   */
   private AsyncDispatchExtension(AsyncLayerAction<Void, Object> action,
                                  AsyncDispatchExtension inner) {
     this.action = action;
@@ -65,27 +51,31 @@ public class AsyncDispatchExtension implements DispatchExtension {
   }
 
   @Override
-  public DispatchExtension linkInner(List<DispatchExtension> innerExtensions) {
-    AsyncDispatchExtension inner = innerExtensions.stream()
-        .filter(AsyncDispatchExtension.class::isInstance)
-        .map(AsyncDispatchExtension.class::cast)
-        .findFirst()
-        .orElse(null);
-    return new AsyncDispatchExtension(this.action, inner);
+  public DispatchExtension linkInner(DispatchExtension[] innerExtensions) {
+    return new AsyncDispatchExtension(this.action, findInner(innerExtensions));
   }
 
-  // ======================== Async chain walk ========================
+  // ======================== Chain walk ========================
 
   CompletionStage<Object> executeChain(long chainId, long callId,
                                        InternalAsyncExecutor<Void, Object> terminal) {
     return action.executeAsync(chainId, callId, null, nextStepFactory.apply(terminal));
   }
 
-  // ======================== Terminal builder ========================
+  // ======================== Internal ========================
+
+  private static AsyncDispatchExtension findInner(DispatchExtension[] extensions) {
+    for (int i = 0; i < extensions.length; i++) {
+      if (extensions[i] instanceof AsyncDispatchExtension async) {
+        return async;
+      }
+    }
+    return null;
+  }
 
   @SuppressWarnings("unchecked")
-  private InternalAsyncExecutor<Void, Object> buildTerminal(Method method, Object[] args,
-                                                            Object realTarget) {
+  private static InternalAsyncExecutor<Void, Object> buildTerminal(Method method, Object[] args,
+                                                                   Object realTarget) {
     return (chainId, callId, arg) -> {
       try {
         return (CompletionStage<Object>) method.invoke(realTarget, args);

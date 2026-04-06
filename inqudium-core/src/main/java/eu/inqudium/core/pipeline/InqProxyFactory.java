@@ -14,12 +14,12 @@ public interface InqProxyFactory {
   @SuppressWarnings("unchecked")
   static InqProxyFactory of(String name, LayerAction<?, ?> action) {
     LayerAction<Void, Object> sync = (LayerAction<Void, Object>) action;
+    SyncDispatchExtension extension = new SyncDispatchExtension(sync);
     return new InqProxyFactory() {
       @Override
       public <T> T protect(Class<T> serviceInterface, T target) {
         ProxyWrapper.validateInterface(serviceInterface);
-        return ProxyWrapper.createProxy(serviceInterface, target, name,
-            new SyncDispatchExtension(sync));
+        return ProxyWrapper.createProxy(serviceInterface, target, name, extension);
       }
     };
   }
