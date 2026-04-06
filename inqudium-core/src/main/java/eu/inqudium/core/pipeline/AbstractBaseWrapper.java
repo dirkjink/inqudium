@@ -92,9 +92,23 @@ public abstract class AbstractBaseWrapper<T, S extends AbstractBaseWrapper<T, S>
     return name;
   }
 
+  /**
+   * Returns the next inner wrapper in the chain, or {@code null} if the
+   * delegate is not a wrapper or is not assignment-compatible with this
+   * wrapper's concrete type.
+   *
+   * <p>Uses {@code this.getClass().isInstance(delegate)} to verify at
+   * runtime that the delegate can safely be viewed as {@code S}, preventing
+   * deferred {@code ClassCastException}s when chains mix different
+   * {@code AbstractBaseWrapper} subclasses. This is slightly more
+   * conservative than the erased {@code (S)} cast — it may return
+   * {@code null} in rare subtype constellations where the cast would
+   * technically succeed — but it is always safe and requires no changes
+   * to the constructor hierarchy.</p>
+   */
   @SuppressWarnings("unchecked")
   @Override
   public S inner() {
-    return (delegate instanceof AbstractBaseWrapper) ? (S) delegate : null;
+    return this.getClass().isInstance(delegate) ? (S) delegate : null;
   }
 }
