@@ -3,43 +3,65 @@ package eu.inqudium.core.pipeline;
 import java.lang.reflect.Method;
 
 /**
- * SPI for pluggable dispatch strategies beyond the default sync chain.
+ * SPI for pluggable dispatch strategies inside a {@link ProxyWrapper}.
  *
- * <p>Each extension handles a specific category of methods — typically identified by
- * return type (e.g. {@code CompletionStage} for async, {@code Publisher} for reactive).
- * Extensions are composed into a {@link ProxyWrapper} and maintain their own
- * independent chain walk, separate from other extensions.</p>
- *
- * <h3>Lifecycle</h3>
- * <ol>
- *   <li><b>Creation:</b> The extension is created with its action (e.g. an async bulkhead)</li>
- *   <li><b>Linking:</b> When a {@link ProxyWrapper} wraps another, each extension receives
- *       the inner handler's extensions via {@link #linkInner} and returns a chained copy
- *       that delegates to the matching inner extension</li>
- *   <li><b>Dispatch:</b> At invocation time, the wrapper asks each extension via
- *       {@link #canHandle}; the first match receives the call via {@link #dispatch}</li>
- * </ol>
+ * <p>Extensions are checked in registration order; the first whose
+ * {@link #canHandle} returns {@code true} receives the call.</p>
  *
  * @since 0.5.0
  */
 public interface DispatchExtension {
 
   /**
-   * Returns {@code true} if this extension handles the given method.
+   * Returns {@code true} if this extension can dispatch the given method.
    */
   boolean canHandle(Method method);
 
   /**
-   * Dispatches the method call through this extension's chain.
+   * Dispatches the method call through this extension's logic.
+   *
+   * @param chainId    the chain identifier
+   * @param callId     the per-call identifier
+   * @param method     the service method being invoked
+   * @param args       the method arguments
+   * @param target     the invocation target for the terminal step
+   * @return the method result
    */
-  Object dispatch(long chainId, long callId, Method method, Object[] args, Object realTarget);
+  Object dispatch(long chainId, long callId,
+                  Method method, Object[] args, Object target) throws Throwable;
 
   /**
-   * Creates a new instance of this extension that is chained to the matching
-   * extension from the inner handler.
+   * Links this extension with matching inner extensions for chain-walk
+   * optimisation.
    *
-   * @param innerExtensions the extensions from the inner handler (may be empty, never null)
-   * @return a new extension instance linked to the inner chain
+   * <p>Implementations that find a type-compatible counterpart in
+   * {@code innerExtensions} should wire a direct chain walk and use
+   * {@code realTarget} for the terminal invocation (skipping intermediate
+   * proxy re-entry).</p>
+   *
+   * <p>Implementations that do <em>not</em> find a match should return
+   * themselves unchanged — the framework will pass the delegate proxy as
+   * the invocation target at dispatch time, ensuring that the inner proxy's
+   * extensions are still invoked.</p>
+   *
+   * @param innerExtensions the extensions registered on the inner proxy
+   * @param realTarget      the deepest non-proxy target; used as terminal
+   *                        override when a type-compatible chain link exists
+   * @return a (possibly new) extension instance wired into the inner chain
    */
-  DispatchExtension linkInner(DispatchExtension[] innerExtensions);
+  default DispatchExtension linkInner(DispatchExtension[] innerExtensions,
+                                      Object realTarget) {
+    // Backward-compatible default: delegate to legacy overload
+    return linkInner(innerExtensions);
+  }
+
+  /**
+   * Legacy linking without real-target override.
+   *
+   * <p>Kept for backward compatibility. New extensions should override
+   * {@link #linkInner(DispatchExtension[], Object)} instead.</p>
+   */
+  default DispatchExtension linkInner(DispatchExtension[] innerExtensions) {
+    return this;
+  }
 }
