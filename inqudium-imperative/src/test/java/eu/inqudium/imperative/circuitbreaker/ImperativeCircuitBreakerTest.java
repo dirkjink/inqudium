@@ -55,12 +55,12 @@ class ImperativeCircuitBreakerTest {
         .build();
   }
 
-  private ImperativeCircuitBreaker createBreaker() {
-    return new ImperativeCircuitBreaker(defaultConfig(), clock);
+  private <A, R> ImperativeCircuitBreaker<A, R> createBreaker() {
+    return new ImperativeCircuitBreaker<>(defaultConfig(), clock);
   }
 
-  private ImperativeCircuitBreaker createBreaker(CircuitBreakerConfig config) {
-    return new ImperativeCircuitBreaker(config, clock);
+  private <A, R> ImperativeCircuitBreaker<A, R> createBreaker(CircuitBreakerConfig config) {
+    return new ImperativeCircuitBreaker<>(config, clock);
   }
 
   /**
@@ -109,7 +109,7 @@ class ImperativeCircuitBreakerTest {
     @DisplayName("should implement InqDecorator interface")
     void should_implement_inq_decorator_interface() {
       // Given
-      ImperativeCircuitBreaker cb = createBreaker();
+      ImperativeCircuitBreaker<Void, Object>  cb = createBreaker();
 
       // When / Then
       assertThat(cb).isInstanceOf(InqDecorator.class);
@@ -119,7 +119,7 @@ class ImperativeCircuitBreakerTest {
     @DisplayName("should return the config name as element name")
     void should_return_the_config_name_as_element_name() {
       // Given
-      ImperativeCircuitBreaker cb = createBreaker();
+      ImperativeCircuitBreaker<Void, Object>  cb = createBreaker();
 
       // When
       String name = cb.getName();
@@ -132,7 +132,7 @@ class ImperativeCircuitBreakerTest {
     @DisplayName("should return CIRCUIT_BREAKER as element type")
     void should_return_circuit_breaker_as_element_type() {
       // Given
-      ImperativeCircuitBreaker cb = createBreaker();
+      ImperativeCircuitBreaker<Void, Object>  cb = createBreaker();
 
       // When
       InqElementType type = cb.getElementType();
@@ -145,7 +145,7 @@ class ImperativeCircuitBreakerTest {
     @DisplayName("should provide a non-null event publisher")
     void should_provide_a_non_null_event_publisher() {
       // Given
-      ImperativeCircuitBreaker cb = createBreaker();
+      ImperativeCircuitBreaker<Void, Object>  cb = createBreaker();
 
       // When / Then
       assertThat(cb.getEventPublisher()).isNotNull();
@@ -155,7 +155,7 @@ class ImperativeCircuitBreakerTest {
     @DisplayName("should delegate to the next step in the chain on success")
     void should_delegate_to_the_next_step_in_the_chain_on_success() {
       // Given
-      ImperativeCircuitBreaker cb = createBreaker();
+      ImperativeCircuitBreaker<Void, Object>  cb = createBreaker();
       InternalExecutor<Void, Object> next = (chainId, callId, arg) -> "chain-result";
 
       // When
@@ -169,7 +169,7 @@ class ImperativeCircuitBreakerTest {
     @DisplayName("should record success and remain closed after chain execution")
     void should_record_success_and_remain_closed_after_chain_execution() {
       // Given
-      ImperativeCircuitBreaker cb = createBreaker();
+      ImperativeCircuitBreaker<Void, Object>  cb = createBreaker();
       InternalExecutor<Void, Object> next = (chainId, callId, arg) -> "ok";
 
       // When
@@ -185,7 +185,7 @@ class ImperativeCircuitBreakerTest {
     @DisplayName("should transition to OPEN when chain failures exceed the threshold")
     void should_transition_to_open_when_chain_failures_exceed_the_threshold() {
       // Given
-      ImperativeCircuitBreaker cb = createBreaker();
+      ImperativeCircuitBreaker<Void, Object>  cb = createBreaker();
       InternalExecutor<Void, Object> failingNext = (chainId, callId, arg) -> {
         throw new RuntimeException("chain-fail");
       };
@@ -206,7 +206,7 @@ class ImperativeCircuitBreakerTest {
     @DisplayName("should reject chain execution with CircuitBreakerException when open")
     void should_reject_chain_execution_with_circuit_breaker_exception_when_open() {
       // Given
-      ImperativeCircuitBreaker cb = createBreaker();
+      ImperativeCircuitBreaker<Void, Object>  cb = createBreaker();
       InternalExecutor<Void, Object> failingNext = (chainId, callId, arg) -> {
         throw new RuntimeException("fail");
       };
@@ -238,7 +238,7 @@ class ImperativeCircuitBreakerTest {
     @DisplayName("should create a decorated supplier that applies circuit breaker logic")
     void should_create_a_decorated_supplier_that_applies_circuit_breaker_logic() {
       // Given
-      ImperativeCircuitBreaker cb = createBreaker();
+      ImperativeCircuitBreaker<Void, Object>  cb = createBreaker();
 
       // When
       Supplier<String> decorated = cb.decorateSupplier(() -> "supplier-result");
@@ -252,7 +252,7 @@ class ImperativeCircuitBreakerTest {
     @DisplayName("should create a decorated runnable that applies circuit breaker logic")
     void should_create_a_decorated_runnable_that_applies_circuit_breaker_logic() {
       // Given
-      ImperativeCircuitBreaker cb = createBreaker();
+      ImperativeCircuitBreaker<Void, Object>  cb = createBreaker();
       AtomicInteger counter = new AtomicInteger(0);
 
       // When
@@ -268,7 +268,7 @@ class ImperativeCircuitBreakerTest {
     @DisplayName("should create a decorated callable that applies circuit breaker logic")
     void should_create_a_decorated_callable_that_applies_circuit_breaker_logic() throws Exception {
       // Given
-      ImperativeCircuitBreaker cb = createBreaker();
+      ImperativeCircuitBreaker<Void, Object>  cb = createBreaker();
 
       // When
       Callable<String> decorated = cb.decorateCallable(() -> "callable-result");
@@ -291,7 +291,7 @@ class ImperativeCircuitBreakerTest {
     @DisplayName("should implement InqAsyncDecorator interface")
     void should_implement_inq_async_decorator_interface() {
       // Given
-      ImperativeCircuitBreaker cb = createBreaker();
+      ImperativeCircuitBreaker<Void, Object>  cb = createBreaker();
 
       // When / Then
       assertThat(cb).isInstanceOf(InqAsyncDecorator.class);
@@ -301,7 +301,7 @@ class ImperativeCircuitBreakerTest {
     @DisplayName("should delegate to the next async step and return result on success")
     void should_delegate_to_the_next_async_step_and_return_result_on_success() throws Exception {
       // Given
-      ImperativeCircuitBreaker cb = createBreaker();
+      ImperativeCircuitBreaker<Void, Object>  cb = createBreaker();
       InternalAsyncExecutor<Void, Object> next =
           (chainId, callId, arg) -> CompletableFuture.completedFuture("async-result");
 
@@ -317,7 +317,7 @@ class ImperativeCircuitBreakerTest {
     @DisplayName("should record failure when the async stage completes exceptionally")
     void should_record_failure_when_the_async_stage_completes_exceptionally() {
       // Given
-      ImperativeCircuitBreaker cb = createBreaker();
+      ImperativeCircuitBreaker<Void, Object>  cb = createBreaker();
       InternalAsyncExecutor<Void, Object> failingNext =
           (chainId, callId, arg) -> CompletableFuture.failedFuture(new RuntimeException("async-fail"));
 
@@ -337,7 +337,7 @@ class ImperativeCircuitBreakerTest {
     @DisplayName("should reject async execution with CircuitBreakerException when open")
     void should_reject_async_execution_with_circuit_breaker_exception_when_open() {
       // Given
-      ImperativeCircuitBreaker cb = createBreaker();
+      ImperativeCircuitBreaker<Void, Object>  cb = createBreaker();
       InternalAsyncExecutor<Void, Object> failingNext =
           (chainId, callId, arg) -> CompletableFuture.failedFuture(new RuntimeException("fail"));
       // Open the circuit
@@ -360,7 +360,7 @@ class ImperativeCircuitBreakerTest {
     @DisplayName("should record failure when next throws synchronously during async chain start")
     void should_record_failure_when_next_throws_synchronously_during_async_chain_start() {
       // Given
-      ImperativeCircuitBreaker cb = createBreaker();
+      ImperativeCircuitBreaker<Void, Object>  cb = createBreaker();
       InternalAsyncExecutor<Void, Object> syncThrowingNext =
           (chainId, callId, arg) -> {
             throw new RuntimeException("sync-boom");
@@ -382,7 +382,7 @@ class ImperativeCircuitBreakerTest {
     @DisplayName("should remain closed after successful async completions")
     void should_remain_closed_after_successful_async_completions() {
       // Given
-      ImperativeCircuitBreaker cb = createBreaker();
+      ImperativeCircuitBreaker<Void, Object>  cb = createBreaker();
       InternalAsyncExecutor<Void, Object> next =
           (chainId, callId, arg) -> CompletableFuture.completedFuture("ok");
 
@@ -399,7 +399,7 @@ class ImperativeCircuitBreakerTest {
     @DisplayName("should transition from OPEN to HALF_OPEN after wait duration in async mode")
     void should_transition_from_open_to_half_open_after_wait_duration_in_async_mode() {
       // Given
-      ImperativeCircuitBreaker cb = createBreaker();
+      ImperativeCircuitBreaker<Void, Object>  cb = createBreaker();
       InternalAsyncExecutor<Void, Object> failingNext =
           (chainId, callId, arg) -> CompletableFuture.failedFuture(new RuntimeException("fail"));
       for (int i = 0; i < 3; i++) {
@@ -433,7 +433,7 @@ class ImperativeCircuitBreakerTest {
     @DisplayName("should create a decorated async supplier that applies circuit breaker logic")
     void should_create_a_decorated_async_supplier_that_applies_circuit_breaker_logic() {
       // Given
-      ImperativeCircuitBreaker cb = createBreaker();
+      ImperativeCircuitBreaker<Void, Object>  cb = createBreaker();
 
       // When
       Supplier<CompletionStage<String>> decorated =
@@ -448,7 +448,7 @@ class ImperativeCircuitBreakerTest {
     @DisplayName("should create a decorated async runnable that applies circuit breaker logic")
     void should_create_a_decorated_async_runnable_that_applies_circuit_breaker_logic() {
       // Given
-      ImperativeCircuitBreaker cb = createBreaker();
+      ImperativeCircuitBreaker<Void, Object>  cb = createBreaker();
       AtomicInteger counter = new AtomicInteger(0);
 
       // When
@@ -465,7 +465,7 @@ class ImperativeCircuitBreakerTest {
     @DisplayName("should create a decorated async callable that applies circuit breaker logic")
     void should_create_a_decorated_async_callable_that_applies_circuit_breaker_logic() throws Exception {
       // Given
-      ImperativeCircuitBreaker cb = createBreaker();
+      ImperativeCircuitBreaker<Void, Object>  cb = createBreaker();
 
       // When
       CompletableFuture<String> originalFuture = CompletableFuture.completedFuture("async-callable");
@@ -501,7 +501,7 @@ class ImperativeCircuitBreakerTest {
     @DisplayName("should return the result of a successful callable")
     void should_return_the_result_of_a_successful_callable() throws Exception {
       // Given
-      ImperativeCircuitBreaker cb = createBreaker();
+      ImperativeCircuitBreaker<Void, Object>  cb = createBreaker();
 
       // When
       String result = cb.execute(() -> "hello");
@@ -514,7 +514,7 @@ class ImperativeCircuitBreakerTest {
     @DisplayName("should remain in CLOSED state after successful calls")
     void should_remain_in_closed_state_after_successful_calls() throws Exception {
       // Given
-      ImperativeCircuitBreaker cb = createBreaker();
+      ImperativeCircuitBreaker<Void, Object>  cb = createBreaker();
 
       // When
       for (int i = 0; i < 10; i++) {
@@ -529,7 +529,7 @@ class ImperativeCircuitBreakerTest {
     @DisplayName("should execute a runnable without throwing")
     void should_execute_a_runnable_without_throwing() throws Exception {
       // Given
-      ImperativeCircuitBreaker cb = createBreaker();
+      ImperativeCircuitBreaker<Void, Object>  cb = createBreaker();
       AtomicInteger counter = new AtomicInteger(0);
 
       // When
@@ -552,7 +552,7 @@ class ImperativeCircuitBreakerTest {
     @DisplayName("should propagate the original exception on failure")
     void should_propagate_the_original_exception_on_failure() {
       // Given
-      ImperativeCircuitBreaker cb = createBreaker();
+      ImperativeCircuitBreaker<Void, Object>  cb = createBreaker();
 
       // When / Then
       assertThatThrownBy(() -> cb.execute(() -> {
@@ -565,7 +565,7 @@ class ImperativeCircuitBreakerTest {
     @DisplayName("should transition to OPEN after reaching the failure threshold")
     void should_transition_to_open_after_reaching_the_failure_threshold() {
       // Given
-      ImperativeCircuitBreaker cb = createBreaker(); // 50% threshold, min 3 calls
+      ImperativeCircuitBreaker<Void, Object>  cb = createBreaker(); // 50% threshold, min 3 calls
 
       // When — record 3 failures (100% error rate, >= 3 calls)
       for (int i = 0; i < 3; i++) {
@@ -582,7 +582,7 @@ class ImperativeCircuitBreakerTest {
     @DisplayName("should reject calls with CircuitBreakerException when open")
     void should_reject_calls_with_circuit_breaker_exception_when_open() {
       // Given
-      ImperativeCircuitBreaker cb = createBreaker();
+      ImperativeCircuitBreaker<Void, Object>  cb = createBreaker();
       // Open the circuit
       for (int i = 0; i < 3; i++) {
         try {
@@ -607,7 +607,7 @@ class ImperativeCircuitBreakerTest {
           .failureThreshold(60) // 60% Error Rate
           .minimumNumberOfCalls(4)
           .build();
-      ImperativeCircuitBreaker cb = createBreaker(config);
+      ImperativeCircuitBreaker<Void, Object>  cb = createBreaker(config);
 
       // When — 2 failures, then 2 successes
       for (int i = 0; i < 2; i++) {
@@ -633,7 +633,7 @@ class ImperativeCircuitBreakerTest {
           .failureThreshold(60) // 60% Error Rate
           .minimumNumberOfCalls(4)
           .build();
-      ImperativeCircuitBreaker cb = createBreaker(config);
+      ImperativeCircuitBreaker<Void, Object>  cb = createBreaker(config);
 
       // When — 3 failures, then 1 success
       for (int i = 0; i < 3; i++) {
@@ -663,7 +663,7 @@ class ImperativeCircuitBreakerTest {
     @DisplayName("should return the primary result when the circuit is closed")
     void should_return_the_primary_result_when_the_circuit_is_closed() throws Exception {
       // Given
-      ImperativeCircuitBreaker cb = createBreaker();
+      ImperativeCircuitBreaker<Void, Object>  cb = createBreaker();
 
       // When
       String result = cb.executeWithFallback(
@@ -679,7 +679,7 @@ class ImperativeCircuitBreakerTest {
     @DisplayName("should return the fallback value when the circuit is open")
     void should_return_the_fallback_value_when_the_circuit_is_open() throws Exception {
       // Given
-      ImperativeCircuitBreaker cb = createBreaker();
+      ImperativeCircuitBreaker<Void, Object>  cb = createBreaker();
       for (int i = 0; i < 3; i++) {
         try {
           cb.execute(() -> {
@@ -703,7 +703,7 @@ class ImperativeCircuitBreakerTest {
     @DisplayName("should still propagate non-circuit-breaker exceptions with fallback")
     void should_still_propagate_non_circuit_breaker_exceptions_with_fallback() {
       // Given
-      ImperativeCircuitBreaker cb = createBreaker();
+      ImperativeCircuitBreaker<Void, Object>  cb = createBreaker();
 
       // When / Then
       assertThatThrownBy(() -> cb.executeWithFallback(
@@ -727,7 +727,7 @@ class ImperativeCircuitBreakerTest {
     @DisplayName("should transition from OPEN to HALF_OPEN after wait duration expires")
     void should_transition_from_open_to_half_open_after_wait_duration_expires() throws Exception {
       // Given
-      ImperativeCircuitBreaker cb = createBreaker();
+      ImperativeCircuitBreaker<Void, Object>  cb = createBreaker();
       for (int i = 0; i < 3; i++) {
         try {
           cb.execute(() -> {
@@ -757,7 +757,7 @@ class ImperativeCircuitBreakerTest {
           .permittedCallsInHalfOpen(3)
           .waitDurationInOpenState(Duration.ofSeconds(10))
           .build();
-      ImperativeCircuitBreaker cb = createBreaker(config);
+      ImperativeCircuitBreaker<Void, Object>  cb = createBreaker(config);
 
       // Open the circuit (2 fails reach the min calls and 100% rate)
       for (int i = 0; i < 2; i++) {
@@ -782,7 +782,7 @@ class ImperativeCircuitBreakerTest {
     @DisplayName("should transition from HALF_OPEN back to OPEN on a probe failure")
     void should_transition_from_half_open_back_to_open_on_a_probe_failure() {
       // Given
-      ImperativeCircuitBreaker cb = createBreaker();
+      ImperativeCircuitBreaker<Void, Object>  cb = createBreaker();
       for (int i = 0; i < 3; i++) {
         try {
           cb.execute(() -> {
@@ -824,7 +824,7 @@ class ImperativeCircuitBreakerTest {
           .waitDurationInOpenState(Duration.ofSeconds(10))
           .ignoreExceptions(IllegalArgumentException.class)
           .build();
-      ImperativeCircuitBreaker cb = createBreaker(config);
+      ImperativeCircuitBreaker<Void, Object>  cb = createBreaker(config);
 
       // When — throw ignored exceptions
       for (int i = 0; i < 5; i++) {
@@ -850,7 +850,7 @@ class ImperativeCircuitBreakerTest {
           .waitDurationInOpenState(Duration.ofSeconds(10))
           .recordExceptions(java.io.IOException.class)
           .build();
-      ImperativeCircuitBreaker cb = createBreaker(config);
+      ImperativeCircuitBreaker<Void, Object>  cb = createBreaker(config);
 
       // When — throw a non-recorded exception
       for (int i = 0; i < 5; i++) {
@@ -879,7 +879,7 @@ class ImperativeCircuitBreakerTest {
     @DisplayName("should notify listeners when the state changes to OPEN")
     void should_notify_listeners_when_the_state_changes_to_open() {
       // Given
-      ImperativeCircuitBreaker cb = createBreaker();
+      ImperativeCircuitBreaker<Void, Object>  cb = createBreaker();
       List<StateTransition> transitions = new ArrayList<>();
       cb.onStateTransition(transitions::add);
 
@@ -910,7 +910,7 @@ class ImperativeCircuitBreakerTest {
           .permittedCallsInHalfOpen(1)
           .waitDurationInOpenState(Duration.ofSeconds(5))
           .build();
-      ImperativeCircuitBreaker cb = createBreaker(config);
+      ImperativeCircuitBreaker<Void, Object>  cb = createBreaker(config);
       List<StateTransition> transitions = Collections.synchronizedList(new ArrayList<>());
       cb.onStateTransition(transitions::add);
 
@@ -945,7 +945,7 @@ class ImperativeCircuitBreakerTest {
     @DisplayName("should reset an open circuit breaker to CLOSED state")
     void should_reset_an_open_circuit_breaker_to_closed_state() throws Exception {
       // Given
-      ImperativeCircuitBreaker cb = createBreaker();
+      ImperativeCircuitBreaker<Void, Object>  cb = createBreaker();
       for (int i = 0; i < 3; i++) {
         try {
           cb.execute(() -> {
@@ -982,7 +982,7 @@ class ImperativeCircuitBreakerTest {
           .minimumNumberOfCalls(10)
           .waitDurationInOpenState(Duration.ofSeconds(30))
           .build();
-      ImperativeCircuitBreaker cb = createBreaker(config);
+      ImperativeCircuitBreaker<Void, Object>  cb = createBreaker(config);
       int threadCount = 1000;
       AtomicInteger successCount = new AtomicInteger(0);
       CountDownLatch latch = new CountDownLatch(threadCount);
@@ -1019,7 +1019,7 @@ class ImperativeCircuitBreakerTest {
           .minimumNumberOfCalls(10)
           .waitDurationInOpenState(Duration.ofSeconds(30))
           .build();
-      ImperativeCircuitBreaker cb = createBreaker(config);
+      ImperativeCircuitBreaker<Void, Object>  cb = createBreaker(config);
       int threadCount = 50;
       CountDownLatch latch = new CountDownLatch(threadCount);
 
