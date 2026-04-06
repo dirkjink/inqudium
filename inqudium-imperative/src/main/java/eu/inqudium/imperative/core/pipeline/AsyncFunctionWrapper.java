@@ -8,8 +8,7 @@ import java.util.function.Function;
 /**
  * Async wrapper for functions that return a {@link CompletionStage}.
  *
- * <p>The async counterpart to {@link FunctionWrapper}. The input flows through
- * every layer's around-advice before reaching the core delegate.</p>
+ * <p>The async counterpart to {@link FunctionWrapper}.</p>
  *
  * @param <I> the input type of the function
  * @param <O> the result type carried by the CompletionStage
@@ -18,27 +17,18 @@ public class AsyncFunctionWrapper<I, O>
     extends AsyncBaseWrapper<Function<I, CompletionStage<O>>, I, O, AsyncFunctionWrapper<I, O>>
     implements Function<I, CompletionStage<O>> {
 
-  /**
-   * Creates a wrapper with an {@link InqAsyncDecorator} providing name and around-advice.
-   */
   public AsyncFunctionWrapper(InqAsyncDecorator<I, O> decorator,
                               Function<I, CompletionStage<O>> delegate) {
     super(decorator, delegate, coreFor(delegate));
   }
 
-  /**
-   * Creates a wrapper with a custom {@link AsyncLayerAction}.
-   */
   public AsyncFunctionWrapper(String name, Function<I, CompletionStage<O>> delegate,
                               AsyncLayerAction<I, O> layerAction) {
     super(name, delegate, coreFor(delegate), layerAction);
   }
 
-  /**
-   * Creates a wrapper with pass-through behavior.
-   */
   public AsyncFunctionWrapper(String name, Function<I, CompletionStage<O>> delegate) {
-    super(name, delegate, coreFor(delegate));
+    this(name, delegate, AsyncLayerAction.passThrough());
   }
 
   private static <I, O> InternalAsyncExecutor<I, O> coreFor(Function<I, CompletionStage<O>> delegate) {

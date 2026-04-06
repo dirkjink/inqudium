@@ -16,27 +16,18 @@ public class AsyncSupplierWrapper<T>
     extends AsyncBaseWrapper<Supplier<CompletionStage<T>>, Void, T, AsyncSupplierWrapper<T>>
     implements Supplier<CompletionStage<T>> {
 
-  /**
-   * Creates a wrapper with an {@link InqAsyncDecorator} providing name and around-advice.
-   */
   public AsyncSupplierWrapper(InqAsyncDecorator<Void, T> decorator,
                               Supplier<CompletionStage<T>> delegate) {
     super(decorator, delegate, coreFor(delegate));
   }
 
-  /**
-   * Creates a wrapper with a custom {@link AsyncLayerAction}.
-   */
   public AsyncSupplierWrapper(String name, Supplier<CompletionStage<T>> delegate,
                               AsyncLayerAction<Void, T> layerAction) {
     super(name, delegate, coreFor(delegate), layerAction);
   }
 
-  /**
-   * Creates a wrapper with pass-through behavior.
-   */
   public AsyncSupplierWrapper(String name, Supplier<CompletionStage<T>> delegate) {
-    super(name, delegate, coreFor(delegate));
+    this(name, delegate, AsyncLayerAction.passThrough());
   }
 
   private static <T> InternalAsyncExecutor<Void, T> coreFor(Supplier<CompletionStage<T>> delegate) {
