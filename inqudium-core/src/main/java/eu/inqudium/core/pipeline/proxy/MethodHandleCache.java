@@ -38,7 +38,7 @@ public final class MethodHandleCache {
   private static final MethodHandles.Lookup LOOKUP = MethodHandles.lookup();
 
   /** Cached resolved handle per method. */
-  private final ConcurrentHashMap<Method, MethodHandle> cache =
+  private final ConcurrentHashMap<Method, MethodHandle> fastCache =
       new ConcurrentHashMap<>();
 
   /**
@@ -70,7 +70,7 @@ public final class MethodHandleCache {
    * @return a reusable {@code MethodHandle}
    */
   MethodHandle resolve(Method method) {
-    return cache.computeIfAbsent(method, MethodHandleCache::unreflect);
+    return fastCache.computeIfAbsent(method, MethodHandleCache::unreflect);
   }
 
   /**
@@ -89,19 +89,24 @@ public final class MethodHandleCache {
    * @throws Throwable if the underlying method throws
    */
   public Object invoke(Method method, Object target, Object[] args) throws Throwable {
-    MethodHandle mh = resolve(method);
     int arity = (args == null) ? 0 : args.length;
 
-    // Specialised fast paths — direct polymorphic invoke, no array packing
-    return switch (arity) {
-      case 0 -> mh.invoke(target);
-      case 1 -> mh.invoke(target, args[0]);
-      case 2 -> mh.invoke(target, args[0], args[1]);
-      case 3 -> mh.invoke(target, args[0], args[1], args[2]);
-      case 4 -> mh.invoke(target, args[0], args[1], args[2], args[3]);
-      case 5 -> mh.invoke(target, args[0], args[1], args[2], args[3], args[4]);
-      default -> resolveSpreader(method, mh, arity).invoke(target, args);
-    };
+    if (arity < 6) {
+      MethodHandle mh = resolve(method);
+
+      return switch (arity) {
+        case 0 -> mh.invoke(target);
+        case 1 -> mh.invoke(target, args[0]);
+        case 2 -> mh.invoke(target, args[0], args[1]);
+        case 3 -> mh.invoke(target, args[0], args[1], args[2]);
+        case 4 -> mh.invoke(target, args[0], args[1], args[2], args[3]);
+        case 5 -> mh.invoke(target, args[0], args[1], args[2], args[3], args[4]);
+        default -> throw new IllegalStateException("should never happen: arity value is not covered by switch");
+      };
+    } else {
+      MethodHandle mh = resolveSpreader(method, arity);
+      return mh.invoke(target, args);
+    }
   }
 
   /**
@@ -113,11 +118,11 @@ public final class MethodHandleCache {
    * via {@link MethodHandle#asSpreader}. This lets us pass the target and
    * the argument array directly — no intermediate array copy required.</p>
    */
-  private MethodHandle resolveSpreader(Method method, MethodHandle mh, int arity) {
+  private MethodHandle resolveSpreader(Method method, int arity) {
     return spreaderCache.computeIfAbsent(method, k -> {
       // Build generic type: (Object, Object, Object, ...) -> Object
       MethodType generic = MethodType.genericMethodType(arity + 1);
-      MethodHandle adapted = mh.asType(generic);
+      MethodHandle adapted = unreflect(method).asType(generic);
       // Convert trailing params to spreader: (Object target, Object[] args) -> Object
       return adapted.asSpreader(Object[].class, arity);
     });
