@@ -2,6 +2,7 @@ package eu.inqudium.core.pipeline.proxy;
 
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
+import java.lang.invoke.MethodType;
 import java.lang.reflect.Method;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -16,13 +17,14 @@ import java.util.concurrent.ConcurrentHashMap;
  * keeps cache sizes proportional to the methods actually dispatched
  * through each extension and avoids a global singleton.</p>
  *
- * <h3>Why this matters</h3>
- * <p>Every call to {@link Method#invoke} performs access checks, argument
- * validation, and boxing — work that the JVM cannot fully eliminate even
- * when the same method is called millions of times. A {@code MethodHandle}
- * obtained via {@link MethodHandles.Lookup#unreflect} encodes the access
- * decision once; subsequent invocations are a direct function-pointer call
- * that the JIT can inline.</p>
+ * <h3>Hot-path optimisation</h3>
+ * <p>Instead of the generic {@link MethodHandle#invokeWithArguments} path
+ * (which copies arrays internally and performs runtime type checks on every
+ * call), this cache dispatches through arity-specialised invocations for
+ * 0–3 parameters. Methods with 4+ parameters use a pre-built
+ * {@linkplain MethodHandle#asSpreader spreader} handle that consumes the
+ * argument array directly — eliminating the per-call array allocation that
+ * was previously needed to prepend the target.</p>
  *
  * <h3>Thread safety</h3>
  * <p>The internal map is a {@link ConcurrentHashMap}. Concurrent
@@ -35,7 +37,16 @@ public final class MethodHandleCache {
 
   private static final MethodHandles.Lookup LOOKUP = MethodHandles.lookup();
 
+  /** Cached resolved handle per method. */
   private final ConcurrentHashMap<Method, MethodHandle> cache =
+      new ConcurrentHashMap<>();
+
+  /**
+   * Cached spreader handle per method (only for arity >= 4).
+   * The spreader accepts (Object target, Object[] args) and spreads args
+   * into positional parameters, avoiding the manual array copy.
+   */
+  private final ConcurrentHashMap<Method, MethodHandle> spreaderCache =
       new ConcurrentHashMap<>();
 
   private static MethodHandle unreflect(Method method) {
@@ -66,9 +77,10 @@ public final class MethodHandleCache {
    * Invokes the cached handle for {@code method} on the given target
    * with the supplied arguments.
    *
-   * <p>Handles the {@code null}-args convention that
-   * {@link java.lang.reflect.InvocationHandler} uses for zero-argument
-   * methods.</p>
+   * <p>Uses arity-specialised dispatch for 0–3 parameters to avoid
+   * {@link MethodHandle#invokeWithArguments} overhead. For methods with
+   * 4+ parameters a pre-built spreader handle is used that consumes the
+   * argument array directly, eliminating the per-call array allocation.</p>
    *
    * @param method the service method
    * @param target the object to invoke on
@@ -78,12 +90,37 @@ public final class MethodHandleCache {
    */
   public Object invoke(Method method, Object target, Object[] args) throws Throwable {
     MethodHandle mh = resolve(method);
-    if (args == null || args.length == 0) {
-      return mh.invoke(target);
-    }
-    Object[] full = new Object[args.length + 1];
-    full[0] = target;
-    System.arraycopy(args, 0, full, 1, args.length);
-    return mh.invokeWithArguments(full);
+    int arity = (args == null) ? 0 : args.length;
+
+    // Specialised fast paths — direct polymorphic invoke, no array packing
+    return switch (arity) {
+      case 0 -> mh.invoke(target);
+      case 1 -> mh.invoke(target, args[0]);
+      case 2 -> mh.invoke(target, args[0], args[1]);
+      case 3 -> mh.invoke(target, args[0], args[1], args[2]);
+      case 4 -> mh.invoke(target, args[0], args[1], args[2], args[3]);
+      case 5 -> mh.invoke(target, args[0], args[1], args[2], args[3], args[4]);
+      case 6 -> mh.invoke(target, args[0], args[1], args[2], args[3], args[4], args[5]);
+      default -> resolveSpreader(method, mh, arity).invoke(target, args);
+    };
+  }
+
+  /**
+   * Returns a cached spreader handle for high-arity methods (4+ params).
+   *
+   * <p>The spreader is built from the original handle by first casting all
+   * parameter types to {@code Object} (via {@link MethodHandle#asType}) and
+   * then converting it into a {@code (Object, Object[]) -> Object} form
+   * via {@link MethodHandle#asSpreader}. This lets us pass the target and
+   * the argument array directly — no intermediate array copy required.</p>
+   */
+  private MethodHandle resolveSpreader(Method method, MethodHandle mh, int arity) {
+    return spreaderCache.computeIfAbsent(method, k -> {
+      // Build generic type: (Object, Object, Object, ...) -> Object
+      MethodType generic = MethodType.genericMethodType(arity + 1);
+      MethodHandle adapted = mh.asType(generic);
+      // Convert trailing params to spreader: (Object target, Object[] args) -> Object
+      return adapted.asSpreader(Object[].class, arity);
+    });
   }
 }
