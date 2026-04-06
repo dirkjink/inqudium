@@ -95,13 +95,6 @@ public class HappyPathBulkheadBenchmarkThree {
   private WorkService proxyR4j;
   private WorkService proxyFailsafe;
 
-  /**
-   * Minimal service interface for proxy-based benchmarking.
-   */
-  public interface WorkService {
-    void doWork();
-  }
-
   public static void main(String[] args) throws RunnerException {
     Options opt = new OptionsBuilder()
         .addProfiler(GCProfiler.class)
@@ -114,6 +107,18 @@ public class HappyPathBulkheadBenchmarkThree {
 
   private static void simulateWork() {
     Blackhole.consumeCPU(100);
+  }
+
+  /**
+   * Creates a dynamic proxy for the WorkService interface with the given handler.
+   * Used for raw Semaphore, Resilience4j, and Failsafe where InqProxyFactory is not applicable.
+   */
+  @SuppressWarnings("unchecked")
+  private static WorkService createManualProxy(WorkService target, InvocationHandler handler) {
+    return (WorkService) Proxy.newProxyInstance(
+        WorkService.class.getClassLoader(),
+        new Class<?>[]{WorkService.class},
+        handler);
   }
 
   // ════════════════════════════════════════════════════════════════════
@@ -202,16 +207,10 @@ public class HappyPathBulkheadBenchmarkThree {
         failsafeExecutor.get(() -> method.invoke(realService, args)));
   }
 
-  /**
-   * Creates a dynamic proxy for the WorkService interface with the given handler.
-   * Used for raw Semaphore, Resilience4j, and Failsafe where InqProxyFactory is not applicable.
-   */
-  @SuppressWarnings("unchecked")
-  private static WorkService createManualProxy(WorkService target, InvocationHandler handler) {
-    return (WorkService) Proxy.newProxyInstance(
-        WorkService.class.getClassLoader(),
-        new Class<?>[]{ WorkService.class },
-        handler);
+  @Benchmark
+  @Threads(10)
+  public void baselineNoBulkhead() {
+    simulateWork();
   }
 
   // ════════════════════════════════════════════════════════════════════
@@ -220,8 +219,8 @@ public class HappyPathBulkheadBenchmarkThree {
 
   @Benchmark
   @Threads(10)
-  public void baselineNoBulkhead() {
-    simulateWork();
+  public void measurePureOverheadSemaphore() {
+    proxySemaphore.doWork();
   }
 
   // ════════════════════════════════════════════════════════════════════
@@ -229,12 +228,6 @@ public class HappyPathBulkheadBenchmarkThree {
   // All proxies are pre-created in setUp — the benchmark measures only
   // the proxy invocation (handler → acquire → work → release).
   // ════════════════════════════════════════════════════════════════════
-
-  @Benchmark
-  @Threads(10)
-  public void measurePureOverheadSemaphore() {
-    proxySemaphore.doWork();
-  }
 
   @Benchmark
   @Threads(10)
@@ -260,16 +253,16 @@ public class HappyPathBulkheadBenchmarkThree {
     proxyFailsafe.doWork();
   }
 
-  // ════════════════════════════════════════════════════════════════════
-  // CONTENTION — Threads (20) > Permits (10), no rejections
-  // Same pre-created proxies, more threads than permits.
-  // ════════════════════════════════════════════════════════════════════
-
   @Benchmark
   @Threads(20)
   public void measureContentionSemaphore() {
     proxySemaphore.doWork();
   }
+
+  // ════════════════════════════════════════════════════════════════════
+  // CONTENTION — Threads (20) > Permits (10), no rejections
+  // Same pre-created proxies, more threads than permits.
+  // ════════════════════════════════════════════════════════════════════
 
   @Benchmark
   @Threads(20)
@@ -293,5 +286,12 @@ public class HappyPathBulkheadBenchmarkThree {
   @Threads(20)
   public void measureContentionFailsafe() {
     proxyFailsafe.doWork();
+  }
+
+  /**
+   * Minimal service interface for proxy-based benchmarking.
+   */
+  public interface WorkService {
+    void doWork();
   }
 }

@@ -31,7 +31,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
 
-import static org.assertj.core.api.Assertions.as;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -363,7 +362,9 @@ class ImperativeCircuitBreakerTest {
       // Given
       ImperativeCircuitBreaker cb = createBreaker();
       InternalAsyncExecutor<Void, Object> syncThrowingNext =
-          (chainId, callId, arg) -> { throw new RuntimeException("sync-boom"); };
+          (chainId, callId, arg) -> {
+            throw new RuntimeException("sync-boom");
+          };
 
       // When
       for (int i = 0; i < 3; i++) {

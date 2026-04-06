@@ -42,7 +42,10 @@ public interface InqAsyncExecutor<A, R> extends AsyncLayerAction<A, R> {
         StandaloneIdGenerator.nextChainId(),
         StandaloneIdGenerator.nextCallId(),
         null,
-        (chainId, callId, arg) -> {runnable.run(); return null;}
+        (chainId, callId, arg) -> {
+          runnable.run();
+          return null;
+        }
     );
   }
 

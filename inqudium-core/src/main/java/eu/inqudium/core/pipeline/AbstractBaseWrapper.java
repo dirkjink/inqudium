@@ -52,12 +52,23 @@ public abstract class AbstractBaseWrapper<T, S extends AbstractBaseWrapper<T, S>
     }
   }
 
-  /** Returns the wrapped delegate. */
+  /**
+   * Builds a layer description from a decorator's element type and name.
+   */
+  protected static String newLayerDesc(InqElement decorator) {
+    return decorator.getElementType().name() + "(" + decorator.getName() + ")";
+  }
+
+  /**
+   * Returns the wrapped delegate.
+   */
   protected T delegate() {
     return delegate;
   }
 
-  /** Returns {@code true} if the delegate is itself a wrapper in the same chain. */
+  /**
+   * Returns {@code true} if the delegate is itself a wrapper in the same chain.
+   */
   protected boolean isDelegateWrapper() {
     return delegate instanceof AbstractBaseWrapper;
   }
@@ -85,10 +96,5 @@ public abstract class AbstractBaseWrapper<T, S extends AbstractBaseWrapper<T, S>
   @Override
   public S inner() {
     return (delegate instanceof AbstractBaseWrapper) ? (S) delegate : null;
-  }
-
-  /** Builds a layer description from a decorator's element type and name. */
-  protected static String newLayerDesc(InqElement decorator) {
-    return decorator.getElementType().name() + "(" + decorator.getName() + ")";
   }
 }

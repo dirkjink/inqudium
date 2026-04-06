@@ -81,9 +81,9 @@ public interface AsyncLayerAction<A, R> {
    * @param argument the argument flowing through the chain
    * @param next     the next async step — call {@code next.execute(...)} to proceed
    * @return the <strong>same</strong> {@link CompletionStage} instance that the downstream
-   *         chain produced — guaranteed. Pipeline identity is preserved: callers may rely
-   *         on {@code returnedStage == originalFuture}. The permit-release callback is
-   *         attached via {@code whenComplete()} as a side-effect only.
+   * chain produced — guaranteed. Pipeline identity is preserved: callers may rely
+   * on {@code returnedStage == originalFuture}. The permit-release callback is
+   * attached via {@code whenComplete()} as a side-effect only.
    */
   CompletionStage<R> executeAsync(long chainId, long callId, A argument,
                                   InternalAsyncExecutor<A, R> next);

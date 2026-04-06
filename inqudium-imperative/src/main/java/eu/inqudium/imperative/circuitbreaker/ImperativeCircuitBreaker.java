@@ -1,6 +1,5 @@
 package eu.inqudium.imperative.circuitbreaker;
 
-import eu.inqudium.core.element.InqElement;
 import eu.inqudium.core.element.InqElementType;
 import eu.inqudium.core.element.circuitbreaker.CircuitBreakerConfig;
 import eu.inqudium.core.element.circuitbreaker.CircuitBreakerCore;
@@ -79,6 +78,21 @@ public class ImperativeCircuitBreaker implements InqDecorator<Void, Object>, Inq
 
   // ======================== InqElement ========================
 
+  /**
+   * Yields the current thread if the CAS retry count exceeds the threshold.
+   * Prevents CPU spin under extreme contention. Resets the counter after yielding.
+   *
+   * @param retries current retry count
+   * @return the (possibly reset) retry count
+   */
+  private static int yieldIfExcessiveRetries(int retries) {
+    if (retries > MAX_CAS_RETRIES_BEFORE_YIELD) {
+      Thread.yield();
+      return 0;
+    }
+    return retries + 1;
+  }
+
   @Override
   public String getName() {
     return config.name();
@@ -89,12 +103,14 @@ public class ImperativeCircuitBreaker implements InqDecorator<Void, Object>, Inq
     return InqElementType.CIRCUIT_BREAKER;
   }
 
+  // ======================== LayerAction ========================
+
   @Override
   public InqEventPublisher getEventPublisher() {
     return eventPublisher;
   }
 
-  // ======================== LayerAction ========================
+  // ======================== AsyncLayerAction ========================
 
   /**
    * Around-advice implementation for the pipeline chain.
@@ -130,7 +146,7 @@ public class ImperativeCircuitBreaker implements InqDecorator<Void, Object>, Inq
     }
   }
 
-  // ======================== AsyncLayerAction ========================
+  // ======================== Execution ========================
 
   /**
    * Async around-advice implementation for the pipeline chain.
@@ -167,23 +183,6 @@ public class ImperativeCircuitBreaker implements InqDecorator<Void, Object>, Inq
       }
     });
     return stage;
-  }
-
-  // ======================== Execution ========================
-
-  /**
-   * Yields the current thread if the CAS retry count exceeds the threshold.
-   * Prevents CPU spin under extreme contention. Resets the counter after yielding.
-   *
-   * @param retries current retry count
-   * @return the (possibly reset) retry count
-   */
-  private static int yieldIfExcessiveRetries(int retries) {
-    if (retries > MAX_CAS_RETRIES_BEFORE_YIELD) {
-      Thread.yield();
-      return 0;
-    }
-    return retries + 1;
   }
 
   /**

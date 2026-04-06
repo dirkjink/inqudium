@@ -1,7 +1,6 @@
 package eu.inqudium.imperative.core.pipeline;
 
 import eu.inqudium.core.pipeline.AbstractBaseWrapper;
-import eu.inqudium.core.pipeline.InqDecorator;
 
 import java.util.concurrent.CompletionStage;
 
@@ -42,7 +41,9 @@ public abstract class AsyncBaseWrapper<T, A, R, S extends AsyncBaseWrapper<T, A,
     this(newLayerDesc(decorator), delegate, coreExecution, decorator);
   }
 
-  /** Entry point: generates a call ID and starts async chain traversal. */
+  /**
+   * Entry point: generates a call ID and starts async chain traversal.
+   */
   protected CompletionStage<R> initiateChain(A argument) {
     return this.executeAsync(chainId(), generateCallId(), argument);
   }

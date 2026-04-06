@@ -28,6 +28,28 @@ public class AsyncRunnableWrapper
     extends AsyncBaseWrapper<Runnable, Void, Void, AsyncRunnableWrapper>
     implements Supplier<CompletionStage<Void>>, Runnable {
 
+  /**
+   * Creates a wrapper with an {@link InqAsyncDecorator} providing name and around-advice.
+   */
+  public AsyncRunnableWrapper(InqAsyncDecorator<Void, Void> decorator, Runnable delegate) {
+    super(decorator, delegate, coreFor(delegate));
+  }
+
+  /**
+   * Creates a wrapper with a custom {@link AsyncLayerAction}.
+   */
+  public AsyncRunnableWrapper(String name, Runnable delegate,
+                              AsyncLayerAction<Void, Void> layerAction) {
+    super(name, delegate, coreFor(delegate), layerAction);
+  }
+
+  /**
+   * Creates a wrapper with pass-through behavior.
+   */
+  public AsyncRunnableWrapper(String name, Runnable delegate) {
+    super(name, delegate, coreFor(delegate));
+  }
+
   private static InternalAsyncExecutor<Void, Void> coreFor(Runnable delegate) {
     return (chainId, callId, arg) -> {
       delegate.run();
@@ -35,23 +57,9 @@ public class AsyncRunnableWrapper
     };
   }
 
-  /** Creates a wrapper with an {@link InqAsyncDecorator} providing name and around-advice. */
-  public AsyncRunnableWrapper(InqAsyncDecorator<Void, Void> decorator, Runnable delegate) {
-    super(decorator, delegate, coreFor(delegate));
-  }
-
-  /** Creates a wrapper with a custom {@link AsyncLayerAction}. */
-  public AsyncRunnableWrapper(String name, Runnable delegate,
-                               AsyncLayerAction<Void, Void> layerAction) {
-    super(name, delegate, coreFor(delegate), layerAction);
-  }
-
-  /** Creates a wrapper with pass-through behavior. */
-  public AsyncRunnableWrapper(String name, Runnable delegate) {
-    super(name, delegate, coreFor(delegate));
-  }
-
-  /** Primary entry point — returns a {@link CompletionStage} for async lifecycle tracking. */
+  /**
+   * Primary entry point — returns a {@link CompletionStage} for async lifecycle tracking.
+   */
   @Override
   public CompletionStage<Void> get() {
     return initiateChain(null);

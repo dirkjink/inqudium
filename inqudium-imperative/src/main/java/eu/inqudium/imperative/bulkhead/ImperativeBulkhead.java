@@ -103,6 +103,26 @@ public final class ImperativeBulkhead<A, R> implements Bulkhead<A, R> {
   // ======================== Decorator (around-advice) ========================
 
   /**
+   * Extracts the error from an already-completed {@link CompletableFuture}.
+   * Returns {@code null} if the future completed successfully.
+   *
+   * <p>Only called on the fast path when {@code cf.isDone()} is {@code true} —
+   * {@code getNow()} returns immediately without blocking.</p>
+   */
+  private static Throwable completionError(CompletableFuture<?> cf) {
+    try {
+      cf.getNow(null);
+      return null;
+    } catch (CompletionException e) {
+      return e.getCause();
+    } catch (CancellationException e) {
+      return e;
+    }
+  }
+
+  // ======================== Async Decorator (two-phase around-advice) ========================
+
+  /**
    * Core bulkhead logic as around-advice for the wrapper pipeline.
    *
    * <p>This method replaces the previous {@code decorate(InqCall)} approach. The execution
@@ -167,7 +187,7 @@ public final class ImperativeBulkhead<A, R> implements Bulkhead<A, R> {
     }
   }
 
-  // ======================== Async Decorator (two-phase around-advice) ========================
+  // ======================== InqElement (via Bulkhead → Decorator) ========================
 
   /**
    * Async bulkhead logic as two-phase around-advice for the async wrapper pipeline.
@@ -190,9 +210,9 @@ public final class ImperativeBulkhead<A, R> implements Bulkhead<A, R> {
    * @param argument the argument flowing through the chain
    * @param next     the next async step in the chain
    * @return the <strong>same</strong> {@link CompletionStage} instance that the downstream
-   *         chain produced — guaranteed. Pipeline identity is preserved: callers may rely
-   *         on {@code returnedStage == originalFuture}. The permit-release callback is
-   *         attached via {@code whenComplete()} as a side-effect only.
+   * chain produced — guaranteed. Pipeline identity is preserved: callers may rely
+   * on {@code returnedStage == originalFuture}. The permit-release callback is
+   * attached via {@code whenComplete()} as a side-effect only.
    */
   @Override
   public CompletionStage<R> executeAsync(long chainId,
@@ -258,8 +278,6 @@ public final class ImperativeBulkhead<A, R> implements Bulkhead<A, R> {
     }
     return stage;
   }
-
-  // ======================== InqElement (via Bulkhead → Decorator) ========================
 
   @Override
   public String getName() {
@@ -413,24 +431,6 @@ public final class ImperativeBulkhead<A, R> implements Bulkhead<A, R> {
             acquired,
             clock.instant()));
       }
-    }
-  }
-
-  /**
-   * Extracts the error from an already-completed {@link CompletableFuture}.
-   * Returns {@code null} if the future completed successfully.
-   *
-   * <p>Only called on the fast path when {@code cf.isDone()} is {@code true} —
-   * {@code getNow()} returns immediately without blocking.</p>
-   */
-  private static Throwable completionError(CompletableFuture<?> cf) {
-    try {
-      cf.getNow(null);
-      return null;
-    } catch (CompletionException e) {
-      return e.getCause();
-    } catch (CancellationException e) {
-      return e;
     }
   }
 }

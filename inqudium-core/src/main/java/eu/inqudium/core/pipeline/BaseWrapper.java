@@ -36,7 +36,9 @@ public abstract class BaseWrapper<T, A, R, S extends BaseWrapper<T, A, R, S>>
     this(newLayerDesc(decorator), delegate, coreExecution, decorator);
   }
 
-  /** Entry point: generates a call ID and starts chain traversal. */
+  /**
+   * Entry point: generates a call ID and starts chain traversal.
+   */
   protected R initiateChain(A argument) {
     return this.execute(chainId(), generateCallId(), argument);
   }

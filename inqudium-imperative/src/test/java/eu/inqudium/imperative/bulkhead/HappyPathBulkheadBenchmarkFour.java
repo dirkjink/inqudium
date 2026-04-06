@@ -116,9 +116,8 @@ public class HappyPathBulkheadBenchmarkFour {
   private static final int BATCH_SIZE = 3;
   private static final int PURE_OVERHEAD_THREADS = 5;
   private static final int BULKHEAD_LIMIT = PURE_OVERHEAD_THREADS * BATCH_SIZE;  // 15
-  private static final int WAIT_MILLIS = 150;
   private static final int CONTENTION_THREADS = BULKHEAD_LIMIT * 2;              // 30
-
+  private static final int WAIT_MILLIS = 150;
   // ── Failsafe metrics counters ──
   private final LongAdder failsafeSuccess = new LongAdder();
   private final LongAdder failsafeFailure = new LongAdder();

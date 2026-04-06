@@ -44,13 +44,12 @@ public interface InqAsyncDecorator<A, R> extends InqElement, AsyncLayerAction<A,
    * Wraps an async runnable in an {@link AsyncRunnableWrapper}.
    *
    * @param delegate the async operation to protect
-  /**
-   * Wraps a {@link Runnable} in an {@link AsyncRunnableWrapper}.
+   *                 /**
+   *                 Wraps a {@link Runnable} in an {@link AsyncRunnableWrapper}.
    *
-   * <p>The Runnable executes synchronously at the core of the chain. The async
-   * behavior comes from the surrounding {@link AsyncLayerAction} layers (e.g.
-   * acquire permit synchronously, release on stage completion).</p>
-   *
+   *                 <p>The Runnable executes synchronously at the core of the chain. The async
+   *                 behavior comes from the surrounding {@link AsyncLayerAction} layers (e.g.
+   *                 acquire permit synchronously, release on stage completion).</p>
    * @param delegate the operation to protect
    * @return a decorated supplier that returns {@code CompletionStage<Void>} on each {@code get()}
    */
