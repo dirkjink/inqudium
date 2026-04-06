@@ -7,6 +7,9 @@ import eu.inqudium.core.element.circuitbreaker.CircuitState;
 import eu.inqudium.core.element.circuitbreaker.StateTransition;
 import eu.inqudium.core.pipeline.InqDecorator;
 import eu.inqudium.core.pipeline.InternalExecutor;
+import eu.inqudium.core.pipeline.Wrapper;
+import eu.inqudium.imperative.core.pipeline.InqAsyncDecorator;
+import eu.inqudium.imperative.core.pipeline.InternalAsyncExecutor;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -20,12 +23,15 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.Callable;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
 
+import static org.assertj.core.api.Assertions.as;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -270,6 +276,214 @@ class ImperativeCircuitBreakerTest {
 
       // Then
       assertThat(decorated.call()).isEqualTo("callable-result");
+      assertThat(cb.getState()).isEqualTo(CircuitState.CLOSED);
+    }
+  }
+
+  // ================================================================
+  // InqAsyncDecorator Contract
+  // ================================================================
+
+  @Nested
+  @DisplayName("InqAsyncDecorator Contract")
+  class InqAsyncDecoratorContract {
+
+    @Test
+    @DisplayName("should implement InqAsyncDecorator interface")
+    void should_implement_inq_async_decorator_interface() {
+      // Given
+      ImperativeCircuitBreaker cb = createBreaker();
+
+      // When / Then
+      assertThat(cb).isInstanceOf(InqAsyncDecorator.class);
+    }
+
+    @Test
+    @DisplayName("should delegate to the next async step and return result on success")
+    void should_delegate_to_the_next_async_step_and_return_result_on_success() throws Exception {
+      // Given
+      ImperativeCircuitBreaker cb = createBreaker();
+      InternalAsyncExecutor<Void, Object> next =
+          (chainId, callId, arg) -> CompletableFuture.completedFuture("async-result");
+
+      // When
+      CompletionStage<Object> stage = cb.executeAsync(1L, 1L, null, next);
+
+      // Then
+      assertThat(stage.toCompletableFuture().join()).isEqualTo("async-result");
+      assertThat(cb.getState()).isEqualTo(CircuitState.CLOSED);
+    }
+
+    @Test
+    @DisplayName("should record failure when the async stage completes exceptionally")
+    void should_record_failure_when_the_async_stage_completes_exceptionally() {
+      // Given
+      ImperativeCircuitBreaker cb = createBreaker();
+      InternalAsyncExecutor<Void, Object> failingNext =
+          (chainId, callId, arg) -> CompletableFuture.failedFuture(new RuntimeException("async-fail"));
+
+      // When
+      for (int i = 0; i < 3; i++) {
+        try {
+          cb.executeAsync(1L, (long) i, null, failingNext).toCompletableFuture().join();
+        } catch (Exception ignored) {
+        }
+      }
+
+      // Then
+      assertThat(cb.getState()).isEqualTo(CircuitState.OPEN);
+    }
+
+    @Test
+    @DisplayName("should reject async execution with CircuitBreakerException when open")
+    void should_reject_async_execution_with_circuit_breaker_exception_when_open() {
+      // Given
+      ImperativeCircuitBreaker cb = createBreaker();
+      InternalAsyncExecutor<Void, Object> failingNext =
+          (chainId, callId, arg) -> CompletableFuture.failedFuture(new RuntimeException("fail"));
+      // Open the circuit
+      for (int i = 0; i < 3; i++) {
+        try {
+          cb.executeAsync(1L, (long) i, null, failingNext).toCompletableFuture().join();
+        } catch (Exception ignored) {
+        }
+      }
+
+      // When / Then
+      InternalAsyncExecutor<Void, Object> shouldNotReach =
+          (chainId, callId, arg) -> CompletableFuture.completedFuture("unreachable");
+      assertThatThrownBy(() -> cb.executeAsync(1L, 99L, null, shouldNotReach))
+          .isInstanceOf(CircuitBreakerException.class)
+          .hasMessageContaining("test-service");
+    }
+
+    @Test
+    @DisplayName("should record failure when next throws synchronously during async chain start")
+    void should_record_failure_when_next_throws_synchronously_during_async_chain_start() {
+      // Given
+      ImperativeCircuitBreaker cb = createBreaker();
+      InternalAsyncExecutor<Void, Object> syncThrowingNext =
+          (chainId, callId, arg) -> { throw new RuntimeException("sync-boom"); };
+
+      // When
+      for (int i = 0; i < 3; i++) {
+        try {
+          cb.executeAsync(1L, (long) i, null, syncThrowingNext);
+        } catch (RuntimeException ignored) {
+        }
+      }
+
+      // Then
+      assertThat(cb.getState()).isEqualTo(CircuitState.OPEN);
+    }
+
+    @Test
+    @DisplayName("should remain closed after successful async completions")
+    void should_remain_closed_after_successful_async_completions() {
+      // Given
+      ImperativeCircuitBreaker cb = createBreaker();
+      InternalAsyncExecutor<Void, Object> next =
+          (chainId, callId, arg) -> CompletableFuture.completedFuture("ok");
+
+      // When
+      for (int i = 0; i < 10; i++) {
+        cb.executeAsync(1L, (long) i, null, next).toCompletableFuture().join();
+      }
+
+      // Then
+      assertThat(cb.getState()).isEqualTo(CircuitState.CLOSED);
+    }
+
+    @Test
+    @DisplayName("should transition from OPEN to HALF_OPEN after wait duration in async mode")
+    void should_transition_from_open_to_half_open_after_wait_duration_in_async_mode() {
+      // Given
+      ImperativeCircuitBreaker cb = createBreaker();
+      InternalAsyncExecutor<Void, Object> failingNext =
+          (chainId, callId, arg) -> CompletableFuture.failedFuture(new RuntimeException("fail"));
+      for (int i = 0; i < 3; i++) {
+        try {
+          cb.executeAsync(1L, (long) i, null, failingNext).toCompletableFuture().join();
+        } catch (Exception ignored) {
+        }
+      }
+      assertThat(cb.getState()).isEqualTo(CircuitState.OPEN);
+
+      // When — advance time past wait duration
+      clock.advance(Duration.ofSeconds(31));
+      InternalAsyncExecutor<Void, Object> successNext =
+          (chainId, callId, arg) -> CompletableFuture.completedFuture("probe-ok");
+      Object result = cb.executeAsync(1L, 99L, null, successNext).toCompletableFuture().join();
+
+      // Then
+      assertThat(result).isEqualTo("probe-ok");
+    }
+  }
+
+  // ================================================================
+  // Async Decorator Factory Methods
+  // ================================================================
+
+  @Nested
+  @DisplayName("Async Decorator Factory Methods")
+  class AsyncDecoratorFactoryMethods {
+
+    @Test
+    @DisplayName("should create a decorated async supplier that applies circuit breaker logic")
+    void should_create_a_decorated_async_supplier_that_applies_circuit_breaker_logic() {
+      // Given
+      ImperativeCircuitBreaker cb = createBreaker();
+
+      // When
+      Supplier<CompletionStage<String>> decorated =
+          cb.decorateAsyncSupplier(() -> CompletableFuture.completedFuture("async-supplier"));
+
+      // Then
+      assertThat(decorated.get().toCompletableFuture().join()).isEqualTo("async-supplier");
+      assertThat(cb.getState()).isEqualTo(CircuitState.CLOSED);
+    }
+
+    @Test
+    @DisplayName("should create a decorated async runnable that applies circuit breaker logic")
+    void should_create_a_decorated_async_runnable_that_applies_circuit_breaker_logic() {
+      // Given
+      ImperativeCircuitBreaker cb = createBreaker();
+      AtomicInteger counter = new AtomicInteger(0);
+
+      // When
+      Supplier<CompletionStage<Void>> decorated =
+          cb.decorateAsyncRunnable(counter::incrementAndGet);
+      decorated.get().toCompletableFuture().join();
+
+      // Then
+      assertThat(counter.get()).isEqualTo(1);
+      assertThat(cb.getState()).isEqualTo(CircuitState.CLOSED);
+    }
+
+    @Test
+    @DisplayName("should create a decorated async callable that applies circuit breaker logic")
+    void should_create_a_decorated_async_callable_that_applies_circuit_breaker_logic() throws Exception {
+      // Given
+      ImperativeCircuitBreaker cb = createBreaker();
+
+      // When
+      CompletableFuture<String> originalFuture = CompletableFuture.completedFuture("async-callable");
+      Callable<CompletionStage<String>> decorated =
+          cb.decorateAsyncCallable(() -> originalFuture);
+      CompletableFuture<String> resultFuture = decorated.call().toCompletableFuture();
+
+      // Then
+      assertThat(decorated)
+          .isInstanceOfSatisfying(Wrapper.class, wrapper -> {
+            long chainId = wrapper.chainId();
+            String layerDescription = wrapper.layerDescription();
+            long currentCallId = wrapper.currentCallId();
+            assertThat(layerDescription).isEqualTo("CIRCUIT_BREAKER(test-service)");
+            assertThat(wrapper.toStringHierarchy()).isEqualToIgnoringNewLines(
+                "Chain-ID: " + chainId + " (current call-ID: " + currentCallId + ")" + layerDescription);
+          });
+      assertThat(originalFuture).isSameAs(resultFuture);
+      assertThat(resultFuture.join()).isEqualTo("async-callable");
       assertThat(cb.getState()).isEqualTo(CircuitState.CLOSED);
     }
   }

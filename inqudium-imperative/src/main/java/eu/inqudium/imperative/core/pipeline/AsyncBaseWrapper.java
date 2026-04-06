@@ -1,6 +1,7 @@
 package eu.inqudium.imperative.core.pipeline;
 
 import eu.inqudium.core.pipeline.BaseWrapper;
+import eu.inqudium.core.pipeline.InqDecorator;
 import eu.inqudium.core.pipeline.Wrapper;
 
 import java.util.concurrent.CompletionStage;
@@ -85,7 +86,11 @@ public abstract class AsyncBaseWrapper<T, A, R, S extends AsyncBaseWrapper<T, A,
    */
   protected AsyncBaseWrapper(InqAsyncDecorator<A, R> decorator, T delegate,
                              InternalAsyncExecutor<A, R> coreExecution) {
-    this(decorator.getName(), delegate, coreExecution, decorator);
+    this( newLayerDesc(decorator), delegate, coreExecution, decorator);
+  }
+
+  private static String newLayerDesc(InqAsyncDecorator<?, ?> decorator) {
+    return decorator.getElementType().name() + "(" + decorator.getName() + ")";
   }
 
   /**

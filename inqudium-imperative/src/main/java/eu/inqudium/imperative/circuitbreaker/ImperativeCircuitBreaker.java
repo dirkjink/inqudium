@@ -13,12 +13,15 @@ import eu.inqudium.core.element.circuitbreaker.metrics.FailureMetrics;
 import eu.inqudium.core.event.InqEventPublisher;
 import eu.inqudium.core.pipeline.InqDecorator;
 import eu.inqudium.core.pipeline.InternalExecutor;
+import eu.inqudium.imperative.core.pipeline.InqAsyncDecorator;
+import eu.inqudium.imperative.core.pipeline.InternalAsyncExecutor;
 
 import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.Callable;
+import java.util.concurrent.CompletionStage;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.ReentrantLock;
@@ -34,10 +37,11 @@ import java.util.logging.Logger;
  * platform threads. Uses lock-free CAS operations for high-throughput fast-paths
  * and a {@link ReentrantLock} exclusively to serialize state transitions.
  *
- * <p>Implements {@link InqDecorator} to participate in the pipeline as a
- * self-describing, pluggable decorator with around-semantics.
+ * <p>Implements {@link InqDecorator} and {@link InqAsyncDecorator} to participate
+ * in both sync and async pipelines as a self-describing, pluggable decorator
+ * with around-semantics.
  */
-public class ImperativeCircuitBreaker implements InqDecorator<Void, Object> {
+public class ImperativeCircuitBreaker implements InqDecorator<Void, Object>, InqAsyncDecorator<Void, Object> {
 
   private static final Logger LOG = Logger.getLogger(ImperativeCircuitBreaker.class.getName());
 
@@ -124,6 +128,45 @@ public class ImperativeCircuitBreaker implements InqDecorator<Void, Object> {
         recordIgnored();
       }
     }
+  }
+
+  // ======================== AsyncLayerAction ========================
+
+  /**
+   * Async around-advice implementation for the pipeline chain.
+   *
+   * <p>Acquires permission synchronously on the calling thread, delegates to the
+   * next async step, and records success or failure when the returned
+   * {@link CompletionStage} completes.
+   */
+  @Override
+  public CompletionStage<Object> executeAsync(long chainId, long callId, Void argument,
+                                              InternalAsyncExecutor<Void, Object> next) {
+    acquirePermissionOrThrow();
+    CompletionStage<Object> stage;
+    try {
+      stage = next.executeAsync(chainId, callId, argument);
+    } catch (Throwable t) {
+      // Synchronous failure during chain start — record and rethrow
+      if (t instanceof Exception e) {
+        handleThrowable(e);
+      } else {
+        recordIgnored();
+      }
+      throw t instanceof RuntimeException re ? re : new RuntimeException(t);
+    }
+    stage.whenComplete((result, error) -> {
+      if (error != null) {
+        if (error instanceof Exception e) {
+          handleThrowable(e);
+        } else {
+          recordIgnored();
+        }
+      } else {
+        recordSuccess();
+      }
+    });
+    return stage;
   }
 
   // ======================== Execution ========================

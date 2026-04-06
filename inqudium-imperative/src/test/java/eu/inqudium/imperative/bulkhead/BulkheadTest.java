@@ -575,7 +575,7 @@ class BulkheadTest {
             long chainId = wrapper.chainId();
             String layerDescription = wrapper.layerDescription();
             long currentCallId = wrapper.currentCallId();
-            assertThat(layerDescription).isEqualTo("async-reuse");
+            assertThat(layerDescription).isEqualTo("BULKHEAD(async-reuse)");
             assertThat(wrapper.toStringHierarchy()).isEqualToIgnoringNewLines(
                 "Chain-ID: " + chainId + " (current call-ID: " + currentCallId + ")" + layerDescription);
           });
