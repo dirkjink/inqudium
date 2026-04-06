@@ -137,7 +137,7 @@ public final class MethodHandleCache {
         MethodHandle adapted = unreflect(method).asType(generic);
         // Convert trailing params to spreader: (Object target, Object[] args) -> Object
         return adapted.asSpreader(Object[].class, arity);
-    });
+      });
     }
     return mh;
   }
