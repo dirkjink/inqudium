@@ -1,9 +1,9 @@
 package eu.inqudium.imperative.core.pipeline;
 
 import eu.inqudium.core.pipeline.DispatchExtension;
+import eu.inqudium.core.pipeline.MethodHandleCache;
 import eu.inqudium.core.pipeline.Throws;
 
-import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.concurrent.CompletionStage;
 import java.util.function.Function;
@@ -38,28 +38,34 @@ public class AsyncDispatchExtension implements DispatchExtension {
    */
   private final Object overrideTarget;
 
+  /** Per-extension handle cache — avoids a global singleton. */
+  private final MethodHandleCache handleCache;
+
   // ======================== Public constructor (root / standalone) ========================
 
   public AsyncDispatchExtension(AsyncLayerAction<Void, Object> action) {
     this.action = action;
     this.nextStepFactory = Function.identity();
     this.overrideTarget = null;
+    this.handleCache = new MethodHandleCache();
   }
 
   // ======================== Internal constructors ========================
 
   /**
    * Linked constructor — wires a direct chain walk and uses realTarget
-   * as terminal override.
+   * as terminal override. Inherits the outer extension's handle cache.
    */
   private AsyncDispatchExtension(AsyncLayerAction<Void, Object> action,
                                  AsyncDispatchExtension inner,
-                                 Object realTarget) {
+                                 Object realTarget,
+                                 MethodHandleCache handleCache) {
     this.action = action;
     this.nextStepFactory = (inner != null)
         ? terminal -> (cid, caid, a) -> inner.executeChain(cid, caid, terminal)
         : Function.identity();
     this.overrideTarget = realTarget;
+    this.handleCache = handleCache;
   }
 
   // ======================== Helpers ========================
@@ -74,11 +80,13 @@ public class AsyncDispatchExtension implements DispatchExtension {
   }
 
   @SuppressWarnings("unchecked")
-  private static InternalAsyncExecutor<Void, Object> buildTerminal(Method method, Object[] args,
-                                                                   Object target) {
+  private InternalAsyncExecutor<Void, Object> buildTerminal(Method method, Object[] args,
+                                                            Object target) {
+    // Eagerly resolve so the handle is cached before the first hot-path call
+    handleCache.resolve(method);
     return (chainId, callId, arg) -> {
       try {
-        Object result = method.invoke(target, args);
+        Object result = handleCache.invoke(method, target, args);
         if (result == null) {
           throw new IllegalStateException(
               "Method " + method.getName() + " returned null, expected a CompletionStage. "
@@ -91,10 +99,10 @@ public class AsyncDispatchExtension implements DispatchExtension {
                   + "This method should not be routed through AsyncDispatchExtension.");
         }
         return (CompletionStage<Object>) result;
-      } catch (InvocationTargetException e) {
-        throw Throws.rethrow(e.getCause() != null ? e.getCause() : e);
-      } catch (IllegalAccessException e) {
-        throw new RuntimeException(e);
+      } catch (RuntimeException | Error e) {
+        throw e;
+      } catch (Throwable e) {
+        throw Throws.rethrow(e);
       }
     };
   }
@@ -120,7 +128,7 @@ public class AsyncDispatchExtension implements DispatchExtension {
                                      Object realTarget) {
     AsyncDispatchExtension inner = findInner(innerExtensions);
     if (inner != null) {
-      return new AsyncDispatchExtension(this.action, inner, realTarget);
+      return new AsyncDispatchExtension(this.action, inner, realTarget, this.handleCache);
     }
     return new AsyncDispatchExtension(this.action);
   }

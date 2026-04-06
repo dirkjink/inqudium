@@ -1,6 +1,5 @@
 package eu.inqudium.core.pipeline;
 
-import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.function.Function;
 
@@ -40,28 +39,35 @@ public class SyncDispatchExtension implements DispatchExtension {
    */
   private final Object overrideTarget;
 
+  /** Per-extension handle cache — avoids a global singleton. */
+  private final MethodHandleCache handleCache;
+
   // ======================== Public constructor (root / standalone) ========================
 
   public SyncDispatchExtension(LayerAction<Void, Object> action) {
     this.action = action;
     this.nextStepFactory = Function.identity();
     this.overrideTarget = null;
+    this.handleCache = new MethodHandleCache();
   }
 
   // ======================== Internal constructors ========================
 
   /**
    * Linked constructor — wires a direct chain walk to the inner extension
-   * and uses {@code realTarget} as terminal override.
+   * and uses {@code realTarget} as terminal override. Inherits the outer
+   * extension's handle cache so that already-resolved handles are reused.
    */
   private SyncDispatchExtension(LayerAction<Void, Object> action,
                                 SyncDispatchExtension inner,
-                                Object realTarget) {
+                                Object realTarget,
+                                MethodHandleCache handleCache) {
     this.action = action;
     this.nextStepFactory = (inner != null)
         ? terminal -> (cid, caid, a) -> inner.executeChain(cid, caid, terminal)
         : Function.identity();
     this.overrideTarget = realTarget;
+    this.handleCache = handleCache;
   }
 
   // ======================== Helpers ========================
@@ -75,15 +81,17 @@ public class SyncDispatchExtension implements DispatchExtension {
     return null;
   }
 
-  private static InternalExecutor<Void, Object> buildTerminal(Method method, Object[] args,
-                                                              Object target) {
+  private InternalExecutor<Void, Object> buildTerminal(Method method, Object[] args,
+                                                       Object target) {
+    // Eagerly resolve so the handle is cached before the first hot-path call
+    handleCache.resolve(method);
     return (chainId, callId, arg) -> {
       try {
-        return method.invoke(target, args);
-      } catch (InvocationTargetException e) {
-        throw Throws.rethrow(e.getCause() != null ? e.getCause() : e);
-      } catch (IllegalAccessException e) {
-        throw new RuntimeException(e);
+        return handleCache.invoke(method, target, args);
+      } catch (RuntimeException | Error e) {
+        throw e;
+      } catch (Throwable e) {
+        throw Throws.rethrow(e);
       }
     };
   }
@@ -123,19 +131,17 @@ public class SyncDispatchExtension implements DispatchExtension {
    *
    * <p>If a matching {@code SyncDispatchExtension} is found, a new instance
    * is returned that chains directly into it, using {@code realTarget} as
-   * the terminal invocation target. If no match is found, the extension is
-   * returned as-is — the framework's default proxy-target dispatch ensures
-   * the inner proxy's extensions are still invoked.</p>
+   * the terminal invocation target. The new instance inherits this
+   * extension's handle cache. If no match is found, a fresh standalone
+   * instance is returned.</p>
    */
   @Override
   public DispatchExtension linkInner(DispatchExtension[] innerExtensions,
                                      Object realTarget) {
     SyncDispatchExtension inner = findInner(innerExtensions);
     if (inner != null) {
-      // Linked: optimised chain walk, terminal uses realTarget
-      return new SyncDispatchExtension(this.action, inner, realTarget);
+      return new SyncDispatchExtension(this.action, inner, realTarget, this.handleCache);
     }
-    // Not linked: return standalone instance; dispatch will use proxyTarget
     return new SyncDispatchExtension(this.action);
   }
 
