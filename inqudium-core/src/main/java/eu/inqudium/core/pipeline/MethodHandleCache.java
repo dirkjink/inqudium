@@ -38,6 +38,16 @@ public final class MethodHandleCache {
   private final ConcurrentHashMap<Method, MethodHandle> cache =
       new ConcurrentHashMap<>();
 
+  private static MethodHandle unreflect(Method method) {
+    try {
+      method.setAccessible(true);
+      return LOOKUP.unreflect(method);
+    } catch (IllegalAccessException e) {
+      throw new RuntimeException(
+          "Failed to unreflect method: " + method, e);
+    }
+  }
+
   /**
    * Returns a cached {@link MethodHandle} for the given method.
    *
@@ -75,15 +85,5 @@ public final class MethodHandleCache {
     full[0] = target;
     System.arraycopy(args, 0, full, 1, args.length);
     return mh.invokeWithArguments(full);
-  }
-
-  private static MethodHandle unreflect(Method method) {
-    try {
-      method.setAccessible(true);
-      return LOOKUP.unreflect(method);
-    } catch (IllegalAccessException e) {
-      throw new RuntimeException(
-          "Failed to unreflect method: " + method, e);
-    }
   }
 }

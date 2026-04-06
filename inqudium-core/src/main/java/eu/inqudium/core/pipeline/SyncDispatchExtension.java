@@ -39,7 +39,9 @@ public class SyncDispatchExtension implements DispatchExtension {
    */
   private final Object overrideTarget;
 
-  /** Per-extension handle cache — avoids a global singleton. */
+  /**
+   * Per-extension handle cache — avoids a global singleton.
+   */
   private final MethodHandleCache handleCache;
 
   // ======================== Public constructor (root / standalone) ========================
