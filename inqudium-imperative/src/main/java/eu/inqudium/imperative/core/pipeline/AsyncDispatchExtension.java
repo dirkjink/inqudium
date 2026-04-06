@@ -128,7 +128,7 @@ public class AsyncDispatchExtension implements DispatchExtension {
     if (inner != null) {
       return new AsyncDispatchExtension(this.action, inner, realTarget, this.handleCache);
     }
-    return new AsyncDispatchExtension(this.action);
+    return new AsyncDispatchExtension(this.action, null, null, this.handleCache);
   }
 
   @Override
