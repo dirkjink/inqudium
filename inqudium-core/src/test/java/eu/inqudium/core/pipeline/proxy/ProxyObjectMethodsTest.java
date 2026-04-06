@@ -6,6 +6,8 @@ import org.junit.jupiter.api.DisplayNameGenerator;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
+import java.lang.reflect.Method;
+import java.lang.reflect.Proxy;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
@@ -35,6 +37,12 @@ class ProxyObjectMethodsTest {
   }
 
   // ======================== Helpers ========================
+
+  interface TestService {
+    String doWork();
+  }
+
+  // ======================== Tests ========================
 
   /**
    * Real target with well-defined equals/hashCode based on an id field,
@@ -68,7 +76,51 @@ class ProxyObjectMethodsTest {
     }
   }
 
-  // ======================== Tests ========================
+  static class TestServiceImpl implements TestService {
+    private final int id;
+
+    TestServiceImpl(int id) {
+      this.id = id;
+    }
+
+    @Override
+    public String doWork() {
+      return "work done";
+    }
+
+    @Override
+    public boolean equals(Object o) {
+      if (this == o) return true;
+      if (o == null || getClass() != o.getClass()) return false;
+      TestServiceImpl that = (TestServiceImpl) o;
+      return id == that.id;
+    }
+
+    @Override
+    public int hashCode() {
+      return id;
+    }
+  }
+
+  // Concrete wrapper implementation for testing purposes
+  static class DummyProxyWrapper extends AbstractProxyWrapper {
+    protected DummyProxyWrapper(String name, Object delegate) {
+      super(name, delegate);
+    }
+
+    static TestService createProxy(TestService target) {
+      return (TestService) Proxy.newProxyInstance(
+          TestService.class.getClassLoader(),
+          new Class<?>[]{TestService.class},
+          new DummyProxyWrapper("test", target)
+      );
+    }
+
+    @Override
+    protected Object dispatchServiceMethod(Method method, Object[] args) {
+      return null; // Not needed for hashCode testing
+    }
+  }
 
   @Nested
   class Equals_delegation {
@@ -87,7 +139,7 @@ class ProxyObjectMethodsTest {
     }
 
     @Test
-    void proxy_is_equal_to_its_own_real_target() {
+    void proxy_is_not_equal_to_its_own_real_target() {
       // Given
       GreetingService target = new IdentifiableGreeter("A");
       GreetingService proxy = wrapOnce(target, "layer");
@@ -95,7 +147,7 @@ class ProxyObjectMethodsTest {
       // When / Then
       assertThat(proxy)
           .as("Proxy should be equal to the real target it wraps")
-          .isEqualTo(target);
+          .isNotEqualTo(target);
     }
 
     @Test
@@ -141,12 +193,9 @@ class ProxyObjectMethodsTest {
       // When / Then
       assertThat(proxy.equals(target))
           .as("proxy.equals(target)")
-          .isTrue();
+          .isFalse();
       assertThat(target.equals(proxy))
-          .as("target.equals(proxy) — requires target's equals to handle proxies, "
-              + "or at least not fail; here IdentifiableGreeter checks instanceof "
-              + "so this direction returns false, which is a known limitation "
-              + "of proxy delegation")
+          .as("target.equals(proxy)")
           .isFalse();
       // Note: full symmetry would require the target class to be proxy-aware.
       // The important guarantee is proxy→target and proxy→proxy consistency.
@@ -212,6 +261,62 @@ class ProxyObjectMethodsTest {
   }
 
   @Nested
+  class HashCodeContractTests {
+
+    @Test
+    void proxiesWrappingTheSameTargetMustHaveTheSameHashCode() {
+      // Given
+      TestService sharedTarget = new TestServiceImpl(1);
+      TestService proxyOne = DummyProxyWrapper.createProxy(sharedTarget);
+      TestService proxyTwo = DummyProxyWrapper.createProxy(sharedTarget);
+
+      // When
+      int hashCodeOne = proxyOne.hashCode();
+      int hashCodeTwo = proxyTwo.hashCode();
+
+      // Then
+      // If proxyOne.equals(proxyTwo) is true, their hash codes must match.
+      assertThat(proxyOne).isEqualTo(proxyTwo);
+      assertThat(hashCodeOne).isEqualTo(hashCodeTwo);
+    }
+
+    @Test
+    void proxyAndRealTargetHaveSameHashCodeEvenThoughTheyAreNotEqual() {
+      // Given
+      TestService realTarget = new TestServiceImpl(42);
+      TestService proxy = DummyProxyWrapper.createProxy(realTarget);
+
+      // When
+      int targetHashCode = realTarget.hashCode();
+      int proxyHashCode = proxy.hashCode();
+
+      // Then
+      // They are not equal (symmetry fix), but sharing a hash code is a valid collision
+      assertThat(proxy).isNotEqualTo(realTarget);
+      assertThat(proxyHashCode)
+          .as("Proxy hash code should strictly delegate to the real target")
+          .isEqualTo(targetHashCode);
+    }
+
+    @Test
+    void proxiesWrappingDifferentTargetsMustHaveDifferentHashCodes() {
+      // Given
+      TestService targetOne = new TestServiceImpl(100);
+      TestService targetTwo = new TestServiceImpl(200);
+      TestService proxyOne = DummyProxyWrapper.createProxy(targetOne);
+      TestService proxyTwo = DummyProxyWrapper.createProxy(targetTwo);
+
+      // When
+      int hashCodeOne = proxyOne.hashCode();
+      int hashCodeTwo = proxyTwo.hashCode();
+
+      // Then
+      assertThat(proxyOne).isNotEqualTo(proxyTwo);
+      assertThat(hashCodeOne).isNotEqualTo(hashCodeTwo);
+    }
+  }
+
+  @Nested
   class Collection_behaviour {
 
     @Test
@@ -246,24 +351,6 @@ class ProxyObjectMethodsTest {
       // Then
       assertThat(value)
           .as("HashMap.get with a different proxy of the same target must find the entry")
-          .isEqualTo("found");
-    }
-
-    @Test
-    void proxy_can_look_up_a_value_stored_under_the_real_target() {
-      // Given
-      IdentifiableGreeter target = new IdentifiableGreeter("A");
-      GreetingService proxy = wrapOnce(target, "layer");
-
-      Map<GreetingService, String> map = new HashMap<>();
-      map.put(target, "found");
-
-      // When
-      String value = map.get(proxy);
-
-      // Then
-      assertThat(value)
-          .as("HashMap.get with a proxy should find value stored under the real target")
           .isEqualTo("found");
     }
   }

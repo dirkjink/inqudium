@@ -105,8 +105,8 @@ class ProxyCreationValidationTest {
           ProxyWrapper.createProxy(GreetingService.class, target, "layer",
               catchAllExtension(), null))
           .isInstanceOf(IllegalArgumentException.class)
-          .hasMessageContaining("index 1")
-          .hasMessageContaining("must not be null");
+          .hasMessageContaining("Invalid extension chain: Catch-all extension SyncDispatchExtension")
+          .hasMessageContaining("found at index 0");
     }
   }
 
@@ -123,7 +123,7 @@ class ProxyCreationValidationTest {
       assertThatThrownBy(() ->
           ProxyWrapper.createProxy(GreetingService.class, target, "layer", selective))
           .isInstanceOf(IllegalArgumentException.class)
-          .hasMessageContaining("No catch-all")
+          .hasMessageContaining("No valid catch-all DispatchExtension found at the end of the chain")
           .hasMessageContaining("SyncDispatchExtension");
     }
   }

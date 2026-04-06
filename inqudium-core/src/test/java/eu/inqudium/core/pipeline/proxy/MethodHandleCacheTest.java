@@ -8,7 +8,6 @@ import org.junit.jupiter.api.Test;
 
 import java.lang.invoke.MethodHandle;
 import java.lang.reflect.Method;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
@@ -23,12 +22,22 @@ class MethodHandleCacheTest {
 
   private MethodHandleCache cache;
 
+  private static Method method(String name, Class<?>... paramTypes) {
+    try {
+      return Target.class.getMethod(name, paramTypes);
+    } catch (NoSuchMethodException e) {
+      throw new RuntimeException(e);
+    }
+  }
+
+  // ======================== Test target class ========================
+
   @BeforeEach
   void setUp() {
     cache = new MethodHandleCache();
   }
 
-  // ======================== Test target class ========================
+  // ======================== Helper ========================
 
   @SuppressWarnings("unused")
   public static class Target {
@@ -74,16 +83,6 @@ class MethodHandleCacheTest {
 
     public String throwsChecked() throws Exception {
       throw new Exception("checked-boom");
-    }
-  }
-
-  // ======================== Helper ========================
-
-  private static Method method(String name, Class<?>... paramTypes) {
-    try {
-      return Target.class.getMethod(name, paramTypes);
-    } catch (NoSuchMethodException e) {
-      throw new RuntimeException(e);
     }
   }
 

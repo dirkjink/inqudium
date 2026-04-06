@@ -108,28 +108,26 @@ public class ProxyWrapper extends AbstractProxyWrapper {
         throw new IllegalArgumentException(
             "DispatchExtension at index " + i + " must not be null.");
       }
-    }
 
-    // Catch-all must exist and must be last
-    int catchAllIndex = -1;
-    for (int i = 0; i < extensions.length; i++) {
-      if (extensions[i].isCatchAll()) {
-        catchAllIndex = i;
+      // Abort immediately if a catch-all is found before the last index.
+      // This prevents later extensions from becoming unreachable ("shadowed").
+      if (extensions[i].isCatchAll() && i < extensions.length - 1) {
+        throw new IllegalArgumentException(
+            "Invalid extension chain: Catch-all extension "
+                + extensions[i].getClass().getSimpleName()
+                + " found at index " + i + ", but must be the last extension. "
+                + "Extensions after a catch-all are unreachable.");
       }
     }
 
-    if (catchAllIndex == -1) {
+    // A simple and direct check to see if the last element is a catch-all.
+    // Since we have already ruled out catch-alls appearing earlier,
+    // this guarantees exactly one catch-all in the correct position.
+    if (!extensions[extensions.length - 1].isCatchAll()) {
       throw new IllegalArgumentException(
-          "No catch-all DispatchExtension found. "
+          "No valid catch-all DispatchExtension found at the end of the chain. "
               + "Register a catch-all (e.g. SyncDispatchExtension) as the last extension "
               + "to ensure every method can be dispatched.");
-    }
-
-    if (catchAllIndex != extensions.length - 1) {
-      throw new IllegalArgumentException(
-          "Catch-all extension " + extensions[catchAllIndex].getClass().getSimpleName()
-              + " is at index " + catchAllIndex + " but must be the last extension (index "
-              + (extensions.length - 1) + "). Extensions after a catch-all are unreachable.");
     }
   }
 

@@ -108,13 +108,23 @@ public abstract class AbstractProxyWrapper
    * Two proxies are equal when they wrap the same real target.
    * A proxy is also equal to its own real target.
    */
+  /**
+   * Two proxies are equal when they wrap the same real target.
+   * A proxy is strictly NOT equal to its own bare real target to maintain
+   * the symmetry contract of Object.equals().
+   */
   private boolean handleEquals(Object other) {
+    // 1. Identity verification as a fast track
+    if (this == other) {
+      return true;
+    }
     if (other == null) {
       return false;
     }
 
-    // Unwrap the other side if it is also one of our proxies
-    Object otherTarget = other;
+    Object otherTarget = null;
+
+    // 2. Check if the other object is a proxy and extract the wrapper
     if (Proxy.isProxyClass(other.getClass())) {
       InvocationHandler h = Proxy.getInvocationHandler(other);
       if (h instanceof AbstractProxyWrapper otherWrapper) {
@@ -124,7 +134,15 @@ public abstract class AbstractProxyWrapper
       otherTarget = otherWrapper.realTarget;
     }
 
-    return realTarget.equals(otherTarget);
+    // 3. CRITICAL FIX: If 'other' is not a proxy (or an AbstractProxyWrapper),
+    // otherTarget is null. In this case, we MUST return false.
+    // A proxy must never claim to be an bare object.
+    if (otherTarget == null) {
+      return false;
+    }
+
+    // 4. Delegating to the equals() function of the underlying target objects
+    return this.realTarget.equals(otherTarget);
   }
 
   // ======================== Method classification ========================

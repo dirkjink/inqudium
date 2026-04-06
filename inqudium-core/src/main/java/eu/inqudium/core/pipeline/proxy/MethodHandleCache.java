@@ -107,7 +107,7 @@ public final class MethodHandleCache {
         case 3 -> mh.invoke(target, args[0], args[1], args[2]);
         case 4 -> mh.invoke(target, args[0], args[1], args[2], args[3]);
         case 5 -> mh.invoke(target, args[0], args[1], args[2], args[3], args[4]);
-        default -> throw new IllegalStateException("should never happen: arity value is not covered by switch");
+        default -> resolveSpreader(method, arity).invoke(target, args);
       };
     } else {
       MethodHandle mh = resolveSpreader(method, arity);
