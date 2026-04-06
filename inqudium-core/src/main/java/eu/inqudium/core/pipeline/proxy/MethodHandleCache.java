@@ -3,7 +3,6 @@ package eu.inqudium.core.pipeline.proxy;
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
-import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Method;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -38,7 +37,9 @@ public final class MethodHandleCache {
 
   private static final MethodHandles.Lookup LOOKUP = MethodHandles.lookup();
 
-  /** Cached resolved handle per method. */
+  /**
+   * Cached resolved handle per method.
+   */
   private final ConcurrentHashMap<Method, MethodHandle> fastCache =
       new ConcurrentHashMap<>();
 
@@ -50,13 +51,17 @@ public final class MethodHandleCache {
   private final ConcurrentHashMap<Method, MethodHandle> spreaderCache =
       new ConcurrentHashMap<>();
 
+
   private static MethodHandle unreflect(Method method) {
     try {
-      method.setAccessible(true);
       return LOOKUP.unreflect(method);
     } catch (IllegalAccessException e) {
-      throw new RuntimeException(
-          "Failed to unreflect method: " + method, e);
+      try {
+        method.setAccessible(true);
+        return LOOKUP.unreflect(method);
+      } catch (Exception ex) {
+        throw new IllegalStateException("Failed to unreflect method: " + method, e);
+      }
     }
   }
 
