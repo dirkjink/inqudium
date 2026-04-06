@@ -40,7 +40,7 @@ import java.util.logging.Logger;
  * in both sync and async pipelines as a self-describing, pluggable decorator
  * with around-semantics.
  */
-public class ImperativeCircuitBreaker implements InqDecorator<Void, Object>, InqAsyncDecorator<Void, Object> {
+public class ImperativeCircuitBreaker<A, R> implements CircuitBreaker<A, R> {
 
   private static final Logger LOG = Logger.getLogger(ImperativeCircuitBreaker.class.getName());
 
@@ -119,22 +119,18 @@ public class ImperativeCircuitBreaker implements InqDecorator<Void, Object>, Inq
    * step in the chain, and records the outcome (success, failure, or ignored).
    */
   @Override
-  @SuppressWarnings("unchecked")
-  public Object execute(long chainId, long callId, Void argument, InternalExecutor<Void, Object> next) {
+  public R execute(long chainId, long callId, A argument, InternalExecutor<A, R> next) {
     acquirePermissionOrThrow();
     boolean outcomeRecorded = false;
     try {
-      Object result = next.execute(chainId, callId, argument);
+      R result = next.execute(chainId, callId, argument);
       recordSuccess();
       outcomeRecorded = true;
       return result;
     } catch (Exception e) {
-      if (e instanceof InterruptedException) {
-        Thread.currentThread().interrupt();
-      }
       handleThrowable(e);
       outcomeRecorded = true;
-      throw e instanceof RuntimeException re ? re : new RuntimeException(e);
+      throw (RuntimeException) e;
     } catch (Error e) {
       recordIgnored();
       outcomeRecorded = true;
@@ -156,10 +152,10 @@ public class ImperativeCircuitBreaker implements InqDecorator<Void, Object>, Inq
    * {@link CompletionStage} completes.
    */
   @Override
-  public CompletionStage<Object> executeAsync(long chainId, long callId, Void argument,
-                                              InternalAsyncExecutor<Void, Object> next) {
+  public CompletionStage<R> executeAsync(long chainId, long callId, A argument,
+                                              InternalAsyncExecutor<A, R> next) {
     acquirePermissionOrThrow();
-    CompletionStage<Object> stage;
+    CompletionStage<R> stage;
     try {
       stage = next.executeAsync(chainId, callId, argument);
     } catch (Throwable t) {
