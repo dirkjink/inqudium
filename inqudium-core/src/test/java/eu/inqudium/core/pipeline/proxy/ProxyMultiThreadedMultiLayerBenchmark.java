@@ -36,7 +36,7 @@ import java.util.concurrent.TimeUnit;
 @Measurement(iterations = 5, time = 5)
 @Fork(2)
 @Threads(4)
-public class ProxyMultiThreadedBenchmark {
+public class ProxyMultiThreadedMultiLayerBenchmark {
 
   private TestService jdkProxy;
   private TestService frameworkProxy;
@@ -46,7 +46,7 @@ public class ProxyMultiThreadedBenchmark {
         .addProfiler(GCProfiler.class)
         .addProfiler(PausesProfiler.class)
         .addProfiler(MemPoolProfiler.class)
-        .include(ProxyMultiThreadedBenchmark.class.getSimpleName())
+        .include(ProxyMultiThreadedMultiLayerBenchmark.class.getSimpleName())
         .build();
     new Runner(opt).run();
   }
@@ -55,11 +55,29 @@ public class ProxyMultiThreadedBenchmark {
   public void setup() {
     TestService target = new TestServiceImpl();
 
+    TestService jdkProxyInner3 = (TestService) Proxy.newProxyInstance(
+        TestService.class.getClassLoader(),
+        new Class<?>[]{TestService.class},
+        (proxy, method, args) -> method.invoke(target, args)
+    );
+
+    TestService jdkProxyInner2 = (TestService) Proxy.newProxyInstance(
+        TestService.class.getClassLoader(),
+        new Class<?>[]{TestService.class},
+        (proxy, method, args) -> method.invoke(jdkProxyInner3, args)
+    );
+
+    TestService jdkProxyInner1 = (TestService) Proxy.newProxyInstance(
+        TestService.class.getClassLoader(),
+        new Class<?>[]{TestService.class},
+        (proxy, method, args) -> method.invoke(jdkProxyInner2, args)
+    );
+
     // Baseline: Standard JDK Proxy
     jdkProxy = (TestService) Proxy.newProxyInstance(
         TestService.class.getClassLoader(),
         new Class<?>[]{TestService.class},
-        (proxy, method, args) -> method.invoke(target, args)
+        (proxy, method, args) -> method.invoke(jdkProxyInner1, args)
     );
 
     // Framework Proxy mit minimaler LayerAction
@@ -71,10 +89,18 @@ public class ProxyMultiThreadedBenchmark {
         throw new RuntimeException(e);
       }
     };
+    InqProxyFactory factory = InqProxyFactory.of("perf-test", noOpAction);
+
+    TestService frameworkProxyInner3 = InqProxyFactory.of("perf-test", noOpAction)
+        .protect(TestService.class, target);
+    TestService frameworkProxyInner2 = InqProxyFactory.of("perf-test-3", noOpAction)
+        .protect(TestService.class, frameworkProxyInner3);
+    TestService frameworkProxyInner1 = InqProxyFactory.of("perf-test-2", noOpAction)
+        .protect(TestService.class, frameworkProxyInner2);
 
     // Nutzt die Factory zur Erstellung des geschützten Proxy
-    InqProxyFactory factory = InqProxyFactory.of("perf-test", noOpAction);
-    frameworkProxy = factory.protect(TestService.class, target);
+    frameworkProxy = InqProxyFactory.of("perf-test-1", noOpAction)
+        .protect(TestService.class, frameworkProxyInner1);
   }
 
   @Benchmark
