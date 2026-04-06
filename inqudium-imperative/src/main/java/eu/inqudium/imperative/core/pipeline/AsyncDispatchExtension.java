@@ -78,7 +78,19 @@ public class AsyncDispatchExtension implements DispatchExtension {
                                                                    Object target) {
     return (chainId, callId, arg) -> {
       try {
-        return (CompletionStage<Object>) method.invoke(target, args);
+        Object result = method.invoke(target, args);
+        if (result == null) {
+          throw new IllegalStateException(
+              "Method " + method.getName() + " returned null, expected a CompletionStage. "
+                  + "Async-dispatched methods must never return null.");
+        }
+        if (!(result instanceof CompletionStage)) {
+          throw new IllegalStateException(
+              "Method " + method.getName() + " returned "
+                  + result.getClass().getName() + ", expected a CompletionStage. "
+                  + "This method should not be routed through AsyncDispatchExtension.");
+        }
+        return (CompletionStage<Object>) result;
       } catch (InvocationTargetException e) {
         throw Throws.rethrow(e.getCause() != null ? e.getCause() : e);
       } catch (IllegalAccessException e) {
