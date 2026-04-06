@@ -25,30 +25,14 @@ public abstract class AbstractProxyWrapper
         ? inner.realTarget : delegate;
   }
 
-  protected Object realTarget() {
-    return realTarget;
-  }
-
-  // ======================== Invoke dispatch ========================
-
-  @Override
-  public final Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
-    if (isInfrastructureMethod(method)) {
-      return method.invoke(this, args);
-    }
-    return dispatchServiceMethod(method, args);
-  }
-
-  protected abstract Object dispatchServiceMethod(Method method, Object[] args) throws Throwable;
-
-  // ======================== Utilities ========================
-
   public static void validateInterface(Class<?> type) {
     if (!type.isInterface()) {
       throw new IllegalArgumentException(
           "InqProxyFactory requires an interface, but received: " + type.getName());
     }
   }
+
+  // ======================== Invoke dispatch ========================
 
   protected static AbstractProxyWrapper resolveInner(Object target) {
     if (Proxy.isProxyClass(target.getClass())) {
@@ -59,6 +43,22 @@ public abstract class AbstractProxyWrapper
     }
     return null;
   }
+
+  protected Object realTarget() {
+    return realTarget;
+  }
+
+  // ======================== Utilities ========================
+
+  @Override
+  public final Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
+    if (isInfrastructureMethod(method)) {
+      return method.invoke(this, args);
+    }
+    return dispatchServiceMethod(method, args);
+  }
+
+  protected abstract Object dispatchServiceMethod(Method method, Object[] args) throws Throwable;
 
   private boolean isInfrastructureMethod(Method method) {
     Class<?> declaringClass = method.getDeclaringClass();

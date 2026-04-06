@@ -39,31 +39,6 @@ public class AsyncDispatchExtension implements DispatchExtension {
 
   // ======================== DispatchExtension SPI ========================
 
-  @Override
-  public boolean canHandle(Method method) {
-    return CompletionStage.class.isAssignableFrom(method.getReturnType());
-  }
-
-  @Override
-  public Object dispatch(long chainId, long callId,
-                         Method method, Object[] args, Object realTarget) {
-    return executeChain(chainId, callId, buildTerminal(method, args, realTarget));
-  }
-
-  @Override
-  public DispatchExtension linkInner(DispatchExtension[] innerExtensions) {
-    return new AsyncDispatchExtension(this.action, findInner(innerExtensions));
-  }
-
-  // ======================== Chain walk ========================
-
-  CompletionStage<Object> executeChain(long chainId, long callId,
-                                       InternalAsyncExecutor<Void, Object> terminal) {
-    return action.executeAsync(chainId, callId, null, nextStepFactory.apply(terminal));
-  }
-
-  // ======================== Internal ========================
-
   private static AsyncDispatchExtension findInner(DispatchExtension[] extensions) {
     for (int i = 0; i < extensions.length; i++) {
       if (extensions[i] instanceof AsyncDispatchExtension async) {
@@ -85,5 +60,30 @@ public class AsyncDispatchExtension implements DispatchExtension {
         throw new RuntimeException(e);
       }
     };
+  }
+
+  @Override
+  public boolean canHandle(Method method) {
+    return CompletionStage.class.isAssignableFrom(method.getReturnType());
+  }
+
+  // ======================== Chain walk ========================
+
+  @Override
+  public Object dispatch(long chainId, long callId,
+                         Method method, Object[] args, Object realTarget) {
+    return executeChain(chainId, callId, buildTerminal(method, args, realTarget));
+  }
+
+  // ======================== Internal ========================
+
+  @Override
+  public DispatchExtension linkInner(DispatchExtension[] innerExtensions) {
+    return new AsyncDispatchExtension(this.action, findInner(innerExtensions));
+  }
+
+  CompletionStage<Object> executeChain(long chainId, long callId,
+                                       InternalAsyncExecutor<Void, Object> terminal) {
+    return action.executeAsync(chainId, callId, null, nextStepFactory.apply(terminal));
   }
 }

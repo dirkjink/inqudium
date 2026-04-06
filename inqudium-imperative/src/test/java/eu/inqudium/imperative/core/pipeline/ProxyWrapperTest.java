@@ -1,12 +1,10 @@
 package eu.inqudium.imperative.core.pipeline;
 
-import eu.inqudium.core.pipeline.DispatchExtension;
 import eu.inqudium.core.pipeline.InqProxyFactory;
 import eu.inqudium.core.pipeline.LayerAction;
 import eu.inqudium.core.pipeline.ProxyWrapper;
 import eu.inqudium.core.pipeline.SyncDispatchExtension;
 import eu.inqudium.core.pipeline.Wrapper;
-
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -31,13 +29,27 @@ class ProxyWrapperTest {
 
   // ======================== Test service interface ========================
 
+  private FakeOrderService target;
+  private InvocationLog log;
+
+  @BeforeEach
+  void setUp() {
+    target = new FakeOrderService();
+    log = new InvocationLog();
+  }
+
+  // ======================== Reusable test fixtures ========================
+
   /**
    * Service interface with both sync and async methods for mixed dispatch testing.
    */
   public interface OrderService {
     String getOrder(long id);
+
     CompletionStage<String> getOrderAsync(long id);
+
     int count();
+
     CompletionStage<Integer> countAsync();
   }
 
@@ -70,8 +82,6 @@ class ProxyWrapperTest {
     }
   }
 
-  // ======================== Reusable test fixtures ========================
-
   /**
    * Records invocation events for verifying execution order and arguments.
    */
@@ -97,15 +107,6 @@ class ProxyWrapperTest {
             });
       };
     }
-  }
-
-  private FakeOrderService target;
-  private InvocationLog log;
-
-  @BeforeEach
-  void setUp() {
-    target = new FakeOrderService();
-    log = new InvocationLog();
   }
 
   // ======================== Single sync layer ========================

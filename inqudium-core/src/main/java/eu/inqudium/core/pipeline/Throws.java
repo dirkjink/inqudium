@@ -24,7 +24,8 @@ package eu.inqudium.core.pipeline;
  */
 public final class Throws {
 
-  private Throws() {}
+  private Throws() {
+  }
 
   /**
    * Rethrows any {@link Throwable} without wrapping, bypassing checked-exception rules.

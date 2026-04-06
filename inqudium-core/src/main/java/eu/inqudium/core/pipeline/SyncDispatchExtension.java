@@ -35,30 +35,6 @@ public class SyncDispatchExtension implements DispatchExtension {
 
   // ======================== DispatchExtension SPI ========================
 
-  @Override
-  public boolean canHandle(Method method) {
-    return true;
-  }
-
-  @Override
-  public Object dispatch(long chainId, long callId,
-                         Method method, Object[] args, Object realTarget) {
-    return executeChain(chainId, callId, buildTerminal(method, args, realTarget));
-  }
-
-  @Override
-  public DispatchExtension linkInner(DispatchExtension[] innerExtensions) {
-    return new SyncDispatchExtension(this.action, findInner(innerExtensions));
-  }
-
-  // ======================== Chain walk ========================
-
-  Object executeChain(long chainId, long callId, InternalExecutor<Void, Object> terminal) {
-    return action.execute(chainId, callId, null, nextStepFactory.apply(terminal));
-  }
-
-  // ======================== Internal ========================
-
   private static SyncDispatchExtension findInner(DispatchExtension[] extensions) {
     for (int i = 0; i < extensions.length; i++) {
       if (extensions[i] instanceof SyncDispatchExtension sync) {
@@ -79,5 +55,29 @@ public class SyncDispatchExtension implements DispatchExtension {
         throw new RuntimeException(e);
       }
     };
+  }
+
+  @Override
+  public boolean canHandle(Method method) {
+    return true;
+  }
+
+  // ======================== Chain walk ========================
+
+  @Override
+  public Object dispatch(long chainId, long callId,
+                         Method method, Object[] args, Object realTarget) {
+    return executeChain(chainId, callId, buildTerminal(method, args, realTarget));
+  }
+
+  // ======================== Internal ========================
+
+  @Override
+  public DispatchExtension linkInner(DispatchExtension[] innerExtensions) {
+    return new SyncDispatchExtension(this.action, findInner(innerExtensions));
+  }
+
+  Object executeChain(long chainId, long callId, InternalExecutor<Void, Object> terminal) {
+    return action.execute(chainId, callId, null, nextStepFactory.apply(terminal));
   }
 }

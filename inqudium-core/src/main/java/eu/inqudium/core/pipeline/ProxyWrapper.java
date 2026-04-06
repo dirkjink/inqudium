@@ -44,13 +44,6 @@ public class ProxyWrapper extends AbstractProxyWrapper {
 
   // ======================== Accessors ========================
 
-  /** Returns the extensions on this handler (for inner-resolution during chaining). */
-  DispatchExtension[] extensions() {
-    return extensions;
-  }
-
-  // ======================== Factory methods ========================
-
   /**
    * Creates a proxy with the given extensions. Extensions are checked in order —
    * register the catch-all (typically {@link SyncDispatchExtension}) last.
@@ -65,6 +58,15 @@ public class ProxyWrapper extends AbstractProxyWrapper {
         serviceInterface.getClassLoader(),
         new Class<?>[]{serviceInterface, Wrapper.class},
         handler);
+  }
+
+  // ======================== Factory methods ========================
+
+  /**
+   * Returns the extensions on this handler (for inner-resolution during chaining).
+   */
+  DispatchExtension[] extensions() {
+    return extensions;
   }
 
   // ======================== Dispatch ========================
