@@ -16,6 +16,12 @@ public interface InqProxyFactory {
 
   @SuppressWarnings("unchecked")
   static InqProxyFactory of(String name, LayerAction<?, ?> action) {
+    if (action == null) {
+      throw new IllegalArgumentException("LayerAction must not be null.");
+    }
+    // Safe at runtime: SyncDispatchExtension always passes null as the first
+    // generic parameter and forwards the raw Object result. The unchecked cast
+    // is unavoidable due to type erasure but guarded by the dispatch contract.
     LayerAction<Void, Object> sync = (LayerAction<Void, Object>) action;
     SyncDispatchExtension extension = new SyncDispatchExtension(sync);
     return new InqProxyFactory() {

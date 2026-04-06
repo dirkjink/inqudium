@@ -100,6 +100,11 @@ public abstract class AbstractProxyWrapper
       case "equals" -> handleEquals(args[0]);
       case "hashCode" -> realTarget.hashCode();
       case "toString" -> layerDescription() + " -> " + realTarget.toString();
+      // Thread synchronisation primitives must operate on the proxy itself,
+      // not the handler, to match what callers synchronize on.
+      case "wait", "notify", "notifyAll" -> method.invoke(proxy, args);
+      // getClass must reflect the proxy's class, not the handler's.
+      case "getClass" -> proxy.getClass();
       default -> method.invoke(this, args);
     };
   }
@@ -122,27 +127,33 @@ public abstract class AbstractProxyWrapper
       return false;
     }
 
-    Object otherTarget = null;
+    AbstractProxyWrapper otherWrapper = null;
 
     // 2. Check if the other object is a proxy and extract the wrapper
     if (Proxy.isProxyClass(other.getClass())) {
       InvocationHandler h = Proxy.getInvocationHandler(other);
-      if (h instanceof AbstractProxyWrapper otherWrapper) {
-        otherTarget = otherWrapper.realTarget;
+      if (h instanceof AbstractProxyWrapper apw) {
+        otherWrapper = apw;
       }
-    } else if (other instanceof AbstractProxyWrapper otherWrapper) {
-      otherTarget = otherWrapper.realTarget;
+    } else if (other instanceof AbstractProxyWrapper apw) {
+      otherWrapper = apw;
     }
 
-    // 3. CRITICAL FIX: If 'other' is not a proxy (or an AbstractProxyWrapper),
-    // otherTarget is null. In this case, we MUST return false.
-    // A proxy must never claim to be an bare object.
-    if (otherTarget == null) {
+    // 3. If 'other' is not a proxy (or an AbstractProxyWrapper),
+    // return false. A proxy must never claim to equal a bare object.
+    if (otherWrapper == null) {
       return false;
     }
 
-    // 4. Delegating to the equals() function of the underlying target objects
-    return this.realTarget.equals(otherTarget);
+    // 4. Different wrapper subtypes (e.g. sync vs async) are never equal,
+    // even when wrapping the same real target. This preserves semantic
+    // distinction between wrapper kinds.
+    if (this.getClass() != otherWrapper.getClass()) {
+      return false;
+    }
+
+    // 5. Delegating to the equals() function of the underlying target objects
+    return this.realTarget.equals(otherWrapper.realTarget);
   }
 
   // ======================== Method classification ========================

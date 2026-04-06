@@ -98,7 +98,17 @@ public class SyncDispatchExtension implements DispatchExtension {
       } catch (RuntimeException | Error e) {
         throw e;
       } catch (Throwable e) {
-        throw Throws.rethrow(e);
+        // Preserve declared checked exceptions from the service interface
+        // so that callers can catch them by their original type.
+        for (Class<?> declared : method.getExceptionTypes()) {
+          if (declared.isInstance(e)) {
+            throw Throws.rethrow(e);
+          }
+        }
+        // Undeclared checked exception — wrap with context for diagnosis
+        throw new IllegalStateException(
+            "Undeclared checked exception from " + method.getDeclaringClass().getSimpleName()
+                + "." + method.getName(), e);
       }
     };
   }
@@ -149,7 +159,9 @@ public class SyncDispatchExtension implements DispatchExtension {
     if (inner != null) {
       return new SyncDispatchExtension(this.action, inner, realTarget, this.handleCache);
     }
-    return new SyncDispatchExtension(this.action);
+    // No type-compatible inner found — return a standalone instance but
+    // preserve the existing handle cache to avoid re-resolving handles.
+    return new SyncDispatchExtension(this.action, null, null, this.handleCache);
   }
 
   // ======================== Internal ========================

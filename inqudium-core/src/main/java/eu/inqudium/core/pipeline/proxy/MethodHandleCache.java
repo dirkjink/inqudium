@@ -76,7 +76,11 @@ public final class MethodHandleCache {
    * @return a reusable {@code MethodHandle}
    */
   MethodHandle resolve(Method method) {
-    return fastCache.computeIfAbsent(method, MethodHandleCache::unreflect);
+    MethodHandle mh = fastCache.get(method);
+    if (mh == null) {
+      mh = fastCache.computeIfAbsent(method, MethodHandleCache::unreflect);
+    }
+    return mh;
   }
 
   /**
@@ -125,12 +129,16 @@ public final class MethodHandleCache {
    * the argument array directly — no intermediate array copy required.</p>
    */
   private MethodHandle resolveSpreader(Method method, int arity) {
-    return spreaderCache.computeIfAbsent(method, k -> {
-      // Build generic type: (Object, Object, Object, ...) -> Object
-      MethodType generic = MethodType.genericMethodType(arity + 1);
-      MethodHandle adapted = unreflect(method).asType(generic);
-      // Convert trailing params to spreader: (Object target, Object[] args) -> Object
-      return adapted.asSpreader(Object[].class, arity);
+    MethodHandle mh = spreaderCache.get(method);
+    if (mh == null) {
+      mh = spreaderCache.computeIfAbsent(method, k -> {
+        // Build generic type: (Object, Object, Object, ...) -> Object
+        MethodType generic = MethodType.genericMethodType(arity + 1);
+        MethodHandle adapted = unreflect(method).asType(generic);
+        // Convert trailing params to spreader: (Object target, Object[] args) -> Object
+        return adapted.asSpreader(Object[].class, arity);
     });
+    }
+    return mh;
   }
 }

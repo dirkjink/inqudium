@@ -109,6 +109,17 @@ public class ProxyWrapper extends AbstractProxyWrapper {
             "DispatchExtension at index " + i + " must not be null.");
       }
 
+      // Detect duplicate extension instances — the same instance registered
+      // twice would cause double dispatch for every matching method.
+      for (int j = 0; j < i; j++) {
+        if (extensions[i] == extensions[j]) {
+          throw new IllegalArgumentException(
+              "Duplicate DispatchExtension instance at index " + i
+                  + " (same instance as index " + j + "). "
+                  + "Each extension must be a distinct instance.");
+        }
+      }
+
       // Abort immediately if a catch-all is found before the last index.
       // This prevents later extensions from becoming unreachable ("shadowed").
       if (extensions[i].isCatchAll() && i < extensions.length - 1) {
