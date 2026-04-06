@@ -20,11 +20,11 @@ public interface DispatchExtension {
   /**
    * Dispatches the method call through this extension's logic.
    *
-   * @param chainId    the chain identifier
-   * @param callId     the per-call identifier
-   * @param method     the service method being invoked
-   * @param args       the method arguments
-   * @param target     the invocation target for the terminal step
+   * @param chainId the chain identifier
+   * @param callId  the per-call identifier
+   * @param method  the service method being invoked
+   * @param args    the method arguments
+   * @param target  the invocation target for the terminal step
    * @return the method result
    */
   Object dispatch(long chainId, long callId,
