@@ -51,10 +51,10 @@ public record CompositeFailureMetrics(List<FailureMetrics> delegates) implements
   }
 
   @Override
-  public boolean isThresholdReached(CircuitBreakerConfig config, Instant now) {
+  public boolean isThresholdReached(Instant now) {
     // OR-Logic: Trip the circuit if any of the underlying metrics reaches its threshold
     for (FailureMetrics metric : delegates) {
-      if (metric.isThresholdReached(config, now)) {
+      if (metric.isThresholdReached(now)) {
         return true;
       }
     }
@@ -72,12 +72,12 @@ public record CompositeFailureMetrics(List<FailureMetrics> delegates) implements
   }
 
   @Override
-  public String getTripReason(CircuitBreakerConfig config, Instant now) {
+  public String getTripReason(Instant now) {
     StringBuilder reasonBuilder = new StringBuilder("Composite threshold reached. Triggering component(s): ");
 
     List<String> triggeringReasons = delegates.stream()
-        .filter(metric -> metric.isThresholdReached(config, now))
-        .map(metric -> "[" + metric.getClass().getSimpleName() + ": " + metric.getTripReason(config, now) + "]")
+        .filter(metric -> metric.isThresholdReached(now))
+        .map(metric -> "[" + metric.getClass().getSimpleName() + ": " + metric.getTripReason(now) + "]")
         .toList();
 
     reasonBuilder.append(String.join(", ", triggeringReasons));

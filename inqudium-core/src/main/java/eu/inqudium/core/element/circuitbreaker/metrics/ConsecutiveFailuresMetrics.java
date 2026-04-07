@@ -13,44 +13,44 @@ import java.time.Instant;
  * that can tolerate occasional isolated failures but need to trip
  * immediately upon a hard outage.
  */
-public record ConsecutiveFailuresMetrics(int consecutiveFailures) implements FailureMetrics {
+public record ConsecutiveFailuresMetrics(long failureThreshold, int consecutiveFailures) implements FailureMetrics {
 
   /**
    * Creates the initial state with zero consecutive failures.
    *
    * @return a fresh metrics instance
    */
-  public static ConsecutiveFailuresMetrics initial() {
-    return new ConsecutiveFailuresMetrics(0);
+  public static ConsecutiveFailuresMetrics initial(double failureThreshold) {
+    return new ConsecutiveFailuresMetrics(Math.round(failureThreshold), 0);
   }
 
   @Override
   public FailureMetrics recordSuccess(Instant now) {
     // A single success breaks the chain and resets the counter to zero
-    return new ConsecutiveFailuresMetrics(0);
+    return new ConsecutiveFailuresMetrics(failureThreshold, 0);
   }
 
   @Override
   public FailureMetrics recordFailure(Instant now) {
     // Increment the streak of consecutive failures
-    return new ConsecutiveFailuresMetrics(consecutiveFailures + 1);
+    return new ConsecutiveFailuresMetrics(failureThreshold, consecutiveFailures + 1);
   }
 
   @Override
-  public boolean isThresholdReached(CircuitBreakerConfig config, Instant now) {
+  public boolean isThresholdReached(Instant now) {
     // Evaluate against the configured failure threshold
-    return consecutiveFailures >= config.failureThreshold();
+    return consecutiveFailures >= failureThreshold;
   }
 
   @Override
   public FailureMetrics reset(Instant now) {
     // Resetting the state is identical to creating the initial state
-    return initial();
+    return initial(Math.round(failureThreshold));
   }
 
   @Override
-  public String getTripReason(CircuitBreakerConfig config, Instant now) {
+  public String getTripReason(Instant now) {
     return "Consecutive failure threshold reached: Received %d failures in a row (Threshold: %d)."
-        .formatted(consecutiveFailures, config.failureThreshold());
+        .formatted(consecutiveFailures, failureThreshold);
   }
 }

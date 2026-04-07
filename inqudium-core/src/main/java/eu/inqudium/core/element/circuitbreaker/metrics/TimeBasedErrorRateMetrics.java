@@ -17,6 +17,7 @@ import java.util.Objects;
  * percentage from 1 to 100 (e.g., a threshold of 50 means 50% failure rate).
  */
 public record TimeBasedErrorRateMetrics(
+    long failureThreshold,
     int windowSizeInSeconds,
     int minimumNumberOfCalls,
     int[] successBuckets,
@@ -33,7 +34,10 @@ public record TimeBasedErrorRateMetrics(
 
   // ======================== Fix 1: Defensive array copy on access ========================
 
-  public static TimeBasedErrorRateMetrics initial(int windowSizeInSeconds, int minimumNumberOfCalls, Instant now) {
+  public static TimeBasedErrorRateMetrics initial(double failureThreshold,
+                                                  int windowSizeInSeconds,
+                                                  int minimumNumberOfCalls,
+                                                  Instant now) {
     if (windowSizeInSeconds <= 0) {
       throw new IllegalArgumentException("windowSizeInSeconds must be greater than 0");
     }
@@ -41,6 +45,7 @@ public record TimeBasedErrorRateMetrics(
       throw new IllegalArgumentException("minimumNumberOfCalls must be greater than 0");
     }
     return new TimeBasedErrorRateMetrics(
+        Math.round(failureThreshold),
         windowSizeInSeconds,
         minimumNumberOfCalls,
         new int[windowSizeInSeconds],
@@ -63,28 +68,26 @@ public record TimeBasedErrorRateMetrics(
 
   @Override
   public boolean equals(Object o) {
-    if (this == o) return true;
-    if (!(o instanceof TimeBasedErrorRateMetrics(
-        int sizeInSeconds, int numberOfCalls, int[] buckets, int[] failureBuckets1, long updatedEpochSecond
-    ))) return false;
-    return windowSizeInSeconds == sizeInSeconds
-        && minimumNumberOfCalls == numberOfCalls
-        && lastUpdatedEpochSecond == updatedEpochSecond
-        && Arrays.equals(successBuckets, buckets)
-        && Arrays.equals(failureBuckets, failureBuckets1);
+    if (o == null || getClass() != o.getClass()) return false;
+    TimeBasedErrorRateMetrics that = (TimeBasedErrorRateMetrics) o;
+    return failureThreshold == that.failureThreshold &&
+        windowSizeInSeconds == that.windowSizeInSeconds &&
+        minimumNumberOfCalls == that.minimumNumberOfCalls &&
+        lastUpdatedEpochSecond == that.lastUpdatedEpochSecond &&
+        Objects.deepEquals(successBuckets, that.successBuckets) &&
+        Objects.deepEquals(failureBuckets, that.failureBuckets);
   }
-
-  // ======================== Factory ========================
 
   @Override
   public int hashCode() {
-    int result = Objects.hash(windowSizeInSeconds, minimumNumberOfCalls, lastUpdatedEpochSecond);
-    result = 31 * result + Arrays.hashCode(successBuckets);
-    result = 31 * result + Arrays.hashCode(failureBuckets);
-    return result;
+    return Objects.hash(failureThreshold,
+        windowSizeInSeconds,
+        minimumNumberOfCalls,
+        Arrays.hashCode(successBuckets),
+        Arrays.hashCode(failureBuckets),
+        lastUpdatedEpochSecond);
   }
 
-  // ======================== Recording ========================
 
   @Override
   public FailureMetrics recordSuccess(Instant now) {
@@ -124,6 +127,7 @@ public record TimeBasedErrorRateMetrics(
     long newLastUpdatedEpochSecond = Math.max(updatedState.lastUpdatedEpochSecond, currentEpochSecond);
 
     return new TimeBasedErrorRateMetrics(
+        failureThreshold,
         windowSizeInSeconds,
         minimumNumberOfCalls,
         newSuccesses,
@@ -142,7 +146,7 @@ public record TimeBasedErrorRateMetrics(
   }
 
   @Override
-  public boolean isThresholdReached(CircuitBreakerConfig config, Instant now) {
+  public boolean isThresholdReached(Instant now) {
     EvaluationResult eval = evaluate(now);
 
     if (eval.totalCalls() < minimumNumberOfCalls) {
@@ -150,13 +154,13 @@ public record TimeBasedErrorRateMetrics(
     }
 
     double failureRate = (double) eval.totalFailures() / eval.totalCalls();
-    double rateThreshold = config.failureThreshold() / 100.0;
+    double rateThreshold = failureThreshold / 100.0;
 
     return failureRate >= rateThreshold;
   }
 
   @Override
-  public String getTripReason(CircuitBreakerConfig config, Instant now) {
+  public String getTripReason(Instant now) {
     EvaluationResult eval = evaluate(now);
 
     if (eval.totalCalls() == 0) {
@@ -165,12 +169,19 @@ public record TimeBasedErrorRateMetrics(
 
     return "Failure rate of %.1f%% (%d failures out of %d calls) in the last %d seconds exceeded the threshold of %d%%."
         .formatted(eval.failureRatePercent(), eval.totalFailures(), eval.totalCalls(),
-            windowSizeInSeconds, config.failureThreshold());
+            windowSizeInSeconds, failureThreshold);
   }
 
   @Override
   public FailureMetrics reset(Instant now) {
-    return initial(windowSizeInSeconds, minimumNumberOfCalls, now);
+    return new TimeBasedErrorRateMetrics(
+        failureThreshold,
+        windowSizeInSeconds,
+        minimumNumberOfCalls,
+        new int[windowSizeInSeconds],
+        new int[windowSizeInSeconds],
+        now.getEpochSecond()
+    );
   }
 
   // ======================== Reset ========================
@@ -184,6 +195,7 @@ public record TimeBasedErrorRateMetrics(
 
     if (deltaSeconds >= windowSizeInSeconds) {
       return new TimeBasedErrorRateMetrics(
+          failureThreshold,
           windowSizeInSeconds,
           minimumNumberOfCalls,
           new int[windowSizeInSeconds],
@@ -207,6 +219,7 @@ public record TimeBasedErrorRateMetrics(
     }
 
     return new TimeBasedErrorRateMetrics(
+        failureThreshold,
         windowSizeInSeconds,
         minimumNumberOfCalls,
         newSuccesses,

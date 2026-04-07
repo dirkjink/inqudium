@@ -10,6 +10,7 @@ import java.util.Arrays;
  * It tracks the outcomes of the last N calls using a circular buffer.
  */
 public record SlidingWindowMetrics(
+    long failureThreshold,
     int windowSize,
     int minimumNumberOfCalls,
     boolean[] window,
@@ -24,14 +25,21 @@ public record SlidingWindowMetrics(
    * @param windowSize           the maximum number of calls to track in the window
    * @param minimumNumberOfCalls the minimum number of recorded calls before evaluating the threshold
    */
-  public static SlidingWindowMetrics initial(int windowSize, int minimumNumberOfCalls) {
+  public static SlidingWindowMetrics initial(double failureThreshold, int windowSize, int minimumNumberOfCalls) {
     if (windowSize <= 0) {
       throw new IllegalArgumentException("windowSize must be greater than 0");
     }
     if (minimumNumberOfCalls <= 0 || minimumNumberOfCalls > windowSize) {
       throw new IllegalArgumentException("minimumNumberOfCalls must be between 1 and windowSize");
     }
-    return new SlidingWindowMetrics(windowSize, minimumNumberOfCalls, new boolean[windowSize], -1, 0, 0);
+    return new SlidingWindowMetrics(
+        Math.round(failureThreshold),
+        windowSize,
+        minimumNumberOfCalls,
+        new boolean[windowSize],
+        -1,
+        0,
+        0);
   }
 
   @Override
@@ -69,6 +77,7 @@ public record SlidingWindowMetrics(
     int newFailureCount = failureCount + (isFailure ? 1 : 0) - (oldOutcome ? 1 : 0);
 
     return new SlidingWindowMetrics(
+        failureThreshold,
         windowSize,
         minimumNumberOfCalls,
         newWindow,
@@ -79,7 +88,7 @@ public record SlidingWindowMetrics(
   }
 
   @Override
-  public boolean isThresholdReached(CircuitBreakerConfig config, Instant now) {
+  public boolean isThresholdReached(Instant now) {
     // Do not trip the circuit if we haven't gathered enough data points yet
     if (size < minimumNumberOfCalls) {
       return false;
@@ -88,18 +97,25 @@ public record SlidingWindowMetrics(
     // Evaluate against the absolute failure threshold from the configuration.
     // For example, if config says threshold is 5, and we have 5 failures in
     // our window size of 10, this will return true.
-    return failureCount >= config.failureThreshold();
+    return failureCount >= failureThreshold;
   }
 
   @Override
   public FailureMetrics reset(Instant now) {
     // Return a fresh, empty window with the same configuration
-    return initial(windowSize, minimumNumberOfCalls);
+    return new SlidingWindowMetrics(
+        failureThreshold,
+        windowSize,
+        minimumNumberOfCalls,
+        new boolean[windowSize],
+        -1,
+        0,
+        0);
   }
 
   @Override
-  public String getTripReason(CircuitBreakerConfig config, Instant now) {
+  public String getTripReason(Instant now) {
     return "Sliding window threshold reached: Found %d failures in the last %d calls (Threshold: %d)."
-        .formatted(failureCount, size, config.failureThreshold());
+        .formatted(failureCount, size, failureThreshold);
   }
 }

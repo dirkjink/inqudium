@@ -196,7 +196,7 @@ public record CircuitBreakerConfig(
       // If the user has not provided a custom factory, use the default time-based strategy
       Function<Instant, FailureMetrics> factoryToUse = customMetricsFactory != null
           ? customMetricsFactory
-          : now -> TimeBasedErrorRateMetrics.initial(slidingWindowSeconds, minimumNumberOfCalls, now);
+          : now -> TimeBasedErrorRateMetrics.initial(failureThreshold,slidingWindowSeconds, minimumNumberOfCalls, now);
 
       return new CircuitBreakerConfig(
           name,

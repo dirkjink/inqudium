@@ -17,6 +17,7 @@ import java.time.Instant;
  * percentage from 1 to 100 (e.g., a threshold of 50 means 50% failure rate, which is 0.5).
  */
 public record ContinuousTimeEwmaMetrics(
+    long failureThreshold,
     ContinuousTimeEwma ewmaCalculator,
     int minimumNumberOfCalls,
     double currentRate,
@@ -25,6 +26,7 @@ public record ContinuousTimeEwmaMetrics(
 ) implements FailureMetrics {
 
   public static ContinuousTimeEwmaMetrics initial(
+      double failureThreshold,
       Duration timeConstant,
       int minimumNumberOfCalls,
       Instant now
@@ -33,6 +35,7 @@ public record ContinuousTimeEwmaMetrics(
       throw new IllegalArgumentException("minimumNumberOfCalls must be greater than 0");
     }
     return new ContinuousTimeEwmaMetrics(
+        Math.round(failureThreshold),
         new ContinuousTimeEwma(timeConstant),
         minimumNumberOfCalls,
         0.0,
@@ -62,6 +65,7 @@ public record ContinuousTimeEwmaMetrics(
     long newLastUpdateNanos = Math.max(lastUpdateNanos, nowNanos);
 
     return new ContinuousTimeEwmaMetrics(
+        failureThreshold,
         ewmaCalculator,
         minimumNumberOfCalls,
         newRate,
@@ -71,7 +75,7 @@ public record ContinuousTimeEwmaMetrics(
   }
 
   @Override
-  public boolean isThresholdReached(CircuitBreakerConfig config, Instant now) {
+  public boolean isThresholdReached(Instant now) {
     if (callsCount < minimumNumberOfCalls) {
       return false;
     }
@@ -81,13 +85,14 @@ public record ContinuousTimeEwmaMetrics(
     // perfectly yields the time-decayed rate without adding new failure weight.
     double decayedRate = ewmaCalculator.calculate(currentRate, lastUpdateNanos, toNanos(now), 0.0);
 
-    double rateThreshold = config.failureThreshold() / 100.0;
+    double rateThreshold = failureThreshold / 100.0;
     return decayedRate >= rateThreshold;
   }
 
   @Override
   public FailureMetrics reset(Instant now) {
     return new ContinuousTimeEwmaMetrics(
+        failureThreshold,
         ewmaCalculator,
         minimumNumberOfCalls,
         0.0,
@@ -97,10 +102,10 @@ public record ContinuousTimeEwmaMetrics(
   }
 
   @Override
-  public String getTripReason(CircuitBreakerConfig config, Instant now) {
+  public String getTripReason(Instant now) {
     // Calculate decayed rate for the exact moment of the trip
     double decayedRate = ewmaCalculator.calculate(currentRate, lastUpdateNanos, toNanos(now), 0.0);
     return "Continuous-time EWMA threshold reached: Current failure rate is %.1f%% (Threshold: %d%%). Time Constant (Tau): %s."
-        .formatted(decayedRate * 100.0, config.failureThreshold(), ewmaCalculator.tauDurationNanos());
+        .formatted(decayedRate * 100.0, failureThreshold, ewmaCalculator.tauDurationNanos());
   }
 }

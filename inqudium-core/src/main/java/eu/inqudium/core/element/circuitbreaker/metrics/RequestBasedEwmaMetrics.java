@@ -16,6 +16,7 @@ import java.time.Instant;
  * percentage from 1 to 100 (e.g., a threshold of 50 means 50% failure rate, which is 0.5).
  */
 public record RequestBasedEwmaMetrics(
+    long failureThreshold,
     RequestBasedEwma ewmaCalculator,
     int minimumNumberOfCalls,
     double currentRate,
@@ -30,6 +31,7 @@ public record RequestBasedEwmaMetrics(
    * @return a fresh metrics instance
    */
   public static RequestBasedEwmaMetrics initial(
+      double failureThreshold,
       double smoothingFactor,
       int minimumNumberOfCalls
   ) {
@@ -37,6 +39,7 @@ public record RequestBasedEwmaMetrics(
       throw new IllegalArgumentException("minimumNumberOfCalls must be greater than 0");
     }
     return new RequestBasedEwmaMetrics(
+        Math.round(failureThreshold),
         new RequestBasedEwma(smoothingFactor),
         minimumNumberOfCalls,
         0.0,
@@ -67,6 +70,7 @@ public record RequestBasedEwmaMetrics(
     int newCount = Math.min(minimumNumberOfCalls, callsCount + 1);
 
     return new RequestBasedEwmaMetrics(
+        failureThreshold,
         ewmaCalculator,
         minimumNumberOfCalls,
         newRate,
@@ -75,14 +79,14 @@ public record RequestBasedEwmaMetrics(
   }
 
   @Override
-  public boolean isThresholdReached(CircuitBreakerConfig config, Instant now) {
+  public boolean isThresholdReached(Instant now) {
     // The circuit breaker cannot trip if we haven't collected enough samples yet
     if (callsCount < minimumNumberOfCalls) {
       return false;
     }
 
     // Convert the integer config threshold (e.g., 50) to a double percentage (e.g., 0.5)
-    double rateThreshold = config.failureThreshold() / 100.0;
+    double rateThreshold = failureThreshold / 100.0;
 
     return currentRate >= rateThreshold;
   }
@@ -91,6 +95,7 @@ public record RequestBasedEwmaMetrics(
   public FailureMetrics reset(Instant now) {
     // Return a completely fresh instance using the existing configuration
     return new RequestBasedEwmaMetrics(
+        failureThreshold,
         ewmaCalculator,
         minimumNumberOfCalls,
         0.0,
@@ -99,8 +104,8 @@ public record RequestBasedEwmaMetrics(
   }
 
   @Override
-  public String getTripReason(CircuitBreakerConfig config, Instant now) {
+  public String getTripReason(Instant now) {
     return "Request-based EWMA threshold reached: Current failure rate is %.1f%% (Threshold: %d%%). Alpha: %.2f."
-        .formatted(currentRate * 100.0, config.failureThreshold(), ewmaCalculator.alpha());
+        .formatted(currentRate * 100.0, failureThreshold, ewmaCalculator.alpha());
   }
 }

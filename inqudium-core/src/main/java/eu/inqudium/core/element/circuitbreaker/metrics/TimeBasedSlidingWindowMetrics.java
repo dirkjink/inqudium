@@ -12,6 +12,7 @@ import java.util.Arrays;
  * When time advances, older buckets are automatically cleared.
  */
 public record TimeBasedSlidingWindowMetrics(
+    long failureThreshold,
     int windowSizeInSeconds,
     int[] failureBuckets,
     long lastUpdatedEpochSecond
@@ -23,11 +24,12 @@ public record TimeBasedSlidingWindowMetrics(
    * @param windowSizeInSeconds the total duration of the window in seconds
    * @param now                 the current timestamp to align the initial window
    */
-  public static TimeBasedSlidingWindowMetrics initial(int windowSizeInSeconds, Instant now) {
+  public static TimeBasedSlidingWindowMetrics initial(double failureThreshold, int windowSizeInSeconds, Instant now) {
     if (windowSizeInSeconds <= 0) {
       throw new IllegalArgumentException("windowSizeInSeconds must be greater than 0");
     }
     return new TimeBasedSlidingWindowMetrics(
+        Math.round(failureThreshold),
         windowSizeInSeconds,
         new int[windowSizeInSeconds],
         now.getEpochSecond()
@@ -61,11 +63,12 @@ public record TimeBasedSlidingWindowMetrics(
 
     newBuckets[currentBucketIndex]++;
 
-    // FIX: Ensure the internal clock never moves backwards.
+    // Ensure the internal clock never moves backwards.
     // If we receive a record from the past, we keep our most advanced known timestamp.
     long newLastUpdatedEpochSecond = Math.max(updatedState.lastUpdatedEpochSecond(), currentEpochSecond);
 
     return new TimeBasedSlidingWindowMetrics(
+        failureThreshold,
         windowSizeInSeconds,
         newBuckets,
         newLastUpdatedEpochSecond
@@ -73,7 +76,7 @@ public record TimeBasedSlidingWindowMetrics(
   }
 
   @Override
-  public boolean isThresholdReached(CircuitBreakerConfig config, Instant now) {
+  public boolean isThresholdReached(Instant now) {
     // We must evaluate the threshold against the *current* time.
     // This ensures that if we haven't received calls for a while, old failures
     // are still ignored correctly.
@@ -84,12 +87,17 @@ public record TimeBasedSlidingWindowMetrics(
       totalFailuresInWindow += count;
     }
 
-    return totalFailuresInWindow >= config.failureThreshold();
+    return totalFailuresInWindow >= failureThreshold;
   }
 
   @Override
   public FailureMetrics reset(Instant now) {
-    return initial(windowSizeInSeconds, now);
+    return new TimeBasedSlidingWindowMetrics(
+        failureThreshold,
+        windowSizeInSeconds,
+        new int[windowSizeInSeconds],
+        now.getEpochSecond()
+    );
   }
 
   /**
@@ -106,7 +114,11 @@ public record TimeBasedSlidingWindowMetrics(
 
     // If the elapsed time is greater than or equal to the entire window, wipe everything
     if (deltaSeconds >= windowSizeInSeconds) {
-      return new TimeBasedSlidingWindowMetrics(windowSizeInSeconds, new int[windowSizeInSeconds], currentEpochSecond);
+      return new TimeBasedSlidingWindowMetrics(
+          failureThreshold,
+          windowSizeInSeconds,
+          new int[windowSizeInSeconds],
+          currentEpochSecond);
     }
 
     // Otherwise, clear only the buckets that have elapsed since the last update
@@ -120,15 +132,19 @@ public record TimeBasedSlidingWindowMetrics(
       newBuckets[indexToClear] = 0;
     }
 
-    return new TimeBasedSlidingWindowMetrics(windowSizeInSeconds, newBuckets, currentEpochSecond);
+    return new TimeBasedSlidingWindowMetrics(
+        failureThreshold,
+        windowSizeInSeconds,
+        newBuckets,
+        currentEpochSecond);
   }
 
-  public String getTripReason(CircuitBreakerConfig config, Instant now) {
+  public String getTripReason(Instant now) {
     TimeBasedSlidingWindowMetrics evaluatedState = fastForward(now.getEpochSecond());
 
     int totalFailuresInWindow = Arrays.stream(evaluatedState.failureBuckets()).sum();
 
     return "Time-based sliding window threshold reached: Found %d failures in the last %d seconds (Threshold: %d)."
-        .formatted(totalFailuresInWindow, windowSizeInSeconds, config.failureThreshold());
+        .formatted(totalFailuresInWindow, windowSizeInSeconds, failureThreshold);
   }
 }

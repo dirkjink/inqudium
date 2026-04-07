@@ -10,8 +10,4 @@ public class TimeBasedSlidingWindowMetricsBuilder {
         this.windowSizeInSeconds = seconds;
         return this;
     }
-
-    public TimeBasedSlidingWindowMetrics build(Instant now) {
-        return TimeBasedSlidingWindowMetrics.initial(windowSizeInSeconds, now);
-    }
 }

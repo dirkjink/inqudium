@@ -23,7 +23,7 @@ public interface FailureMetrics {
   /**
    * Evaluates if the failure threshold has been reached based on the current state and configuration.
    */
-  boolean isThresholdReached(CircuitBreakerConfig config, Instant now);
+  boolean isThresholdReached(Instant now);
 
   /**
    * Resets the metrics to their initial state (e.g., when transitioning to CLOSED).
@@ -35,5 +35,5 @@ public interface FailureMetrics {
    * <p>This is highly valuable for DevOps engineers and logging. It should include
    * the concrete numbers (e.g., current rate vs. threshold) that led to the trip.
    */
-  String getTripReason(CircuitBreakerConfig config, Instant now);
+  String getTripReason(Instant now);
 }

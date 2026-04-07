@@ -100,9 +100,9 @@ public final class CircuitBreakerCore {
     return switch (snapshot.state()) {
       case CLOSED -> {
         FailureMetrics updatedMetrics = snapshot.failureMetrics().recordSuccess(now);
-        if (updatedMetrics.isThresholdReached(config, now)) {
+        if (updatedMetrics.isThresholdReached(now)) {
           // METRIK WIRD GEFRAGT WARUM:
-          String reason = updatedMetrics.getTripReason(config, now);
+          String reason = updatedMetrics.getTripReason(now);
           yield snapshot.withState(CircuitState.OPEN, now, reason);
         }
         yield snapshot.withUpdatedFailureMetrics(updatedMetrics);
@@ -143,9 +143,9 @@ public final class CircuitBreakerCore {
     return switch (snapshot.state()) {
       case CLOSED -> {
         FailureMetrics updatedMetrics = snapshot.failureMetrics().recordFailure(now);
-        if (updatedMetrics.isThresholdReached(config, now)) {
+        if (updatedMetrics.isThresholdReached(now)) {
           // METRIK WIRD GEFRAGT WARUM:
-          String reason = updatedMetrics.getTripReason(config, now);
+          String reason = updatedMetrics.getTripReason(now);
           yield snapshot.withState(CircuitState.OPEN, now, reason);
         }
         yield snapshot.withUpdatedFailureMetrics(updatedMetrics);

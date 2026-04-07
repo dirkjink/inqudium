@@ -15,16 +15,18 @@ import java.time.Instant;
  * of the bucket (e.g., a threshold of 5 means the circuit trips if the bucket holds >= 5.0).
  */
 public record LeakyBucketMetrics(
+    long failureThreshold,
     double leakRatePerSecond,
     double currentLevel,
     long lastUpdateNanos
 ) implements FailureMetrics {
 
-  public static LeakyBucketMetrics initial(double leakRatePerSecond, Instant now) {
+  public static LeakyBucketMetrics initial(double failureThreshold, double leakRatePerSecond, Instant now) {
     if (leakRatePerSecond < 0) {
       throw new IllegalArgumentException("leakRatePerSecond cannot be negative");
     }
     return new LeakyBucketMetrics(
+        Math.round(failureThreshold),
         leakRatePerSecond,
         0.0,
         toNanos(now)
@@ -52,6 +54,7 @@ public record LeakyBucketMetrics(
     double newLevel = leakedState.currentLevel() + 1.0;
 
     return new LeakyBucketMetrics(
+        failureThreshold,
         leakRatePerSecond,
         newLevel,
         nowNanos
@@ -59,16 +62,21 @@ public record LeakyBucketMetrics(
   }
 
   @Override
-  public boolean isThresholdReached(CircuitBreakerConfig config, Instant now) {
+  public boolean isThresholdReached(Instant now) {
     // We must apply the continuous leak up to the exact 'now' timestamp before evaluating
     LeakyBucketMetrics evaluatedState = leak(toNanos(now));
 
-    return evaluatedState.currentLevel() >= config.failureThreshold();
+    return evaluatedState.currentLevel() >= failureThreshold;
   }
 
   @Override
   public FailureMetrics reset(Instant now) {
-    return initial(leakRatePerSecond, now);
+    return new LeakyBucketMetrics(
+        failureThreshold,
+        leakRatePerSecond,
+        0.0,
+        toNanos(now)
+    );
   }
 
   /**
@@ -85,6 +93,7 @@ public record LeakyBucketMetrics(
     long newLastUpdateNanos = Math.max(nowNanos, lastUpdateNanos);
 
     return new LeakyBucketMetrics(
+        failureThreshold,
         leakRatePerSecond,
         newLevel,
         newLastUpdateNanos
@@ -92,10 +101,10 @@ public record LeakyBucketMetrics(
   }
 
   @Override
-  public String getTripReason(CircuitBreakerConfig config, Instant now) {
+  public String getTripReason(Instant now) {
     // We apply the leak to get the absolutely current level for the log
     LeakyBucketMetrics evaluatedState = leak(toNanos(now));
     return "Leaky bucket overflow: Current failure level is %.2f (Capacity: %d, Leak Rate: %.1f/sec)."
-        .formatted(evaluatedState.currentLevel(), config.failureThreshold(), leakRatePerSecond);
+        .formatted(evaluatedState.currentLevel(), failureThreshold, leakRatePerSecond);
   }
 }
