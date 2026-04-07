@@ -537,7 +537,8 @@ class InqImperativeCircuitBreakerConfigBuilderTest {
       // Given / When: no preset, no manual values
       InqConfig inqConfig = InqConfig.configure()
           .general()
-          .with(new TimeBasedSlidingWindowConfigBuilder(), b -> {})
+          .with(new TimeBasedSlidingWindowConfigBuilder(), b -> {
+          })
           .build();
       var swConfig = inqConfig.of(TimeBasedSlidingWindowConfig.class).orElseThrow();
 

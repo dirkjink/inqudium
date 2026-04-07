@@ -1,9 +1,6 @@
 package eu.inqudium.imperative.circuitbreaker;
 
 import eu.inqudium.core.config.InqConfig;
-import eu.inqudium.core.element.circuitbreaker.config.InqCircuitBreakerConfig;
-import eu.inqudium.imperative.circuitbreaker.config.InqImperativeCircuitBreakerConfig;
-import eu.inqudium.imperative.circuitbreaker.config.InqImperativeCircuitBreakerConfigBuilder;
 import org.junit.jupiter.api.Test;
 
 import static eu.inqudium.imperative.circuitbreaker.config.InqImperativeCircuitBreakerConfigBuilder.circuitBreaker;
