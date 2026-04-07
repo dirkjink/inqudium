@@ -20,7 +20,6 @@ public abstract class InqCircuitBreakerConfigBuilder
   private Boolean enableExceptionOptimization;
   private Double failureRateThreshold;
   private Double slowCallRateThreshold;
-  private FailureMetricsConfig failureMetrics;
   private Integer slidingWindowSize;
   private Integer waitDurationInOpenState;
   private Integer permittedNumberOfCallsInHalfOpenState;
@@ -56,11 +55,6 @@ public abstract class InqCircuitBreakerConfigBuilder
 
   public InqCircuitBreakerConfigBuilder<B, E> slowCallRateThreshold(Double slowCallRateThreshold) {
     this.slowCallRateThreshold = slowCallRateThreshold;
-    return this;
-  }
-
-  public InqCircuitBreakerConfigBuilder<B, E> failureMetrics(FailureMetricsConfig failureMetrics) {
-    this.failureMetrics = failureMetrics;
     return this;
   }
 
@@ -132,7 +126,6 @@ public abstract class InqCircuitBreakerConfigBuilder
         common.inference(),
         this.failureRateThreshold,
         this.slowCallRateThreshold,
-        this.failureMetrics,
         this.slidingWindowSize,
         this.waitDurationInOpenState,
         this.permittedNumberOfCallsInHalfOpenState,
