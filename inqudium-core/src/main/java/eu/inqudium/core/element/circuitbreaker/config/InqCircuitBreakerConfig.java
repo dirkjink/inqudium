@@ -5,6 +5,7 @@ import eu.inqudium.core.config.GeneralConfig;
 import eu.inqudium.core.config.InqElementCommonConfig;
 import eu.inqudium.core.config.InqElementConfig;
 import eu.inqudium.core.element.InqElementType;
+import eu.inqudium.core.element.config.FailurePredicateConfig;
 import eu.inqudium.core.event.InqEventPublisher;
 
 public record InqCircuitBreakerConfig(
@@ -15,7 +16,8 @@ public record InqCircuitBreakerConfig(
     FailureMetricsConfig failureMetrics,
     Integer slidingWindowSize,
     Integer waitDurationInOpenState,
-    Integer permittedNumberOfCallsInHalfOpenState
+    Integer permittedNumberOfCallsInHalfOpenState,
+    FailurePredicateConfig failurePredicateConfig
 
 ) implements InqElementConfig, ConfigExtension<InqCircuitBreakerConfig> {
   @Override
@@ -53,7 +55,8 @@ public record InqCircuitBreakerConfig(
         this.failureMetrics,
         this.slidingWindowSize,
         this.waitDurationInOpenState,
-        this.permittedNumberOfCallsInHalfOpenState
+        this.permittedNumberOfCallsInHalfOpenState,
+        this.failurePredicateConfig
     );
   }
 }

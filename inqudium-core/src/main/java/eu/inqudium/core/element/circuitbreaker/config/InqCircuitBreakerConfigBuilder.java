@@ -5,6 +5,7 @@ import eu.inqudium.core.config.ExtensionBuilder;
 import eu.inqudium.core.config.GeneralConfig;
 import eu.inqudium.core.config.InqElementCommonConfig;
 import eu.inqudium.core.element.InqElementType;
+import eu.inqudium.core.element.config.FailurePredicateConfig;
 import eu.inqudium.core.event.InqEventPublisher;
 
 import java.util.Objects;
@@ -23,6 +24,7 @@ public abstract class InqCircuitBreakerConfigBuilder
   private Integer slidingWindowSize;
   private Integer waitDurationInOpenState;
   private Integer permittedNumberOfCallsInHalfOpenState;
+  private FailurePredicateConfig failurePredicateConfig;
 
   protected InqCircuitBreakerConfigBuilder() {
   }
@@ -133,7 +135,8 @@ public abstract class InqCircuitBreakerConfigBuilder
         this.failureMetrics,
         this.slidingWindowSize,
         this.waitDurationInOpenState,
-        this.permittedNumberOfCallsInHalfOpenState
+        this.permittedNumberOfCallsInHalfOpenState,
+        this.failurePredicateConfig
     ).inference();
 
     validate(config);
