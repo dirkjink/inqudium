@@ -44,11 +44,11 @@ import eu.inqudium.core.algo.RequestBasedEwma;
  * accepted but ignored in every method. If you need time-based decay, see
  * {@link ContinuousTimeEwmaMetrics}.
  *
- * @param failureRatePercent the threshold as a percentage (1–100); stored as rounded value
- * @param ewmaCalculator     the stateless EWMA calculator holding the smoothing factor (alpha)
+ * @param failureRatePercent   the threshold as a percentage (1–100); stored as rounded value
+ * @param ewmaCalculator       the stateless EWMA calculator holding the smoothing factor (alpha)
  * @param minimumNumberOfCalls minimum samples required before the threshold is evaluated
- * @param currentRate        the current EWMA failure rate (0.0–1.0 scale)
- * @param callsCount         how many outcomes have been recorded (capped at minimumNumberOfCalls)
+ * @param currentRate          the current EWMA failure rate (0.0–1.0 scale)
+ * @param callsCount           how many outcomes have been recorded (capped at minimumNumberOfCalls)
  */
 public record RequestBasedEwmaMetrics(
     double failureRatePercent,

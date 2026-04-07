@@ -45,7 +45,9 @@ public record InqElementCommonConfig(
     Boolean enableExceptionOptimization
 ) implements InqElementConfig, ConfigExtension<InqElementCommonConfig> {
 
-  /** Global counter for auto-generating unique element names when none is provided. */
+  /**
+   * Global counter for auto-generating unique element names when none is provided.
+   */
   private final static AtomicInteger counter = new AtomicInteger(1);
 
   /**

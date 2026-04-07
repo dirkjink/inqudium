@@ -48,12 +48,12 @@ import java.time.Duration;
  *   <li>You want precise control over how fast history is forgotten via the tau parameter.</li>
  * </ul>
  *
- * @param failureRatePercent  the threshold as a percentage (1–100); rounded at construction
- * @param ewmaCalculator      the stateless continuous-time EWMA calculator holding tau
+ * @param failureRatePercent   the threshold as a percentage (1–100); rounded at construction
+ * @param ewmaCalculator       the stateless continuous-time EWMA calculator holding tau
  * @param minimumNumberOfCalls minimum samples required before the threshold is evaluated
- * @param currentRate         the current EWMA failure rate (0.0–1.0 scale)
- * @param callsCount          how many outcomes have been recorded (capped at minimumNumberOfCalls)
- * @param lastUpdateNanos     the nanosecond timestamp of the most recent recording
+ * @param currentRate          the current EWMA failure rate (0.0–1.0 scale)
+ * @param callsCount           how many outcomes have been recorded (capped at minimumNumberOfCalls)
+ * @param lastUpdateNanos      the nanosecond timestamp of the most recent recording
  */
 public record ContinuousTimeEwmaMetrics(
     double failureRatePercent,

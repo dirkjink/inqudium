@@ -145,8 +145,8 @@ public record CompositeFailureMetrics(List<FailureMetrics> delegates) implements
    *
    * @param nowNanos the current timestamp in nanoseconds, forwarded to each delegate
    * @return a formatted string such as
-   *         "Composite threshold reached. Triggering component(s):
-   *         [ConsecutiveFailuresMetrics: Received 5 failures in a row (Threshold: 5)]"
+   * "Composite threshold reached. Triggering component(s):
+   * [ConsecutiveFailuresMetrics: Received 5 failures in a row (Threshold: 5)]"
    */
   @Override
   public String getTripReason(long nowNanos) {

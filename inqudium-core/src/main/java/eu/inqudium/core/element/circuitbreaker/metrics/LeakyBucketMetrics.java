@@ -41,10 +41,10 @@ package eu.inqudium.core.element.circuitbreaker.metrics;
  * {@code bucketCapacity}, which means it takes proportionally longer to leak back below
  * the threshold after a large burst.
  *
- * @param bucketCapacity     the maximum level before the circuit trips (acts as the threshold)
- * @param leakRatePerSecond  how many units of water drain per second (must be >= 0)
- * @param currentLevel       the current water level in the bucket
- * @param lastUpdateNanos    the timestamp (in nanoseconds) of the most recent update
+ * @param bucketCapacity    the maximum level before the circuit trips (acts as the threshold)
+ * @param leakRatePerSecond how many units of water drain per second (must be >= 0)
+ * @param currentLevel      the current water level in the bucket
+ * @param lastUpdateNanos   the timestamp (in nanoseconds) of the most recent update
  */
 public record LeakyBucketMetrics(
     int bucketCapacity,

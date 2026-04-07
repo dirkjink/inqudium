@@ -12,11 +12,11 @@ import java.time.Duration;
  * by the time constant (tau): after one tau has elapsed, a past observation retains
  * approximately 1/e ≈ 36.8% of its original weight.
  *
- * @param failureRatePercent  the percentage threshold (1–100); the circuit trips when the
- *                            time-decayed EWMA rate reaches or exceeds this value
- * @param timeConstant        the EWMA time constant (tau) as a {@link Duration}; shorter
- *                            durations make the average more reactive, longer durations
- *                            make it more stable
+ * @param failureRatePercent   the percentage threshold (1–100); the circuit trips when the
+ *                             time-decayed EWMA rate reaches or exceeds this value
+ * @param timeConstant         the EWMA time constant (tau) as a {@link Duration}; shorter
+ *                             durations make the average more reactive, longer durations
+ *                             make it more stable
  * @param minimumNumberOfCalls the minimum number of recorded outcomes before the threshold
  *                             is evaluated (must be &gt; 0)
  * @see eu.inqudium.core.element.circuitbreaker.metrics.ContinuousTimeEwmaMetrics

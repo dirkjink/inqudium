@@ -23,13 +23,13 @@ import java.util.Optional;
  * Because the map is keyed by the extension's concrete class, lookups are O(1) and
  * fully type-safe thanks to the cast inside the method.
  *
- * @param clock           the wall-clock abstraction used for human-readable timestamps
- * @param nanoTimesource  the nanosecond time source used for high-resolution, monotonic
- *                        timing throughout the framework (e.g., circuit breaker metrics)
- * @param compatibility   compatibility flags for cross-version behavior adjustments
- * @param loggerFactory   the factory for creating loggers within the framework
- * @param extensions      an unmodifiable map of registered {@link ConfigExtension}s,
- *                        keyed by their concrete class
+ * @param clock          the wall-clock abstraction used for human-readable timestamps
+ * @param nanoTimesource the nanosecond time source used for high-resolution, monotonic
+ *                       timing throughout the framework (e.g., circuit breaker metrics)
+ * @param compatibility  compatibility flags for cross-version behavior adjustments
+ * @param loggerFactory  the factory for creating loggers within the framework
+ * @param extensions     an unmodifiable map of registered {@link ConfigExtension}s,
+ *                       keyed by their concrete class
  * @see GeneralConfigBuilder
  * @see InqConfig
  */

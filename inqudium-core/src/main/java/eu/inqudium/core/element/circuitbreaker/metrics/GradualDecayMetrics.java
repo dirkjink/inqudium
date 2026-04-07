@@ -101,7 +101,7 @@ public record GradualDecayMetrics(
    *
    * @param nowNanos ignored — this algorithm is time-independent
    * @return a formatted string such as
-   *         "Failure threshold reached: Current failure count is 10 (Threshold: 10)."
+   * "Failure threshold reached: Current failure count is 10 (Threshold: 10)."
    */
   @Override
   public String getTripReason(long nowNanos) {

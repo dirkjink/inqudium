@@ -13,10 +13,10 @@ import eu.inqudium.core.config.ConfigExtension;
  * failure count threshold rather than a percentage-based error rate, and does not track
  * successes.
  *
- * @param maxFailuresInWindow  the absolute failure count threshold; the circuit opens when
- *                             the sum of failures across all buckets reaches this value
- * @param windowSizeInSeconds  the duration of the sliding window in seconds (also the number
- *                             of 1-second buckets); must be &gt; 0
+ * @param maxFailuresInWindow the absolute failure count threshold; the circuit opens when
+ *                            the sum of failures across all buckets reaches this value
+ * @param windowSizeInSeconds the duration of the sliding window in seconds (also the number
+ *                            of 1-second buckets); must be &gt; 0
  * @see eu.inqudium.core.element.circuitbreaker.metrics.TimeBasedSlidingWindowMetrics
  * @see TimeBasedSlidingWindowConfigBuilder
  */

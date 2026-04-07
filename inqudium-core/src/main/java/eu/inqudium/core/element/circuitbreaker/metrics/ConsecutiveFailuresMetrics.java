@@ -30,7 +30,7 @@ package eu.inqudium.core.element.circuitbreaker.metrics;
  * </ul>
  *
  * @param maxConsecutiveFailures the maximum number of consecutive failures before the circuit opens
- * @param consecutiveFailures   the running count of consecutive failures (0 after a success or reset)
+ * @param consecutiveFailures    the running count of consecutive failures (0 after a success or reset)
  */
 public record ConsecutiveFailuresMetrics(
     int maxConsecutiveFailures,
@@ -102,7 +102,7 @@ public record ConsecutiveFailuresMetrics(
    *
    * @param nowNanos ignored — this algorithm is time-independent
    * @return a formatted string such as
-   *         "Consecutive failure threshold reached: Received 5 failures in a row (Threshold: 5)."
+   * "Consecutive failure threshold reached: Received 5 failures in a row (Threshold: 5)."
    */
   @Override
   public String getTripReason(long nowNanos) {

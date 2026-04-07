@@ -157,10 +157,14 @@ public record InqConfig(
    */
   private static class BuilderState implements MandatoryStep, TopicHub {
 
-    /** Mutable extension registry; made unmodifiable at build time. */
+    /**
+     * Mutable extension registry; made unmodifiable at build time.
+     */
     private final Map<Class<?>, ConfigExtension<?>> extensions = new HashMap<>();
 
-    /** The built general configuration; must be set before any extension or final build. */
+    /**
+     * The built general configuration; must be set before any extension or final build.
+     */
     private GeneralConfig general;
 
     @Override

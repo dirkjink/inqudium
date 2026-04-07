@@ -75,25 +75,33 @@ public record InqCircuitBreakerConfig(
     LongFunction<FailureMetrics> metricsFactory
 ) implements InqElementConfig, ConfigExtension<InqCircuitBreakerConfig> {
 
-  /** Delegates to the common config's name. */
+  /**
+   * Delegates to the common config's name.
+   */
   @Override
   public String name() {
     return common.name();
   }
 
-  /** Delegates to the common config's element type. */
+  /**
+   * Delegates to the common config's element type.
+   */
   @Override
   public InqElementType elementType() {
     return common.elementType();
   }
 
-  /** Delegates to the common config's event publisher. */
+  /**
+   * Delegates to the common config's event publisher.
+   */
   @Override
   public InqEventPublisher eventPublisher() {
     return common.eventPublisher();
   }
 
-  /** Delegates to the common config's exception optimization flag. */
+  /**
+   * Delegates to the common config's exception optimization flag.
+   */
   @Override
   public Boolean enableExceptionOptimization() {
     return common.enableExceptionOptimization();

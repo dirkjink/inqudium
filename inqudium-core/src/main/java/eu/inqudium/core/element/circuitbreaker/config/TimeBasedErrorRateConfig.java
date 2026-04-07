@@ -14,10 +14,10 @@ import eu.inqudium.core.config.ConfigExtension;
  * trip decision proportional to traffic volume rather than based on an absolute
  * failure count.
  *
- * @param failureRatePercent  the percentage threshold (1–100); the circuit trips when the
- *                            failure rate in the window meets or exceeds this value
- * @param windowSizeInSeconds the duration of the rolling observation window in seconds
- *                            (also the number of 1-second buckets); must be &gt; 0
+ * @param failureRatePercent   the percentage threshold (1–100); the circuit trips when the
+ *                             failure rate in the window meets or exceeds this value
+ * @param windowSizeInSeconds  the duration of the rolling observation window in seconds
+ *                             (also the number of 1-second buckets); must be &gt; 0
  * @param minimumNumberOfCalls the minimum total calls (successes + failures) in the window
  *                             before the rate is evaluated; prevents premature tripping
  *                             during low-traffic periods (must be &gt; 0)

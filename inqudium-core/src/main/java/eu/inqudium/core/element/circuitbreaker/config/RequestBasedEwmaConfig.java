@@ -9,10 +9,10 @@ import eu.inqudium.core.config.ConfigExtension;
  * failure rate that decays per request (not by wall-clock time). Each failure contributes
  * a sample of 1.0 and each success a sample of 0.0 to the exponentially weighted moving average.
  *
- * @param failureRatePercent  the percentage threshold (1–100); the circuit trips when the
- *                            EWMA failure rate reaches or exceeds this value
- * @param smoothingFactor     the EWMA alpha (0 &lt; alpha ≤ 1); higher values make the average
- *                            more reactive to recent observations, lower values make it more stable
+ * @param failureRatePercent   the percentage threshold (1–100); the circuit trips when the
+ *                             EWMA failure rate reaches or exceeds this value
+ * @param smoothingFactor      the EWMA alpha (0 &lt; alpha ≤ 1); higher values make the average
+ *                             more reactive to recent observations, lower values make it more stable
  * @param minimumNumberOfCalls the minimum number of recorded outcomes before the threshold
  *                             is evaluated; prevents premature tripping on small sample sizes
  *                             (must be &gt; 0)

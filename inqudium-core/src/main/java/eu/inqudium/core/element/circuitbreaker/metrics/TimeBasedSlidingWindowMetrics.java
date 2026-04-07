@@ -40,12 +40,12 @@ import java.util.Arrays;
  *       absolute failure counts matter.</li>
  * </ul>
  *
- * @param maxFailuresInWindow  the failure count threshold; circuit trips when total failures
- *                             across all buckets reaches this value
- * @param windowSizeInSeconds  the number of 1-second buckets in the window (also the window
- *                             duration in seconds)
- * @param failureBuckets       the array of per-second failure counts (circular, size = windowSizeInSeconds)
- * @param lastUpdatedSecond    the second (converted from nanos) of the most recent update
+ * @param maxFailuresInWindow the failure count threshold; circuit trips when total failures
+ *                            across all buckets reaches this value
+ * @param windowSizeInSeconds the number of 1-second buckets in the window (also the window
+ *                            duration in seconds)
+ * @param failureBuckets      the array of per-second failure counts (circular, size = windowSizeInSeconds)
+ * @param lastUpdatedSecond   the second (converted from nanos) of the most recent update
  */
 public record TimeBasedSlidingWindowMetrics(
     int maxFailuresInWindow,
@@ -57,9 +57,9 @@ public record TimeBasedSlidingWindowMetrics(
   /**
    * Creates an empty time-based sliding window anchored at the given time.
    *
-   * @param maxFailuresInWindow  the failure threshold
-   * @param windowSizeInSeconds  the window duration in seconds; must be > 0
-   * @param nowNanos             the initial timestamp anchor (in nanoseconds)
+   * @param maxFailuresInWindow the failure threshold
+   * @param windowSizeInSeconds the window duration in seconds; must be > 0
+   * @param nowNanos            the initial timestamp anchor (in nanoseconds)
    * @return a fresh instance with all buckets zeroed
    * @throws IllegalArgumentException if {@code windowSizeInSeconds <= 0}
    */

@@ -9,7 +9,7 @@ import eu.inqudium.core.config.ConfigExtension;
  * a counter by one and each success decrements it by one (floored at zero). The circuit
  * trips when the counter reaches {@code maxFailureCount}.
  *
- * @param maxFailureCount    the net failure count threshold at which the circuit opens (must be &gt; 0)
+ * @param maxFailureCount     the net failure count threshold at which the circuit opens (must be &gt; 0)
  * @param initialFailureCount the starting value of the failure counter; typically 0
  * @see eu.inqudium.core.element.circuitbreaker.metrics.GradualDecayMetrics
  * @see GradualDecayConfigBuilder

@@ -62,7 +62,7 @@ public record SlidingWindowMetrics(
    *                             must be between 1 and {@code windowSize} inclusive
    * @return a fresh instance with an empty window
    * @throws IllegalArgumentException if {@code windowSize <= 0} or
-   *         {@code minimumNumberOfCalls} is outside [1, windowSize]
+   *                                  {@code minimumNumberOfCalls} is outside [1, windowSize]
    */
   public static SlidingWindowMetrics initial(int maxFailuresInWindow, int windowSize, int minimumNumberOfCalls) {
     if (windowSize <= 0) {
