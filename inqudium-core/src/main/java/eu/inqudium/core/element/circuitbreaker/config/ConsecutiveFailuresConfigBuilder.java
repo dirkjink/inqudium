@@ -1,7 +1,7 @@
 package eu.inqudium.core.element.circuitbreaker.config;
 
 public class ConsecutiveFailuresConfigBuilder {
-  private Double failureRateThreshold;
+  private Integer maxConsecutiveFailures;
   private Integer initialConsecutiveFailures;
 
   public ConsecutiveFailuresConfigBuilder initialConsecutiveFailures(int count) {
@@ -9,8 +9,8 @@ public class ConsecutiveFailuresConfigBuilder {
     return this;
   }
 
-  public ConsecutiveFailuresConfigBuilder failureRateThreshold(double failureRateThreshold) {
-    this.failureRateThreshold = failureRateThreshold;
+  public ConsecutiveFailuresConfigBuilder maxConsecutiveFailures(int maxConsecutiveFailures) {
+    this.maxConsecutiveFailures = maxConsecutiveFailures;
     return this;
   }
 
@@ -21,7 +21,7 @@ public class ConsecutiveFailuresConfigBuilder {
    * indicates a complete service outage.
    */
   public ConsecutiveFailuresConfigBuilder protective() {
-    this.failureRateThreshold = 4.0;
+    this.maxConsecutiveFailures = 4;
     this.initialConsecutiveFailures = 0;
     return this;
   }
@@ -33,7 +33,7 @@ public class ConsecutiveFailuresConfigBuilder {
    * hiccups while catching sustained connectivity issues.
    */
   public ConsecutiveFailuresConfigBuilder balanced() {
-    this.failureRateThreshold = 15.0;
+    this.maxConsecutiveFailures = 15;
     this.initialConsecutiveFailures = 0;
     return this;
   }
@@ -45,15 +45,15 @@ public class ConsecutiveFailuresConfigBuilder {
    * background tasks that should almost never trigger the breaker.
    */
   public ConsecutiveFailuresConfigBuilder permissive() {
-    this.failureRateThreshold = 50.0;
+    this.maxConsecutiveFailures = 50;
     this.initialConsecutiveFailures = 0;
     return this;
   }
 
   public ConsecutiveFailuresConfig build() {
-    if (failureRateThreshold == null || initialConsecutiveFailures == null) {
+    if (maxConsecutiveFailures == null || initialConsecutiveFailures == null) {
       balanced();
     }
-    return new ConsecutiveFailuresConfig(failureRateThreshold, initialConsecutiveFailures);
+    return new ConsecutiveFailuresConfig(maxConsecutiveFailures, initialConsecutiveFailures);
   }
 }

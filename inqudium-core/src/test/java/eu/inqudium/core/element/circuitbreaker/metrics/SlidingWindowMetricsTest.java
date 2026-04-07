@@ -103,14 +103,7 @@ class SlidingWindowMetricsTest {
       // Given — window=3, threshold=2, min=1
       var metrics = SlidingWindowMetrics.initial(2, 3, 1);
 
-      // When — F, S, F, S, F (window ends up with [S, F, F] after wrapping? No:
-      // slots: [F] → [F,S] → [F,S,F] → evict F→[S,S,F] → evict S→[F,S,F])
-      // Actually let's trace: headIndex starts at -1
-      // F: head=0 window=[T,f,f] size=1 fc=1
-      // S: head=1 window=[T,F,f] size=2 fc=1
-      // F: head=2 window=[T,F,T] size=3 fc=2
-      // S: head=0 window=[F,F,T] evicts old[0]=T fc=2-1+0=1 size=3
-      // F: head=1 window=[F,T,T] evicts old[1]=F fc=1-0+1=2 size=3
+      // When — F, S, F, S, F
       var updated = metrics
           .recordFailure(NOW).recordSuccess(NOW).recordFailure(NOW)
           .recordSuccess(NOW).recordFailure(NOW);
@@ -200,7 +193,7 @@ class SlidingWindowMetricsTest {
       var afterReset = (SlidingWindowMetrics) metrics.reset(NOW);
 
       // Then
-      assertThat(afterReset.failureThreshold()).isEqualTo(4);
+      assertThat(afterReset.maxFailuresInWindow()).isEqualTo(4);
       assertThat(afterReset.windowSize()).isEqualTo(8);
       assertThat(afterReset.minimumNumberOfCalls()).isEqualTo(3);
     }

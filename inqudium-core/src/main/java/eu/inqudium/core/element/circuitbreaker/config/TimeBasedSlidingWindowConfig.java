@@ -5,7 +5,9 @@ import eu.inqudium.core.config.ConfigExtension;
 /**
  * Configuration for absolute count-based sliding window metrics over time.
  */
-public record TimeBasedSlidingWindowConfig(int windowSizeInSeconds)
+public record TimeBasedSlidingWindowConfig(
+    int maxFailuresInWindow,
+    int windowSizeInSeconds)
     implements ConfigExtension<TimeBasedSlidingWindowConfig> {
 
   @Override

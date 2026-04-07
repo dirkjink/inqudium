@@ -32,21 +32,12 @@ class ConsecutiveFailuresMetricsTest {
     }
 
     @Test
-    void should_store_the_configured_failure_threshold() {
+    void should_store_the_configured_max_consecutive_failures() {
       // Given / When
       var metrics = ConsecutiveFailuresMetrics.initial(10);
 
       // Then
-      assertThat(metrics.failureThreshold()).isEqualTo(10);
-    }
-
-    @Test
-    void should_round_fractional_threshold_to_nearest_long() {
-      // Given / When
-      var metrics = ConsecutiveFailuresMetrics.initial(4.6);
-
-      // Then
-      assertThat(metrics.failureThreshold()).isEqualTo(5);
+      assertThat(metrics.maxConsecutiveFailures()).isEqualTo(10);
     }
   }
 
@@ -180,7 +171,7 @@ class ConsecutiveFailuresMetricsTest {
     }
 
     @Test
-    void should_preserve_threshold_after_reset() {
+    void should_preserve_max_consecutive_failures_after_reset() {
       // Given
       var metrics = ConsecutiveFailuresMetrics.initial(7);
 
@@ -188,7 +179,7 @@ class ConsecutiveFailuresMetricsTest {
       var afterReset = (ConsecutiveFailuresMetrics) metrics.reset(LATER);
 
       // Then
-      assertThat(afterReset.failureThreshold()).isEqualTo(7);
+      assertThat(afterReset.maxConsecutiveFailures()).isEqualTo(7);
     }
   }
 

@@ -5,7 +5,11 @@ import eu.inqudium.core.config.ConfigExtension;
 /**
  * Configuration for time-bucketed error rate metrics.
  */
-public record TimeBasedErrorRateConfig(int windowSizeInSeconds, int minimumNumberOfCalls)
+public record TimeBasedErrorRateConfig(
+    double failureRatePercent,
+    int windowSizeInSeconds,
+    int minimumNumberOfCalls
+)
     implements ConfigExtension<TimeBasedErrorRateConfig> {
 
   @Override

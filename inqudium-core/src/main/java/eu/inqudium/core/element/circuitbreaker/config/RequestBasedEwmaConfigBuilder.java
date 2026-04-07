@@ -3,8 +3,14 @@ package eu.inqudium.core.element.circuitbreaker.config;
 import eu.inqudium.core.config.ExtensionBuilder;
 
 public class RequestBasedEwmaConfigBuilder extends ExtensionBuilder<RequestBasedEwmaConfig> {
+  private Double failureRatePercent;
   private Double smoothingFactor;
   private Integer minimumNumberOfCalls;
+
+  public RequestBasedEwmaConfigBuilder failureRatePercent(double failureRatePercent) {
+    this.failureRatePercent = failureRatePercent;
+    return this;
+  }
 
   public RequestBasedEwmaConfigBuilder smoothingFactor(double alpha) {
     this.smoothingFactor = alpha;
@@ -44,9 +50,9 @@ public class RequestBasedEwmaConfigBuilder extends ExtensionBuilder<RequestBased
   }
 
   public RequestBasedEwmaConfig build() {
-    if (minimumNumberOfCalls == null || smoothingFactor == null) {
+    if (minimumNumberOfCalls == null || smoothingFactor == null || failureRatePercent == null) {
       balanced();
     }
-    return new RequestBasedEwmaConfig(smoothingFactor, minimumNumberOfCalls);
+    return new RequestBasedEwmaConfig(failureRatePercent, smoothingFactor, minimumNumberOfCalls);
   }
 }

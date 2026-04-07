@@ -13,7 +13,7 @@ import java.time.Duration;
  * <p>The failure threshold is interpreted as a percentage from 1 to 100.
  */
 public record ContinuousTimeEwmaMetrics(
-    long failureThreshold,
+    double failureRatePercent,
     ContinuousTimeEwma ewmaCalculator,
     int minimumNumberOfCalls,
     double currentRate,
@@ -56,7 +56,7 @@ public record ContinuousTimeEwmaMetrics(
     long newLastUpdateNanos = Math.max(lastUpdateNanos, nowNanos);
 
     return new ContinuousTimeEwmaMetrics(
-        failureThreshold, ewmaCalculator, minimumNumberOfCalls,
+        failureRatePercent, ewmaCalculator, minimumNumberOfCalls,
         newRate, newCount, newLastUpdateNanos
     );
   }
@@ -67,14 +67,14 @@ public record ContinuousTimeEwmaMetrics(
       return false;
     }
     double decayedRate = ewmaCalculator.calculate(currentRate, lastUpdateNanos, nowNanos, 0.0);
-    double rateThreshold = failureThreshold / 100.0;
+    double rateThreshold = failureRatePercent / 100.0;
     return decayedRate >= rateThreshold;
   }
 
   @Override
   public FailureMetrics reset(long nowNanos) {
     return new ContinuousTimeEwmaMetrics(
-        failureThreshold, ewmaCalculator, minimumNumberOfCalls,
+        failureRatePercent, ewmaCalculator, minimumNumberOfCalls,
         0.0, 0, nowNanos
     );
   }
@@ -82,7 +82,7 @@ public record ContinuousTimeEwmaMetrics(
   @Override
   public String getTripReason(long nowNanos) {
     double decayedRate = ewmaCalculator.calculate(currentRate, lastUpdateNanos, nowNanos, 0.0);
-    return "Continuous-time EWMA threshold reached: Current failure rate is %.1f%% (Threshold: %d%%). Time Constant (Tau): %s."
-        .formatted(decayedRate * 100.0, failureThreshold, ewmaCalculator.tauDurationNanos());
+    return "Continuous-time EWMA threshold reached: Current failure rate is %.1f%% (Threshold: %f%%). Time Constant (Tau): %s."
+        .formatted(decayedRate * 100.0, failureRatePercent, ewmaCalculator.tauDurationNanos());
   }
 }

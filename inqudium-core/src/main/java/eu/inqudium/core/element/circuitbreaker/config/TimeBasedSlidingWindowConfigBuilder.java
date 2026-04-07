@@ -3,7 +3,13 @@ package eu.inqudium.core.element.circuitbreaker.config;
 import eu.inqudium.core.config.ExtensionBuilder;
 
 public class TimeBasedSlidingWindowConfigBuilder extends ExtensionBuilder<TimeBasedSlidingWindowConfig> {
+  private Integer maxFailuresInWindow;
   private Integer windowSizeInSeconds;
+
+  public TimeBasedSlidingWindowConfigBuilder maxFailuresInWindow(int maxFailuresInWindow) {
+    this.maxFailuresInWindow = maxFailuresInWindow;
+    return this;
+  }
 
   public TimeBasedSlidingWindowConfigBuilder windowSizeInSeconds(int seconds) {
     this.windowSizeInSeconds = seconds;
@@ -38,9 +44,9 @@ public class TimeBasedSlidingWindowConfigBuilder extends ExtensionBuilder<TimeBa
   }
 
   public TimeBasedSlidingWindowConfig build() {
-    if (windowSizeInSeconds == null) {
+    if (windowSizeInSeconds == null || maxFailuresInWindow == null) {
       balanced();
     }
-    return new TimeBasedSlidingWindowConfig(windowSizeInSeconds);
+    return new TimeBasedSlidingWindowConfig(maxFailuresInWindow, windowSizeInSeconds);
   }
 }

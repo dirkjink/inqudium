@@ -1,13 +1,17 @@
 package eu.inqudium.imperative.circuitbreaker;
 
-import eu.inqudium.core.element.circuitbreaker.CircuitBreakerConfig;
+import eu.inqudium.core.config.GeneralConfig;
+import eu.inqudium.core.config.InqElementCommonConfig;
+import eu.inqudium.core.element.InqElementType;
 import eu.inqudium.core.element.circuitbreaker.CircuitBreakerException;
 import eu.inqudium.core.element.circuitbreaker.CircuitState;
 import eu.inqudium.core.element.circuitbreaker.StateTransition;
+import eu.inqudium.core.element.circuitbreaker.config.InqCircuitBreakerConfig;
 import eu.inqudium.core.element.circuitbreaker.metrics.SlidingWindowMetrics;
+import eu.inqudium.core.element.config.FailurePredicateConfigBuilder;
+import eu.inqudium.core.event.InqEventPublisher;
 import eu.inqudium.core.time.InqNanoTimeSource;
 
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayNameGeneration;
 import org.junit.jupiter.api.DisplayNameGenerator;
 import org.junit.jupiter.api.Nested;
@@ -44,7 +48,7 @@ class ImperativeCircuitBreakerSlidingWindowTest {
   private static final long NANOS_PER_SECOND = 1_000_000_000L;
 
   /**
-   * Creates a default config with sliding window metrics.
+   * Creates a config with sliding window metrics using the new {@link InqCircuitBreakerConfig} record.
    *
    * @param failureThreshold     absolute number of failures to trip the circuit
    * @param windowSize           number of calls tracked in the sliding window
@@ -52,27 +56,59 @@ class ImperativeCircuitBreakerSlidingWindowTest {
    * @param successThreshold     successes required in HALF_OPEN to close
    * @param permittedInHalfOpen  probe calls permitted in HALF_OPEN
    */
-  private CircuitBreakerConfig slidingWindowConfig(
+  private InqCircuitBreakerConfig slidingWindowConfig(
       int failureThreshold,
       int windowSize,
       int minimumNumberOfCalls,
       int successThreshold,
       int permittedInHalfOpen) {
 
-    return CircuitBreakerConfig.builder("test-cb")
-        .failureThreshold(failureThreshold)
-        .successThresholdInHalfOpen(successThreshold)
-        .permittedCallsInHalfOpen(permittedInHalfOpen)
-        .waitDurationInOpenState(WAIT_DURATION)
-        .metricsStrategy(nowNanos ->
-            SlidingWindowMetrics.initial(failureThreshold, windowSize, minimumNumberOfCalls))
-        .build();
+    return new InqCircuitBreakerConfig(
+        null, // GeneralConfig — not needed for tests
+        new InqElementCommonConfig("test-cb", InqElementType.CIRCUIT_BREAKER, null, null),
+        WAIT_DURATION.toNanos(),
+        successThreshold,
+        permittedInHalfOpen,
+        WAIT_DURATION,
+        t -> true, // record all exceptions as failures by default
+        nowNanos -> SlidingWindowMetrics.initial(failureThreshold, windowSize, minimumNumberOfCalls)
+    );
   }
 
   /** Shorthand for the most common config used in tests. */
-  private CircuitBreakerConfig defaultConfig() {
+  private InqCircuitBreakerConfig defaultConfig() {
     // threshold=3, window=10, min=3, successThreshold=2, permitted=3
     return slidingWindowConfig(3, 10, 3, 2, 3);
+  }
+
+  /**
+   * Creates a config that only records specific exception types using
+   * {@link FailurePredicateConfigBuilder}.
+   */
+  private InqCircuitBreakerConfig configWithRecordExceptions(
+      String name,
+      int failureThreshold,
+      int windowSize,
+      int minimumNumberOfCalls,
+      int successThreshold,
+      int permittedInHalfOpen,
+      Class<? extends Throwable>... recordExceptions) {
+
+    var failurePredicate = FailurePredicateConfigBuilder.failurePredicate()
+        .recordExceptions(recordExceptions)
+        .build()
+        .finalPredicate();
+
+    return new InqCircuitBreakerConfig(
+        null,
+        new InqElementCommonConfig(name, InqElementType.CIRCUIT_BREAKER, null, null),
+        WAIT_DURATION.toNanos(),
+        successThreshold,
+        permittedInHalfOpen,
+        WAIT_DURATION,
+        failurePredicate,
+        nowNanos -> SlidingWindowMetrics.initial(failureThreshold, windowSize, minimumNumberOfCalls)
+    );
   }
 
   /** Advances the deterministic clock by the given number of nanoseconds. */
@@ -147,13 +183,12 @@ class ImperativeCircuitBreakerSlidingWindowTest {
     }
 
     @Test
-    void should_expose_the_configuration() {
+    void should_expose_the_configured_name() {
       // Given
       var config = defaultConfig();
       var cb = new ImperativeCircuitBreaker<>(config, timeSource);
 
       // When / Then
-      assertThat(cb.getConfig()).isSameAs(config);
       assertThat(cb.getName()).isEqualTo("test-cb");
     }
   }
@@ -476,14 +511,8 @@ class ImperativeCircuitBreakerSlidingWindowTest {
     @Test
     void should_only_count_exceptions_matching_the_predicate_as_failures() throws Exception {
       // Given — only IOException counts as failure
-      var config = CircuitBreakerConfig.builder("predicate-cb")
-          .failureThreshold(2)
-          .successThresholdInHalfOpen(2)
-          .permittedCallsInHalfOpen(3)
-          .waitDurationInOpenState(WAIT_DURATION)
-          .recordExceptions(IOException.class)
-          .metricsStrategy(nowNanos -> SlidingWindowMetrics.initial(2, 10, 2))
-          .build();
+      @SuppressWarnings("unchecked")
+      var config = configWithRecordExceptions("predicate-cb", 2, 10, 2, 2, 3, IOException.class);
       var cb = new ImperativeCircuitBreaker<>(config, timeSource);
 
       // When — throw IllegalArgumentException (not recorded) twice
@@ -500,14 +529,8 @@ class ImperativeCircuitBreakerSlidingWindowTest {
     @Test
     void should_trip_when_matching_exceptions_reach_threshold() {
       // Given — only IOException counts
-      var config = CircuitBreakerConfig.builder("predicate-cb")
-          .failureThreshold(2)
-          .successThresholdInHalfOpen(2)
-          .permittedCallsInHalfOpen(3)
-          .waitDurationInOpenState(WAIT_DURATION)
-          .recordExceptions(IOException.class)
-          .metricsStrategy(nowNanos -> SlidingWindowMetrics.initial(2, 10, 2))
-          .build();
+      @SuppressWarnings("unchecked")
+      var config = configWithRecordExceptions("predicate-cb", 2, 10, 2, 2, 3, IOException.class);
       var cb = new ImperativeCircuitBreaker<>(config, timeSource);
 
       // When — 2 IOExceptions

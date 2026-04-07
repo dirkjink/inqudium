@@ -7,7 +7,7 @@ import java.util.Arrays;
  * Tracks the outcomes of the last N calls using a circular buffer.
  */
 public record SlidingWindowMetrics(
-    long failureThreshold,
+    int maxFailuresInWindow,
     int windowSize,
     int minimumNumberOfCalls,
     boolean[] window,
@@ -16,7 +16,7 @@ public record SlidingWindowMetrics(
     int failureCount
 ) implements FailureMetrics {
 
-  public static SlidingWindowMetrics initial(double failureThreshold, int windowSize, int minimumNumberOfCalls) {
+  public static SlidingWindowMetrics initial(int maxFailuresInWindow, int windowSize, int minimumNumberOfCalls) {
     if (windowSize <= 0) {
       throw new IllegalArgumentException("windowSize must be greater than 0");
     }
@@ -24,8 +24,13 @@ public record SlidingWindowMetrics(
       throw new IllegalArgumentException("minimumNumberOfCalls must be between 1 and windowSize");
     }
     return new SlidingWindowMetrics(
-        Math.round(failureThreshold), windowSize, minimumNumberOfCalls,
-        new boolean[windowSize], -1, 0, 0);
+        maxFailuresInWindow,
+        windowSize,
+        minimumNumberOfCalls,
+        new boolean[windowSize],
+        -1,
+        0,
+        0);
   }
 
   @Override
@@ -47,7 +52,7 @@ public record SlidingWindowMetrics(
     int newFailureCount = failureCount + (isFailure ? 1 : 0) - (oldOutcome ? 1 : 0);
 
     return new SlidingWindowMetrics(
-        failureThreshold, windowSize, minimumNumberOfCalls,
+        maxFailuresInWindow, windowSize, minimumNumberOfCalls,
         newWindow, newHeadIndex, newSize, newFailureCount);
   }
 
@@ -56,19 +61,19 @@ public record SlidingWindowMetrics(
     if (size < minimumNumberOfCalls) {
       return false;
     }
-    return failureCount >= failureThreshold;
+    return failureCount >= maxFailuresInWindow;
   }
 
   @Override
   public FailureMetrics reset(long nowNanos) {
     return new SlidingWindowMetrics(
-        failureThreshold, windowSize, minimumNumberOfCalls,
+        maxFailuresInWindow, windowSize, minimumNumberOfCalls,
         new boolean[windowSize], -1, 0, 0);
   }
 
   @Override
   public String getTripReason(long nowNanos) {
     return "Sliding window threshold reached: Found %d failures in the last %d calls (Threshold: %d)."
-        .formatted(failureCount, size, failureThreshold);
+        .formatted(failureCount, size, maxFailuresInWindow);
   }
 }

@@ -1,11 +1,11 @@
 package eu.inqudium.core.element.circuitbreaker.config;
 
-public class GradualDecayBuilderConfig {
-  private Double failureRateThreshold;
+public class GradualDecayConfigBuilder {
+  private Integer maxFailureCount;
   private Integer initialFailureCount;
 
-  public GradualDecayBuilderConfig failureRateThreshold(double failureRateThreshold) {
-    this.failureRateThreshold = failureRateThreshold;
+  public GradualDecayConfigBuilder maxFailureCount(int maxFailureCount) {
+    this.maxFailureCount = maxFailureCount;
     return this;
   }
 
@@ -15,8 +15,8 @@ public class GradualDecayBuilderConfig {
    * Since every success only heals one failure, a low threshold
    * ensures high sensitivity to recurring issues.
    */
-  public GradualDecayBuilderConfig protective() {
-    this.failureRateThreshold = 7.0;
+  public GradualDecayConfigBuilder protective() {
+    this.maxFailureCount = 7;
     this.initialFailureCount = 0;
     return this;
   }
@@ -27,8 +27,8 @@ public class GradualDecayBuilderConfig {
    * Balanced approach for services with occasional "noise" that
    * eventually recover, requiring a steady stream of successes to heal.
    */
-  public GradualDecayBuilderConfig balanced() {
-    this.failureRateThreshold = 37.0;
+  public GradualDecayConfigBuilder balanced() {
+    this.maxFailureCount = 37;
     this.initialFailureCount = 0;
     return this;
   }
@@ -39,16 +39,16 @@ public class GradualDecayBuilderConfig {
    * High capacity for errors; intended for systems where intermittent
    * failures are common and slow recovery is acceptable.
    */
-  public GradualDecayBuilderConfig permissive() {
-    this.failureRateThreshold = 100.0;
+  public GradualDecayConfigBuilder permissive() {
+    this.maxFailureCount = 100;
     this.initialFailureCount = 0;
     return this;
   }
 
   public GradualDecayConfig build() {
-    if (failureRateThreshold == null || initialFailureCount == null) {
+    if (maxFailureCount == null || initialFailureCount == null) {
       balanced();
     }
-    return new GradualDecayConfig(failureRateThreshold, initialFailureCount);
+    return new GradualDecayConfig(maxFailureCount, initialFailureCount);
   }
 }

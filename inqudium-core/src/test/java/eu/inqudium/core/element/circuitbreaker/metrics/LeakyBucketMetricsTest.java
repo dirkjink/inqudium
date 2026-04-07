@@ -37,12 +37,12 @@ class LeakyBucketMetricsTest {
     }
 
     @Test
-    void should_store_configured_threshold_and_leak_rate() {
+    void should_store_configured_capacity_and_leak_rate() {
       // Given / When
       var metrics = LeakyBucketMetrics.initial(10, 2.5, T0);
 
       // Then
-      assertThat(metrics.failureThreshold()).isEqualTo(10);
+      assertThat(metrics.bucketCapacity()).isEqualTo(10);
       assertThat(metrics.leakRatePerSecond()).isCloseTo(2.5, within(0.001));
     }
   }
@@ -224,7 +224,7 @@ class LeakyBucketMetricsTest {
       var afterReset = (LeakyBucketMetrics) metrics.reset(T0 + NANOS_PER_SECOND);
 
       // Then
-      assertThat(afterReset.failureThreshold()).isEqualTo(7);
+      assertThat(afterReset.bucketCapacity()).isEqualTo(7);
       assertThat(afterReset.leakRatePerSecond()).isCloseTo(3.5, within(0.001));
     }
   }

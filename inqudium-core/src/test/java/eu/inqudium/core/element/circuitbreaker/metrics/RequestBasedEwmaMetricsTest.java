@@ -37,12 +37,12 @@ class RequestBasedEwmaMetricsTest {
     }
 
     @Test
-    void should_store_threshold_as_rounded_long() {
+    void should_store_threshold_as_rounded_value() {
       // Given / When
       var metrics = RequestBasedEwmaMetrics.initial(49.6, 0.3, 5);
 
       // Then
-      assertThat(metrics.failureThreshold()).isEqualTo(50);
+      assertThat(metrics.failureRatePercent()).isEqualTo(50.0);
     }
   }
 
@@ -201,7 +201,7 @@ class RequestBasedEwmaMetricsTest {
       var afterReset = (RequestBasedEwmaMetrics) metrics.reset(NOW);
 
       // Then
-      assertThat(afterReset.failureThreshold()).isEqualTo(60);
+      assertThat(afterReset.failureRatePercent()).isEqualTo(60.0);
       assertThat(afterReset.minimumNumberOfCalls()).isEqualTo(8);
     }
   }

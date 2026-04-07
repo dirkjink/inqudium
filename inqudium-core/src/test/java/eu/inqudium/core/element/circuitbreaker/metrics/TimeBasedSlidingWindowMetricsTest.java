@@ -167,7 +167,7 @@ class TimeBasedSlidingWindowMetricsTest {
       var afterReset = (TimeBasedSlidingWindowMetrics) metrics.reset(T0 + NANOS_PER_SECOND);
 
       // Then
-      assertThat(afterReset.failureThreshold()).isEqualTo(7);
+      assertThat(afterReset.maxFailuresInWindow()).isEqualTo(7);
       assertThat(afterReset.windowSizeInSeconds()).isEqualTo(15);
     }
   }

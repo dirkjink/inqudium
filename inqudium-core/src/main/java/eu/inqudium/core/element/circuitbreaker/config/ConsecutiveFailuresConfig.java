@@ -7,7 +7,7 @@ import eu.inqudium.core.config.ConfigExtension;
  * Typically starts with 0 failures.
  */
 public record ConsecutiveFailuresConfig(
-    double failureRateThreshold,
+    int maxConsecutiveFailures,
     int initialConsecutiveFailures
 ) implements ConfigExtension<ConsecutiveFailuresConfig> {
   @Override

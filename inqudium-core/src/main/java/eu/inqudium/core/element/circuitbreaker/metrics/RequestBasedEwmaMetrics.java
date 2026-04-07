@@ -11,7 +11,7 @@ import eu.inqudium.core.algo.RequestBasedEwma;
  * <p>The failure threshold is interpreted as a percentage from 1 to 100.
  */
 public record RequestBasedEwmaMetrics(
-    long failureThreshold,
+    double failureRatePercent,
     RequestBasedEwma ewmaCalculator,
     int minimumNumberOfCalls,
     double currentRate,
@@ -48,7 +48,7 @@ public record RequestBasedEwmaMetrics(
   private RequestBasedEwmaMetrics recordOutcome(double sample) {
     double newRate = ewmaCalculator.calculate(currentRate, sample);
     int newCount = Math.min(minimumNumberOfCalls, callsCount + 1);
-    return new RequestBasedEwmaMetrics(failureThreshold, ewmaCalculator, minimumNumberOfCalls, newRate, newCount);
+    return new RequestBasedEwmaMetrics(failureRatePercent, ewmaCalculator, minimumNumberOfCalls, newRate, newCount);
   }
 
   @Override
@@ -56,18 +56,18 @@ public record RequestBasedEwmaMetrics(
     if (callsCount < minimumNumberOfCalls) {
       return false;
     }
-    double rateThreshold = failureThreshold / 100.0;
+    double rateThreshold = failureRatePercent / 100.0;
     return currentRate >= rateThreshold;
   }
 
   @Override
   public FailureMetrics reset(long nowNanos) {
-    return new RequestBasedEwmaMetrics(failureThreshold, ewmaCalculator, minimumNumberOfCalls, 0.0, 0);
+    return new RequestBasedEwmaMetrics(failureRatePercent, ewmaCalculator, minimumNumberOfCalls, 0.0, 0);
   }
 
   @Override
   public String getTripReason(long nowNanos) {
-    return "Request-based EWMA threshold reached: Current failure rate is %.1f%% (Threshold: %d%%). Alpha: %.2f."
-        .formatted(currentRate * 100.0, failureThreshold, ewmaCalculator.alpha());
+    return "Request-based EWMA threshold reached: Current failure rate is %.1f%% (Threshold: %f%%). Alpha: %.2f."
+        .formatted(currentRate * 100.0, failureRatePercent, ewmaCalculator.alpha());
   }
 }

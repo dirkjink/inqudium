@@ -29,21 +29,12 @@ class GradualDecayMetricsTest {
     }
 
     @Test
-    void should_store_the_configured_threshold() {
+    void should_store_the_configured_max_failure_count() {
       // Given / When
       var metrics = GradualDecayMetrics.initial(10);
 
       // Then
-      assertThat(metrics.failureThreshold()).isEqualTo(10);
-    }
-
-    @Test
-    void should_round_fractional_threshold() {
-      // Given / When
-      var metrics = GradualDecayMetrics.initial(3.7);
-
-      // Then
-      assertThat(metrics.failureThreshold()).isEqualTo(4);
+      assertThat(metrics.maxFailureCount()).isEqualTo(10);
     }
   }
 
@@ -222,7 +213,7 @@ class GradualDecayMetricsTest {
     }
 
     @Test
-    void should_preserve_threshold_after_reset() {
+    void should_preserve_max_failure_count_after_reset() {
       // Given
       var metrics = GradualDecayMetrics.initial(7);
 
@@ -230,7 +221,7 @@ class GradualDecayMetricsTest {
       var afterReset = (GradualDecayMetrics) metrics.reset(LATER);
 
       // Then
-      assertThat(afterReset.failureThreshold()).isEqualTo(7);
+      assertThat(afterReset.maxFailureCount()).isEqualTo(7);
     }
   }
 

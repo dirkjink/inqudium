@@ -12,7 +12,7 @@ import java.util.Objects;
  * <p>The failure threshold is interpreted as a percentage from 1 to 100.
  */
 public record TimeBasedErrorRateMetrics(
-    long failureThreshold,
+    double failureRatePercent,
     int windowSizeInSeconds,
     int minimumNumberOfCalls,
     int[] successBuckets,
@@ -26,7 +26,7 @@ public record TimeBasedErrorRateMetrics(
     failureBuckets = Arrays.copyOf(failureBuckets, failureBuckets.length);
   }
 
-  public static TimeBasedErrorRateMetrics initial(double failureThreshold,
+  public static TimeBasedErrorRateMetrics initial(double failureRatePercent,
                                                   int windowSizeInSeconds,
                                                   int minimumNumberOfCalls,
                                                   long nowNanos) {
@@ -37,8 +37,12 @@ public record TimeBasedErrorRateMetrics(
       throw new IllegalArgumentException("minimumNumberOfCalls must be greater than 0");
     }
     return new TimeBasedErrorRateMetrics(
-        Math.round(failureThreshold), windowSizeInSeconds, minimumNumberOfCalls,
-        new int[windowSizeInSeconds], new int[windowSizeInSeconds], toSeconds(nowNanos));
+        failureRatePercent,
+        windowSizeInSeconds,
+        minimumNumberOfCalls,
+        new int[windowSizeInSeconds],
+        new int[windowSizeInSeconds],
+        toSeconds(nowNanos));
   }
 
   private static long toSeconds(long nanos) {
@@ -60,7 +64,7 @@ public record TimeBasedErrorRateMetrics(
   public boolean equals(Object o) {
     if (o == null || getClass() != o.getClass()) return false;
     TimeBasedErrorRateMetrics that = (TimeBasedErrorRateMetrics) o;
-    return failureThreshold == that.failureThreshold &&
+    return failureRatePercent == that.failureRatePercent &&
         windowSizeInSeconds == that.windowSizeInSeconds &&
         minimumNumberOfCalls == that.minimumNumberOfCalls &&
         lastUpdatedSecond == that.lastUpdatedSecond &&
@@ -70,7 +74,7 @@ public record TimeBasedErrorRateMetrics(
 
   @Override
   public int hashCode() {
-    return Objects.hash(failureThreshold, windowSizeInSeconds, minimumNumberOfCalls,
+    return Objects.hash(failureRatePercent, windowSizeInSeconds, minimumNumberOfCalls,
         Arrays.hashCode(successBuckets), Arrays.hashCode(failureBuckets), lastUpdatedSecond);
   }
 
@@ -104,8 +108,12 @@ public record TimeBasedErrorRateMetrics(
 
     long newLastUpdatedSecond = Math.max(updatedState.lastUpdatedSecond, currentSecond);
     return new TimeBasedErrorRateMetrics(
-        failureThreshold, windowSizeInSeconds, minimumNumberOfCalls,
-        newSuccesses, newFailures, newLastUpdatedSecond);
+        failureRatePercent,
+        windowSizeInSeconds,
+        minimumNumberOfCalls,
+        newSuccesses,
+        newFailures,
+        newLastUpdatedSecond);
   }
 
   private EvaluationResult evaluate(long nowNanos) {
@@ -122,7 +130,7 @@ public record TimeBasedErrorRateMetrics(
       return false;
     }
     double failureRate = (double) eval.totalFailures() / eval.totalCalls();
-    double rateThreshold = failureThreshold / 100.0;
+    double rateThreshold = failureRatePercent / 100.0;
     return failureRate >= rateThreshold;
   }
 
@@ -132,16 +140,20 @@ public record TimeBasedErrorRateMetrics(
     if (eval.totalCalls() == 0) {
       return "Circuit tripped, but no calls were recorded in the current window.";
     }
-    return "Failure rate of %.1f%% (%d failures out of %d calls) in the last %d seconds exceeded the threshold of %d%%."
+    return "Failure rate of %.1f%% (%d failures out of %d calls) in the last %d seconds exceeded the threshold of %f%%."
         .formatted(eval.failureRatePercent(), eval.totalFailures(), eval.totalCalls(),
-            windowSizeInSeconds, failureThreshold);
+            windowSizeInSeconds, failureRatePercent);
   }
 
   @Override
   public FailureMetrics reset(long nowNanos) {
     return new TimeBasedErrorRateMetrics(
-        failureThreshold, windowSizeInSeconds, minimumNumberOfCalls,
-        new int[windowSizeInSeconds], new int[windowSizeInSeconds], toSeconds(nowNanos));
+        failureRatePercent,
+        windowSizeInSeconds,
+        minimumNumberOfCalls,
+        new int[windowSizeInSeconds],
+        new int[windowSizeInSeconds],
+        toSeconds(nowNanos));
   }
 
   private TimeBasedErrorRateMetrics fastForward(long currentSecond) {
@@ -151,8 +163,12 @@ public record TimeBasedErrorRateMetrics(
     long deltaSeconds = currentSecond - lastUpdatedSecond;
     if (deltaSeconds >= windowSizeInSeconds) {
       return new TimeBasedErrorRateMetrics(
-          failureThreshold, windowSizeInSeconds, minimumNumberOfCalls,
-          new int[windowSizeInSeconds], new int[windowSizeInSeconds], currentSecond);
+          failureRatePercent,
+          windowSizeInSeconds,
+          minimumNumberOfCalls,
+          new int[windowSizeInSeconds],
+          new int[windowSizeInSeconds],
+          currentSecond);
     }
     int[] newSuccesses = Arrays.copyOf(successBuckets, windowSizeInSeconds);
     int[] newFailures = Arrays.copyOf(failureBuckets, windowSizeInSeconds);
@@ -166,8 +182,12 @@ public record TimeBasedErrorRateMetrics(
       newFailures[indexToClear] = 0;
     }
     return new TimeBasedErrorRateMetrics(
-        failureThreshold, windowSizeInSeconds, minimumNumberOfCalls,
-        newSuccesses, newFailures, currentSecond);
+        failureRatePercent,
+        windowSizeInSeconds,
+        minimumNumberOfCalls,
+        newSuccesses,
+        newFailures,
+        currentSecond);
   }
 
   private record EvaluationResult(int totalSuccesses, int totalFailures, int totalCalls) {

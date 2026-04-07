@@ -3,8 +3,14 @@ package eu.inqudium.core.element.circuitbreaker.config;
 import eu.inqudium.core.config.ExtensionBuilder;
 
 public class TimeBasedErrorRateConfigBuilder extends ExtensionBuilder<TimeBasedErrorRateConfig> {
+  private Double failureRatePercent;
   private Integer windowSizeInSeconds;
   private Integer minimumNumberOfCalls;
+
+  public TimeBasedErrorRateConfigBuilder failureRatePercent(double failureRatePercent) {
+    this.failureRatePercent = failureRatePercent;
+    return this;
+  }
 
   public TimeBasedErrorRateConfigBuilder windowSizeInSeconds(int seconds) {
     this.windowSizeInSeconds = seconds;
@@ -44,9 +50,9 @@ public class TimeBasedErrorRateConfigBuilder extends ExtensionBuilder<TimeBasedE
   }
 
   public TimeBasedErrorRateConfig build() {
-    if (windowSizeInSeconds == null || minimumNumberOfCalls == null) {
+    if (windowSizeInSeconds == null || minimumNumberOfCalls == null || failureRatePercent == null) {
       balanced();
     }
-    return new TimeBasedErrorRateConfig(windowSizeInSeconds, minimumNumberOfCalls);
+    return new TimeBasedErrorRateConfig(failureRatePercent, windowSizeInSeconds, minimumNumberOfCalls);
   }
 }

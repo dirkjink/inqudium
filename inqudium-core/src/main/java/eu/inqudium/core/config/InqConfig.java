@@ -79,6 +79,7 @@ public record InqConfig(
       builderInstance.general(general);
       customizer.accept(builderInstance);
       ConfigExtension<?> extensionConfig = builderInstance.build();
+      Objects.requireNonNull(extensionConfig, "Extension config must not be null");
 
       this.extensions.put(extensionConfig.getClass(), extensionConfig);
       return this;

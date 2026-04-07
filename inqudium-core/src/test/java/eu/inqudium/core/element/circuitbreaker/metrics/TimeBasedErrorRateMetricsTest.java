@@ -41,12 +41,12 @@ class TimeBasedErrorRateMetricsTest {
     }
 
     @Test
-    void should_round_fractional_threshold() {
+    void should_store_the_configured_failure_rate_percent() {
       // Given / When
-      var metrics = TimeBasedErrorRateMetrics.initial(49.6, 10, 5, T0);
+      var metrics = TimeBasedErrorRateMetrics.initial(50, 10, 5, T0);
 
       // Then
-      assertThat(metrics.failureThreshold()).isEqualTo(50);
+      assertThat(metrics.failureRatePercent()).isEqualTo(50.0);
     }
   }
 
@@ -260,7 +260,7 @@ class TimeBasedErrorRateMetricsTest {
       var afterReset = (TimeBasedErrorRateMetrics) metrics.reset(T0 + NANOS_PER_SECOND);
 
       // Then
-      assertThat(afterReset.failureThreshold()).isEqualTo(60);
+      assertThat(afterReset.failureRatePercent()).isEqualTo(60.0);
       assertThat(afterReset.windowSizeInSeconds()).isEqualTo(15);
       assertThat(afterReset.minimumNumberOfCalls()).isEqualTo(8);
     }

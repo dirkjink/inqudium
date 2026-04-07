@@ -3,12 +3,18 @@ package eu.inqudium.core.element.circuitbreaker.config;
 import eu.inqudium.core.config.ConfigExtension;
 import eu.inqudium.core.config.ExtensionBuilder;
 import eu.inqudium.core.config.GeneralConfig;
+import eu.inqudium.core.config.InqConfig;
 import eu.inqudium.core.config.InqElementCommonConfig;
 import eu.inqudium.core.element.InqElementType;
-import eu.inqudium.core.element.config.FailurePredicateConfig;
+import eu.inqudium.core.element.circuitbreaker.metrics.FailureMetrics;
+import eu.inqudium.core.element.config.FailurePredicateConfigBuilder;
 import eu.inqudium.core.event.InqEventPublisher;
 
+import java.time.Duration;
 import java.util.Objects;
+import java.util.function.Consumer;
+import java.util.function.LongFunction;
+import java.util.function.Predicate;
 
 public abstract class InqCircuitBreakerConfigBuilder
     <B extends InqCircuitBreakerConfigBuilder<B, E>, E extends ConfigExtension<E>>
@@ -17,13 +23,13 @@ public abstract class InqCircuitBreakerConfigBuilder
   private GeneralConfig generalConfig;
   private String name;
   private InqEventPublisher eventPublisher;
+  private Long waitDurationNanos;
   private Boolean enableExceptionOptimization;
-  private Double failureRateThreshold;
-  private Double slowCallRateThreshold;
-  private Integer slidingWindowSize;
-  private Integer waitDurationInOpenState;
-  private Integer permittedNumberOfCallsInHalfOpenState;
-  private FailurePredicateConfig failurePredicateConfig;
+  private Integer successThresholdInHalfOpen;
+  private Integer permittedCallsInHalfOpen;
+  private Duration waitDurationInOpenState;
+  private Predicate<Throwable> recordFailurePredicate;
+  private LongFunction<FailureMetrics> metricsFactory;
 
   protected InqCircuitBreakerConfigBuilder() {
   }
@@ -44,32 +50,40 @@ public abstract class InqCircuitBreakerConfigBuilder
 
   protected abstract B self();
 
-  // ──────────────────────────────────────────────────────────────────────────
-  // Individual Setters — each guards its own value immediately
-  // ──────────────────────────────────────────────────────────────────────────
-
-  public InqCircuitBreakerConfigBuilder<B, E> failureRateThreshold(Double failureRateThreshold) {
-    this.failureRateThreshold = failureRateThreshold;
+  public InqCircuitBreakerConfigBuilder<B, E> successThresholdInHalfOpen(Integer successThresholdInHalfOpen) {
+    this.successThresholdInHalfOpen = successThresholdInHalfOpen;
     return this;
   }
 
-  public InqCircuitBreakerConfigBuilder<B, E> slowCallRateThreshold(Double slowCallRateThreshold) {
-    this.slowCallRateThreshold = slowCallRateThreshold;
+  public InqCircuitBreakerConfigBuilder<B, E> permittedCallsInHalfOpen(Integer permittedCallsInHalfOpen) {
+    this.permittedCallsInHalfOpen = permittedCallsInHalfOpen;
     return this;
   }
 
-  public InqCircuitBreakerConfigBuilder<B, E> slidingWindowSize(Integer slidingWindowSize) {
-    this.slidingWindowSize = slidingWindowSize;
+  public InqCircuitBreakerConfigBuilder<B, E> waitDurationNanos(Long waitDurationNanos) {
+    this.waitDurationNanos = waitDurationNanos;
     return this;
   }
 
-  public InqCircuitBreakerConfigBuilder<B, E> waitDurationInOpenState(Integer waitDurationInOpenState) {
+  public InqCircuitBreakerConfigBuilder<B, E> waitDurationInOpenState(Duration waitDurationInOpenState) {
     this.waitDurationInOpenState = waitDurationInOpenState;
     return this;
   }
 
-  public InqCircuitBreakerConfigBuilder<B, E> permittedNumberOfCallsInHalfOpenState(Integer permittedNumberOfCallsInHalfOpenState) {
-    this.permittedNumberOfCallsInHalfOpenState = permittedNumberOfCallsInHalfOpenState;
+  public InqCircuitBreakerConfigBuilder<B, E> withRecordFailurePredicates(Consumer<FailurePredicateConfigBuilder> customizer) {
+    FailurePredicateConfigBuilder builderInstance = FailurePredicateConfigBuilder.failurePredicate();
+    customizer.accept(builderInstance);
+    recordFailurePredicate = builderInstance.build().finalPredicate();
+    return this;
+  }
+
+  public InqCircuitBreakerConfigBuilder<B, E> recordFailurePredicate(Predicate<Throwable> recordFailurePredicate) {
+    this.recordFailurePredicate = recordFailurePredicate;
+    return this;
+  }
+
+  public InqCircuitBreakerConfigBuilder<B, E> metricsFactory(LongFunction<FailureMetrics> metricsFactory) {
+    this.metricsFactory = metricsFactory;
     return this;
   }
 
@@ -109,10 +123,6 @@ public abstract class InqCircuitBreakerConfigBuilder
     return self();
   }
 
-  // ──────────────────────────────────────────────────────────────────────────
-  // Build helper
-  // ──────────────────────────────────────────────────────────────────────────
-
   protected InqCircuitBreakerConfig common() {
 
     InqElementCommonConfig common =
@@ -122,15 +132,14 @@ public abstract class InqCircuitBreakerConfigBuilder
             enableExceptionOptimization);
 
     InqCircuitBreakerConfig config = new InqCircuitBreakerConfig(
-        this.generalConfig,
-        common.inference(),
-        this.failureRateThreshold,
-        this.slowCallRateThreshold,
-        this.slidingWindowSize,
-        this.waitDurationInOpenState,
-        this.permittedNumberOfCallsInHalfOpenState,
-        this.failurePredicateConfig
-    ).inference();
+        generalConfig,
+        common,
+        waitDurationNanos,
+        successThresholdInHalfOpen,
+        permittedCallsInHalfOpen,
+        waitDurationInOpenState,
+        recordFailurePredicate,
+        metricsFactory);
 
     validate(config);
     return config;

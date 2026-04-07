@@ -5,11 +5,17 @@ import eu.inqudium.core.config.ExtensionBuilder;
 import java.time.Duration;
 
 public class ContinuousTimeEwmaConfigBuilder extends ExtensionBuilder<ContinuousTimeEwmaConfig> {
+  private Double failureRatePercent;
   private Duration timeConstant;
   private Integer minimumNumberOfCalls;
 
   public ContinuousTimeEwmaConfigBuilder timeConstant(Duration tau) {
     this.timeConstant = tau;
+    return this;
+  }
+
+  public ContinuousTimeEwmaConfigBuilder failureRatePercent(double failureRatePercent) {
+    this.failureRatePercent = failureRatePercent;
     return this;
   }
 
@@ -50,6 +56,6 @@ public class ContinuousTimeEwmaConfigBuilder extends ExtensionBuilder<Continuous
     if (timeConstant == null || minimumNumberOfCalls == null) {
       balanced();
     }
-    return new ContinuousTimeEwmaConfig(timeConstant, minimumNumberOfCalls);
+    return new ContinuousTimeEwmaConfig(failureRatePercent, timeConstant, minimumNumberOfCalls);
   }
 }

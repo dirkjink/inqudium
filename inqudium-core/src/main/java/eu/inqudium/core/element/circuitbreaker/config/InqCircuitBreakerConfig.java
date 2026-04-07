@@ -5,19 +5,22 @@ import eu.inqudium.core.config.GeneralConfig;
 import eu.inqudium.core.config.InqElementCommonConfig;
 import eu.inqudium.core.config.InqElementConfig;
 import eu.inqudium.core.element.InqElementType;
-import eu.inqudium.core.element.config.FailurePredicateConfig;
+import eu.inqudium.core.element.circuitbreaker.metrics.FailureMetrics;
 import eu.inqudium.core.event.InqEventPublisher;
+
+import java.time.Duration;
+import java.util.function.LongFunction;
+import java.util.function.Predicate;
 
 public record InqCircuitBreakerConfig(
     GeneralConfig general,
     InqElementCommonConfig common,
-    Double failureRateThreshold,
-    Double slowCallRateThreshold,
-    Integer slidingWindowSize,
-    Integer waitDurationInOpenState,
-    Integer permittedNumberOfCallsInHalfOpenState,
-    FailurePredicateConfig failurePredicateConfig
-
+    long waitDurationNanos,
+    int successThresholdInHalfOpen,
+    int permittedCallsInHalfOpen,
+    Duration waitDurationInOpenState,
+    Predicate<Throwable> recordFailurePredicate,
+    LongFunction<FailureMetrics> metricsFactory
 ) implements InqElementConfig, ConfigExtension<InqCircuitBreakerConfig> {
   @Override
   public String name() {
@@ -42,20 +45,6 @@ public record InqCircuitBreakerConfig(
   @Override
   public InqCircuitBreakerConfig self() {
     return this;
-  }
-
-  @Override
-  public InqCircuitBreakerConfig inference() {
-    return new InqCircuitBreakerConfig(
-        this.general,
-        this.common,
-        this.failureRateThreshold,
-        this.slowCallRateThreshold,
-        this.slidingWindowSize,
-        this.waitDurationInOpenState,
-        this.permittedNumberOfCallsInHalfOpenState,
-        this.failurePredicateConfig
-    );
   }
 }
 

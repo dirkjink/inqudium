@@ -3,7 +3,13 @@ package eu.inqudium.core.element.circuitbreaker.config;
 import eu.inqudium.core.config.ExtensionBuilder;
 
 public class LeakyBucketConfigBuilder extends ExtensionBuilder<LeakyBucketConfig> {
+  private Integer bucketCapacity;
   private Double leakRatePerSecond;
+
+  public LeakyBucketConfigBuilder bucketCapacity(int bucketCapacity) {
+    this.bucketCapacity = bucketCapacity;
+    return this;
+  }
 
   public LeakyBucketConfigBuilder leakRatePerSecond(double rate) {
     this.leakRatePerSecond = rate;
@@ -35,9 +41,9 @@ public class LeakyBucketConfigBuilder extends ExtensionBuilder<LeakyBucketConfig
   }
 
   public LeakyBucketConfig build() {
-    if (leakRatePerSecond == null) {
+    if (bucketCapacity == null || leakRatePerSecond == null) {
       balanced();
     }
-    return new LeakyBucketConfig(leakRatePerSecond);
+    return new LeakyBucketConfig(bucketCapacity, leakRatePerSecond);
   }
 }

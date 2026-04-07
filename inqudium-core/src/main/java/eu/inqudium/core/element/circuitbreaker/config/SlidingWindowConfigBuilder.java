@@ -4,8 +4,14 @@ import eu.inqudium.core.config.ExtensionBuilder;
 
 
 public class SlidingWindowConfigBuilder extends ExtensionBuilder<SlidingWindowConfig> {
+  private Integer maxFailuresInWindow;
   private Integer windowSize;
   private Integer minimumNumberOfCalls;
+
+  public SlidingWindowConfigBuilder maxFailuresInWindow(int maxFailuresInWindow) {
+    this.maxFailuresInWindow = maxFailuresInWindow;
+    return this;
+  }
 
   public SlidingWindowConfigBuilder windowSize(int windowSize) {
     this.windowSize = windowSize;
@@ -49,9 +55,9 @@ public class SlidingWindowConfigBuilder extends ExtensionBuilder<SlidingWindowCo
 
 
   public SlidingWindowConfig build() {
-    if (minimumNumberOfCalls == null || windowSize == null) {
+    if (minimumNumberOfCalls == null || windowSize == null || maxFailuresInWindow == null) {
       balanced();
     }
-    return new SlidingWindowConfig(windowSize, minimumNumberOfCalls);
+    return new SlidingWindowConfig(maxFailuresInWindow, windowSize, minimumNumberOfCalls);
   }
 }

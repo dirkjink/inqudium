@@ -48,6 +48,10 @@ public class FailurePredicateConfigBuilder extends ExtensionBuilder<FailurePredi
   FailurePredicateConfigBuilder() {
   }
 
+  public static FailurePredicateConfigBuilder failurePredicate() {
+    return new FailurePredicateConfigBuilder();
+  }
+
   /**
    * Adds exception classes to the base inclusion list (White-List).
    * If any record rule is set, only matching exceptions are recorded by default.

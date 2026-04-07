@@ -1,19 +1,17 @@
 package eu.inqudium.imperative.circuitbreaker;
 
 import eu.inqudium.core.element.InqElementType;
-import eu.inqudium.core.element.circuitbreaker.CircuitBreakerConfig;
 import eu.inqudium.core.element.circuitbreaker.CircuitBreakerCore;
 import eu.inqudium.core.element.circuitbreaker.CircuitBreakerException;
 import eu.inqudium.core.element.circuitbreaker.CircuitBreakerSnapshot;
 import eu.inqudium.core.element.circuitbreaker.CircuitState;
 import eu.inqudium.core.element.circuitbreaker.PermissionResult;
 import eu.inqudium.core.element.circuitbreaker.StateTransition;
+import eu.inqudium.core.element.circuitbreaker.config.InqCircuitBreakerConfig;
 import eu.inqudium.core.element.circuitbreaker.metrics.FailureMetrics;
 import eu.inqudium.core.event.InqEventPublisher;
-import eu.inqudium.core.pipeline.InqDecorator;
 import eu.inqudium.core.pipeline.InternalExecutor;
 import eu.inqudium.core.time.InqNanoTimeSource;
-import eu.inqudium.imperative.core.pipeline.InqAsyncDecorator;
 import eu.inqudium.imperative.core.pipeline.InternalAsyncExecutor;
 
 import java.util.List;
@@ -24,6 +22,8 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Consumer;
+import java.util.function.LongFunction;
+import java.util.function.Predicate;
 import java.util.function.Supplier;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -35,9 +35,7 @@ import java.util.logging.Logger;
  * platform threads. Uses lock-free CAS operations for high-throughput fast-paths
  * and a {@link ReentrantLock} exclusively to serialize state transitions.
  *
- * <p>Implements {@link InqDecorator} and {@link InqAsyncDecorator} to participate
- * in both sync and async pipelines as a self-describing, pluggable decorator
- * with around-semantics.
+ * <p>All configuration values are extracted into final fields in the constructor.
  */
 public class ImperativeCircuitBreaker<A, R> implements CircuitBreaker<A, R> {
 
@@ -46,30 +44,45 @@ public class ImperativeCircuitBreaker<A, R> implements CircuitBreaker<A, R> {
   // Fix 6: Maximum CAS retries before yielding to prevent CPU spin under extreme contention
   private static final int MAX_CAS_RETRIES_BEFORE_YIELD = 64;
 
-  private final CircuitBreakerConfig config;
   private final AtomicReference<CircuitBreakerSnapshot> snapshotRef;
   private final InqNanoTimeSource timeSource;
   private final List<Consumer<StateTransition>> transitionListeners;
   private final InqEventPublisher eventPublisher;
 
+  // All config values extracted into final fields
+  private final String name;
+  private final long waitDurationNanos;
+  private final int permittedCallsInHalfOpen;
+  private final int successThresholdInHalfOpen;
+  private final Predicate<Throwable> recordFailurePredicate;
+  private final LongFunction<FailureMetrics> metricsFactory;
+
   // Lock exclusively used to serialize state transitions (NOT for event emissions)
   private final ReentrantLock transitionLock = new ReentrantLock();
 
-  public ImperativeCircuitBreaker(CircuitBreakerConfig config) {
+  public ImperativeCircuitBreaker(InqCircuitBreakerConfig config) {
     this(config, InqNanoTimeSource.system());
   }
 
-  public ImperativeCircuitBreaker(CircuitBreakerConfig config, InqNanoTimeSource timeSource) {
+  public ImperativeCircuitBreaker(InqCircuitBreakerConfig config, InqNanoTimeSource timeSource) {
     this(config, timeSource, InqEventPublisher.create(config.name(), InqElementType.CIRCUIT_BREAKER));
   }
 
-  public ImperativeCircuitBreaker(CircuitBreakerConfig config, InqNanoTimeSource timeSource, InqEventPublisher eventPublisher) {
-    this.config = Objects.requireNonNull(config, "config must not be null");
+  public ImperativeCircuitBreaker(InqCircuitBreakerConfig config, InqNanoTimeSource timeSource, InqEventPublisher eventPublisher) {
+    Objects.requireNonNull(config, "config must not be null");
     this.timeSource = Objects.requireNonNull(timeSource, "timeSource must not be null");
     this.eventPublisher = Objects.requireNonNull(eventPublisher, "eventPublisher must not be null");
 
+    // Extract all config values into fields
+    this.name = config.name();
+    this.waitDurationNanos = config.waitDurationNanos();
+    this.permittedCallsInHalfOpen = config.permittedCallsInHalfOpen();
+    this.successThresholdInHalfOpen = config.successThresholdInHalfOpen();
+    this.recordFailurePredicate = config.recordFailurePredicate();
+    this.metricsFactory = config.metricsFactory();
+
     long nowNanos = timeSource.now();
-    FailureMetrics initialMetrics = config.metricsFactory().apply(nowNanos);
+    FailureMetrics initialMetrics = metricsFactory.apply(nowNanos);
 
     this.snapshotRef = new AtomicReference<>(CircuitBreakerSnapshot.initial(nowNanos, initialMetrics));
     this.transitionListeners = new CopyOnWriteArrayList<>();
@@ -77,13 +90,6 @@ public class ImperativeCircuitBreaker<A, R> implements CircuitBreaker<A, R> {
 
   // ======================== InqElement ========================
 
-  /**
-   * Yields the current thread if the CAS retry count exceeds the threshold.
-   * Prevents CPU spin under extreme contention. Resets the counter after yielding.
-   *
-   * @param retries current retry count
-   * @return the (possibly reset) retry count
-   */
   private static int yieldIfExcessiveRetries(int retries) {
     if (retries > MAX_CAS_RETRIES_BEFORE_YIELD) {
       Thread.yield();
@@ -94,7 +100,7 @@ public class ImperativeCircuitBreaker<A, R> implements CircuitBreaker<A, R> {
 
   @Override
   public String getName() {
-    return config.name();
+    return name;
   }
 
   @Override
@@ -111,12 +117,6 @@ public class ImperativeCircuitBreaker<A, R> implements CircuitBreaker<A, R> {
 
   // ======================== AsyncLayerAction ========================
 
-  /**
-   * Around-advice implementation for the pipeline chain.
-   *
-   * <p>Acquires permission from the circuit breaker, delegates to the next
-   * step in the chain, and records the outcome (success, failure, or ignored).
-   */
   @Override
   public R execute(long chainId, long callId, A argument, InternalExecutor<A, R> next) {
     acquirePermissionOrThrow();
@@ -143,13 +143,6 @@ public class ImperativeCircuitBreaker<A, R> implements CircuitBreaker<A, R> {
 
   // ======================== Execution ========================
 
-  /**
-   * Async around-advice implementation for the pipeline chain.
-   *
-   * <p>Acquires permission synchronously on the calling thread, delegates to the
-   * next async step, and records success or failure when the returned
-   * {@link CompletionStage} completes.
-   */
   @Override
   public CompletionStage<R> executeAsync(long chainId, long callId, A argument,
                                          InternalAsyncExecutor<A, R> next) {
@@ -158,7 +151,6 @@ public class ImperativeCircuitBreaker<A, R> implements CircuitBreaker<A, R> {
     try {
       stage = next.executeAsync(chainId, callId, argument);
     } catch (Throwable t) {
-      // Synchronous failure during chain start — record and rethrow
       if (t instanceof Exception e) {
         handleThrowable(e);
       } else {
@@ -180,15 +172,6 @@ public class ImperativeCircuitBreaker<A, R> implements CircuitBreaker<A, R> {
     return stage;
   }
 
-  /**
-   * Executes the callable, recording the outcome with the circuit breaker.
-   *
-   * <p><strong>Fix 2b:</strong> Errors (OOM, StackOverflow) are never recorded as
-   * downstream failures — they are treated as ignored to release HALF_OPEN slots.
-   *
-   * <p><strong>Fix 3:</strong> A {@code finally} safety net ensures that every
-   * acquired permission slot is released, even in unexpected scenarios.
-   */
   public <T> T execute(Callable<T> callable) throws Exception {
     acquirePermissionOrThrow();
     boolean outcomeRecorded = false;
@@ -215,12 +198,6 @@ public class ImperativeCircuitBreaker<A, R> implements CircuitBreaker<A, R> {
     }
   }
 
-  /**
-   * Executes the callable with a fallback that activates only when the circuit breaker
-   * rejects the call (i.e., circuit is OPEN or HALF_OPEN with no remaining slots).
-   *
-   * <p>Business exceptions thrown by the callable are NOT caught — they propagate normally.
-   */
   public <T> T executeWithFallback(Callable<T> callable, Supplier<T> fallback) throws Exception {
     try {
       return execute(callable);
@@ -229,13 +206,6 @@ public class ImperativeCircuitBreaker<A, R> implements CircuitBreaker<A, R> {
     }
   }
 
-  /**
-   * Executes the callable with a fallback that activates on ANY exception,
-   * including business exceptions thrown by the callable and circuit breaker rejections.
-   *
-   * <p><strong>Bonus fix:</strong> If the fallback itself throws, the original exception
-   * is attached as a suppressed exception for debugging.
-   */
   public <T> T executeWithFallbackOnAny(Callable<T> callable, Supplier<T> fallback) throws Exception {
     try {
       return execute(callable);
@@ -251,12 +221,6 @@ public class ImperativeCircuitBreaker<A, R> implements CircuitBreaker<A, R> {
     }
   }
 
-  /**
-   * Executes the runnable, recording the outcome with the circuit breaker.
-   *
-   * <p><strong>Fix 4:</strong> Implemented directly instead of delegating to the
-   * Callable variant — eliminates the unreachable catch block and wrapping overhead.
-   */
   public void execute(Runnable runnable) {
     acquirePermissionOrThrow();
     boolean outcomeRecorded = false;
@@ -291,10 +255,11 @@ public class ImperativeCircuitBreaker<A, R> implements CircuitBreaker<A, R> {
 
       long nowNanos = timeSource.now();
       CircuitBreakerSnapshot current = snapshotRef.get();
-      PermissionResult result = CircuitBreakerCore.tryAcquirePermission(current, config, nowNanos);
+      PermissionResult result = CircuitBreakerCore.tryAcquirePermission(
+          current, waitDurationNanos, permittedCallsInHalfOpen, nowNanos);
 
       if (!result.permitted()) {
-        throw new CircuitBreakerException(config.name(), result.snapshot().state());
+        throw new CircuitBreakerException(name, result.snapshot().state());
       }
 
       if (result.snapshot().state() != current.state()) {
@@ -303,10 +268,11 @@ public class ImperativeCircuitBreaker<A, R> implements CircuitBreaker<A, R> {
         try {
           nowNanos = timeSource.now();
           current = snapshotRef.get();
-          result = CircuitBreakerCore.tryAcquirePermission(current, config, nowNanos);
+          result = CircuitBreakerCore.tryAcquirePermission(
+              current, waitDurationNanos, permittedCallsInHalfOpen, nowNanos);
 
           if (!result.permitted()) {
-            throw new CircuitBreakerException(config.name(), result.snapshot().state());
+            throw new CircuitBreakerException(name, result.snapshot().state());
           }
 
           if (result.snapshot().state() == current.state()) {
@@ -315,7 +281,7 @@ public class ImperativeCircuitBreaker<A, R> implements CircuitBreaker<A, R> {
 
           if (snapshotRef.compareAndSet(current, result.snapshot())) {
             transition = CircuitBreakerCore.detectTransition(
-                config.name(), current, result.snapshot(), nowNanos).orElse(null);
+                name, current, result.snapshot(), nowNanos).orElse(null);
           } else {
             continue;
           }
@@ -341,7 +307,8 @@ public class ImperativeCircuitBreaker<A, R> implements CircuitBreaker<A, R> {
 
       long nowNanos = timeSource.now();
       CircuitBreakerSnapshot current = snapshotRef.get();
-      CircuitBreakerSnapshot updated = CircuitBreakerCore.recordSuccess(current, config, nowNanos);
+      CircuitBreakerSnapshot updated = CircuitBreakerCore.recordSuccess(
+          current, successThresholdInHalfOpen, nowNanos);
 
       if (updated.state() != current.state()) {
         StateTransition transition = null;
@@ -349,7 +316,8 @@ public class ImperativeCircuitBreaker<A, R> implements CircuitBreaker<A, R> {
         try {
           nowNanos = timeSource.now();
           current = snapshotRef.get();
-          updated = CircuitBreakerCore.recordSuccess(current, config, nowNanos);
+          updated = CircuitBreakerCore.recordSuccess(
+              current, successThresholdInHalfOpen, nowNanos);
 
           if (updated.state() == current.state()) {
             continue;
@@ -357,7 +325,7 @@ public class ImperativeCircuitBreaker<A, R> implements CircuitBreaker<A, R> {
 
           if (snapshotRef.compareAndSet(current, updated)) {
             transition = CircuitBreakerCore.detectTransition(
-                config.name(), current, updated, nowNanos).orElse(null);
+                name, current, updated, nowNanos).orElse(null);
           } else {
             continue;
           }
@@ -375,7 +343,7 @@ public class ImperativeCircuitBreaker<A, R> implements CircuitBreaker<A, R> {
   }
 
   private void handleThrowable(Throwable throwable) {
-    if (!config.shouldRecordAsFailure(throwable)) {
+    if (!recordFailurePredicate.test(throwable)) {
       recordIgnored();
       return;
     }
@@ -386,7 +354,7 @@ public class ImperativeCircuitBreaker<A, R> implements CircuitBreaker<A, R> {
 
       long nowNanos = timeSource.now();
       CircuitBreakerSnapshot current = snapshotRef.get();
-      CircuitBreakerSnapshot updated = CircuitBreakerCore.recordFailure(current, config, nowNanos);
+      CircuitBreakerSnapshot updated = CircuitBreakerCore.recordFailure(current, nowNanos);
 
       if (updated.state() != current.state()) {
         StateTransition transition = null;
@@ -394,7 +362,7 @@ public class ImperativeCircuitBreaker<A, R> implements CircuitBreaker<A, R> {
         try {
           nowNanos = timeSource.now();
           current = snapshotRef.get();
-          updated = CircuitBreakerCore.recordFailure(current, config, nowNanos);
+          updated = CircuitBreakerCore.recordFailure(current, nowNanos);
 
           if (updated.state() == current.state()) {
             continue;
@@ -402,7 +370,7 @@ public class ImperativeCircuitBreaker<A, R> implements CircuitBreaker<A, R> {
 
           if (snapshotRef.compareAndSet(current, updated)) {
             transition = CircuitBreakerCore.detectTransition(
-                config.name(), current, updated, nowNanos).orElse(null);
+                name, current, updated, nowNanos).orElse(null);
           } else {
             continue;
           }
@@ -434,23 +402,12 @@ public class ImperativeCircuitBreaker<A, R> implements CircuitBreaker<A, R> {
 
   // ======================== Listeners ========================
 
-  /**
-   * Registers a state transition listener.
-   *
-   * @param listener the listener to be notified on state transitions
-   * @return a Runnable that, when executed, unregisters this listener to prevent memory leaks
-   */
   public Runnable onStateTransition(Consumer<StateTransition> listener) {
     Objects.requireNonNull(listener, "listener must not be null");
     transitionListeners.add(listener);
     return () -> transitionListeners.remove(listener);
   }
 
-  /**
-   * Notifies all listeners outside of any lock.
-   * Each listener is invoked in its own try-catch to ensure that a failing listener
-   * does not prevent subsequent listeners from being notified.
-   */
   private void notifyListeners(StateTransition transition) {
     if (transition == null) {
       return;
@@ -461,7 +418,7 @@ public class ImperativeCircuitBreaker<A, R> implements CircuitBreaker<A, R> {
       } catch (Exception e) {
         LOG.log(Level.WARNING,
             "State transition listener threw exception for circuit breaker '%s': %s"
-                .formatted(config.name(), e.getMessage()),
+                .formatted(name, e.getMessage()),
             e);
       }
     }
@@ -477,17 +434,6 @@ public class ImperativeCircuitBreaker<A, R> implements CircuitBreaker<A, R> {
     return snapshotRef.get();
   }
 
-  public CircuitBreakerConfig getConfig() {
-    return config;
-  }
-
-  /**
-   * Resets the circuit breaker to its initial CLOSED state.
-   *
-   * <p><strong>Fix 10:</strong> When already in a clean CLOSED state, the metrics
-   * are refreshed but no transition event is fired, avoiding unnecessary CAS
-   * contention in other threads.
-   */
   public void reset() {
     StateTransition transition = null;
     transitionLock.lock();
@@ -498,17 +444,17 @@ public class ImperativeCircuitBreaker<A, R> implements CircuitBreaker<A, R> {
       if (current.state() == CircuitState.CLOSED
           && current.successCount() == 0
           && current.halfOpenAttempts() == 0) {
-        FailureMetrics freshMetrics = config.metricsFactory().apply(nowNanos);
+        FailureMetrics freshMetrics = metricsFactory.apply(nowNanos);
         CircuitBreakerSnapshot refreshed = CircuitBreakerSnapshot.initial(nowNanos, freshMetrics);
         snapshotRef.set(refreshed);
         return;
       }
 
-      FailureMetrics initialMetrics = config.metricsFactory().apply(nowNanos);
+      FailureMetrics initialMetrics = metricsFactory.apply(nowNanos);
       CircuitBreakerSnapshot initial = CircuitBreakerSnapshot.initial(nowNanos, initialMetrics);
       CircuitBreakerSnapshot before = snapshotRef.getAndSet(initial);
       transition = CircuitBreakerCore.detectTransition(
-          config.name(), before, initial, nowNanos).orElse(null);
+          name, before, initial, nowNanos).orElse(null);
     } finally {
       transitionLock.unlock();
     }

@@ -7,7 +7,11 @@ import java.time.Duration;
 /**
  * Configuration for chronologically decaying EWMA metrics.
  */
-public record ContinuousTimeEwmaConfig(Duration timeConstant, int minimumNumberOfCalls)
+public record ContinuousTimeEwmaConfig(
+    double failureRatePercent,
+    Duration timeConstant,
+    int minimumNumberOfCalls
+)
     implements ConfigExtension<ContinuousTimeEwmaConfig> {
   @Override
   public ContinuousTimeEwmaConfig self() {
