@@ -1,11 +1,8 @@
 package eu.inqudium.core.element.circuitbreaker.config;
 
 import eu.inqudium.core.config.ExtensionBuilder;
-import eu.inqudium.core.element.circuitbreaker.metrics.LeakyBucketMetrics;
 
-import java.time.Instant;
-
-public class LeakyBucketConfigBuilder  extends ExtensionBuilder<LeakyBucketConfig> {
+public class LeakyBucketConfigBuilder extends ExtensionBuilder<LeakyBucketConfig> {
   private Double leakRatePerSecond;
 
   public LeakyBucketConfigBuilder leakRatePerSecond(double rate) {

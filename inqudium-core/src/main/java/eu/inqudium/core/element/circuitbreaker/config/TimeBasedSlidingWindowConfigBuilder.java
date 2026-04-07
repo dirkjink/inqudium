@@ -1,9 +1,6 @@
 package eu.inqudium.core.element.circuitbreaker.config;
 
 import eu.inqudium.core.config.ExtensionBuilder;
-import eu.inqudium.core.element.circuitbreaker.metrics.TimeBasedSlidingWindowMetrics;
-
-import java.time.Instant;
 
 public class TimeBasedSlidingWindowConfigBuilder extends ExtensionBuilder<TimeBasedSlidingWindowConfig> {
   private Integer windowSizeInSeconds;

@@ -2,8 +2,6 @@ package eu.inqudium.core.element.circuitbreaker.config;
 
 import eu.inqudium.core.config.ExtensionBuilder;
 
-import java.time.Instant;
-
 public class TimeBasedErrorRateConfigBuilder extends ExtensionBuilder<TimeBasedErrorRateConfig> {
   private Integer windowSizeInSeconds;
   private Integer minimumNumberOfCalls;

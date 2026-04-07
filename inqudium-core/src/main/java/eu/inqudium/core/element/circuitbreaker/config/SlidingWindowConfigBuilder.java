@@ -1,10 +1,9 @@
 package eu.inqudium.core.element.circuitbreaker.config;
 
 import eu.inqudium.core.config.ExtensionBuilder;
-import eu.inqudium.core.element.circuitbreaker.metrics.SlidingWindowMetrics;
 
 
-public class SlidingWindowConfigBuilder  extends ExtensionBuilder<SlidingWindowConfig> {
+public class SlidingWindowConfigBuilder extends ExtensionBuilder<SlidingWindowConfig> {
   private Integer windowSize;
   private Integer minimumNumberOfCalls;
 

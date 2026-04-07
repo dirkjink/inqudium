@@ -1,13 +1,16 @@
 package eu.inqudium.core.element.circuitbreaker.config;
 
-import eu.inqudium.core.element.circuitbreaker.metrics.ConsecutiveFailuresMetrics;
-
 public class ConsecutiveFailuresConfigBuilder {
-  private Integer initialConsecutiveFailures;
   private Double failureRateThreshold;
+  private Integer initialConsecutiveFailures;
 
   public ConsecutiveFailuresConfigBuilder initialConsecutiveFailures(int count) {
     this.initialConsecutiveFailures = count;
+    return this;
+  }
+
+  public ConsecutiveFailuresConfigBuilder failureRateThreshold(double failureRateThreshold) {
+    this.failureRateThreshold = failureRateThreshold;
     return this;
   }
 
@@ -17,8 +20,10 @@ public class ConsecutiveFailuresConfigBuilder {
    * Best for critical low-latency dependencies where a short burst of errors
    * indicates a complete service outage.
    */
-  public ConsecutiveFailuresConfig buildProtective() {
-    return new ConsecutiveFailuresConfig(0);
+  public ConsecutiveFailuresConfigBuilder protective() {
+    this.failureRateThreshold = 4.0;
+    this.initialConsecutiveFailures = 0;
+    return this;
   }
 
   /**
@@ -27,8 +32,10 @@ public class ConsecutiveFailuresConfigBuilder {
    * Standard setting for distributed systems to tolerate small network
    * hiccups while catching sustained connectivity issues.
    */
-  public ConsecutiveFailuresConfig buildBalanced() {
-    return new ConsecutiveFailuresConfig(0);
+  public ConsecutiveFailuresConfigBuilder balanced() {
+    this.failureRateThreshold = 15.0;
+    this.initialConsecutiveFailures = 0;
+    return this;
   }
 
   /**
@@ -37,11 +44,16 @@ public class ConsecutiveFailuresConfigBuilder {
    * Use this for highly unstable legacy systems or non-critical
    * background tasks that should almost never trigger the breaker.
    */
-  public ConsecutiveFailuresConfig buildPermissive() {
-    return new ConsecutiveFailuresConfig(0);
+  public ConsecutiveFailuresConfigBuilder permissive() {
+    this.failureRateThreshold = 50.0;
+    this.initialConsecutiveFailures = 0;
+    return this;
   }
 
   public ConsecutiveFailuresConfig build() {
-    return new ConsecutiveFailuresConfig(initialConsecutiveFailures);
+    if (failureRateThreshold == null || initialConsecutiveFailures == null) {
+      balanced();
+    }
+    return new ConsecutiveFailuresConfig(failureRateThreshold, initialConsecutiveFailures);
   }
 }

@@ -1,9 +1,8 @@
 package eu.inqudium.core.element.circuitbreaker.config;
 
 import eu.inqudium.core.config.ExtensionBuilder;
-import eu.inqudium.core.element.circuitbreaker.metrics.RequestBasedEwmaMetrics;
 
-public class RequestBasedEwmaConfigBuilder  extends ExtensionBuilder<RequestBasedEwmaConfig> {
+public class RequestBasedEwmaConfigBuilder extends ExtensionBuilder<RequestBasedEwmaConfig> {
   private Double smoothingFactor;
   private Integer minimumNumberOfCalls;
 
