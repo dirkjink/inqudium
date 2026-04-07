@@ -3,6 +3,9 @@ package eu.inqudium.imperative.circuitbreaker.config;
 import eu.inqudium.core.config.InqConfig;
 import eu.inqudium.core.element.InqElementType;
 import eu.inqudium.core.element.circuitbreaker.config.InqCircuitBreakerConfig;
+import eu.inqudium.core.element.circuitbreaker.config.InqCircuitBreakerConfigBuilder;
+import eu.inqudium.core.element.circuitbreaker.config.TimeBasedSlidingWindowConfig;
+import eu.inqudium.core.element.circuitbreaker.config.TimeBasedSlidingWindowConfigBuilder;
 import eu.inqudium.core.element.circuitbreaker.metrics.FailureMetrics;
 import eu.inqudium.core.event.InqEventPublisher;
 import org.junit.jupiter.api.DisplayNameGeneration;
@@ -373,7 +376,7 @@ class InqImperativeCircuitBreakerConfigBuilderTest {
     @Test
     void build_without_name_throws_illegal_state_exception() {
       // Given / When / Then
-      assertThatThrownBy(() -> buildWith(b -> b.balanced()))
+      assertThatThrownBy(() -> buildWith(InqCircuitBreakerConfigBuilder::balanced))
           .isInstanceOf(IllegalStateException.class)
           .hasMessageContaining("name must be set");
     }
@@ -456,6 +459,141 @@ class InqImperativeCircuitBreakerConfigBuilderTest {
 
       // Then
       assertThat(result).isEmpty();
+    }
+  }
+
+  @Nested
+  class WithTimeBasedSlidingWindowConfig {
+
+    private InqImperativeCircuitBreakerConfig buildWithSlidingWindow(
+        Consumer<InqImperativeCircuitBreakerConfigBuilder> cbCustomizer,
+        Consumer<TimeBasedSlidingWindowConfigBuilder> swCustomizer) {
+      InqConfig inqConfig = InqConfig.configure()
+          .general()
+          .with(new TimeBasedSlidingWindowConfigBuilder(), swCustomizer)
+          .with(InqImperativeCircuitBreakerConfigBuilder.circuitBreaker(), cbCustomizer)
+          .build();
+      return inqConfig.of(InqImperativeCircuitBreakerConfig.class).orElseThrow();
+    }
+
+    @Test
+    void sliding_window_config_is_registered_alongside_circuit_breaker() {
+      // Given / When
+      InqConfig inqConfig = InqConfig.configure()
+          .general()
+          .with(new TimeBasedSlidingWindowConfigBuilder(), TimeBasedSlidingWindowConfigBuilder::balanced)
+          .with(InqImperativeCircuitBreakerConfigBuilder.circuitBreaker(), b -> b.name("combined"))
+          .build();
+
+      // Then
+      assertThat(inqConfig.of(InqImperativeCircuitBreakerConfig.class)).isPresent();
+      assertThat(inqConfig.of(TimeBasedSlidingWindowConfig.class)).isPresent();
+    }
+
+    @Test
+    void sliding_window_balanced_preset_has_expected_defaults() {
+      // Given / When
+      InqConfig inqConfig = InqConfig.configure()
+          .general()
+          .with(new TimeBasedSlidingWindowConfigBuilder(), TimeBasedSlidingWindowConfigBuilder::balanced)
+          .build();
+      var swConfig = inqConfig.of(TimeBasedSlidingWindowConfig.class).orElseThrow();
+
+      // Then
+      assertThat(swConfig.windowSizeInSeconds()).isEqualTo(60);
+      assertThat(swConfig.maxFailuresInWindow()).isEqualTo(10);
+    }
+
+    @Test
+    void sliding_window_protective_preset_has_expected_values() {
+      // Given / When
+      InqConfig inqConfig = InqConfig.configure()
+          .general()
+          .with(new TimeBasedSlidingWindowConfigBuilder(), TimeBasedSlidingWindowConfigBuilder::protective)
+          .build();
+      var swConfig = inqConfig.of(TimeBasedSlidingWindowConfig.class).orElseThrow();
+
+      // Then
+      assertThat(swConfig.windowSizeInSeconds()).isEqualTo(5);
+      assertThat(swConfig.maxFailuresInWindow()).isEqualTo(3);
+    }
+
+    @Test
+    void sliding_window_permissive_preset_has_expected_values() {
+      // Given / When
+      InqConfig inqConfig = InqConfig.configure()
+          .general()
+          .with(new TimeBasedSlidingWindowConfigBuilder(), TimeBasedSlidingWindowConfigBuilder::permissive)
+          .build();
+      var swConfig = inqConfig.of(TimeBasedSlidingWindowConfig.class).orElseThrow();
+
+      // Then
+      assertThat(swConfig.windowSizeInSeconds()).isEqualTo(300);
+      assertThat(swConfig.maxFailuresInWindow()).isEqualTo(30);
+    }
+
+    @Test
+    void sliding_window_without_configuration_falls_back_to_balanced() {
+      // Given / When: no preset, no manual values
+      InqConfig inqConfig = InqConfig.configure()
+          .general()
+          .with(new TimeBasedSlidingWindowConfigBuilder(), b -> {})
+          .build();
+      var swConfig = inqConfig.of(TimeBasedSlidingWindowConfig.class).orElseThrow();
+
+      // Then
+      assertThat(swConfig.windowSizeInSeconds()).isEqualTo(60);
+      assertThat(swConfig.maxFailuresInWindow()).isEqualTo(10);
+    }
+
+    @Test
+    void sliding_window_custom_values_override_preset() {
+      // Given / When
+      InqConfig inqConfig = InqConfig.configure()
+          .general()
+          .with(new TimeBasedSlidingWindowConfigBuilder(), b -> b
+              .protective()
+              .maxFailuresInWindow(7)
+              .windowSizeInSeconds(20))
+          .build();
+      var swConfig = inqConfig.of(TimeBasedSlidingWindowConfig.class).orElseThrow();
+
+      // Then
+      assertThat(swConfig.maxFailuresInWindow()).isEqualTo(7);
+      assertThat(swConfig.windowSizeInSeconds()).isEqualTo(20);
+    }
+
+    @Test
+    void circuit_breaker_and_sliding_window_can_use_different_presets() {
+      // Given / When: protective circuit breaker + permissive sliding window
+      var cbConfig = buildWithSlidingWindow(
+          cb -> cb.name("mixed-presets").protective(),
+          TimeBasedSlidingWindowConfigBuilder::permissive);
+
+      InqConfig inqConfig = InqConfig.configure()
+          .general()
+          .with(new TimeBasedSlidingWindowConfigBuilder(), TimeBasedSlidingWindowConfigBuilder::permissive)
+          .with(InqImperativeCircuitBreakerConfigBuilder.circuitBreaker(),
+              b -> b.name("mixed-presets").protective())
+          .build();
+
+      var swConfig = inqConfig.of(TimeBasedSlidingWindowConfig.class).orElseThrow();
+      var imperativeConfig = inqConfig.of(InqImperativeCircuitBreakerConfig.class).orElseThrow();
+
+      // Then: each has its own preset values
+      assertThat(imperativeConfig.circuitBreaker().waitDurationInOpenState())
+          .isEqualTo(Duration.ofSeconds(5));
+      assertThat(swConfig.windowSizeInSeconds()).isEqualTo(300);
+      assertThat(swConfig.maxFailuresInWindow()).isEqualTo(30);
+    }
+
+    @Test
+    void sliding_window_self_returns_same_instance() {
+      // Given
+      var swConfig = new TimeBasedSlidingWindowConfig(5, 10);
+
+      // When / Then
+      assertThat(swConfig.self()).isSameAs(swConfig);
     }
   }
 }
