@@ -24,9 +24,9 @@ public final class CircuitBreakerCore {
   /**
    * Evaluates whether a call is permitted given the current state.
    *
-   * @param snapshot  the current state snapshot
-   * @param config    the circuit breaker configuration
-   * @param nowNanos  the current nanosecond timestamp
+   * @param snapshot the current state snapshot
+   * @param config   the circuit breaker configuration
+   * @param nowNanos the current nanosecond timestamp
    * @return a {@link PermissionResult} indicating whether the call is permitted
    */
   public static PermissionResult tryAcquirePermission(

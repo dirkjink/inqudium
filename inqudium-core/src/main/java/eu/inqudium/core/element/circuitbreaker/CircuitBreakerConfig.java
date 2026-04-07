@@ -51,7 +51,9 @@ public record CircuitBreakerConfig(
     return new Builder(name);
   }
 
-  /** Returns the wait duration in OPEN state expressed in nanoseconds. */
+  /**
+   * Returns the wait duration in OPEN state expressed in nanoseconds.
+   */
   public long waitDurationNanos() {
     return waitDurationInOpenState.toNanos();
   }

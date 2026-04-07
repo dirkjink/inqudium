@@ -1,6 +1,5 @@
 package eu.inqudium.imperative.core.pipeline;
 
-import eu.inqudium.core.pipeline.Throws;
 import eu.inqudium.core.pipeline.proxy.DispatchExtension;
 import eu.inqudium.core.pipeline.proxy.MethodHandleCache;
 

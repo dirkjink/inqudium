@@ -232,7 +232,7 @@ class SlidingWindowMetricsTest {
   class TripReason {
 
     @Test
-    void should_include_failure_count_and_window_size_and_threshold_in_reason() {
+    void should_include_failure_count_and_call_count_and_threshold_in_reason() {
       // Given
       var metrics = SlidingWindowMetrics.initial(2, 5, 1);
       var tripped = metrics.recordFailure(NOW).recordFailure(NOW);
@@ -241,7 +241,10 @@ class SlidingWindowMetricsTest {
       String reason = tripped.getTripReason(NOW);
 
       // Then
-      assertThat(reason).contains("2").contains("5").contains("Threshold");
+      assertThat(reason)
+          .contains("2 failures")
+          .contains("2 calls")
+          .contains("Threshold: 2");
     }
   }
 }

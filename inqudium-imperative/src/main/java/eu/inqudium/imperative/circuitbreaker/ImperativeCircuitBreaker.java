@@ -152,7 +152,7 @@ public class ImperativeCircuitBreaker<A, R> implements CircuitBreaker<A, R> {
    */
   @Override
   public CompletionStage<R> executeAsync(long chainId, long callId, A argument,
-                                              InternalAsyncExecutor<A, R> next) {
+                                         InternalAsyncExecutor<A, R> next) {
     acquirePermissionOrThrow();
     CompletionStage<R> stage;
     try {

@@ -264,8 +264,8 @@ class LeakyBucketMetricsTest {
       // Then
       assertThat(reason)
           .containsIgnoringCase("bucket")
-          .contains("3")
-          .contains("1.0");
+          .contains("Capacity: 3")
+          .containsIgnoringCase("Leak Rate");
     }
   }
 }

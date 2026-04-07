@@ -3,7 +3,6 @@ package eu.inqudium.imperative.circuitbreaker;
 import eu.inqudium.core.config.InqConfig;
 import eu.inqudium.core.pipeline.InqDecorator;
 import eu.inqudium.core.pipeline.InqExecutor;
-import eu.inqudium.imperative.bulkhead.Bulkhead;
 import eu.inqudium.imperative.bulkhead.config.InqImperativeBulkheadConfig;
 import eu.inqudium.imperative.core.pipeline.InqAsyncDecorator;
 import eu.inqudium.imperative.core.pipeline.InqAsyncExecutor;

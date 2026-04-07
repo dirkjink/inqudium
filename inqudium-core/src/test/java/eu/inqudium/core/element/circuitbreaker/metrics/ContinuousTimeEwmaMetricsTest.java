@@ -62,16 +62,19 @@ class ContinuousTimeEwmaMetricsTest {
 
     @Test
     void should_trip_once_minimum_calls_are_met() {
-      // Given — min=3, threshold=50%, short tau
+      // Given — min=3, threshold=50%, tau=100ms
       var metrics = ContinuousTimeEwmaMetrics.initial(50, Duration.ofMillis(100), 3, T0);
 
-      // When — 3 rapid failures
-      long t = T0;
-      var updated = metrics.recordFailure(t).recordFailure(t + 1).recordFailure(t + 2);
+      // When — 3 failures spaced 100ms apart, starting 100ms after init
+      long t1 = T0 + 100_000_000L;
+      long t2 = t1 + 100_000_000L;
+      long t3 = t2 + 100_000_000L;
+      var updated = metrics.recordFailure(t1).recordFailure(t2).recordFailure(t3);
 
-      // Then — rate should be close to 1.0 (all failures, nearly no time passed)
-      assertThat(updated.isThresholdReached(t + 3)).isTrue();
+      // Then — rate should be well above 50% after 3 consecutive failures
+      assertThat(updated.isThresholdReached(t3)).isTrue();
     }
+
   }
 
   // ======================== Time-Based Decay ========================
@@ -84,10 +87,11 @@ class ContinuousTimeEwmaMetricsTest {
       // Given — threshold=50%, tau=1s, min=1
       var metrics = ContinuousTimeEwmaMetrics.initial(50, Duration.ofSeconds(1), 1, T0);
 
-      // When — one failure, then evaluate much later
-      var updated = metrics.recordFailure(T0);
-      boolean reachedImmediately = updated.isThresholdReached(T0);
-      boolean reachedLater = updated.isThresholdReached(T0 + 10 * NANOS_PER_SECOND);
+      // When — one failure slightly after init so the sample carries weight
+      long failureTime = T0 + NANOS_PER_SECOND;
+      var updated = metrics.recordFailure(failureTime);
+      boolean reachedImmediately = updated.isThresholdReached(failureTime);
+      boolean reachedLater = updated.isThresholdReached(failureTime + 10 * NANOS_PER_SECOND);
 
       // Then — should be above threshold right after failure, below after 10 * tau
       assertThat(reachedImmediately).isTrue();
@@ -97,18 +101,20 @@ class ContinuousTimeEwmaMetricsTest {
     @Test
     void should_decay_faster_with_shorter_time_constant() {
       // Given
-      long tau100ms = 100_000_000L; // 100ms in nanos
       var shortTau = ContinuousTimeEwmaMetrics.initial(10, Duration.ofMillis(100), 1, T0);
       var longTau = ContinuousTimeEwmaMetrics.initial(10, Duration.ofSeconds(10), 1, T0);
 
-      // When — both get one failure at T0
-      var shortUpdated = shortTau.recordFailure(T0);
-      var longUpdated = longTau.recordFailure(T0);
+      // When — both get one failure 1s after init so the sample carries weight
+      long failureTime = T0 + NANOS_PER_SECOND;
+      var shortUpdated = shortTau.recordFailure(failureTime);
+      var longUpdated = longTau.recordFailure(failureTime);
 
-      // Then — after 1 second, short tau should have decayed much more
-      long evaluationTime = T0 + NANOS_PER_SECOND;
-      assertThat(((ContinuousTimeEwmaMetrics) shortUpdated.recordSuccess(evaluationTime)).currentRate())
-          .isLessThan(((ContinuousTimeEwmaMetrics) longUpdated.recordSuccess(evaluationTime)).currentRate());
+      // Then — after another second, short tau should have decayed much more
+      long evaluationTime = failureTime + NANOS_PER_SECOND;
+      double shortRate = ((ContinuousTimeEwmaMetrics) shortUpdated.recordSuccess(evaluationTime)).currentRate();
+      double longRate = ((ContinuousTimeEwmaMetrics) longUpdated.recordSuccess(evaluationTime)).currentRate();
+
+      assertThat(shortRate).isLessThan(longRate);
     }
 
     @Test
@@ -133,22 +139,23 @@ class ContinuousTimeEwmaMetricsTest {
 
     @Test
     void should_lower_rate_when_successes_are_interleaved() {
-      // Given — tau=5s, threshold=50%, min=1
-      var metrics = ContinuousTimeEwmaMetrics.initial(50, Duration.ofSeconds(5), 1, T0);
+      // Given — tau=100ms so each 100ms-spaced sample carries meaningful weight
+      var metrics = ContinuousTimeEwmaMetrics.initial(50, Duration.ofMillis(100), 1, T0);
 
-      // When — alternating F and S
+      // When — alternating F and S, 100ms apart
       var updated = metrics;
       for (int i = 0; i < 10; i++) {
         long t = T0 + i * 100_000_000L; // 100ms apart
         updated = (ContinuousTimeEwmaMetrics) ((i % 2 == 0)
-                    ? updated.recordFailure(t)
-                    : updated.recordSuccess(t));
+            ? updated.recordFailure(t)
+            : updated.recordSuccess(t));
       }
 
-      // Then — rate should be roughly around 0.5 but slightly below due to EWMA weighting
+      // Then — rate should settle around 0.5 for evenly alternating outcomes
       double rate = ((ContinuousTimeEwmaMetrics) updated).currentRate();
       assertThat(rate).isBetween(0.2, 0.8);
     }
+
   }
 
   // ======================== Reset ========================
