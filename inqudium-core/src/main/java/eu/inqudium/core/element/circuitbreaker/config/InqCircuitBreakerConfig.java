@@ -9,7 +9,14 @@ import eu.inqudium.core.event.InqEventPublisher;
 
 public record InqCircuitBreakerConfig(
     GeneralConfig general,
-    InqElementCommonConfig common
+    InqElementCommonConfig common,
+    Double failureRateThreshold,
+    Double slowCallRateThreshold,
+    FailureMetricsConfig failureMetrics,
+    Integer slidingWindowSize,
+    Integer waitDurationInOpenState,
+    Integer permittedNumberOfCallsInHalfOpenState
+
 ) implements InqElementConfig, ConfigExtension<InqCircuitBreakerConfig> {
   @Override
   public String name() {
@@ -40,7 +47,13 @@ public record InqCircuitBreakerConfig(
   public InqCircuitBreakerConfig inference() {
     return new InqCircuitBreakerConfig(
         this.general,
-        this.common
+        this.common,
+        this.failureRateThreshold,
+        this.slowCallRateThreshold,
+        this.failureMetrics,
+        this.slidingWindowSize,
+        this.waitDurationInOpenState,
+        this.permittedNumberOfCallsInHalfOpenState
     );
   }
 }

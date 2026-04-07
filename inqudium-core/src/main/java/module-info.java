@@ -35,6 +35,7 @@ module inqudium.core {
   // ── Dependencies ──
 
   requires org.slf4j;
+  requires annotations;
 
   // ── Exports: all public packages ──
 

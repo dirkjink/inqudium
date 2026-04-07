@@ -17,6 +17,12 @@ public abstract class InqCircuitBreakerConfigBuilder
   private String name;
   private InqEventPublisher eventPublisher;
   private Boolean enableExceptionOptimization;
+  private Double failureRateThreshold;
+  private Double slowCallRateThreshold;
+  private FailureMetricsConfig failureMetrics;
+  private Integer slidingWindowSize;
+  private Integer waitDurationInOpenState;
+  private Integer permittedNumberOfCallsInHalfOpenState;
 
   protected InqCircuitBreakerConfigBuilder() {
   }
@@ -40,6 +46,36 @@ public abstract class InqCircuitBreakerConfigBuilder
   // ──────────────────────────────────────────────────────────────────────────
   // Individual Setters — each guards its own value immediately
   // ──────────────────────────────────────────────────────────────────────────
+
+  public InqCircuitBreakerConfigBuilder<B, E> failureRateThreshold(Double failureRateThreshold) {
+    this.failureRateThreshold = failureRateThreshold;
+    return this;
+  }
+
+  public InqCircuitBreakerConfigBuilder<B, E> slowCallRateThreshold(Double slowCallRateThreshold) {
+    this.slowCallRateThreshold = slowCallRateThreshold;
+    return this;
+  }
+
+  public InqCircuitBreakerConfigBuilder<B, E> failureMetrics(FailureMetricsConfig failureMetrics) {
+    this.failureMetrics = failureMetrics;
+    return this;
+  }
+
+  public InqCircuitBreakerConfigBuilder<B, E> slidingWindowSize(Integer slidingWindowSize) {
+    this.slidingWindowSize = slidingWindowSize;
+    return this;
+  }
+
+  public InqCircuitBreakerConfigBuilder<B, E> waitDurationInOpenState(Integer waitDurationInOpenState) {
+    this.waitDurationInOpenState = waitDurationInOpenState;
+    return this;
+  }
+
+  public InqCircuitBreakerConfigBuilder<B, E> permittedNumberOfCallsInHalfOpenState(Integer permittedNumberOfCallsInHalfOpenState) {
+    this.permittedNumberOfCallsInHalfOpenState = permittedNumberOfCallsInHalfOpenState;
+    return this;
+  }
 
   /**
    * Sets the name of this bulkhead element, used for identification in
@@ -91,7 +127,13 @@ public abstract class InqCircuitBreakerConfigBuilder
 
     InqCircuitBreakerConfig config = new InqCircuitBreakerConfig(
         this.generalConfig,
-        common.inference()
+        common.inference(),
+        this.failureRateThreshold,
+        this.slowCallRateThreshold,
+        this.failureMetrics,
+        this.slidingWindowSize,
+        this.waitDurationInOpenState,
+        this.permittedNumberOfCallsInHalfOpenState
     ).inference();
 
     validate(config);
