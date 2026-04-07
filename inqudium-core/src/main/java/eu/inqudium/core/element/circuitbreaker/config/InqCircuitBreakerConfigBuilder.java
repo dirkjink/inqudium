@@ -3,7 +3,6 @@ package eu.inqudium.core.element.circuitbreaker.config;
 import eu.inqudium.core.config.ConfigExtension;
 import eu.inqudium.core.config.ExtensionBuilder;
 import eu.inqudium.core.config.GeneralConfig;
-import eu.inqudium.core.config.InqConfig;
 import eu.inqudium.core.config.InqElementCommonConfig;
 import eu.inqudium.core.element.InqElementType;
 import eu.inqudium.core.element.circuitbreaker.metrics.FailureMetrics;

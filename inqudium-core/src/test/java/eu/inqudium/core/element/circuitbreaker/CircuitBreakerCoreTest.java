@@ -38,13 +38,17 @@ class CircuitBreakerCoreTest {
 
   // ======================== Test helpers ========================
 
-  /** Creates a fresh CLOSED snapshot with ConsecutiveFailuresMetrics. */
+  /**
+   * Creates a fresh CLOSED snapshot with ConsecutiveFailuresMetrics.
+   */
   private CircuitBreakerSnapshot closedSnapshot() {
     FailureMetrics metrics = ConsecutiveFailuresMetrics.initial(FAILURE_THRESHOLD);
     return CircuitBreakerSnapshot.initial(T0, metrics);
   }
 
-  /** Creates a snapshot in OPEN state by recording enough consecutive failures. */
+  /**
+   * Creates a snapshot in OPEN state by recording enough consecutive failures.
+   */
   private CircuitBreakerSnapshot openSnapshot() {
     var snapshot = closedSnapshot();
     for (int i = 0; i < FAILURE_THRESHOLD; i++) {
@@ -54,7 +58,9 @@ class CircuitBreakerCoreTest {
     return snapshot;
   }
 
-  /** Creates a snapshot in HALF_OPEN state by expiring the wait duration in OPEN. */
+  /**
+   * Creates a snapshot in HALF_OPEN state by expiring the wait duration in OPEN.
+   */
   private CircuitBreakerSnapshot halfOpenSnapshot() {
     var open = openSnapshot();
     long afterWait = open.stateChangedAtNanos() + WAIT_DURATION_NANOS + NANOS_PER_SECOND;

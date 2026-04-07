@@ -1,6 +1,5 @@
 package eu.inqudium.imperative.circuitbreaker;
 
-import eu.inqudium.core.config.GeneralConfig;
 import eu.inqudium.core.config.InqElementCommonConfig;
 import eu.inqudium.core.element.InqElementType;
 import eu.inqudium.core.element.circuitbreaker.CircuitBreakerException;
@@ -9,9 +8,7 @@ import eu.inqudium.core.element.circuitbreaker.StateTransition;
 import eu.inqudium.core.element.circuitbreaker.config.InqCircuitBreakerConfig;
 import eu.inqudium.core.element.circuitbreaker.metrics.SlidingWindowMetrics;
 import eu.inqudium.core.element.config.FailurePredicateConfigBuilder;
-import eu.inqudium.core.event.InqEventPublisher;
 import eu.inqudium.core.time.InqNanoTimeSource;
-
 import org.junit.jupiter.api.DisplayNameGeneration;
 import org.junit.jupiter.api.DisplayNameGenerator;
 import org.junit.jupiter.api.Nested;
@@ -40,12 +37,11 @@ import static org.assertj.core.api.Assertions.catchThrowableOfType;
 @DisplayNameGeneration(DisplayNameGenerator.ReplaceUnderscores.class)
 class ImperativeCircuitBreakerSlidingWindowTest {
 
+  private static final Duration WAIT_DURATION = Duration.ofSeconds(30);
+  private static final long NANOS_PER_SECOND = 1_000_000_000L;
   // Deterministic time source — start at a non-zero value to avoid edge cases
   private final AtomicLong clock = new AtomicLong(1_000_000_000L);
   private final InqNanoTimeSource timeSource = clock::get;
-
-  private static final Duration WAIT_DURATION = Duration.ofSeconds(30);
-  private static final long NANOS_PER_SECOND = 1_000_000_000L;
 
   /**
    * Creates a config with sliding window metrics using the new {@link InqCircuitBreakerConfig} record.
@@ -75,7 +71,9 @@ class ImperativeCircuitBreakerSlidingWindowTest {
     );
   }
 
-  /** Shorthand for the most common config used in tests. */
+  /**
+   * Shorthand for the most common config used in tests.
+   */
   private InqCircuitBreakerConfig defaultConfig() {
     // threshold=3, window=10, min=3, successThreshold=2, permitted=3
     return slidingWindowConfig(3, 10, 3, 2, 3);
@@ -111,28 +109,38 @@ class ImperativeCircuitBreakerSlidingWindowTest {
     );
   }
 
-  /** Advances the deterministic clock by the given number of nanoseconds. */
+  /**
+   * Advances the deterministic clock by the given number of nanoseconds.
+   */
   private void advanceTime(long nanos) {
     clock.addAndGet(nanos);
   }
 
-  /** Advances the clock past the OPEN wait duration. */
+  /**
+   * Advances the clock past the OPEN wait duration.
+   */
   private void advancePastWaitDuration() {
     advanceTime(WAIT_DURATION.toNanos() + NANOS_PER_SECOND);
   }
 
-  /** Records N successful calls via execute(Callable). */
+  /**
+   * Records N successful calls via execute(Callable).
+   */
   private void recordSuccesses(ImperativeCircuitBreaker<?, ?> cb, int count) throws Exception {
     for (int i = 0; i < count; i++) {
       cb.execute(() -> "ok");
     }
   }
 
-  /** Records N failed calls via execute(Callable), swallowing the expected exception. */
+  /**
+   * Records N failed calls via execute(Callable), swallowing the expected exception.
+   */
   private void recordFailures(ImperativeCircuitBreaker<?, ?> cb, int count) {
     for (int i = 0; i < count; i++) {
       try {
-        cb.execute((Callable<String>) () -> { throw new IOException("boom"); });
+        cb.execute((Callable<String>) () -> {
+          throw new IOException("boom");
+        });
       } catch (Exception ignored) {
         // expected
       }
@@ -518,8 +526,11 @@ class ImperativeCircuitBreakerSlidingWindowTest {
       // When — throw IllegalArgumentException (not recorded) twice
       for (int i = 0; i < 2; i++) {
         try {
-          cb.execute((Callable<String>) () -> { throw new IllegalArgumentException("ignored"); });
-        } catch (IllegalArgumentException ignored) {}
+          cb.execute((Callable<String>) () -> {
+            throw new IllegalArgumentException("ignored");
+          });
+        } catch (IllegalArgumentException ignored) {
+        }
       }
 
       // Then — still CLOSED because IAE is not recorded
@@ -536,8 +547,11 @@ class ImperativeCircuitBreakerSlidingWindowTest {
       // When — 2 IOExceptions
       for (int i = 0; i < 2; i++) {
         try {
-          cb.execute((Callable<String>) () -> { throw new IOException("boom"); });
-        } catch (Exception ignored) {}
+          cb.execute((Callable<String>) () -> {
+            throw new IOException("boom");
+          });
+        } catch (Exception ignored) {
+        }
       }
 
       // Then
@@ -558,8 +572,11 @@ class ImperativeCircuitBreakerSlidingWindowTest {
 
       // When — StackOverflowError is thrown
       try {
-        cb.execute((Callable<String>) () -> { throw new StackOverflowError("test"); });
-      } catch (Error | Exception ignored) {}
+        cb.execute((Callable<String>) () -> {
+          throw new StackOverflowError("test");
+        });
+      } catch (Error | Exception ignored) {
+      }
 
       // Then — Errors are ignored, circuit stays CLOSED
       assertThat(cb.getState()).isEqualTo(CircuitState.CLOSED);
@@ -593,8 +610,11 @@ class ImperativeCircuitBreakerSlidingWindowTest {
 
       // When
       try {
-        cb.execute((Runnable) () -> { throw new RuntimeException("boom"); });
-      } catch (RuntimeException ignored) {}
+        cb.execute((Runnable) () -> {
+          throw new RuntimeException("boom");
+        });
+      } catch (RuntimeException ignored) {
+      }
 
       // Then
       assertThat(cb.getState()).isEqualTo(CircuitState.OPEN);
@@ -607,7 +627,8 @@ class ImperativeCircuitBreakerSlidingWindowTest {
       recordFailures(cb, 3);
 
       // When / Then
-      assertThatThrownBy(() -> cb.execute(() -> {}))
+      assertThatThrownBy(() -> cb.execute(() -> {
+      }))
           .isInstanceOf(CircuitBreakerException.class);
     }
   }
@@ -650,7 +671,9 @@ class ImperativeCircuitBreakerSlidingWindowTest {
       // When / Then — business exception is NOT caught by executeWithFallback
       assertThatThrownBy(() ->
           cb.executeWithFallback(
-              () -> { throw new IOException("business error"); },
+              () -> {
+                throw new IOException("business error");
+              },
               () -> "fallback"))
           .isInstanceOf(IOException.class);
     }
@@ -668,7 +691,9 @@ class ImperativeCircuitBreakerSlidingWindowTest {
 
       // When
       String result = cb.executeWithFallbackOnAny(
-          () -> { throw new IOException("oops"); },
+          () -> {
+            throw new IOException("oops");
+          },
           () -> "recovered");
 
       // Then
@@ -696,8 +721,12 @@ class ImperativeCircuitBreakerSlidingWindowTest {
       // When / Then
       var thrown = catchThrowableOfType(
           () -> cb.executeWithFallbackOnAny(
-              () -> { throw new IOException("original"); },
-              () -> { throw new RuntimeException("fallback-error"); }),
+              () -> {
+                throw new IOException("original");
+              },
+              () -> {
+                throw new RuntimeException("fallback-error");
+              }),
           RuntimeException.class);
 
       assertThat(thrown.getMessage()).isEqualTo("fallback-error");
@@ -713,7 +742,9 @@ class ImperativeCircuitBreakerSlidingWindowTest {
       // When / Then
       assertThatThrownBy(() ->
           cb.executeWithFallbackOnAny(
-              () -> { throw new InterruptedException("interrupted"); },
+              () -> {
+                throw new InterruptedException("interrupted");
+              },
               () -> "should-not-reach"))
           .isInstanceOf(InterruptedException.class);
     }
@@ -838,7 +869,9 @@ class ImperativeCircuitBreakerSlidingWindowTest {
     void should_not_break_circuit_breaker_when_listener_throws() throws Exception {
       // Given
       var cb = new ImperativeCircuitBreaker<>(defaultConfig(), timeSource);
-      cb.onStateTransition(t -> { throw new RuntimeException("listener crash"); });
+      cb.onStateTransition(t -> {
+        throw new RuntimeException("listener crash");
+      });
 
       // When — trip the circuit (listener will throw)
       recordFailures(cb, 3);
@@ -1009,8 +1042,11 @@ class ImperativeCircuitBreakerSlidingWindowTest {
 
       // When
       try {
-        cb.execute((Callable<String>) () -> { throw new InterruptedException("test"); });
-      } catch (Exception ignored) {}
+        cb.execute((Callable<String>) () -> {
+          throw new InterruptedException("test");
+        });
+      } catch (Exception ignored) {
+      }
 
       // Then — interrupt flag should be restored
       assertThat(Thread.currentThread().isInterrupted()).isTrue();
