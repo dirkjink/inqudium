@@ -4,9 +4,8 @@ import eu.inqudium.core.element.circuitbreaker.metrics.FailureMetrics;
 import eu.inqudium.core.element.circuitbreaker.metrics.TimeBasedErrorRateMetrics;
 
 import java.time.Duration;
-import java.time.Instant;
 import java.util.Objects;
-import java.util.function.Function;
+import java.util.function.LongFunction;
 import java.util.function.Predicate;
 
 /**
@@ -20,7 +19,7 @@ public record CircuitBreakerConfig(
     int permittedCallsInHalfOpen,
     Duration waitDurationInOpenState,
     Predicate<Throwable> recordFailurePredicate,
-    Function<Instant, FailureMetrics> metricsFactory
+    LongFunction<FailureMetrics> metricsFactory
 ) {
 
   public CircuitBreakerConfig {
@@ -52,6 +51,11 @@ public record CircuitBreakerConfig(
     return new Builder(name);
   }
 
+  /** Returns the wait duration in OPEN state expressed in nanoseconds. */
+  public long waitDurationNanos() {
+    return waitDurationInOpenState.toNanos();
+  }
+
   public boolean shouldRecordAsFailure(Throwable throwable) {
     return recordFailurePredicate.test(throwable);
   }
@@ -59,21 +63,16 @@ public record CircuitBreakerConfig(
   public static final class Builder {
     private final String name;
 
-    private int failureThreshold = 50; // 50% failure rate
+    private int failureThreshold = 50;
     private int successThresholdInHalfOpen = 3;
     private int permittedCallsInHalfOpen = 3;
     private Duration waitDurationInOpenState = Duration.ofSeconds(30);
 
-    // ======================== Fix 2a: Default predicate excludes Errors ========================
-    // Only Exceptions indicate downstream failures. JVM-level Errors (OOM, StackOverflow)
-    // should not trip the circuit breaker.
     private Predicate<Throwable> recordFailurePredicate = e -> e instanceof Exception;
     private PredicateSource predicateSource = PredicateSource.NONE;
-    // Settings for the default metric strategy
     private int slidingWindowSeconds = 10;
     private int minimumNumberOfCalls = 10;
-    // Allows overriding the metric strategy
-    private Function<Instant, FailureMetrics> customMetricsFactory = null;
+    private LongFunction<FailureMetrics> customMetricsFactory = null;
 
     private Builder(String name) {
       this.name = Objects.requireNonNull(name);
@@ -99,19 +98,11 @@ public record CircuitBreakerConfig(
       return this;
     }
 
-    /**
-     * Set the size of the time-based sliding window.
-     * Only applies if no custom metrics factory is provided.
-     */
     public Builder slidingWindow(Duration windowSize) {
       this.slidingWindowSeconds = (int) Math.max(1, windowSize.getSeconds());
       return this;
     }
 
-    /**
-     * Set the minimum number of calls required before the failure rate is evaluated.
-     * Only applies if no custom metrics factory is provided.
-     */
     public Builder minimumNumberOfCalls(int minimumNumberOfCalls) {
       this.minimumNumberOfCalls = minimumNumberOfCalls;
       return this;
@@ -120,18 +111,14 @@ public record CircuitBreakerConfig(
     /**
      * Provide a custom strategy for tracking failures.
      * Overrides the default Time-Based Error Rate algorithm.
+     *
+     * @param factory a function that receives the current nanos timestamp and returns a fresh {@link FailureMetrics}
      */
-    public Builder metricsStrategy(Function<Instant, FailureMetrics> factory) {
+    public Builder metricsStrategy(LongFunction<FailureMetrics> factory) {
       this.customMetricsFactory = Objects.requireNonNull(factory);
       return this;
     }
 
-    /**
-     * Set a custom predicate for determining which throwables count as failures.
-     *
-     * <p>Cannot be used after {@link #recordExceptions} or {@link #ignoreExceptions}
-     * has already been called.
-     */
     public Builder recordFailurePredicate(Predicate<Throwable> recordFailurePredicate) {
       if (predicateSource == PredicateSource.RECORD_EXCEPTIONS
           || predicateSource == PredicateSource.IGNORE_EXCEPTIONS) {
@@ -144,14 +131,6 @@ public record CircuitBreakerConfig(
       return this;
     }
 
-    // ======================== Fix 8: Hardened predicate configuration ========================
-
-    /**
-     * Only record failures for the specified exception types.
-     *
-     * <p>Cannot be combined with {@link #ignoreExceptions} or called after any
-     * other predicate configuration method.
-     */
     @SafeVarargs
     public final Builder recordExceptions(Class<? extends Throwable>... exceptionTypes) {
       if (predicateSource != PredicateSource.NONE) {
@@ -169,12 +148,6 @@ public record CircuitBreakerConfig(
       return this;
     }
 
-    /**
-     * Record all exceptions as failures EXCEPT the specified types.
-     *
-     * <p>Cannot be combined with {@link #recordExceptions} or called after any
-     * other predicate configuration method.
-     */
     @SafeVarargs
     public final Builder ignoreExceptions(Class<? extends Throwable>... exceptionTypes) {
       if (predicateSource != PredicateSource.NONE) {
@@ -193,10 +166,9 @@ public record CircuitBreakerConfig(
     }
 
     public CircuitBreakerConfig build() {
-      // If the user has not provided a custom factory, use the default time-based strategy
-      Function<Instant, FailureMetrics> factoryToUse = customMetricsFactory != null
+      LongFunction<FailureMetrics> factoryToUse = customMetricsFactory != null
           ? customMetricsFactory
-          : now -> TimeBasedErrorRateMetrics.initial(failureThreshold,slidingWindowSeconds, minimumNumberOfCalls, now);
+          : nowNanos -> TimeBasedErrorRateMetrics.initial(failureThreshold, slidingWindowSeconds, minimumNumberOfCalls, nowNanos);
 
       return new CircuitBreakerConfig(
           name,
@@ -209,7 +181,6 @@ public record CircuitBreakerConfig(
       );
     }
 
-    // ======================== Fix 8: Hardened predicate source tracking ========================
     private enum PredicateSource {NONE, RAW, RECORD_EXCEPTIONS, IGNORE_EXCEPTIONS}
   }
 }

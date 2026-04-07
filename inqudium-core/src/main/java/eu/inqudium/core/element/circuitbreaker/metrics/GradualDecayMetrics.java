@@ -1,9 +1,5 @@
 package eu.inqudium.core.element.circuitbreaker.metrics;
 
-import eu.inqudium.core.element.circuitbreaker.CircuitBreakerConfig;
-
-import java.time.Instant;
-
 /**
  * Immutable implementation of the gradual decay algorithm.
  * One success heals exactly one failure.
@@ -15,28 +11,27 @@ public record GradualDecayMetrics(long failureThreshold, int failureCount) imple
   }
 
   @Override
-  public FailureMetrics recordSuccess(Instant now) {
-    // Prevent failure count from dropping below zero
+  public FailureMetrics recordSuccess(long nowNanos) {
     return new GradualDecayMetrics(failureThreshold, Math.max(0, failureCount - 1));
   }
 
   @Override
-  public FailureMetrics recordFailure(Instant now) {
-    return new GradualDecayMetrics(failureThreshold,failureCount + 1);
+  public FailureMetrics recordFailure(long nowNanos) {
+    return new GradualDecayMetrics(failureThreshold, failureCount + 1);
   }
 
   @Override
-  public boolean isThresholdReached(Instant now) {
+  public boolean isThresholdReached(long nowNanos) {
     return failureCount >= failureThreshold;
   }
 
   @Override
-  public FailureMetrics reset(Instant now) {
-    return new GradualDecayMetrics(failureThreshold,0);
+  public FailureMetrics reset(long nowNanos) {
+    return new GradualDecayMetrics(failureThreshold, 0);
   }
 
   @Override
-  public String getTripReason(Instant now) {
+  public String getTripReason(long nowNanos) {
     return "Failure threshold reached: Current failure count is %d (Threshold: %d)."
         .formatted(failureCount, failureThreshold);
   }

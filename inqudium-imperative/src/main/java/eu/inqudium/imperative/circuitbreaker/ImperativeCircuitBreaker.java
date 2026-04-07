@@ -12,11 +12,10 @@ import eu.inqudium.core.element.circuitbreaker.metrics.FailureMetrics;
 import eu.inqudium.core.event.InqEventPublisher;
 import eu.inqudium.core.pipeline.InqDecorator;
 import eu.inqudium.core.pipeline.InternalExecutor;
+import eu.inqudium.core.time.InqNanoTimeSource;
 import eu.inqudium.imperative.core.pipeline.InqAsyncDecorator;
 import eu.inqudium.imperative.core.pipeline.InternalAsyncExecutor;
 
-import java.time.Clock;
-import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.Callable;
@@ -49,7 +48,7 @@ public class ImperativeCircuitBreaker<A, R> implements CircuitBreaker<A, R> {
 
   private final CircuitBreakerConfig config;
   private final AtomicReference<CircuitBreakerSnapshot> snapshotRef;
-  private final Clock clock;
+  private final InqNanoTimeSource timeSource;
   private final List<Consumer<StateTransition>> transitionListeners;
   private final InqEventPublisher eventPublisher;
 
@@ -57,22 +56,22 @@ public class ImperativeCircuitBreaker<A, R> implements CircuitBreaker<A, R> {
   private final ReentrantLock transitionLock = new ReentrantLock();
 
   public ImperativeCircuitBreaker(CircuitBreakerConfig config) {
-    this(config, Clock.systemUTC());
+    this(config, InqNanoTimeSource.system());
   }
 
-  public ImperativeCircuitBreaker(CircuitBreakerConfig config, Clock clock) {
-    this(config, clock, InqEventPublisher.create(config.name(), InqElementType.CIRCUIT_BREAKER));
+  public ImperativeCircuitBreaker(CircuitBreakerConfig config, InqNanoTimeSource timeSource) {
+    this(config, timeSource, InqEventPublisher.create(config.name(), InqElementType.CIRCUIT_BREAKER));
   }
 
-  public ImperativeCircuitBreaker(CircuitBreakerConfig config, Clock clock, InqEventPublisher eventPublisher) {
+  public ImperativeCircuitBreaker(CircuitBreakerConfig config, InqNanoTimeSource timeSource, InqEventPublisher eventPublisher) {
     this.config = Objects.requireNonNull(config, "config must not be null");
-    this.clock = Objects.requireNonNull(clock, "clock must not be null");
+    this.timeSource = Objects.requireNonNull(timeSource, "timeSource must not be null");
     this.eventPublisher = Objects.requireNonNull(eventPublisher, "eventPublisher must not be null");
 
-    Instant now = clock.instant();
-    FailureMetrics initialMetrics = config.metricsFactory().apply(now);
+    long nowNanos = timeSource.now();
+    FailureMetrics initialMetrics = config.metricsFactory().apply(nowNanos);
 
-    this.snapshotRef = new AtomicReference<>(CircuitBreakerSnapshot.initial(now, initialMetrics));
+    this.snapshotRef = new AtomicReference<>(CircuitBreakerSnapshot.initial(nowNanos, initialMetrics));
     this.transitionListeners = new CopyOnWriteArrayList<>();
   }
 
@@ -290,9 +289,9 @@ public class ImperativeCircuitBreaker<A, R> implements CircuitBreaker<A, R> {
     while (true) {
       retries = yieldIfExcessiveRetries(retries);
 
-      Instant now = clock.instant();
+      long nowNanos = timeSource.now();
       CircuitBreakerSnapshot current = snapshotRef.get();
-      PermissionResult result = CircuitBreakerCore.tryAcquirePermission(current, config, now);
+      PermissionResult result = CircuitBreakerCore.tryAcquirePermission(current, config, nowNanos);
 
       if (!result.permitted()) {
         throw new CircuitBreakerException(config.name(), result.snapshot().state());
@@ -302,9 +301,9 @@ public class ImperativeCircuitBreaker<A, R> implements CircuitBreaker<A, R> {
         StateTransition transition = null;
         transitionLock.lock();
         try {
-          now = clock.instant();
+          nowNanos = timeSource.now();
           current = snapshotRef.get();
-          result = CircuitBreakerCore.tryAcquirePermission(current, config, now);
+          result = CircuitBreakerCore.tryAcquirePermission(current, config, nowNanos);
 
           if (!result.permitted()) {
             throw new CircuitBreakerException(config.name(), result.snapshot().state());
@@ -316,7 +315,7 @@ public class ImperativeCircuitBreaker<A, R> implements CircuitBreaker<A, R> {
 
           if (snapshotRef.compareAndSet(current, result.snapshot())) {
             transition = CircuitBreakerCore.detectTransition(
-                config.name(), current, result.snapshot(), now).orElse(null);
+                config.name(), current, result.snapshot(), nowNanos).orElse(null);
           } else {
             continue;
           }
@@ -340,17 +339,17 @@ public class ImperativeCircuitBreaker<A, R> implements CircuitBreaker<A, R> {
     while (true) {
       retries = yieldIfExcessiveRetries(retries);
 
-      Instant now = clock.instant();
+      long nowNanos = timeSource.now();
       CircuitBreakerSnapshot current = snapshotRef.get();
-      CircuitBreakerSnapshot updated = CircuitBreakerCore.recordSuccess(current, config, now);
+      CircuitBreakerSnapshot updated = CircuitBreakerCore.recordSuccess(current, config, nowNanos);
 
       if (updated.state() != current.state()) {
         StateTransition transition = null;
         transitionLock.lock();
         try {
-          now = clock.instant();
+          nowNanos = timeSource.now();
           current = snapshotRef.get();
-          updated = CircuitBreakerCore.recordSuccess(current, config, now);
+          updated = CircuitBreakerCore.recordSuccess(current, config, nowNanos);
 
           if (updated.state() == current.state()) {
             continue;
@@ -358,7 +357,7 @@ public class ImperativeCircuitBreaker<A, R> implements CircuitBreaker<A, R> {
 
           if (snapshotRef.compareAndSet(current, updated)) {
             transition = CircuitBreakerCore.detectTransition(
-                config.name(), current, updated, now).orElse(null);
+                config.name(), current, updated, nowNanos).orElse(null);
           } else {
             continue;
           }
@@ -385,17 +384,17 @@ public class ImperativeCircuitBreaker<A, R> implements CircuitBreaker<A, R> {
     while (true) {
       retries = yieldIfExcessiveRetries(retries);
 
-      Instant now = clock.instant();
+      long nowNanos = timeSource.now();
       CircuitBreakerSnapshot current = snapshotRef.get();
-      CircuitBreakerSnapshot updated = CircuitBreakerCore.recordFailure(current, config, now);
+      CircuitBreakerSnapshot updated = CircuitBreakerCore.recordFailure(current, config, nowNanos);
 
       if (updated.state() != current.state()) {
         StateTransition transition = null;
         transitionLock.lock();
         try {
-          now = clock.instant();
+          nowNanos = timeSource.now();
           current = snapshotRef.get();
-          updated = CircuitBreakerCore.recordFailure(current, config, now);
+          updated = CircuitBreakerCore.recordFailure(current, config, nowNanos);
 
           if (updated.state() == current.state()) {
             continue;
@@ -403,7 +402,7 @@ public class ImperativeCircuitBreaker<A, R> implements CircuitBreaker<A, R> {
 
           if (snapshotRef.compareAndSet(current, updated)) {
             transition = CircuitBreakerCore.detectTransition(
-                config.name(), current, updated, now).orElse(null);
+                config.name(), current, updated, nowNanos).orElse(null);
           } else {
             continue;
           }
@@ -493,23 +492,23 @@ public class ImperativeCircuitBreaker<A, R> implements CircuitBreaker<A, R> {
     StateTransition transition = null;
     transitionLock.lock();
     try {
-      Instant now = clock.instant();
+      long nowNanos = timeSource.now();
       CircuitBreakerSnapshot current = snapshotRef.get();
 
       if (current.state() == CircuitState.CLOSED
           && current.successCount() == 0
           && current.halfOpenAttempts() == 0) {
-        FailureMetrics freshMetrics = config.metricsFactory().apply(now);
-        CircuitBreakerSnapshot refreshed = CircuitBreakerSnapshot.initial(now, freshMetrics);
+        FailureMetrics freshMetrics = config.metricsFactory().apply(nowNanos);
+        CircuitBreakerSnapshot refreshed = CircuitBreakerSnapshot.initial(nowNanos, freshMetrics);
         snapshotRef.set(refreshed);
         return;
       }
 
-      FailureMetrics initialMetrics = config.metricsFactory().apply(now);
-      CircuitBreakerSnapshot initial = CircuitBreakerSnapshot.initial(now, initialMetrics);
+      FailureMetrics initialMetrics = config.metricsFactory().apply(nowNanos);
+      CircuitBreakerSnapshot initial = CircuitBreakerSnapshot.initial(nowNanos, initialMetrics);
       CircuitBreakerSnapshot before = snapshotRef.getAndSet(initial);
       transition = CircuitBreakerCore.detectTransition(
-          config.name(), before, initial, now).orElse(null);
+          config.name(), before, initial, nowNanos).orElse(null);
     } finally {
       transitionLock.unlock();
     }

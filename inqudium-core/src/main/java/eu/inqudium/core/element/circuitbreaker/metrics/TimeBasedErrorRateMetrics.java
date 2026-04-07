@@ -1,8 +1,5 @@
 package eu.inqudium.core.element.circuitbreaker.metrics;
 
-import eu.inqudium.core.element.circuitbreaker.CircuitBreakerConfig;
-
-import java.time.Instant;
 import java.util.Arrays;
 import java.util.Objects;
 
@@ -10,11 +7,9 @@ import java.util.Objects;
  * Immutable implementation of a Time-Based Error Rate algorithm.
  *
  * <p>Tracks both successes and failures in distinct time buckets (1 second per bucket).
- * When time advances, older buckets are automatically cleared. The threshold is
- * evaluated as a percentage of total calls within the active time window.
+ * Internally converts nanosecond timestamps to seconds for bucket addressing.
  *
- * <p>Note: The {@link CircuitBreakerConfig#failureThreshold()} is interpreted as a
- * percentage from 1 to 100 (e.g., a threshold of 50 means 50% failure rate).
+ * <p>The failure threshold is interpreted as a percentage from 1 to 100.
  */
 public record TimeBasedErrorRateMetrics(
     long failureThreshold,
@@ -22,22 +17,19 @@ public record TimeBasedErrorRateMetrics(
     int minimumNumberOfCalls,
     int[] successBuckets,
     int[] failureBuckets,
-    long lastUpdatedEpochSecond
+    long lastUpdatedSecond
 ) implements FailureMetrics {
 
-  // ======================== Fix 1: Defensive array copy on construction ========================
-
+  // Defensive array copy on construction
   public TimeBasedErrorRateMetrics {
     successBuckets = Arrays.copyOf(successBuckets, successBuckets.length);
     failureBuckets = Arrays.copyOf(failureBuckets, failureBuckets.length);
   }
 
-  // ======================== Fix 1: Defensive array copy on access ========================
-
   public static TimeBasedErrorRateMetrics initial(double failureThreshold,
                                                   int windowSizeInSeconds,
                                                   int minimumNumberOfCalls,
-                                                  Instant now) {
+                                                  long nowNanos) {
     if (windowSizeInSeconds <= 0) {
       throw new IllegalArgumentException("windowSizeInSeconds must be greater than 0");
     }
@@ -45,21 +37,19 @@ public record TimeBasedErrorRateMetrics(
       throw new IllegalArgumentException("minimumNumberOfCalls must be greater than 0");
     }
     return new TimeBasedErrorRateMetrics(
-        Math.round(failureThreshold),
-        windowSizeInSeconds,
-        minimumNumberOfCalls,
-        new int[windowSizeInSeconds],
-        new int[windowSizeInSeconds],
-        now.getEpochSecond()
-    );
+        Math.round(failureThreshold), windowSizeInSeconds, minimumNumberOfCalls,
+        new int[windowSizeInSeconds], new int[windowSizeInSeconds], toSeconds(nowNanos));
   }
 
+  private static long toSeconds(long nanos) {
+    return nanos / 1_000_000_000L;
+  }
+
+  // Defensive array copy on access
   @Override
   public int[] successBuckets() {
     return Arrays.copyOf(successBuckets, successBuckets.length);
   }
-
-  // ======================== Fix 1: Structural equals and hashCode ========================
 
   @Override
   public int[] failureBuckets() {
@@ -73,143 +63,101 @@ public record TimeBasedErrorRateMetrics(
     return failureThreshold == that.failureThreshold &&
         windowSizeInSeconds == that.windowSizeInSeconds &&
         minimumNumberOfCalls == that.minimumNumberOfCalls &&
-        lastUpdatedEpochSecond == that.lastUpdatedEpochSecond &&
+        lastUpdatedSecond == that.lastUpdatedSecond &&
         Objects.deepEquals(successBuckets, that.successBuckets) &&
         Objects.deepEquals(failureBuckets, that.failureBuckets);
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(failureThreshold,
-        windowSizeInSeconds,
-        minimumNumberOfCalls,
-        Arrays.hashCode(successBuckets),
-        Arrays.hashCode(failureBuckets),
-        lastUpdatedEpochSecond);
-  }
-
-
-  @Override
-  public FailureMetrics recordSuccess(Instant now) {
-    return recordOutcome(now, true);
+    return Objects.hash(failureThreshold, windowSizeInSeconds, minimumNumberOfCalls,
+        Arrays.hashCode(successBuckets), Arrays.hashCode(failureBuckets), lastUpdatedSecond);
   }
 
   @Override
-  public FailureMetrics recordFailure(Instant now) {
-    return recordOutcome(now, false);
+  public FailureMetrics recordSuccess(long nowNanos) {
+    return recordOutcome(nowNanos, true);
   }
 
-  private TimeBasedErrorRateMetrics recordOutcome(Instant now, boolean isSuccess) {
-    long currentEpochSecond = now.getEpochSecond();
+  @Override
+  public FailureMetrics recordFailure(long nowNanos) {
+    return recordOutcome(nowNanos, false);
+  }
 
-    // Fast-forward to clear expired buckets
-    TimeBasedErrorRateMetrics updatedState = fastForward(currentEpochSecond);
+  private TimeBasedErrorRateMetrics recordOutcome(long nowNanos, boolean isSuccess) {
+    long currentSecond = toSeconds(nowNanos);
+    TimeBasedErrorRateMetrics updatedState = fastForward(currentSecond);
 
-    // Access internal fields directly (not the defensive-copy accessors)
-    // since we are inside the record and will immediately copy anyway.
     int[] newSuccesses = Arrays.copyOf(updatedState.successBuckets, windowSizeInSeconds);
     int[] newFailures = Arrays.copyOf(updatedState.failureBuckets, windowSizeInSeconds);
 
-    // Determine the correct bucket index
-    int currentBucketIndex = (int) (currentEpochSecond % windowSizeInSeconds);
+    int currentBucketIndex = (int) (currentSecond % windowSizeInSeconds);
     if (currentBucketIndex < 0) {
       currentBucketIndex += windowSizeInSeconds;
     }
 
-    // Increment the respective counter
     if (isSuccess) {
       newSuccesses[currentBucketIndex]++;
     } else {
       newFailures[currentBucketIndex]++;
     }
 
-    // Ensure the internal clock never moves backwards
-    long newLastUpdatedEpochSecond = Math.max(updatedState.lastUpdatedEpochSecond, currentEpochSecond);
-
+    long newLastUpdatedSecond = Math.max(updatedState.lastUpdatedSecond, currentSecond);
     return new TimeBasedErrorRateMetrics(
-        failureThreshold,
-        windowSizeInSeconds,
-        minimumNumberOfCalls,
-        newSuccesses,
-        newFailures,
-        newLastUpdatedEpochSecond
-    );
+        failureThreshold, windowSizeInSeconds, minimumNumberOfCalls,
+        newSuccesses, newFailures, newLastUpdatedSecond);
   }
 
-  // ======================== Fix 9: Shared evaluation to avoid double fastForward ========================
-
-  private EvaluationResult evaluate(Instant now) {
-    TimeBasedErrorRateMetrics evaluated = fastForward(now.getEpochSecond());
+  private EvaluationResult evaluate(long nowNanos) {
+    TimeBasedErrorRateMetrics evaluated = fastForward(toSeconds(nowNanos));
     int totalSuccesses = Arrays.stream(evaluated.successBuckets).sum();
     int totalFailures = Arrays.stream(evaluated.failureBuckets).sum();
     return new EvaluationResult(totalSuccesses, totalFailures, totalSuccesses + totalFailures);
   }
 
   @Override
-  public boolean isThresholdReached(Instant now) {
-    EvaluationResult eval = evaluate(now);
-
+  public boolean isThresholdReached(long nowNanos) {
+    EvaluationResult eval = evaluate(nowNanos);
     if (eval.totalCalls() < minimumNumberOfCalls) {
       return false;
     }
-
     double failureRate = (double) eval.totalFailures() / eval.totalCalls();
     double rateThreshold = failureThreshold / 100.0;
-
     return failureRate >= rateThreshold;
   }
 
   @Override
-  public String getTripReason(Instant now) {
-    EvaluationResult eval = evaluate(now);
-
+  public String getTripReason(long nowNanos) {
+    EvaluationResult eval = evaluate(nowNanos);
     if (eval.totalCalls() == 0) {
       return "Circuit tripped, but no calls were recorded in the current window.";
     }
-
     return "Failure rate of %.1f%% (%d failures out of %d calls) in the last %d seconds exceeded the threshold of %d%%."
         .formatted(eval.failureRatePercent(), eval.totalFailures(), eval.totalCalls(),
             windowSizeInSeconds, failureThreshold);
   }
 
   @Override
-  public FailureMetrics reset(Instant now) {
+  public FailureMetrics reset(long nowNanos) {
     return new TimeBasedErrorRateMetrics(
-        failureThreshold,
-        windowSizeInSeconds,
-        minimumNumberOfCalls,
-        new int[windowSizeInSeconds],
-        new int[windowSizeInSeconds],
-        now.getEpochSecond()
-    );
+        failureThreshold, windowSizeInSeconds, minimumNumberOfCalls,
+        new int[windowSizeInSeconds], new int[windowSizeInSeconds], toSeconds(nowNanos));
   }
 
-  // ======================== Reset ========================
-
-  private TimeBasedErrorRateMetrics fastForward(long currentEpochSecond) {
-    if (currentEpochSecond <= lastUpdatedEpochSecond) {
+  private TimeBasedErrorRateMetrics fastForward(long currentSecond) {
+    if (currentSecond <= lastUpdatedSecond) {
       return this;
     }
-
-    long deltaSeconds = currentEpochSecond - lastUpdatedEpochSecond;
-
+    long deltaSeconds = currentSecond - lastUpdatedSecond;
     if (deltaSeconds >= windowSizeInSeconds) {
       return new TimeBasedErrorRateMetrics(
-          failureThreshold,
-          windowSizeInSeconds,
-          minimumNumberOfCalls,
-          new int[windowSizeInSeconds],
-          new int[windowSizeInSeconds],
-          currentEpochSecond
-      );
+          failureThreshold, windowSizeInSeconds, minimumNumberOfCalls,
+          new int[windowSizeInSeconds], new int[windowSizeInSeconds], currentSecond);
     }
-
-    // Access internal fields directly — we are inside the record
     int[] newSuccesses = Arrays.copyOf(successBuckets, windowSizeInSeconds);
     int[] newFailures = Arrays.copyOf(failureBuckets, windowSizeInSeconds);
-
     for (long i = 1; i <= deltaSeconds; i++) {
-      long timeToClear = lastUpdatedEpochSecond + i;
+      long timeToClear = lastUpdatedSecond + i;
       int indexToClear = (int) (timeToClear % windowSizeInSeconds);
       if (indexToClear < 0) {
         indexToClear += windowSizeInSeconds;
@@ -217,24 +165,11 @@ public record TimeBasedErrorRateMetrics(
       newSuccesses[indexToClear] = 0;
       newFailures[indexToClear] = 0;
     }
-
     return new TimeBasedErrorRateMetrics(
-        failureThreshold,
-        windowSizeInSeconds,
-        minimumNumberOfCalls,
-        newSuccesses,
-        newFailures,
-        currentEpochSecond
-    );
+        failureThreshold, windowSizeInSeconds, minimumNumberOfCalls,
+        newSuccesses, newFailures, currentSecond);
   }
 
-  // ======================== Internal: Sliding Window ========================
-
-  /**
-   * Internal evaluation result that captures aggregated metrics after fast-forwarding.
-   * Used by both {@link #isThresholdReached} and {@link #getTripReason} to avoid
-   * redundant array copy and summation operations.
-   */
   private record EvaluationResult(int totalSuccesses, int totalFailures, int totalCalls) {
     double failureRatePercent() {
       return totalCalls == 0 ? 0.0 : ((double) totalFailures / totalCalls) * 100.0;

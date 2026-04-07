@@ -1,60 +1,42 @@
 package eu.inqudium.core.element.circuitbreaker.metrics;
 
-import eu.inqudium.core.element.circuitbreaker.CircuitBreakerConfig;
-
-import java.time.Instant;
 import java.util.List;
 
 /**
  * Immutable implementation of a Composite FailureMetrics strategy.
  *
- * <p>This allows combining multiple metrics (e.g., a sliding window AND a
- * consecutive failures counter). By default, it uses an OR-logic for the
- * threshold evaluation: if ANY of the underlying metrics signals that the
- * threshold is reached, the composite metric trips the circuit.
+ * <p>Combines multiple metrics with OR-logic: if ANY underlying metric
+ * signals that the threshold is reached, the composite metric trips the circuit.
  */
 public record CompositeFailureMetrics(List<FailureMetrics> delegates) implements FailureMetrics {
 
-  /**
-   * Creates a new composite metric from the provided underlying metrics.
-   *
-   * @param metrics the metrics to combine
-   * @return a new composite metric instance
-   * @throws IllegalArgumentException if no metrics are provided
-   */
   public static CompositeFailureMetrics of(FailureMetrics... metrics) {
     if (metrics == null || metrics.length == 0) {
       throw new IllegalArgumentException("At least one FailureMetrics instance must be provided");
     }
-    // List.of creates an immutable copy to guarantee the functional core constraints
     return new CompositeFailureMetrics(List.of(metrics));
   }
 
   @Override
-  public FailureMetrics recordSuccess(Instant now) {
-    // Map over all delegates and record the success immutably
+  public FailureMetrics recordSuccess(long nowNanos) {
     List<FailureMetrics> updatedDelegates = delegates.stream()
-        .map(metric -> metric.recordSuccess(now))
+        .map(metric -> metric.recordSuccess(nowNanos))
         .toList();
-
     return new CompositeFailureMetrics(updatedDelegates);
   }
 
   @Override
-  public FailureMetrics recordFailure(Instant now) {
-    // Map over all delegates and record the failure immutably
+  public FailureMetrics recordFailure(long nowNanos) {
     List<FailureMetrics> updatedDelegates = delegates.stream()
-        .map(metric -> metric.recordFailure(now))
+        .map(metric -> metric.recordFailure(nowNanos))
         .toList();
-
     return new CompositeFailureMetrics(updatedDelegates);
   }
 
   @Override
-  public boolean isThresholdReached(Instant now) {
-    // OR-Logic: Trip the circuit if any of the underlying metrics reaches its threshold
+  public boolean isThresholdReached(long nowNanos) {
     for (FailureMetrics metric : delegates) {
-      if (metric.isThresholdReached(now)) {
+      if (metric.isThresholdReached(nowNanos)) {
         return true;
       }
     }
@@ -62,22 +44,20 @@ public record CompositeFailureMetrics(List<FailureMetrics> delegates) implements
   }
 
   @Override
-  public FailureMetrics reset(Instant now) {
-    // Reset all underlying metrics
+  public FailureMetrics reset(long nowNanos) {
     List<FailureMetrics> resetDelegates = delegates.stream()
-        .map(metric -> metric.reset(now))
+        .map(metric -> metric.reset(nowNanos))
         .toList();
-
     return new CompositeFailureMetrics(resetDelegates);
   }
 
   @Override
-  public String getTripReason(Instant now) {
+  public String getTripReason(long nowNanos) {
     StringBuilder reasonBuilder = new StringBuilder("Composite threshold reached. Triggering component(s): ");
 
     List<String> triggeringReasons = delegates.stream()
-        .filter(metric -> metric.isThresholdReached(now))
-        .map(metric -> "[" + metric.getClass().getSimpleName() + ": " + metric.getTripReason(now) + "]")
+        .filter(metric -> metric.isThresholdReached(nowNanos))
+        .map(metric -> "[" + metric.getClass().getSimpleName() + ": " + metric.getTripReason(nowNanos) + "]")
         .toList();
 
     reasonBuilder.append(String.join(", ", triggeringReasons));

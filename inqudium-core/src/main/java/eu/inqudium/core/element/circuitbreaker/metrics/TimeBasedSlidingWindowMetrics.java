@@ -1,149 +1,97 @@
 package eu.inqudium.core.element.circuitbreaker.metrics;
 
-import eu.inqudium.core.element.circuitbreaker.CircuitBreakerConfig;
-
-import java.time.Instant;
 import java.util.Arrays;
 
 /**
  * Immutable implementation of a time-based sliding window algorithm.
  *
  * <p>Tracks failures in distinct time buckets (1 second per bucket).
- * When time advances, older buckets are automatically cleared.
+ * Internally converts nanosecond timestamps to seconds for bucket addressing.
  */
 public record TimeBasedSlidingWindowMetrics(
     long failureThreshold,
     int windowSizeInSeconds,
     int[] failureBuckets,
-    long lastUpdatedEpochSecond
+    long lastUpdatedSecond
 ) implements FailureMetrics {
 
-  /**
-   * Creates an initial, empty time-based sliding window.
-   *
-   * @param windowSizeInSeconds the total duration of the window in seconds
-   * @param now                 the current timestamp to align the initial window
-   */
-  public static TimeBasedSlidingWindowMetrics initial(double failureThreshold, int windowSizeInSeconds, Instant now) {
+  public static TimeBasedSlidingWindowMetrics initial(double failureThreshold, int windowSizeInSeconds, long nowNanos) {
     if (windowSizeInSeconds <= 0) {
       throw new IllegalArgumentException("windowSizeInSeconds must be greater than 0");
     }
     return new TimeBasedSlidingWindowMetrics(
-        Math.round(failureThreshold),
-        windowSizeInSeconds,
-        new int[windowSizeInSeconds],
-        now.getEpochSecond()
-    );
+        Math.round(failureThreshold), windowSizeInSeconds,
+        new int[windowSizeInSeconds], toSeconds(nowNanos));
+  }
+
+  private static long toSeconds(long nanos) {
+    return nanos / 1_000_000_000L;
   }
 
   @Override
-  public FailureMetrics recordSuccess(Instant now) {
-    // A success does not add a failure, but we must fast-forward the time window
-    // to clear out any old buckets if time has passed.
-    return fastForward(now.getEpochSecond());
+  public FailureMetrics recordSuccess(long nowNanos) {
+    return fastForward(toSeconds(nowNanos));
   }
 
   @Override
-  public FailureMetrics recordFailure(Instant now) {
-    long currentEpochSecond = now.getEpochSecond();
+  public FailureMetrics recordFailure(long nowNanos) {
+    long currentSecond = toSeconds(nowNanos);
+    TimeBasedSlidingWindowMetrics updatedState = fastForward(currentSecond);
 
-    // First, fast-forward the state to clear expired buckets
-    TimeBasedSlidingWindowMetrics updatedState = fastForward(currentEpochSecond);
-
-    // Create a new copy of the buckets to mutate
     int[] newBuckets = Arrays.copyOf(updatedState.failureBuckets(), windowSizeInSeconds);
-
-    // Increment the failure count for the current second's bucket
-    int currentBucketIndex = (int) (currentEpochSecond % windowSizeInSeconds);
-
-    // Prevent negative index for times before 1970
+    int currentBucketIndex = (int) (currentSecond % windowSizeInSeconds);
     if (currentBucketIndex < 0) {
       currentBucketIndex += windowSizeInSeconds;
     }
-
     newBuckets[currentBucketIndex]++;
 
-    // Ensure the internal clock never moves backwards.
-    // If we receive a record from the past, we keep our most advanced known timestamp.
-    long newLastUpdatedEpochSecond = Math.max(updatedState.lastUpdatedEpochSecond(), currentEpochSecond);
-
-    return new TimeBasedSlidingWindowMetrics(
-        failureThreshold,
-        windowSizeInSeconds,
-        newBuckets,
-        newLastUpdatedEpochSecond
-    );
+    long newLastUpdatedSecond = Math.max(updatedState.lastUpdatedSecond(), currentSecond);
+    return new TimeBasedSlidingWindowMetrics(failureThreshold, windowSizeInSeconds, newBuckets, newLastUpdatedSecond);
   }
 
   @Override
-  public boolean isThresholdReached(Instant now) {
-    // We must evaluate the threshold against the *current* time.
-    // This ensures that if we haven't received calls for a while, old failures
-    // are still ignored correctly.
-    TimeBasedSlidingWindowMetrics evaluatedState = fastForward(now.getEpochSecond());
-
+  public boolean isThresholdReached(long nowNanos) {
+    TimeBasedSlidingWindowMetrics evaluatedState = fastForward(toSeconds(nowNanos));
     int totalFailuresInWindow = 0;
     for (int count : evaluatedState.failureBuckets()) {
       totalFailuresInWindow += count;
     }
-
     return totalFailuresInWindow >= failureThreshold;
   }
 
   @Override
-  public FailureMetrics reset(Instant now) {
+  public FailureMetrics reset(long nowNanos) {
     return new TimeBasedSlidingWindowMetrics(
-        failureThreshold,
-        windowSizeInSeconds,
-        new int[windowSizeInSeconds],
-        now.getEpochSecond()
-    );
+        failureThreshold, windowSizeInSeconds,
+        new int[windowSizeInSeconds], toSeconds(nowNanos));
   }
 
-  /**
-   * Helper method that creates a new state where buckets older than the window
-   * size have been cleared out based on the time difference.
-   */
-  private TimeBasedSlidingWindowMetrics fastForward(long currentEpochSecond) {
-    // If time goes backwards (e.g., NTP sync), we ignore the jump to avoid corrupting the window
-    if (currentEpochSecond <= lastUpdatedEpochSecond) {
+  private TimeBasedSlidingWindowMetrics fastForward(long currentSecond) {
+    if (currentSecond <= lastUpdatedSecond) {
       return this;
     }
-
-    long deltaSeconds = currentEpochSecond - lastUpdatedEpochSecond;
-
-    // If the elapsed time is greater than or equal to the entire window, wipe everything
+    long deltaSeconds = currentSecond - lastUpdatedSecond;
     if (deltaSeconds >= windowSizeInSeconds) {
       return new TimeBasedSlidingWindowMetrics(
-          failureThreshold,
-          windowSizeInSeconds,
-          new int[windowSizeInSeconds],
-          currentEpochSecond);
+          failureThreshold, windowSizeInSeconds,
+          new int[windowSizeInSeconds], currentSecond);
     }
-
-    // Otherwise, clear only the buckets that have elapsed since the last update
     int[] newBuckets = Arrays.copyOf(failureBuckets, windowSizeInSeconds);
     for (long i = 1; i <= deltaSeconds; i++) {
-      long timeToClear = lastUpdatedEpochSecond + i;
+      long timeToClear = lastUpdatedSecond + i;
       int indexToClear = (int) (timeToClear % windowSizeInSeconds);
       if (indexToClear < 0) {
         indexToClear += windowSizeInSeconds;
       }
       newBuckets[indexToClear] = 0;
     }
-
-    return new TimeBasedSlidingWindowMetrics(
-        failureThreshold,
-        windowSizeInSeconds,
-        newBuckets,
-        currentEpochSecond);
+    return new TimeBasedSlidingWindowMetrics(failureThreshold, windowSizeInSeconds, newBuckets, currentSecond);
   }
 
-  public String getTripReason(Instant now) {
-    TimeBasedSlidingWindowMetrics evaluatedState = fastForward(now.getEpochSecond());
-
+  @Override
+  public String getTripReason(long nowNanos) {
+    TimeBasedSlidingWindowMetrics evaluatedState = fastForward(toSeconds(nowNanos));
     int totalFailuresInWindow = Arrays.stream(evaluatedState.failureBuckets()).sum();
-
     return "Time-based sliding window threshold reached: Found %d failures in the last %d seconds (Threshold: %d)."
         .formatted(totalFailuresInWindow, windowSizeInSeconds, failureThreshold);
   }
