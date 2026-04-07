@@ -45,11 +45,29 @@ import java.util.function.Predicate;
  *   <tr><td>{@code enableExceptionOptimization}</td><td>Whether to optimize exception handling.</td></tr>
  * </table>
  *
+ * <h2>Presets</h2>
+ * <p>Three opinionated presets configure the <em>common</em> circuit breaker state-machine
+ * parameters (OPEN wait duration and HALF_OPEN probing behavior). They are intended to be
+ * combined with the algorithm-specific presets defined in each metrics config builder:
+ * <ul>
+ *   <li><strong>{@link #protective()}</strong> — short OPEN wait (5s), strict half-open
+ *       probing (1 success out of 1 call). Re-probes quickly but demands immediate
+ *       proof of recovery.</li>
+ *   <li><strong>{@link #balanced()}</strong> — moderate OPEN wait (30s), standard
+ *       half-open probing (2 successes out of 3 calls). Gives the downstream reasonable
+ *       breathing room (default).</li>
+ *   <li><strong>{@link #permissive()}</strong> — long OPEN wait (120s), lenient
+ *       half-open probing (3 successes out of 5 calls). Avoids overwhelming a fragile
+ *       downstream with premature probes.</li>
+ * </ul>
+ *
  * <h2>Build Lifecycle</h2>
  * <p>The {@link #common()} method assembles the shared {@link InqCircuitBreakerConfig}
  * from all fields set on this builder, applies validation, and returns it. Concrete
  * subclasses typically call {@code common()} inside their own {@code build()} method
- * and wrap the result together with algorithm-specific configuration.
+ * and wrap the result together with algorithm-specific configuration. If no preset or
+ * manual values have been set for the state-machine parameters, {@link #balanced()} is
+ * applied automatically as a safe default.
  *
  * @param <B> the self-type of the concrete builder subclass
  * @param <E> the configuration extension type produced by the concrete builder
@@ -71,6 +89,10 @@ public abstract class InqCircuitBreakerConfigBuilder
 
   protected InqCircuitBreakerConfigBuilder() {
   }
+
+  // ---------------------------------------------------------------------------
+  // Framework injection
+  // ---------------------------------------------------------------------------
 
   /**
    * Receives the framework-wide general configuration, typically injected by the
@@ -98,6 +120,93 @@ public abstract class InqCircuitBreakerConfigBuilder
    * Must be implemented by each concrete subclass.
    */
   protected abstract B self();
+
+  // ---------------------------------------------------------------------------
+  // Presets — common circuit breaker state-machine parameters
+  // ---------------------------------------------------------------------------
+
+  /**
+   * <strong>Protective preset</strong> — aggressive probing with minimal OPEN wait time.
+   *
+   * <p>The circuit re-opens for probing after just 5 seconds, but only permits a single
+   * trial call that must succeed immediately. This is ideal for critical, low-latency
+   * dependencies where you want the fastest possible recovery detection — at the cost
+   * of more frequent probing load on the downstream.
+   *
+   * <table>
+   *   <tr><th>Parameter</th><th>Value</th></tr>
+   *   <tr><td>waitDurationInOpenState</td><td>5 seconds</td></tr>
+   *   <tr><td>waitDurationNanos</td><td>5,000,000,000 ns</td></tr>
+   *   <tr><td>permittedCallsInHalfOpen</td><td>1</td></tr>
+   *   <tr><td>successThresholdInHalfOpen</td><td>1</td></tr>
+   * </table>
+   *
+   * @return this builder for chaining
+   */
+  public InqCircuitBreakerConfigBuilder<B, E> protective() {
+    this.waitDurationInOpenState = Duration.ofSeconds(5);
+    this.waitDurationNanos = Duration.ofSeconds(5).toNanos();
+    this.permittedCallsInHalfOpen = 1;
+    this.successThresholdInHalfOpen = 1;
+    return this;
+  }
+
+  /**
+   * <strong>Balanced preset</strong> — standard configuration for typical distributed systems.
+   *
+   * <p>The circuit stays OPEN for 30 seconds before probing. In the HALF_OPEN state,
+   * up to 3 trial calls are permitted, of which at least 2 must succeed to close the
+   * circuit. This gives the downstream sufficient time to recover while providing a
+   * statistically meaningful probe sample.
+   *
+   * <table>
+   *   <tr><th>Parameter</th><th>Value</th></tr>
+   *   <tr><td>waitDurationInOpenState</td><td>30 seconds</td></tr>
+   *   <tr><td>waitDurationNanos</td><td>30,000,000,000 ns</td></tr>
+   *   <tr><td>permittedCallsInHalfOpen</td><td>3</td></tr>
+   *   <tr><td>successThresholdInHalfOpen</td><td>2</td></tr>
+   * </table>
+   *
+   * @return this builder for chaining
+   */
+  public InqCircuitBreakerConfigBuilder<B, E> balanced() {
+    this.waitDurationInOpenState = Duration.ofSeconds(30);
+    this.waitDurationNanos = Duration.ofSeconds(30).toNanos();
+    this.permittedCallsInHalfOpen = 3;
+    this.successThresholdInHalfOpen = 2;
+    return this;
+  }
+
+  /**
+   * <strong>Permissive preset</strong> — conservative probing for fragile or slow-recovering
+   * downstream services.
+   *
+   * <p>The circuit remains OPEN for a full 2 minutes before any probe attempt. In
+   * HALF_OPEN, 5 trial calls are allowed, requiring at least 3 successes. This avoids
+   * hammering a struggling service with premature probes and demands strong evidence
+   * of recovery before re-closing.
+   *
+   * <table>
+   *   <tr><th>Parameter</th><th>Value</th></tr>
+   *   <tr><td>waitDurationInOpenState</td><td>120 seconds</td></tr>
+   *   <tr><td>waitDurationNanos</td><td>120,000,000,000 ns</td></tr>
+   *   <tr><td>permittedCallsInHalfOpen</td><td>5</td></tr>
+   *   <tr><td>successThresholdInHalfOpen</td><td>3</td></tr>
+   * </table>
+   *
+   * @return this builder for chaining
+   */
+  public InqCircuitBreakerConfigBuilder<B, E> permissive() {
+    this.waitDurationInOpenState = Duration.ofSeconds(120);
+    this.waitDurationNanos = Duration.ofSeconds(120).toNanos();
+    this.permittedCallsInHalfOpen = 5;
+    this.successThresholdInHalfOpen = 3;
+    return this;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Individual setters
+  // ---------------------------------------------------------------------------
 
   /**
    * Sets the number of consecutive successes required in the HALF_OPEN state to
@@ -154,7 +263,7 @@ public abstract class InqCircuitBreakerConfigBuilder
    *
    * <p>Example usage:
    * <pre>
-   *   builder.withRecordFailurePredicates(fp -> fp
+   *   builder.withRecordFailurePredicates(fp -&gt; fp
    *       .recordException(IOException.class)
    *       .recordException(TimeoutException.class)
    *   );
@@ -239,10 +348,17 @@ public abstract class InqCircuitBreakerConfigBuilder
     return self();
   }
 
+  // ---------------------------------------------------------------------------
+  // Assembly and validation
+  // ---------------------------------------------------------------------------
+
   /**
    * Assembles the common {@link InqCircuitBreakerConfig} from all fields currently
    * set on this builder. Called by concrete subclasses inside their {@code build()}
    * method.
+   *
+   * <p>If no preset or manual values have been provided for the state-machine parameters,
+   * the {@link #balanced()} preset is applied as a safe default.
    *
    * <p>This method also runs cross-field validation via {@link #validate(InqCircuitBreakerConfig)}.
    *
@@ -250,6 +366,11 @@ public abstract class InqCircuitBreakerConfigBuilder
    * @throws IllegalStateException if required fields (e.g., name) are missing
    */
   protected InqCircuitBreakerConfig common() {
+
+    // Apply balanced defaults if no state-machine parameters have been set
+    if (waitDurationInOpenState == null || successThresholdInHalfOpen == null || permittedCallsInHalfOpen == null) {
+      balanced();
+    }
 
     InqElementCommonConfig common =
         new InqElementCommonConfig(name,

@@ -20,6 +20,6 @@ public class InqImperativeCircuitBreakerConfigBuilder
 
   @Override
   public InqImperativeCircuitBreakerConfig build() {
-    return null;
+    return new InqImperativeCircuitBreakerConfig(this.getGeneralConfig(), common());
   }
 }
