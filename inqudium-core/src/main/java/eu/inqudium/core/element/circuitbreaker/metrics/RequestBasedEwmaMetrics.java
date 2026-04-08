@@ -2,6 +2,8 @@ package eu.inqudium.core.element.circuitbreaker.metrics;
 
 import eu.inqudium.core.algo.RequestBasedEwma;
 
+import java.util.Locale;
+
 /**
  * Immutable implementation of a failure tracking strategy using a Request-Based
  * Exponentially Weighted Moving Average (EWMA).
@@ -152,7 +154,9 @@ public record RequestBasedEwmaMetrics(
    */
   @Override
   public String getTripReason(long nowNanos) {
-    return "Request-based EWMA threshold reached: Current failure rate is %.1f%% (Threshold: %f%%). Alpha: %.2f."
-        .formatted(currentRate * 100.0, failureRatePercent, ewmaCalculator.alpha());
+    return String.format(
+        Locale.ROOT,"Request-based EWMA threshold reached: " +
+            "Current failure rate is %.1f%% (Threshold: %f%%). Alpha: %.2f.",
+        currentRate * 100.0, failureRatePercent, ewmaCalculator.alpha());
   }
 }

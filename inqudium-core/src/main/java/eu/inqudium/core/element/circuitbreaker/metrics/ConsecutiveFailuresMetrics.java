@@ -1,5 +1,7 @@
 package eu.inqudium.core.element.circuitbreaker.metrics;
 
+import java.util.Locale;
+
 /**
  * Immutable implementation of a consecutive-failures circuit breaker strategy.
  *
@@ -106,7 +108,8 @@ public record ConsecutiveFailuresMetrics(
    */
   @Override
   public String getTripReason(long nowNanos) {
-    return "Consecutive failure threshold reached: Received %d failures in a row (Threshold: %d)."
-        .formatted(consecutiveFailures, maxConsecutiveFailures);
+    return String.format(
+        Locale.ROOT,"Consecutive failure threshold reached: " +
+            "Received %d failures in a row (Threshold: %d).",consecutiveFailures, maxConsecutiveFailures);
   }
 }

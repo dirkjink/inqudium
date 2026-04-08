@@ -1,6 +1,7 @@
 package eu.inqudium.core.element.circuitbreaker.metrics;
 
 import java.util.Arrays;
+import java.util.Locale;
 import java.util.Objects;
 
 /**
@@ -269,8 +270,10 @@ public record TimeBasedErrorRateMetrics(
     if (eval.totalCalls() == 0) {
       return "Circuit tripped, but no calls were recorded in the current window.";
     }
-    return "Failure rate of %.1f%% (%d failures out of %d calls) in the last %d seconds exceeded the threshold of %f%%."
-        .formatted(eval.failureRatePercent(), eval.totalFailures(), eval.totalCalls(),
+    return String.format(
+        Locale.ROOT,"Failure rate of %.1f%% (%d failures out of %d calls) " +
+            "in the last %d seconds exceeded the threshold of %f%%.",
+        eval.failureRatePercent(), eval.totalFailures(), eval.totalCalls(),
             windowSizeInSeconds, failureRatePercent);
   }
 

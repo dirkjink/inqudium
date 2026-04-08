@@ -1,5 +1,7 @@
 package eu.inqudium.core.element.circuitbreaker.metrics;
 
+import java.util.Locale;
+
 /**
  * Immutable implementation of a gradual-decay failure tracking strategy.
  *
@@ -105,7 +107,8 @@ public record GradualDecayMetrics(
    */
   @Override
   public String getTripReason(long nowNanos) {
-    return "Failure threshold reached: Current failure count is %d (Threshold: %d)."
-        .formatted(failureCount, maxFailureCount);
+    return String.format(
+        Locale.ROOT,"Failure threshold reached: " +
+            "Current failure count is %d (Threshold: %d).",failureCount, maxFailureCount);
   }
 }

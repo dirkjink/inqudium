@@ -1,5 +1,7 @@
 package eu.inqudium.core.element.circuitbreaker.metrics;
 
+import java.util.Locale;
+
 /**
  * Immutable implementation of a Leaky Bucket failure tracking strategy.
  *
@@ -147,7 +149,9 @@ public record LeakyBucketMetrics(
   @Override
   public String getTripReason(long nowNanos) {
     LeakyBucketMetrics evaluatedState = leak(nowNanos);
-    return "Leaky bucket overflow: Current failure level is %.2f (Capacity: %d, Leak Rate: %.1f/sec)."
-        .formatted(evaluatedState.currentLevel(), bucketCapacity, leakRatePerSecond);
+    return String.format(
+        Locale.ROOT,"Leaky bucket overflow: " +
+            "Current failure level is %.2f (Capacity: %d, Leak Rate: %.1f/sec).",
+        evaluatedState.currentLevel(), bucketCapacity, leakRatePerSecond);
   }
 }

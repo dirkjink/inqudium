@@ -1,6 +1,7 @@
 package eu.inqudium.core.element.circuitbreaker.metrics;
 
 import java.util.Arrays;
+import java.util.Locale;
 
 /**
  * Immutable implementation of a count-based sliding window failure tracking strategy.
@@ -169,7 +170,9 @@ public record SlidingWindowMetrics(
    */
   @Override
   public String getTripReason(long nowNanos) {
-    return "Sliding window threshold reached: Found %d failures in the last %d calls (Threshold: %d)."
-        .formatted(failureCount, size, maxFailuresInWindow);
+    return String.format(
+        Locale.ROOT, "Sliding window threshold reached: " +
+            "Found %d failures in the last %d calls (Threshold: %d).",
+        failureCount, size, maxFailuresInWindow);
   }
 }

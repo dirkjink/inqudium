@@ -1,6 +1,7 @@
 package eu.inqudium.core.element.circuitbreaker.metrics;
 
 import java.util.Arrays;
+import java.util.Locale;
 
 /**
  * Immutable implementation of a time-based sliding window failure tracking strategy.
@@ -208,7 +209,9 @@ public record TimeBasedSlidingWindowMetrics(
   public String getTripReason(long nowNanos) {
     TimeBasedSlidingWindowMetrics evaluatedState = fastForward(toSeconds(nowNanos));
     int totalFailuresInWindow = Arrays.stream(evaluatedState.failureBuckets()).sum();
-    return "Time-based sliding window threshold reached: Found %d failures in the last %d seconds (Threshold: %d)."
-        .formatted(totalFailuresInWindow, windowSizeInSeconds, maxFailuresInWindow);
+    return String.format(
+        Locale.ROOT,"Time-based sliding window threshold reached: " +
+            "Found %d failures in the last %d seconds (Threshold: %d)."
+        ,totalFailuresInWindow, windowSizeInSeconds, maxFailuresInWindow);
   }
 }

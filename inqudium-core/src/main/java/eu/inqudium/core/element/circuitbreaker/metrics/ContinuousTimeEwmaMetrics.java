@@ -3,6 +3,7 @@ package eu.inqudium.core.element.circuitbreaker.metrics;
 import eu.inqudium.core.algo.ContinuousTimeEwma;
 
 import java.time.Duration;
+import java.util.Locale;
 
 /**
  * Immutable implementation of a failure tracking strategy using a Continuous-Time
@@ -181,7 +182,9 @@ public record ContinuousTimeEwmaMetrics(
   @Override
   public String getTripReason(long nowNanos) {
     double decayedRate = ewmaCalculator.calculate(currentRate, lastUpdateNanos, nowNanos, 0.0);
-    return "Continuous-time EWMA threshold reached: Current failure rate is %.1f%% (Threshold: %f%%). Time Constant (Tau): %s."
-        .formatted(decayedRate * 100.0, failureRatePercent, ewmaCalculator.tauDurationNanos());
+    return String.format(
+        Locale.ROOT,"Continuous-time EWMA threshold reached: " +
+            "Current failure rate is %.1f%% (Threshold: %f%%). Time Constant (Tau): %s.",
+        decayedRate * 100.0, failureRatePercent, ewmaCalculator.tauDurationNanos());
   }
 }

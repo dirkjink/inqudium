@@ -155,7 +155,8 @@ public record CompositeFailureMetrics(List<FailureMetrics> delegates) implements
     // Collect trip reasons only from delegates that have actually tripped
     List<String> triggeringReasons = delegates.stream()
         .filter(metric -> metric.isThresholdReached(nowNanos))
-        .map(metric -> "[" + metric.getClass().getSimpleName() + ": " + metric.getTripReason(nowNanos) + "]")
+        .map(metric ->
+            "[" + metric.getClass().getSimpleName() + ": " + metric.getTripReason(nowNanos) + "]")
         .toList();
 
     reasonBuilder.append(String.join(", ", triggeringReasons));
