@@ -70,34 +70,32 @@ public record CompositeFailureMetrics(List<FailureMetrics> delegates) implements
    * Records a successful call across <em>all</em> delegates.
    *
    * <p>Each delegate independently processes the success and returns its updated state.
-   * The resulting list is collected into a new composite instance.
+   * If no delegate changed (all return the same identity), {@code this} is returned
+   * to avoid unnecessary allocation.
    *
    * @param nowNanos the current timestamp in nanoseconds, forwarded to each delegate
-   * @return a new {@code CompositeFailureMetrics} containing the updated delegates
+   * @return a new {@code CompositeFailureMetrics} containing the updated delegates,
+   *         or {@code this} if no delegate state changed
    */
   @Override
   public FailureMetrics recordSuccess(long nowNanos) {
-    List<FailureMetrics> updatedDelegates = delegates.stream()
-        .map(metric -> metric.recordSuccess(nowNanos))
-        .toList();
-    return new CompositeFailureMetrics(updatedDelegates);
+    return applyToAll(nowNanos, Action.SUCCESS);
   }
 
   /**
    * Records a failed call across <em>all</em> delegates.
    *
    * <p>Each delegate independently processes the failure and returns its updated state.
-   * The resulting list is collected into a new composite instance.
+   * If no delegate changed (all return the same identity), {@code this} is returned
+   * to avoid unnecessary allocation.
    *
    * @param nowNanos the current timestamp in nanoseconds, forwarded to each delegate
-   * @return a new {@code CompositeFailureMetrics} containing the updated delegates
+   * @return a new {@code CompositeFailureMetrics} containing the updated delegates,
+   *         or {@code this} if no delegate state changed
    */
   @Override
   public FailureMetrics recordFailure(long nowNanos) {
-    List<FailureMetrics> updatedDelegates = delegates.stream()
-        .map(metric -> metric.recordFailure(nowNanos))
-        .toList();
-    return new CompositeFailureMetrics(updatedDelegates);
+    return applyToAll(nowNanos, Action.FAILURE);
   }
 
   /**
@@ -111,8 +109,8 @@ public record CompositeFailureMetrics(List<FailureMetrics> delegates) implements
    */
   @Override
   public boolean isThresholdReached(long nowNanos) {
-    for (FailureMetrics metric : delegates) {
-      if (metric.isThresholdReached(nowNanos)) {
+    for (int i = 0, size = delegates.size(); i < size; i++) {
+      if (delegates.get(i).isThresholdReached(nowNanos)) {
         return true;
       }
     }
@@ -128,10 +126,7 @@ public record CompositeFailureMetrics(List<FailureMetrics> delegates) implements
    */
   @Override
   public FailureMetrics reset(long nowNanos) {
-    List<FailureMetrics> resetDelegates = delegates.stream()
-        .map(metric -> metric.reset(nowNanos))
-        .toList();
-    return new CompositeFailureMetrics(resetDelegates);
+    return applyToAll(nowNanos, Action.RESET);
   }
 
   /**
@@ -150,16 +145,56 @@ public record CompositeFailureMetrics(List<FailureMetrics> delegates) implements
    */
   @Override
   public String getTripReason(long nowNanos) {
-    StringBuilder reasonBuilder = new StringBuilder("Composite threshold reached. Triggering component(s): ");
+    // Single-pass StringBuilder avoids intermediate list and String.join
+    StringBuilder sb = new StringBuilder("Composite threshold reached. Triggering component(s): ");
+    boolean first = true;
+    for (int i = 0, size = delegates.size(); i < size; i++) {
+      FailureMetrics metric = delegates.get(i);
+      if (metric.isThresholdReached(nowNanos)) {
+        if (!first) {
+          sb.append(", ");
+        }
+        sb.append('[')
+            .append(metric.getClass().getSimpleName())
+            .append(": ")
+            .append(metric.getTripReason(nowNanos))
+            .append(']');
+        first = false;
+      }
+    }
+    return sb.toString();
+  }
 
-    // Collect trip reasons only from delegates that have actually tripped
-    List<String> triggeringReasons = delegates.stream()
-        .filter(metric -> metric.isThresholdReached(nowNanos))
-        .map(metric ->
-            "[" + metric.getClass().getSimpleName() + ": " + metric.getTripReason(nowNanos) + "]")
-        .toList();
+  // ── internal helpers ──────────────────────────────────────────────────
 
-    reasonBuilder.append(String.join(", ", triggeringReasons));
-    return reasonBuilder.toString();
+  private enum Action { SUCCESS, FAILURE, RESET }
+
+  /**
+   * Applies the given action to every delegate. Returns {@code this} when all
+   * delegates return the same identity (no state change), avoiding a new list
+   * and a new composite allocation on the hot path.
+   */
+  private FailureMetrics applyToAll(long nowNanos, Action action) {
+    int size = delegates.size();
+    FailureMetrics[] updated = null; // allocated lazily only when a change is detected
+    for (int i = 0; i < size; i++) {
+      FailureMetrics original = delegates.get(i);
+      FailureMetrics result = switch (action) {
+        case SUCCESS -> original.recordSuccess(nowNanos);
+        case FAILURE -> original.recordFailure(nowNanos);
+        case RESET   -> original.reset(nowNanos);
+      };
+      if (result != original && updated == null) {
+        // First change detected — back-fill array with previous unchanged delegates
+        updated = new FailureMetrics[size];
+        for (int j = 0; j < i; j++) {
+          updated[j] = delegates.get(j);
+        }
+      }
+      if (updated != null) {
+        updated[i] = result;
+      }
+    }
+    return updated == null ? this : new CompositeFailureMetrics(List.of(updated));
   }
 }
