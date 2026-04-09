@@ -12,7 +12,9 @@ package eu.inqudium.core.pipeline;
  * instantiations even under reflection or serialization attacks.</p>
  */
 enum PassThrough implements LayerAction<Object, Object> {
-  /** The sole instance — simply forwards to the next step without any logic. */
+  /**
+   * The sole instance — simply forwards to the next step without any logic.
+   */
   INSTANCE;
 
   /**

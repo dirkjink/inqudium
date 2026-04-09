@@ -71,7 +71,7 @@ public record ContinuousTimeEwmaMetrics(
   /**
    * Creates an initial instance with a zero failure rate, anchored at the given time.
    *
-   * @param failureRatePercent     the failure rate percentage (1–100) at which the circuit trips
+   * @param failureRatePercent   the failure rate percentage (1–100) at which the circuit trips
    * @param timeConstant         the EWMA time constant (tau); controls decay speed
    * @param minimumNumberOfCalls minimum number of calls before evaluation; must be > 0
    * @param nowNanos             the initial timestamp anchor
@@ -102,11 +102,11 @@ public record ContinuousTimeEwmaMetrics(
    * Returns a factory function that produces a fresh instance of this metrics strategy.
    *
    * @return a {@link LongFunction} that accepts a nanosecond timestamp and produces a
-   *         fresh {@link FailureMetrics} instance with identical configuration
+   * fresh {@link FailureMetrics} instance with identical configuration
    */
   @Override
   public LongFunction<FailureMetrics> metricsFactory() {
-    return (long nowNanos)-> ContinuousTimeEwmaMetrics.initial(
+    return (long nowNanos) -> ContinuousTimeEwmaMetrics.initial(
         failureRatePercent,
         timeConstant,
         minimumNumberOfCalls,
@@ -213,7 +213,7 @@ public record ContinuousTimeEwmaMetrics(
   public String getTripReason(long nowNanos) {
     double decayedRate = ewmaCalculator.calculate(currentRate, lastUpdateNanos, nowNanos, 0.0);
     return String.format(
-        Locale.ROOT,"Continuous-time EWMA threshold reached: " +
+        Locale.ROOT, "Continuous-time EWMA threshold reached: " +
             "Current failure rate is %.1f%% (Threshold: %f%%). Time Constant (Tau): %s.",
         decayedRate * 100.0, failureRatePercent, ewmaCalculator.tauDurationNanos());
   }

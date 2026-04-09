@@ -125,6 +125,7 @@ public interface FailureMetrics {
    * clean slate while preserving the operator's chosen algorithm and parameters.
    *
    * @return a {@link LongFunction} that accepts a nanosecond timestamp and produces a
-   *         fresh {@link FailureMetrics} instance with identical configuration
+   * fresh {@link FailureMetrics} instance with identical configuration
    */
-  LongFunction<FailureMetrics> metricsFactory();}
+  LongFunction<FailureMetrics> metricsFactory();
+}

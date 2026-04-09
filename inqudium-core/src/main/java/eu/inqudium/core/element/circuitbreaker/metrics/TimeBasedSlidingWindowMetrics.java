@@ -79,25 +79,25 @@ public record TimeBasedSlidingWindowMetrics(
   }
 
   /**
-   * Returns a factory function that produces a fresh instance of this metrics strategy.
-   *
-   * @return a {@link LongFunction} that accepts a nanosecond timestamp and produces a
-   *         fresh {@link FailureMetrics} instance with identical configuration
-   */
-  @Override
-  public LongFunction<FailureMetrics> metricsFactory() {
-    return (long nowNanos)-> TimeBasedSlidingWindowMetrics.initial(
-        maxFailuresInWindow,
-        windowSizeInSeconds,
-        nowNanos
-    );
-  }
-
-  /**
    * Converts a nanosecond timestamp to whole seconds via integer division.
    */
   private static long toSeconds(long nanos) {
     return nanos / 1_000_000_000L;
+  }
+
+  /**
+   * Returns a factory function that produces a fresh instance of this metrics strategy.
+   *
+   * @return a {@link LongFunction} that accepts a nanosecond timestamp and produces a
+   * fresh {@link FailureMetrics} instance with identical configuration
+   */
+  @Override
+  public LongFunction<FailureMetrics> metricsFactory() {
+    return (long nowNanos) -> TimeBasedSlidingWindowMetrics.initial(
+        maxFailuresInWindow,
+        windowSizeInSeconds,
+        nowNanos
+    );
   }
 
   /**
@@ -228,8 +228,8 @@ public record TimeBasedSlidingWindowMetrics(
     TimeBasedSlidingWindowMetrics evaluatedState = fastForward(toSeconds(nowNanos));
     int totalFailuresInWindow = Arrays.stream(evaluatedState.failureBuckets()).sum();
     return String.format(
-        Locale.ROOT,"Time-based sliding window threshold reached: " +
+        Locale.ROOT, "Time-based sliding window threshold reached: " +
             "Found %d failures in the last %d seconds (Threshold: %d)."
-        ,totalFailuresInWindow, windowSizeInSeconds, maxFailuresInWindow);
+        , totalFailuresInWindow, windowSizeInSeconds, maxFailuresInWindow);
   }
 }

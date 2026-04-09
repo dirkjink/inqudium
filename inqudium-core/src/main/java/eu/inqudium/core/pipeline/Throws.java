@@ -34,7 +34,9 @@ package eu.inqudium.core.pipeline;
  */
 public final class Throws {
 
-  /** Prevent instantiation — this is a utility class. */
+  /**
+   * Prevent instantiation — this is a utility class.
+   */
   private Throws() {
   }
 

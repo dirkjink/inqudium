@@ -161,8 +161,8 @@ public interface DispatchExtension {
    * @param method the method that was being invoked (used to check declared exceptions)
    * @param e      the exception caught during dispatch
    * @return never returns — always throws. The return type is {@code RuntimeException}
-   *         to allow callers to write {@code throw handleException(method, e)} for
-   *         control-flow analysis.
+   * to allow callers to write {@code throw handleException(method, e)} for
+   * control-flow analysis.
    */
   default RuntimeException handleException(Method method, Throwable e) {
     // Iteratively unwrap reflection wrappers to expose the real cause.

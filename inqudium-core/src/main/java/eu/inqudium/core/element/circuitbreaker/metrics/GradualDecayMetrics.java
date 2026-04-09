@@ -58,11 +58,11 @@ public record GradualDecayMetrics(
    * Returns a factory function that produces a fresh instance of this metrics strategy.
    *
    * @return a {@link LongFunction} that accepts a nanosecond timestamp and produces a
-   *         fresh {@link FailureMetrics} instance with identical configuration
+   * fresh {@link FailureMetrics} instance with identical configuration
    */
   @Override
   public LongFunction<FailureMetrics> metricsFactory() {
-    return (long nowNanos)-> GradualDecayMetrics.initial(
+    return (long nowNanos) -> GradualDecayMetrics.initial(
         maxFailureCount,
         failureCount
     );
@@ -123,7 +123,7 @@ public record GradualDecayMetrics(
   @Override
   public String getTripReason(long nowNanos) {
     return String.format(
-        Locale.ROOT,"Failure threshold reached: " +
-            "Current failure count is %d (Threshold: %d).",failureCount, maxFailureCount);
+        Locale.ROOT, "Failure threshold reached: " +
+            "Current failure count is %d (Threshold: %d).", failureCount, maxFailureCount);
   }
 }

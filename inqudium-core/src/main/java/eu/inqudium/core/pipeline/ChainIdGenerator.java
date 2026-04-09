@@ -23,7 +23,9 @@ public final class ChainIdGenerator {
    */
   public static final AtomicLong CHAIN_ID_COUNTER = new AtomicLong();
 
-  /** Prevent instantiation — this is a utility class. */
+  /**
+   * Prevent instantiation — this is a utility class.
+   */
   private ChainIdGenerator() {
   }
 }

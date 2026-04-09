@@ -78,7 +78,7 @@ public record CompositeFailureMetrics(List<FailureMetrics> delegates) implements
    * delegate's metrics directly without the composite wrapper.
    *
    * @return a {@link LongFunction} that accepts a nanosecond timestamp and produces a
-   *         pristine {@link FailureMetrics} instance mirroring this composite's structure
+   * pristine {@link FailureMetrics} instance mirroring this composite's structure
    */
   @Override
   public LongFunction<FailureMetrics> metricsFactory() {
@@ -103,7 +103,7 @@ public record CompositeFailureMetrics(List<FailureMetrics> delegates) implements
    *
    * @param nowNanos the current timestamp in nanoseconds, forwarded to each delegate
    * @return a new {@code CompositeFailureMetrics} containing the updated delegates,
-   *         or {@code this} if no delegate state changed
+   * or {@code this} if no delegate state changed
    */
   @Override
   public FailureMetrics recordSuccess(long nowNanos) {
@@ -119,7 +119,7 @@ public record CompositeFailureMetrics(List<FailureMetrics> delegates) implements
    *
    * @param nowNanos the current timestamp in nanoseconds, forwarded to each delegate
    * @return a new {@code CompositeFailureMetrics} containing the updated delegates,
-   *         or {@code this} if no delegate state changed
+   * or {@code this} if no delegate state changed
    */
   @Override
   public FailureMetrics recordFailure(long nowNanos) {
@@ -195,8 +195,6 @@ public record CompositeFailureMetrics(List<FailureMetrics> delegates) implements
 
   // ── internal helpers ──────────────────────────────────────────────────
 
-  private enum Action { SUCCESS, FAILURE, RESET }
-
   /**
    * Applies the given action to every delegate. Returns {@code this} when all
    * delegates return the same identity (no state change), avoiding a new list
@@ -210,7 +208,7 @@ public record CompositeFailureMetrics(List<FailureMetrics> delegates) implements
       FailureMetrics result = switch (action) {
         case SUCCESS -> original.recordSuccess(nowNanos);
         case FAILURE -> original.recordFailure(nowNanos);
-        case RESET   -> original.reset(nowNanos);
+        case RESET -> original.reset(nowNanos);
       };
       if (result != original && updated == null) {
         // First change detected — back-fill array with previous unchanged delegates
@@ -225,4 +223,6 @@ public record CompositeFailureMetrics(List<FailureMetrics> delegates) implements
     }
     return updated == null ? this : new CompositeFailureMetrics(List.of(updated));
   }
+
+  private enum Action {SUCCESS, FAILURE, RESET}
 }

@@ -43,7 +43,7 @@ public interface InternalExecutor<A, R> {
    *                 argument-free interfaces like {@link Runnable} and
    *                 {@link java.util.function.Supplier}
    * @return the result of the innermost delegate's execution, potentially
-   *         modified by intermediate layers
+   * modified by intermediate layers
    */
   R execute(long chainId, long callId, A argument);
 }

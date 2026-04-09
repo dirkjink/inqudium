@@ -107,26 +107,26 @@ public record TimeBasedErrorRateMetrics(
   }
 
   /**
+   * Converts a nanosecond timestamp to whole seconds via integer division.
+   */
+  private static long toSeconds(long nanos) {
+    return nanos / 1_000_000_000L;
+  }
+
+  /**
    * Returns a factory function that produces a fresh instance of this metrics strategy.
    *
    * @return a {@link LongFunction} that accepts a nanosecond timestamp and produces a
-   *         fresh {@link FailureMetrics} instance with identical configuration
+   * fresh {@link FailureMetrics} instance with identical configuration
    */
   @Override
   public LongFunction<FailureMetrics> metricsFactory() {
-    return (long nowNanos)-> TimeBasedErrorRateMetrics.initial(
+    return (long nowNanos) -> TimeBasedErrorRateMetrics.initial(
         failureRatePercent,
         windowSizeInSeconds,
         minimumNumberOfCalls,
         nowNanos
     );
-  }
-
-  /**
-   * Converts a nanosecond timestamp to whole seconds via integer division.
-   */
-  private static long toSeconds(long nanos) {
-    return nanos / 1_000_000_000L;
   }
 
   /**
@@ -288,10 +288,10 @@ public record TimeBasedErrorRateMetrics(
       return "Circuit tripped, but no calls were recorded in the current window.";
     }
     return String.format(
-        Locale.ROOT,"Failure rate of %.1f%% (%d failures out of %d calls) " +
+        Locale.ROOT, "Failure rate of %.1f%% (%d failures out of %d calls) " +
             "in the last %d seconds exceeded the threshold of %f%%.",
         eval.failureRatePercent(), eval.totalFailures(), eval.totalCalls(),
-            windowSizeInSeconds, failureRatePercent);
+        windowSizeInSeconds, failureRatePercent);
   }
 
   /**

@@ -64,7 +64,7 @@ public class SupplierWrapper<T>
    * Entry point: initiates chain traversal and returns the supplier's result.
    *
    * @return the value produced by the delegate, potentially modified by
-   *         intermediate layers
+   * intermediate layers
    */
   @Override
   public T get() {

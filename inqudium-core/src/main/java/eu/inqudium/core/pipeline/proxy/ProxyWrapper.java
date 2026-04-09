@@ -46,7 +46,9 @@ import java.lang.reflect.Proxy;
  */
 public class ProxyWrapper extends AbstractProxyWrapper {
 
-  /** Reusable empty array constant to avoid allocation. */
+  /**
+   * Reusable empty array constant to avoid allocation.
+   */
   private static final DispatchExtension[] EMPTY = new DispatchExtension[0];
 
   /**
@@ -253,9 +255,9 @@ public class ProxyWrapper extends AbstractProxyWrapper {
    * @param method the service method being invoked
    * @param args   the method arguments
    * @return the method's return value
-   * @throws Throwable if the dispatch or underlying method throws
+   * @throws Throwable                     if the dispatch or underlying method throws
    * @throws UnsupportedOperationException if no extension handles the method
-   *         (should never happen with a properly validated extension array)
+   *                                       (should never happen with a properly validated extension array)
    */
   @Override
   protected Object dispatchServiceMethod(Method method, Object[] args) throws Throwable {

@@ -35,10 +35,14 @@ import static eu.inqudium.core.pipeline.ChainIdGenerator.CHAIN_ID_COUNTER;
 public abstract class AbstractBaseWrapper<T, S extends AbstractBaseWrapper<T, S>>
     implements Wrapper<S> {
 
-  /** The wrapped delegate — either a plain functional interface or another wrapper layer. */
+  /**
+   * The wrapped delegate — either a plain functional interface or another wrapper layer.
+   */
   private final T delegate;
 
-  /** Human-readable name for this layer, used in diagnostics and hierarchy visualization. */
+  /**
+   * Human-readable name for this layer, used in diagnostics and hierarchy visualization.
+   */
   private final String name;
 
   /**
@@ -167,13 +171,17 @@ public abstract class AbstractBaseWrapper<T, S extends AbstractBaseWrapper<T, S>
     return callIdCounter.get();
   }
 
-  /** {@inheritDoc} */
+  /**
+   * {@inheritDoc}
+   */
   @Override
   public long chainId() {
     return chainId;
   }
 
-  /** {@inheritDoc} */
+  /**
+   * {@inheritDoc}
+   */
   @Override
   public String layerDescription() {
     return name;

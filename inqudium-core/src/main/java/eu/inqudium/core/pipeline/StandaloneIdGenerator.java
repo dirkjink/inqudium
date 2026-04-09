@@ -30,7 +30,9 @@ public final class StandaloneIdGenerator {
    */
   private static final AtomicLong CALL_ID_COUNTER = new AtomicLong();
 
-  /** Prevent instantiation — this is a utility class. */
+  /**
+   * Prevent instantiation — this is a utility class.
+   */
   private StandaloneIdGenerator() {
   }
 

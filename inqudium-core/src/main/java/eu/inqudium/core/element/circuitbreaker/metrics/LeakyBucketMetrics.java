@@ -78,11 +78,11 @@ public record LeakyBucketMetrics(
    * Returns a factory function that produces a fresh instance of this metrics strategy.
    *
    * @return a {@link LongFunction} that accepts a nanosecond timestamp and produces a
-   *         fresh {@link FailureMetrics} instance with identical configuration
+   * fresh {@link FailureMetrics} instance with identical configuration
    */
   @Override
   public LongFunction<FailureMetrics> metricsFactory() {
-    return (long nowNanos)-> LeakyBucketMetrics.initial(
+    return (long nowNanos) -> LeakyBucketMetrics.initial(
         bucketCapacity,
         leakRatePerSecond,
         nowNanos
@@ -168,7 +168,7 @@ public record LeakyBucketMetrics(
   public String getTripReason(long nowNanos) {
     LeakyBucketMetrics evaluatedState = leak(nowNanos);
     return String.format(
-        Locale.ROOT,"Leaky bucket overflow: " +
+        Locale.ROOT, "Leaky bucket overflow: " +
             "Current failure level is %.2f (Capacity: %d, Leak Rate: %.1f/sec).",
         evaluatedState.currentLevel(), bucketCapacity, leakRatePerSecond);
   }

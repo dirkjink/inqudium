@@ -89,11 +89,11 @@ public record SlidingWindowMetrics(
    * Returns a factory function that produces a fresh instance of this metrics strategy.
    *
    * @return a {@link LongFunction} that accepts a nanosecond timestamp and produces a
-   *         fresh {@link FailureMetrics} instance with identical configuration
+   * fresh {@link FailureMetrics} instance with identical configuration
    */
   @Override
   public LongFunction<FailureMetrics> metricsFactory() {
-    return (long nowNanos)-> SlidingWindowMetrics.initial(
+    return (long nowNanos) -> SlidingWindowMetrics.initial(
         maxFailuresInWindow,
         windowSize,
         minimumNumberOfCalls

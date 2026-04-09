@@ -99,7 +99,7 @@ public abstract class AbstractProxyWrapper
    *
    * @param target the object to inspect
    * @return the inner {@code AbstractProxyWrapper}, or {@code null} if the target
-   *         is not a compatible proxy
+   * is not a compatible proxy
    */
   protected static AbstractProxyWrapper resolveInner(Object target) {
     if (Proxy.isProxyClass(target.getClass())) {
@@ -240,7 +240,7 @@ public abstract class AbstractProxyWrapper
    *
    * @param other the object to compare with
    * @return {@code true} if the other object is a proxy of the same type wrapping
-   *         an equal real target
+   * an equal real target
    */
   private boolean handleEquals(Object other) {
     // 1. Identity check — fast path

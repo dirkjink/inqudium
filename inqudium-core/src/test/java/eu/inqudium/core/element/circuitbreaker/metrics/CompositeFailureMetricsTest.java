@@ -35,7 +35,7 @@ class CompositeFailureMetricsTest {
     void should_accept_a_single_delegate() {
       // Given / When
       var composite = CompositeFailureMetrics.of(
-          ConsecutiveFailuresMetrics.initial(3,0)
+          ConsecutiveFailuresMetrics.initial(3, 0)
       );
 
       // Then
@@ -224,7 +224,7 @@ class CompositeFailureMetricsTest {
     void should_have_immutable_delegate_list() {
       // Given
       var composite = CompositeFailureMetrics.of(
-          ConsecutiveFailuresMetrics.initial(3,0)
+          ConsecutiveFailuresMetrics.initial(3, 0)
       );
 
       // When / Then

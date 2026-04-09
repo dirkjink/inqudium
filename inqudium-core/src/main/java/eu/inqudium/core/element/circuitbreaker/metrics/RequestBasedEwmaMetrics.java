@@ -66,7 +66,7 @@ public record RequestBasedEwmaMetrics(
   /**
    * Creates an initial instance with a zero failure rate and zero recorded calls.
    *
-   * @param failureRatePercent     the failure rate percentage (1–100) at which the circuit trips
+   * @param failureRatePercent   the failure rate percentage (1–100) at which the circuit trips
    * @param smoothingFactor      the EWMA alpha value (0 < alpha ≤ 1); higher = more reactive
    * @param minimumNumberOfCalls the minimum number of calls before evaluation; must be > 0
    * @return a fresh instance ready to accept outcomes
@@ -94,11 +94,11 @@ public record RequestBasedEwmaMetrics(
    * Returns a factory function that produces a fresh instance of this metrics strategy.
    *
    * @return a {@link LongFunction} that accepts a nanosecond timestamp and produces a
-   *         fresh {@link FailureMetrics} instance with identical configuration
+   * fresh {@link FailureMetrics} instance with identical configuration
    */
   @Override
   public LongFunction<FailureMetrics> metricsFactory() {
-    return (long nowNanos)-> RequestBasedEwmaMetrics.initial(
+    return (long nowNanos) -> RequestBasedEwmaMetrics.initial(
         failureRatePercent,
         smoothingFactor,
         minimumNumberOfCalls
@@ -184,7 +184,7 @@ public record RequestBasedEwmaMetrics(
   @Override
   public String getTripReason(long nowNanos) {
     return String.format(
-        Locale.ROOT,"Request-based EWMA threshold reached: " +
+        Locale.ROOT, "Request-based EWMA threshold reached: " +
             "Current failure rate is %.1f%% (Threshold: %f%%). Alpha: %.2f.",
         currentRate * 100.0, failureRatePercent, ewmaCalculator.alpha());
   }

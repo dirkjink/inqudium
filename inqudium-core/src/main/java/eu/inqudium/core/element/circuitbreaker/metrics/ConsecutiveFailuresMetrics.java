@@ -55,11 +55,11 @@ public record ConsecutiveFailuresMetrics(
    * Returns a factory function that produces a fresh instance of this metrics strategy.
    *
    * @return a {@link LongFunction} that accepts a nanosecond timestamp and produces a
-   *         fresh {@link FailureMetrics} instance with identical configuration
+   * fresh {@link FailureMetrics} instance with identical configuration
    */
   @Override
   public LongFunction<FailureMetrics> metricsFactory() {
-    return (long nowNanos)-> ConsecutiveFailuresMetrics.initial(maxConsecutiveFailures, consecutiveFailures);
+    return (long nowNanos) -> ConsecutiveFailuresMetrics.initial(maxConsecutiveFailures, consecutiveFailures);
   }
 
   /**
@@ -122,7 +122,7 @@ public record ConsecutiveFailuresMetrics(
   @Override
   public String getTripReason(long nowNanos) {
     return String.format(
-        Locale.ROOT,"Consecutive failure threshold reached: " +
-            "Received %d failures in a row (Threshold: %d).",consecutiveFailures, maxConsecutiveFailures);
+        Locale.ROOT, "Consecutive failure threshold reached: " +
+            "Received %d failures in a row (Threshold: %d).", consecutiveFailures, maxConsecutiveFailures);
   }
 }
