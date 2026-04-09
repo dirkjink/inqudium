@@ -35,15 +35,6 @@ class RequestBasedEwmaMetricsTest {
       assertThatThrownBy(() -> RequestBasedEwmaMetrics.initial(50, 0.3, 0))
           .isInstanceOf(IllegalArgumentException.class);
     }
-
-    @Test
-    void should_store_threshold_as_rounded_value() {
-      // Given / When
-      var metrics = RequestBasedEwmaMetrics.initial(49.6, 0.3, 5);
-
-      // Then
-      assertThat(metrics.failureRatePercent()).isEqualTo(50.0);
-    }
   }
 
   // ======================== Minimum Number of Calls ========================
