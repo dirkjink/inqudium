@@ -26,6 +26,7 @@ class BulkheadDslTest {
       // When
       // "Isolate with bulkhead, limiting concurrent calls to 42, waiting at most for 250ms, apply."
       BulkheadConfig config = isolateWithBulkhead()
+          .named("test-1")
           .limitingConcurrentCallsTo(expectedMaxCalls)
           .waitingAtMostFor(expectedWaitDuration)
           .apply();
@@ -44,7 +45,10 @@ class BulkheadDslTest {
     @DisplayName("The DSL should apply the Strict Profile correctly (Fail-Fast)")
     void theDslShouldApplyTheStrictProfileCorrectly() {
       // When
-      BulkheadConfig config = isolateWithBulkhead().applyStrictProfile();
+      BulkheadConfig config =
+          isolateWithBulkhead()
+              .named("test-1")
+              .applyStrictProfile();
 
       // Then
       assertThat(config.maxConcurrentCalls()).isEqualTo(10);
@@ -55,7 +59,10 @@ class BulkheadDslTest {
     @DisplayName("The DSL should apply the Balanced Profile correctly")
     void theDslShouldApplyTheBalancedProfileCorrectly() {
       // When
-      BulkheadConfig config = isolateWithBulkhead().applyBalancedProfile();
+      BulkheadConfig config =
+          isolateWithBulkhead()
+              .named("test-1")
+              .applyBalancedProfile();
 
       // Then
       assertThat(config.maxConcurrentCalls()).isEqualTo(50);
@@ -66,7 +73,10 @@ class BulkheadDslTest {
     @DisplayName("The DSL should apply the Permissive Profile correctly")
     void theDslShouldApplyThePermissiveProfileCorrectly() {
       // When
-      BulkheadConfig config = isolateWithBulkhead().applyPermissiveProfile();
+      BulkheadConfig config =
+          isolateWithBulkhead()
+              .named("test-1")
+              .applyPermissiveProfile();
 
       // Then
       assertThat(config.maxConcurrentCalls()).isEqualTo(200);
@@ -82,7 +92,10 @@ class BulkheadDslTest {
     @DisplayName("The DSL should provide safe defaults if apply() is called without modifiers")
     void theDslShouldProvideSafeDefaultsIfApplyIsCalledWithoutModifiers() {
       // When
-      BulkheadConfig config = isolateWithBulkhead().apply();
+      BulkheadConfig config =
+          isolateWithBulkhead()
+              .named("test-1")
+              .apply();
 
       // Then
       // Verifying the safe internal defaults defined in DefaultBulkheadProtection

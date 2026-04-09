@@ -1,5 +1,8 @@
 package eu.inqudium.core.element.circuitbreaker.dsl;
 
+import eu.inqudium.core.element.circuitbreaker.config.SlidingWindowConfigBuilder;
+import eu.inqudium.core.element.circuitbreaker.config.TimeBasedSlidingWindowConfigBuilder;
+
 class DefaultErrorTrackingStrategy implements FailureTrackingStrategy {
 
   @Override
@@ -30,22 +33,31 @@ class DefaultErrorTrackingStrategy implements FailureTrackingStrategy {
 
     @Override
     public SlidingWindowConfig applyProtectiveProfile() {
-      return new SlidingWindowConfig(10, 5);
+      var cfg = new SlidingWindowConfigBuilder().protective().build();
+      return new SlidingWindowConfig(cfg.maxFailuresInWindow(),
+          cfg.windowSize(),
+          cfg.minimumNumberOfCalls());
     }
 
     @Override
     public SlidingWindowConfig applyBalancedProfile() {
-      return new SlidingWindowConfig(50, 20);
+      var cfg = new SlidingWindowConfigBuilder().balanced().build();
+      return new SlidingWindowConfig(cfg.maxFailuresInWindow(),
+          cfg.windowSize(),
+          cfg.minimumNumberOfCalls());
     }
 
     @Override
     public SlidingWindowConfig applyPermissiveProfile() {
-      return new SlidingWindowConfig(200, 100);
+      var cfg = new SlidingWindowConfigBuilder().permissive().build();
+      return new SlidingWindowConfig(cfg.maxFailuresInWindow(),
+          cfg.windowSize(),
+          cfg.minimumNumberOfCalls());
     }
 
     @Override
     public SlidingWindowConfig apply() {
-      return new SlidingWindowConfig(windowSize, minimumCalls);
+      return new SlidingWindowConfig(-1, windowSize, minimumCalls);
     }
   }
 
@@ -60,22 +72,25 @@ class DefaultErrorTrackingStrategy implements FailureTrackingStrategy {
 
     @Override
     public TimeBasedSlidingWindowConfig applyProtectiveProfile() {
-      return new TimeBasedSlidingWindowConfig(5);
+      var cfg = new TimeBasedSlidingWindowConfigBuilder().protective().build();
+      return new TimeBasedSlidingWindowConfig(cfg.maxFailuresInWindow(), cfg.windowSizeInSeconds());
     }
 
     @Override
     public TimeBasedSlidingWindowConfig applyBalancedProfile() {
-      return new TimeBasedSlidingWindowConfig(60);
+      var cfg = new TimeBasedSlidingWindowConfigBuilder().balanced().build();
+      return new TimeBasedSlidingWindowConfig(cfg.maxFailuresInWindow(), cfg.windowSizeInSeconds());
     }
 
     @Override
     public TimeBasedSlidingWindowConfig applyPermissiveProfile() {
-      return new TimeBasedSlidingWindowConfig(300);
+      var cfg = new TimeBasedSlidingWindowConfigBuilder().protective().build();
+      return new TimeBasedSlidingWindowConfig(cfg.maxFailuresInWindow(), cfg.windowSizeInSeconds());
     }
 
     @Override
     public TimeBasedSlidingWindowConfig apply() {
-      return new TimeBasedSlidingWindowConfig(seconds);
+      return new TimeBasedSlidingWindowConfig(-1, seconds);
     }
   }
 }

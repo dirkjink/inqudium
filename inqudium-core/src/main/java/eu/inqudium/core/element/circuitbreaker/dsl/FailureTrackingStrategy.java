@@ -10,6 +10,10 @@ public interface FailureTrackingStrategy {
     FailureMetricsConfig apply();
   }
 
+  static FailureTrackingStrategy errorTracking() {
+    return new DefaultErrorTrackingStrategy();
+  }
+
   interface CountBasedStrategy extends Builder {
     CountBasedStrategy keepingHistoryOf(int numberOfCalls);
 

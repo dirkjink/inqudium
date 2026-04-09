@@ -6,7 +6,7 @@ import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
 
-import static eu.inqudium.core.element.circuitbreaker.dsl.Resilience.errorTracking;
+import static eu.inqudium.core.element.circuitbreaker.dsl.FailureTrackingStrategy.errorTracking;
 import static eu.inqudium.core.element.circuitbreaker.dsl.Resilience.stabilizeWithCircuitBreaker;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -30,6 +30,7 @@ class ResilienceDslTest {
 
       // When
       CircuitBreakerConfig config = stabilizeWithCircuitBreaker()
+          .named("test-2")
           .trippingAtThreshold(customThreshold)
           .waitingInOpenStateFor(waitDuration)
           .permittingCallsInHalfOpen(halfOpenCalls)
@@ -66,6 +67,7 @@ class ResilienceDslTest {
 
       // When
       CircuitBreakerConfig config = stabilizeWithCircuitBreaker()
+          .named("test-2")
           .trippingAtThreshold(standardThreshold)
           .evaluatedBy(
               errorTracking()
@@ -92,6 +94,7 @@ class ResilienceDslTest {
     void theDslShouldThrowAnExceptionIfTheMetricsConfigurationIsMissingUponApply() {
       // Given
       CircuitBreakerProtection incompleteDsl = stabilizeWithCircuitBreaker()
+          .named("test-2")
           .trippingAtThreshold(50);
 
       // When / Then

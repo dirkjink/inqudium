@@ -1,5 +1,7 @@
 package eu.inqudium.core.element.bulkhead.dsl;
 
+import eu.inqudium.core.config.InqConfig;
+
 import java.time.Duration;
 
 /**
@@ -7,6 +9,9 @@ import java.time.Duration;
  */
 public record BulkheadConfig(
     int maxConcurrentCalls,
-    Duration maxWaitDuration
+    Duration maxWaitDuration,
+    InqConfig inqConfig
 ) {
+
+
 }

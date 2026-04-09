@@ -58,7 +58,25 @@ public class FailurePredicateConfigBuilder extends ExtensionBuilder<FailurePredi
    */
   @SafeVarargs
   public final FailurePredicateConfigBuilder recordExceptions(Class<? extends Throwable>... exceptions) {
-    this.recordExceptions.addAll(Arrays.asList(exceptions));
+    recordExceptions(Arrays.asList(exceptions));
+    return this;
+  }
+
+  /**
+   * Adds exception classes to the base inclusion list (White-List).
+   * If any record rule is set, only matching exceptions are recorded by default.
+   */
+  public final FailurePredicateConfigBuilder recordExceptions(List<Class<? extends Throwable>> exceptionList) {
+    this.recordExceptions.addAll(exceptionList);
+    return this;
+  }
+
+  /**
+   * Adds exception classes to the base exclusion list (Black-List).
+   * Exceptions matching these classes will be ignored unless overridden by a force-record rule.
+   */
+  public final FailurePredicateConfigBuilder ignoreExceptions(List<Class<? extends Throwable>> exceptionList) {
+    this.ignoreExceptions.addAll(exceptionList);
     return this;
   }
 
@@ -68,7 +86,7 @@ public class FailurePredicateConfigBuilder extends ExtensionBuilder<FailurePredi
    */
   @SafeVarargs
   public final FailurePredicateConfigBuilder ignoreExceptions(Class<? extends Throwable>... exceptions) {
-    this.ignoreExceptions.addAll(Arrays.asList(exceptions));
+    ignoreExceptions(Arrays.asList(exceptions));
     return this;
   }
 
