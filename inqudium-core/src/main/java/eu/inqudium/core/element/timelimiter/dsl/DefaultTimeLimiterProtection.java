@@ -1,0 +1,44 @@
+package eu.inqudium.core.element.timelimiter.dsl;
+
+import java.time.Duration;
+
+class DefaultTimeLimiterProtection implements TimeLimiterProtection {
+
+  private Duration timeoutDuration = Duration.ofSeconds(1); // Fallback
+  private boolean cancelRunningTask = true; // Fallback: Free up resources
+
+  @Override
+  public TimeLimiterProtection timingOutAfter(Duration timeout) {
+    this.timeoutDuration = timeout;
+    return this;
+  }
+
+  @Override
+  public TimeLimiterProtection cancelingRunningTasks(boolean cancel) {
+    this.cancelRunningTask = cancel;
+    return this;
+  }
+
+  @Override
+  public TimeLimiterConfig applyStrictProfile() {
+    // Strict: Very short timeout, aggressively kills the thread
+    return new TimeLimiterConfig(Duration.ofMillis(500), true);
+  }
+
+  @Override
+  public TimeLimiterConfig applyBalancedProfile() {
+    // Balanced: Standard timeout, safely cancels task
+    return new TimeLimiterConfig(Duration.ofSeconds(3), true);
+  }
+
+  @Override
+  public TimeLimiterConfig applyPermissiveProfile() {
+    // Permissive: Long waiting allowed, lets the thread finish in background
+    return new TimeLimiterConfig(Duration.ofSeconds(10), false);
+  }
+
+  @Override
+  public TimeLimiterConfig apply() {
+    return new TimeLimiterConfig(timeoutDuration, cancelRunningTask);
+  }
+}
