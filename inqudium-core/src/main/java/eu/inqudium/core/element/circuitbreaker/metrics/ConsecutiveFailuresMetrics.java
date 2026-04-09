@@ -1,6 +1,7 @@
 package eu.inqudium.core.element.circuitbreaker.metrics;
 
 import java.util.Locale;
+import java.util.function.LongFunction;
 
 /**
  * Immutable implementation of a consecutive-failures circuit breaker strategy.
@@ -45,8 +46,20 @@ public record ConsecutiveFailuresMetrics(
    * @param maxConsecutiveFailures the threshold at which the circuit should trip
    * @return a new {@code ConsecutiveFailuresMetrics} with {@code consecutiveFailures == 0}
    */
-  public static ConsecutiveFailuresMetrics initial(int maxConsecutiveFailures) {
-    return new ConsecutiveFailuresMetrics(maxConsecutiveFailures, 0);
+  public static ConsecutiveFailuresMetrics initial(int maxConsecutiveFailures,
+                                                   int initialConsecutiveFailures) {
+    return new ConsecutiveFailuresMetrics(maxConsecutiveFailures, initialConsecutiveFailures);
+  }
+
+  /**
+   * Returns a factory function that produces a fresh instance of this metrics strategy.
+   *
+   * @return a {@link LongFunction} that accepts a nanosecond timestamp and produces a
+   *         fresh {@link FailureMetrics} instance with identical configuration
+   */
+  @Override
+  public LongFunction<FailureMetrics> metricsFactory() {
+    return (long nowNanos)-> ConsecutiveFailuresMetrics.initial(maxConsecutiveFailures, consecutiveFailures);
   }
 
   /**
@@ -89,14 +102,14 @@ public record ConsecutiveFailuresMetrics(
 
   /**
    * Resets the metrics to their initial state (zero consecutive failures).
-   * Equivalent to calling {@link #initial(int)} with the same threshold.
+   * Equivalent to calling {@link #initial(int, int)} with the same threshold.
    *
    * @param nowNanos ignored — this algorithm is time-independent
    * @return a fresh instance with {@code consecutiveFailures == 0}
    */
   @Override
   public FailureMetrics reset(long nowNanos) {
-    return initial(maxConsecutiveFailures);
+    return initial(maxConsecutiveFailures, 0);
   }
 
   /**

@@ -1,5 +1,6 @@
 package eu.inqudium.imperative.circuitbreaker;
 
+import eu.inqudium.core.config.GeneralConfig;
 import eu.inqudium.core.config.InqElementCommonConfig;
 import eu.inqudium.core.element.InqElementType;
 import eu.inqudium.core.element.circuitbreaker.CircuitBreakerException;
@@ -8,6 +9,7 @@ import eu.inqudium.core.element.circuitbreaker.StateTransition;
 import eu.inqudium.core.element.circuitbreaker.config.InqCircuitBreakerConfig;
 import eu.inqudium.core.element.circuitbreaker.metrics.SlidingWindowMetrics;
 import eu.inqudium.core.element.config.FailurePredicateConfigBuilder;
+import eu.inqudium.core.log.LoggerFactory;
 import eu.inqudium.core.time.InqNanoTimeSource;
 import org.junit.jupiter.api.DisplayNameGeneration;
 import org.junit.jupiter.api.DisplayNameGenerator;
@@ -16,9 +18,11 @@ import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.Callable;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -43,8 +47,17 @@ class ImperativeCircuitBreakerSlidingWindowTest {
   private final AtomicLong clock = new AtomicLong(1_000_000_000L);
   private final InqNanoTimeSource timeSource = clock::get;
 
+  // GeneralConfig wired with the deterministic time source
+  private final GeneralConfig generalConfig = new GeneralConfig(
+      Instant::now,
+      timeSource,
+      null,
+      LoggerFactory.NO_OP_LOGGER_FACTORY,
+      Map.of()
+  );
+
   /**
-   * Creates a config with sliding window metrics using the new {@link InqCircuitBreakerConfig} record.
+   * Creates a config with sliding window metrics using the {@link InqCircuitBreakerConfig} record.
    *
    * @param failureThreshold     absolute number of failures to trip the circuit
    * @param windowSize           number of calls tracked in the sliding window
@@ -60,7 +73,7 @@ class ImperativeCircuitBreakerSlidingWindowTest {
       int permittedInHalfOpen) {
 
     return new InqCircuitBreakerConfig(
-        null, // GeneralConfig — not needed for tests
+        generalConfig,
         new InqElementCommonConfig("test-cb", InqElementType.CIRCUIT_BREAKER, null, null),
         WAIT_DURATION.toNanos(),
         successThreshold,
@@ -83,6 +96,7 @@ class ImperativeCircuitBreakerSlidingWindowTest {
    * Creates a config that only records specific exception types using
    * {@link FailurePredicateConfigBuilder}.
    */
+  @SafeVarargs
   private InqCircuitBreakerConfig configWithRecordExceptions(
       String name,
       int failureThreshold,
@@ -98,7 +112,7 @@ class ImperativeCircuitBreakerSlidingWindowTest {
         .finalPredicate();
 
     return new InqCircuitBreakerConfig(
-        null,
+        generalConfig,
         new InqElementCommonConfig(name, InqElementType.CIRCUIT_BREAKER, null, null),
         WAIT_DURATION.toNanos(),
         successThreshold,
@@ -106,6 +120,19 @@ class ImperativeCircuitBreakerSlidingWindowTest {
         WAIT_DURATION,
         failurePredicate,
         nowNanos -> SlidingWindowMetrics.initial(failureThreshold, windowSize, minimumNumberOfCalls)
+    );
+  }
+
+  /**
+   * Creates an {@link ImperativeCircuitBreaker} from the given config,
+   * passing {@code metricsFactory} and {@code recordFailurePredicate}
+   * as separate constructor arguments (new constructor signature).
+   */
+  private <A, R> ImperativeCircuitBreaker<A, R> createCircuitBreaker(InqCircuitBreakerConfig config) {
+    return new ImperativeCircuitBreaker<>(
+        config,
+        config.metricsFactory(),
+        config.recordFailurePredicate()
     );
   }
 
@@ -155,7 +182,7 @@ class ImperativeCircuitBreakerSlidingWindowTest {
     @Test
     void should_start_in_closed_state() {
       // Given
-      var cb = new ImperativeCircuitBreaker<>(defaultConfig(), timeSource);
+      var cb = createCircuitBreaker(defaultConfig());
 
       // When
       CircuitState state = cb.getState();
@@ -167,7 +194,7 @@ class ImperativeCircuitBreakerSlidingWindowTest {
     @Test
     void should_permit_calls_in_closed_state() throws Exception {
       // Given
-      var cb = new ImperativeCircuitBreaker<>(defaultConfig(), timeSource);
+      var cb = createCircuitBreaker(defaultConfig());
 
       // When
       String result = cb.execute(() -> "hello");
@@ -179,7 +206,7 @@ class ImperativeCircuitBreakerSlidingWindowTest {
     @Test
     void should_return_snapshot_with_initial_values() {
       // Given
-      var cb = new ImperativeCircuitBreaker<>(defaultConfig(), timeSource);
+      var cb = createCircuitBreaker(defaultConfig());
 
       // When
       var snapshot = cb.getSnapshot();
@@ -193,15 +220,14 @@ class ImperativeCircuitBreakerSlidingWindowTest {
     @Test
     void should_expose_the_configured_name() {
       // Given
-      var config = defaultConfig();
-      var cb = new ImperativeCircuitBreaker<>(config, timeSource);
+      var cb = createCircuitBreaker(defaultConfig());
 
       // When / Then
       assertThat(cb.getName()).isEqualTo("test-cb");
     }
   }
 
-  // ======================== CLOSED → OPEN Transition ========================
+  // ======================== CLOSED -> OPEN Transition ========================
 
   @Nested
   class ClosedToOpenTransition {
@@ -209,7 +235,7 @@ class ImperativeCircuitBreakerSlidingWindowTest {
     @Test
     void should_transition_to_open_when_failure_threshold_is_reached() {
       // Given — threshold=3, min=3
-      var cb = new ImperativeCircuitBreaker<>(defaultConfig(), timeSource);
+      var cb = createCircuitBreaker(defaultConfig());
 
       // When — 3 failures
       recordFailures(cb, 3);
@@ -221,7 +247,7 @@ class ImperativeCircuitBreakerSlidingWindowTest {
     @Test
     void should_remain_closed_when_failures_are_below_threshold() {
       // Given — threshold=3, min=3
-      var cb = new ImperativeCircuitBreaker<>(defaultConfig(), timeSource);
+      var cb = createCircuitBreaker(defaultConfig());
 
       // When — only 2 failures
       recordFailures(cb, 2);
@@ -233,8 +259,7 @@ class ImperativeCircuitBreakerSlidingWindowTest {
     @Test
     void should_not_trip_before_minimum_number_of_calls_is_reached() {
       // Given — threshold=3, window=10, min=5
-      var config = slidingWindowConfig(3, 10, 5, 2, 3);
-      var cb = new ImperativeCircuitBreaker<>(config, timeSource);
+      var cb = createCircuitBreaker(slidingWindowConfig(3, 10, 5, 2, 3));
 
       // When — 3 failures (meets threshold but not minimum of 5)
       recordFailures(cb, 3);
@@ -246,8 +271,7 @@ class ImperativeCircuitBreakerSlidingWindowTest {
     @Test
     void should_trip_once_minimum_calls_are_met_and_threshold_exceeded() throws Exception {
       // Given — threshold=3, window=10, min=5
-      var config = slidingWindowConfig(3, 10, 5, 2, 3);
-      var cb = new ImperativeCircuitBreaker<>(config, timeSource);
+      var cb = createCircuitBreaker(slidingWindowConfig(3, 10, 5, 2, 3));
 
       // When — 3 failures + 2 successes = 5 calls (min met), 3 failures >= threshold
       recordFailures(cb, 3);
@@ -260,7 +284,7 @@ class ImperativeCircuitBreakerSlidingWindowTest {
     @Test
     void should_reject_calls_when_open() {
       // Given
-      var cb = new ImperativeCircuitBreaker<>(defaultConfig(), timeSource);
+      var cb = createCircuitBreaker(defaultConfig());
       recordFailures(cb, 3);
       assertThat(cb.getState()).isEqualTo(CircuitState.OPEN);
 
@@ -272,7 +296,7 @@ class ImperativeCircuitBreakerSlidingWindowTest {
     @Test
     void should_include_circuit_breaker_name_and_state_in_exception() {
       // Given
-      var cb = new ImperativeCircuitBreaker<>(defaultConfig(), timeSource);
+      var cb = createCircuitBreaker(defaultConfig());
       recordFailures(cb, 3);
 
       // When
@@ -287,7 +311,7 @@ class ImperativeCircuitBreakerSlidingWindowTest {
     }
   }
 
-  // ======================== OPEN → HALF_OPEN Transition ========================
+  // ======================== OPEN -> HALF_OPEN Transition ========================
 
   @Nested
   class OpenToHalfOpenTransition {
@@ -295,7 +319,7 @@ class ImperativeCircuitBreakerSlidingWindowTest {
     @Test
     void should_transition_to_half_open_after_wait_duration_expires() throws Exception {
       // Given — trip the circuit
-      var cb = new ImperativeCircuitBreaker<>(defaultConfig(), timeSource);
+      var cb = createCircuitBreaker(defaultConfig());
       recordFailures(cb, 3);
       assertThat(cb.getState()).isEqualTo(CircuitState.OPEN);
 
@@ -310,7 +334,7 @@ class ImperativeCircuitBreakerSlidingWindowTest {
     @Test
     void should_stay_open_before_wait_duration_expires() {
       // Given
-      var cb = new ImperativeCircuitBreaker<>(defaultConfig(), timeSource);
+      var cb = createCircuitBreaker(defaultConfig());
       recordFailures(cb, 3);
 
       // When — advance only half the wait duration
@@ -329,7 +353,7 @@ class ImperativeCircuitBreakerSlidingWindowTest {
   class HalfOpenBehavior {
 
     private ImperativeCircuitBreaker<Object, Object> openCircuitBreaker() {
-      var cb = new ImperativeCircuitBreaker<>(defaultConfig(), timeSource);
+      var cb = createCircuitBreaker(defaultConfig());
       recordFailures(cb, 3);
       assertThat(cb.getState()).isEqualTo(CircuitState.OPEN);
       advancePastWaitDuration();
@@ -353,12 +377,11 @@ class ImperativeCircuitBreakerSlidingWindowTest {
     @Test
     void should_reject_calls_after_probe_failure_transitions_back_to_open() {
       // Given — trip the circuit, then advance past wait duration
-      var config = slidingWindowConfig(3, 10, 3, 2, 3);
-      var cb = new ImperativeCircuitBreaker<>(config, timeSource);
+      var cb = createCircuitBreaker(slidingWindowConfig(3, 10, 3, 2, 3));
       recordFailures(cb, 3);
       advancePastWaitDuration();
 
-      // When — first probe call fails → immediately back to OPEN
+      // When — first probe call fails -> immediately back to OPEN
       recordFailures(cb, 1);
 
       // Then — subsequent calls are rejected because circuit is OPEN again
@@ -368,7 +391,7 @@ class ImperativeCircuitBreakerSlidingWindowTest {
     }
   }
 
-  // ======================== HALF_OPEN → CLOSED Transition ========================
+  // ======================== HALF_OPEN -> CLOSED Transition ========================
 
   @Nested
   class HalfOpenToClosedTransition {
@@ -376,7 +399,7 @@ class ImperativeCircuitBreakerSlidingWindowTest {
     @Test
     void should_transition_to_closed_when_success_threshold_is_met() throws Exception {
       // Given — successThreshold=2
-      var cb = new ImperativeCircuitBreaker<>(defaultConfig(), timeSource);
+      var cb = createCircuitBreaker(defaultConfig());
       recordFailures(cb, 3);
       advancePastWaitDuration();
 
@@ -389,8 +412,8 @@ class ImperativeCircuitBreakerSlidingWindowTest {
 
     @Test
     void should_permit_unlimited_calls_after_closing_again() throws Exception {
-      // Given — trip → wait → recover
-      var cb = new ImperativeCircuitBreaker<>(defaultConfig(), timeSource);
+      // Given — trip -> wait -> recover
+      var cb = createCircuitBreaker(defaultConfig());
       recordFailures(cb, 3);
       advancePastWaitDuration();
       recordSuccesses(cb, 2);
@@ -408,8 +431,8 @@ class ImperativeCircuitBreakerSlidingWindowTest {
 
     @Test
     void should_reset_failure_metrics_after_transitioning_back_to_closed() throws Exception {
-      // Given — trip → wait → recover
-      var cb = new ImperativeCircuitBreaker<>(defaultConfig(), timeSource);
+      // Given — trip -> wait -> recover
+      var cb = createCircuitBreaker(defaultConfig());
       recordFailures(cb, 3);
       advancePastWaitDuration();
       recordSuccesses(cb, 2);
@@ -423,7 +446,7 @@ class ImperativeCircuitBreakerSlidingWindowTest {
     }
   }
 
-  // ======================== HALF_OPEN → OPEN Transition ========================
+  // ======================== HALF_OPEN -> OPEN Transition ========================
 
   @Nested
   class HalfOpenToOpenTransition {
@@ -431,7 +454,7 @@ class ImperativeCircuitBreakerSlidingWindowTest {
     @Test
     void should_transition_back_to_open_on_any_failure_in_half_open() {
       // Given
-      var cb = new ImperativeCircuitBreaker<>(defaultConfig(), timeSource);
+      var cb = createCircuitBreaker(defaultConfig());
       recordFailures(cb, 3);
       advancePastWaitDuration();
 
@@ -444,8 +467,8 @@ class ImperativeCircuitBreakerSlidingWindowTest {
 
     @Test
     void should_require_another_full_wait_after_re_opening_from_half_open() {
-      // Given — trip → wait → half-open → fail → open again
-      var cb = new ImperativeCircuitBreaker<>(defaultConfig(), timeSource);
+      // Given — trip -> wait -> half-open -> fail -> open again
+      var cb = createCircuitBreaker(defaultConfig());
       recordFailures(cb, 3);
       advancePastWaitDuration();
       recordFailures(cb, 1);
@@ -461,14 +484,14 @@ class ImperativeCircuitBreakerSlidingWindowTest {
 
     @Test
     void should_eventually_recover_after_re_opening_from_half_open() throws Exception {
-      // Given — trip → wait → fail again → open
-      var cb = new ImperativeCircuitBreaker<>(defaultConfig(), timeSource);
+      // Given — trip -> wait -> fail again -> open
+      var cb = createCircuitBreaker(defaultConfig());
       recordFailures(cb, 3);
       advancePastWaitDuration();
       recordFailures(cb, 1);
       assertThat(cb.getState()).isEqualTo(CircuitState.OPEN);
 
-      // When — wait again → successful probes
+      // When — wait again -> successful probes
       advancePastWaitDuration();
       recordSuccesses(cb, 2);
 
@@ -485,8 +508,7 @@ class ImperativeCircuitBreakerSlidingWindowTest {
     @Test
     void should_not_trip_when_old_failures_are_evicted_by_newer_successes() throws Exception {
       // Given — threshold=3, window=5, min=3
-      var config = slidingWindowConfig(3, 5, 3, 2, 3);
-      var cb = new ImperativeCircuitBreaker<>(config, timeSource);
+      var cb = createCircuitBreaker(slidingWindowConfig(3, 5, 3, 2, 3));
 
       // When — 2 failures then 5 successes (evicting the failures from the window)
       recordFailures(cb, 2);
@@ -499,8 +521,7 @@ class ImperativeCircuitBreakerSlidingWindowTest {
     @Test
     void should_trip_when_failures_accumulate_within_the_window() throws Exception {
       // Given — threshold=3, window=5, min=3
-      var config = slidingWindowConfig(3, 5, 3, 2, 3);
-      var cb = new ImperativeCircuitBreaker<>(config, timeSource);
+      var cb = createCircuitBreaker(slidingWindowConfig(3, 5, 3, 2, 3));
 
       // When — S, F, F, F (3 failures within last 5)
       recordSuccesses(cb, 1);
@@ -521,7 +542,7 @@ class ImperativeCircuitBreakerSlidingWindowTest {
       // Given — only IOException counts as failure
       @SuppressWarnings("unchecked")
       var config = configWithRecordExceptions("predicate-cb", 2, 10, 2, 2, 3, IOException.class);
-      var cb = new ImperativeCircuitBreaker<>(config, timeSource);
+      var cb = createCircuitBreaker(config);
 
       // When — throw IllegalArgumentException (not recorded) twice
       for (int i = 0; i < 2; i++) {
@@ -542,7 +563,7 @@ class ImperativeCircuitBreakerSlidingWindowTest {
       // Given — only IOException counts
       @SuppressWarnings("unchecked")
       var config = configWithRecordExceptions("predicate-cb", 2, 10, 2, 2, 3, IOException.class);
-      var cb = new ImperativeCircuitBreaker<>(config, timeSource);
+      var cb = createCircuitBreaker(config);
 
       // When — 2 IOExceptions
       for (int i = 0; i < 2; i++) {
@@ -567,8 +588,7 @@ class ImperativeCircuitBreakerSlidingWindowTest {
     @Test
     void should_not_record_jvm_errors_as_failures() {
       // Given — threshold=1, min=1
-      var config = slidingWindowConfig(1, 10, 1, 2, 3);
-      var cb = new ImperativeCircuitBreaker<>(config, timeSource);
+      var cb = createCircuitBreaker(slidingWindowConfig(1, 10, 1, 2, 3));
 
       // When — StackOverflowError is thrown
       try {
@@ -591,7 +611,7 @@ class ImperativeCircuitBreakerSlidingWindowTest {
     @Test
     void should_record_success_for_runnable_that_completes_normally() throws Exception {
       // Given
-      var cb = new ImperativeCircuitBreaker<>(defaultConfig(), timeSource);
+      var cb = createCircuitBreaker(defaultConfig());
       List<String> sideEffects = new ArrayList<>();
 
       // When
@@ -605,8 +625,7 @@ class ImperativeCircuitBreakerSlidingWindowTest {
     @Test
     void should_record_failure_for_runnable_that_throws() {
       // Given — threshold=1, min=1
-      var config = slidingWindowConfig(1, 10, 1, 2, 3);
-      var cb = new ImperativeCircuitBreaker<>(config, timeSource);
+      var cb = createCircuitBreaker(slidingWindowConfig(1, 10, 1, 2, 3));
 
       // When
       try {
@@ -623,7 +642,7 @@ class ImperativeCircuitBreakerSlidingWindowTest {
     @Test
     void should_reject_runnable_when_circuit_is_open() {
       // Given
-      var cb = new ImperativeCircuitBreaker<>(defaultConfig(), timeSource);
+      var cb = createCircuitBreaker(defaultConfig());
       recordFailures(cb, 3);
 
       // When / Then
@@ -641,7 +660,7 @@ class ImperativeCircuitBreakerSlidingWindowTest {
     @Test
     void should_return_primary_result_when_circuit_is_closed() throws Exception {
       // Given
-      var cb = new ImperativeCircuitBreaker<>(defaultConfig(), timeSource);
+      var cb = createCircuitBreaker(defaultConfig());
 
       // When
       String result = cb.executeWithFallback(() -> "primary", () -> "fallback");
@@ -653,7 +672,7 @@ class ImperativeCircuitBreakerSlidingWindowTest {
     @Test
     void should_return_fallback_when_circuit_is_open() throws Exception {
       // Given
-      var cb = new ImperativeCircuitBreaker<>(defaultConfig(), timeSource);
+      var cb = createCircuitBreaker(defaultConfig());
       recordFailures(cb, 3);
 
       // When
@@ -666,7 +685,7 @@ class ImperativeCircuitBreakerSlidingWindowTest {
     @Test
     void should_propagate_business_exception_without_triggering_fallback() {
       // Given
-      var cb = new ImperativeCircuitBreaker<>(defaultConfig(), timeSource);
+      var cb = createCircuitBreaker(defaultConfig());
 
       // When / Then — business exception is NOT caught by executeWithFallback
       assertThatThrownBy(() ->
@@ -687,7 +706,7 @@ class ImperativeCircuitBreakerSlidingWindowTest {
     @Test
     void should_return_fallback_on_business_exception() throws Exception {
       // Given
-      var cb = new ImperativeCircuitBreaker<>(defaultConfig(), timeSource);
+      var cb = createCircuitBreaker(defaultConfig());
 
       // When
       String result = cb.executeWithFallbackOnAny(
@@ -703,7 +722,7 @@ class ImperativeCircuitBreakerSlidingWindowTest {
     @Test
     void should_return_fallback_when_circuit_is_open() throws Exception {
       // Given
-      var cb = new ImperativeCircuitBreaker<>(defaultConfig(), timeSource);
+      var cb = createCircuitBreaker(defaultConfig());
       recordFailures(cb, 3);
 
       // When
@@ -716,7 +735,7 @@ class ImperativeCircuitBreakerSlidingWindowTest {
     @Test
     void should_attach_original_exception_as_suppressed_when_fallback_also_throws() {
       // Given
-      var cb = new ImperativeCircuitBreaker<>(defaultConfig(), timeSource);
+      var cb = createCircuitBreaker(defaultConfig());
 
       // When / Then
       var thrown = catchThrowableOfType(
@@ -737,7 +756,7 @@ class ImperativeCircuitBreakerSlidingWindowTest {
     @Test
     void should_propagate_interrupted_exception_without_triggering_fallback() {
       // Given
-      var cb = new ImperativeCircuitBreaker<>(defaultConfig(), timeSource);
+      var cb = createCircuitBreaker(defaultConfig());
 
       // When / Then
       assertThatThrownBy(() ->
@@ -758,7 +777,7 @@ class ImperativeCircuitBreakerSlidingWindowTest {
     @Test
     void should_notify_listener_on_closed_to_open_transition() {
       // Given
-      var cb = new ImperativeCircuitBreaker<>(defaultConfig(), timeSource);
+      var cb = createCircuitBreaker(defaultConfig());
       List<StateTransition> transitions = Collections.synchronizedList(new ArrayList<>());
       cb.onStateTransition(transitions::add);
 
@@ -776,7 +795,7 @@ class ImperativeCircuitBreakerSlidingWindowTest {
     @Test
     void should_notify_listener_on_open_to_half_open_transition() throws Exception {
       // Given
-      var cb = new ImperativeCircuitBreaker<>(defaultConfig(), timeSource);
+      var cb = createCircuitBreaker(defaultConfig());
       List<StateTransition> transitions = Collections.synchronizedList(new ArrayList<>());
       cb.onStateTransition(transitions::add);
       recordFailures(cb, 3);
@@ -796,7 +815,7 @@ class ImperativeCircuitBreakerSlidingWindowTest {
     @Test
     void should_notify_listener_on_half_open_to_closed_transition() throws Exception {
       // Given
-      var cb = new ImperativeCircuitBreaker<>(defaultConfig(), timeSource);
+      var cb = createCircuitBreaker(defaultConfig());
       List<StateTransition> transitions = Collections.synchronizedList(new ArrayList<>());
       cb.onStateTransition(transitions::add);
       recordFailures(cb, 3);
@@ -816,7 +835,7 @@ class ImperativeCircuitBreakerSlidingWindowTest {
     @Test
     void should_notify_listener_on_half_open_to_open_transition() {
       // Given
-      var cb = new ImperativeCircuitBreaker<>(defaultConfig(), timeSource);
+      var cb = createCircuitBreaker(defaultConfig());
       List<StateTransition> transitions = Collections.synchronizedList(new ArrayList<>());
       cb.onStateTransition(transitions::add);
       recordFailures(cb, 3);
@@ -836,7 +855,7 @@ class ImperativeCircuitBreakerSlidingWindowTest {
     @Test
     void should_support_multiple_listeners() {
       // Given
-      var cb = new ImperativeCircuitBreaker<>(defaultConfig(), timeSource);
+      var cb = createCircuitBreaker(defaultConfig());
       List<StateTransition> listener1 = Collections.synchronizedList(new ArrayList<>());
       List<StateTransition> listener2 = Collections.synchronizedList(new ArrayList<>());
       cb.onStateTransition(listener1::add);
@@ -853,7 +872,7 @@ class ImperativeCircuitBreakerSlidingWindowTest {
     @Test
     void should_allow_unregistering_a_listener() {
       // Given
-      var cb = new ImperativeCircuitBreaker<>(defaultConfig(), timeSource);
+      var cb = createCircuitBreaker(defaultConfig());
       List<StateTransition> transitions = Collections.synchronizedList(new ArrayList<>());
       Runnable unregister = cb.onStateTransition(transitions::add);
 
@@ -868,7 +887,7 @@ class ImperativeCircuitBreakerSlidingWindowTest {
     @Test
     void should_not_break_circuit_breaker_when_listener_throws() throws Exception {
       // Given
-      var cb = new ImperativeCircuitBreaker<>(defaultConfig(), timeSource);
+      var cb = createCircuitBreaker(defaultConfig());
       cb.onStateTransition(t -> {
         throw new RuntimeException("listener crash");
       });
@@ -891,7 +910,7 @@ class ImperativeCircuitBreakerSlidingWindowTest {
     @Test
     void should_reset_to_closed_from_open_state() {
       // Given
-      var cb = new ImperativeCircuitBreaker<>(defaultConfig(), timeSource);
+      var cb = createCircuitBreaker(defaultConfig());
       recordFailures(cb, 3);
       assertThat(cb.getState()).isEqualTo(CircuitState.OPEN);
 
@@ -905,7 +924,7 @@ class ImperativeCircuitBreakerSlidingWindowTest {
     @Test
     void should_reset_to_closed_from_half_open_state() throws Exception {
       // Given
-      var cb = new ImperativeCircuitBreaker<>(defaultConfig(), timeSource);
+      var cb = createCircuitBreaker(defaultConfig());
       recordFailures(cb, 3);
       advancePastWaitDuration();
       cb.execute(() -> "probe"); // triggers HALF_OPEN
@@ -920,7 +939,7 @@ class ImperativeCircuitBreakerSlidingWindowTest {
     @Test
     void should_clear_metrics_after_reset() throws Exception {
       // Given — 2 failures (one short of tripping)
-      var cb = new ImperativeCircuitBreaker<>(defaultConfig(), timeSource);
+      var cb = createCircuitBreaker(defaultConfig());
       recordFailures(cb, 2);
 
       // When
@@ -934,7 +953,7 @@ class ImperativeCircuitBreakerSlidingWindowTest {
     @Test
     void should_fire_transition_event_on_reset_from_non_closed_state() {
       // Given
-      var cb = new ImperativeCircuitBreaker<>(defaultConfig(), timeSource);
+      var cb = createCircuitBreaker(defaultConfig());
       List<StateTransition> transitions = Collections.synchronizedList(new ArrayList<>());
       cb.onStateTransition(transitions::add);
       recordFailures(cb, 3);
@@ -952,7 +971,7 @@ class ImperativeCircuitBreakerSlidingWindowTest {
     @Test
     void should_not_fire_transition_event_on_reset_from_clean_closed_state() {
       // Given
-      var cb = new ImperativeCircuitBreaker<>(defaultConfig(), timeSource);
+      var cb = createCircuitBreaker(defaultConfig());
       List<StateTransition> transitions = Collections.synchronizedList(new ArrayList<>());
       cb.onStateTransition(transitions::add);
 
@@ -966,7 +985,7 @@ class ImperativeCircuitBreakerSlidingWindowTest {
     @Test
     void should_permit_calls_immediately_after_reset() throws Exception {
       // Given
-      var cb = new ImperativeCircuitBreaker<>(defaultConfig(), timeSource);
+      var cb = createCircuitBreaker(defaultConfig());
       recordFailures(cb, 3);
       cb.reset();
 
@@ -986,19 +1005,19 @@ class ImperativeCircuitBreakerSlidingWindowTest {
     @Test
     void should_complete_a_full_closed_open_half_open_closed_cycle() throws Exception {
       // Given
-      var cb = new ImperativeCircuitBreaker<>(defaultConfig(), timeSource);
+      var cb = createCircuitBreaker(defaultConfig());
       List<StateTransition> transitions = Collections.synchronizedList(new ArrayList<>());
       cb.onStateTransition(transitions::add);
 
-      // Step 1: CLOSED → OPEN (3 failures)
+      // Step 1: CLOSED -> OPEN (3 failures)
       recordFailures(cb, 3);
       assertThat(cb.getState()).isEqualTo(CircuitState.OPEN);
 
-      // Step 2: OPEN → HALF_OPEN (wait duration expires)
+      // Step 2: OPEN -> HALF_OPEN (wait duration expires)
       advancePastWaitDuration();
       cb.execute(() -> "probe-1");
 
-      // Step 3: HALF_OPEN → CLOSED (2 successes)
+      // Step 3: HALF_OPEN -> CLOSED (2 successes)
       cb.execute(() -> "probe-2");
       assertThat(cb.getState()).isEqualTo(CircuitState.CLOSED);
 
@@ -1015,7 +1034,7 @@ class ImperativeCircuitBreakerSlidingWindowTest {
     @Test
     void should_survive_multiple_trip_and_recovery_cycles() throws Exception {
       // Given
-      var cb = new ImperativeCircuitBreaker<>(defaultConfig(), timeSource);
+      var cb = createCircuitBreaker(defaultConfig());
 
       for (int cycle = 0; cycle < 5; cycle++) {
         // Trip the circuit
@@ -1038,7 +1057,7 @@ class ImperativeCircuitBreakerSlidingWindowTest {
     @Test
     void should_restore_interrupt_flag_when_callable_throws_interrupted_exception() {
       // Given
-      var cb = new ImperativeCircuitBreaker<>(defaultConfig(), timeSource);
+      var cb = createCircuitBreaker(defaultConfig());
 
       // When
       try {

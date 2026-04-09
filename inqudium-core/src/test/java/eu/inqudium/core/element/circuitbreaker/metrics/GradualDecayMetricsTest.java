@@ -21,7 +21,7 @@ class GradualDecayMetricsTest {
     @Test
     void should_start_with_zero_failure_count() {
       // Given / When
-      var metrics = GradualDecayMetrics.initial(5);
+      var metrics = GradualDecayMetrics.initial(5, 0);
 
       // Then
       assertThat(metrics.failureCount()).isZero();
@@ -31,7 +31,7 @@ class GradualDecayMetricsTest {
     @Test
     void should_store_the_configured_max_failure_count() {
       // Given / When
-      var metrics = GradualDecayMetrics.initial(10);
+      var metrics = GradualDecayMetrics.initial(10, 0);
 
       // Then
       assertThat(metrics.maxFailureCount()).isEqualTo(10);
@@ -46,7 +46,7 @@ class GradualDecayMetricsTest {
     @Test
     void should_increment_failure_count_on_each_failure() {
       // Given
-      var metrics = GradualDecayMetrics.initial(5);
+      var metrics = GradualDecayMetrics.initial(5, 0);
 
       // When
       var after = metrics.recordFailure(NOW).recordFailure(NOW).recordFailure(NOW);
@@ -58,7 +58,7 @@ class GradualDecayMetricsTest {
     @Test
     void should_reach_threshold_at_exactly_n_failures() {
       // Given
-      var metrics = GradualDecayMetrics.initial(3);
+      var metrics = GradualDecayMetrics.initial(3, 0);
 
       // When
       var updated = metrics.recordFailure(NOW).recordFailure(NOW).recordFailure(NOW);
@@ -70,7 +70,7 @@ class GradualDecayMetricsTest {
     @Test
     void should_not_reach_threshold_with_fewer_failures_than_required() {
       // Given
-      var metrics = GradualDecayMetrics.initial(3);
+      var metrics = GradualDecayMetrics.initial(3, 0);
 
       // When
       var updated = metrics.recordFailure(NOW).recordFailure(NOW);
@@ -82,7 +82,7 @@ class GradualDecayMetricsTest {
     @Test
     void should_allow_failure_count_to_exceed_threshold() {
       // Given
-      var metrics = GradualDecayMetrics.initial(2);
+      var metrics = GradualDecayMetrics.initial(2, 0);
 
       // When
       var updated = metrics.recordFailure(NOW).recordFailure(NOW)
@@ -102,7 +102,7 @@ class GradualDecayMetricsTest {
     @Test
     void should_decrement_failure_count_by_one_per_success() {
       // Given
-      var metrics = GradualDecayMetrics.initial(5);
+      var metrics = GradualDecayMetrics.initial(5, 0);
       var withFailures = metrics.recordFailure(NOW).recordFailure(NOW).recordFailure(NOW);
 
       // When
@@ -115,7 +115,7 @@ class GradualDecayMetricsTest {
     @Test
     void should_require_as_many_successes_as_failures_to_fully_heal() {
       // Given
-      var metrics = GradualDecayMetrics.initial(5);
+      var metrics = GradualDecayMetrics.initial(5, 0);
       var tripped = metrics.recordFailure(NOW).recordFailure(NOW).recordFailure(NOW);
 
       // When
@@ -128,7 +128,7 @@ class GradualDecayMetricsTest {
     @Test
     void should_not_allow_failure_count_to_drop_below_zero() {
       // Given
-      var metrics = GradualDecayMetrics.initial(5);
+      var metrics = GradualDecayMetrics.initial(5, 0);
 
       // When
       var afterSuccess = metrics.recordSuccess(NOW).recordSuccess(NOW);
@@ -140,7 +140,7 @@ class GradualDecayMetricsTest {
     @Test
     void should_drop_below_threshold_after_enough_successes() {
       // Given — threshold is 3, we have 4 failures, so we need 2 successes to drop below
-      var metrics = GradualDecayMetrics.initial(3);
+      var metrics = GradualDecayMetrics.initial(3, 0);
       var above = metrics.recordFailure(NOW).recordFailure(NOW)
           .recordFailure(NOW).recordFailure(NOW);
       assertThat(above.isThresholdReached(NOW)).isTrue();
@@ -162,7 +162,7 @@ class GradualDecayMetricsTest {
     @Test
     void should_correctly_track_interleaved_successes_and_failures() {
       // Given
-      var metrics = GradualDecayMetrics.initial(3);
+      var metrics = GradualDecayMetrics.initial(3, 0);
 
       // When — F, F, S, F, F, S → count should be 2
       var result = metrics
@@ -179,7 +179,7 @@ class GradualDecayMetricsTest {
     @Test
     void should_trip_when_failures_outpace_successes() {
       // Given
-      var metrics = GradualDecayMetrics.initial(2);
+      var metrics = GradualDecayMetrics.initial(2, 0);
 
       // When — F, F, S, F → count should be 2 (3 failures - 1 success)
       var result = metrics
@@ -201,7 +201,7 @@ class GradualDecayMetricsTest {
     @Test
     void should_return_failure_count_to_zero_after_reset() {
       // Given
-      var metrics = GradualDecayMetrics.initial(3);
+      var metrics = GradualDecayMetrics.initial(3, 0);
       var tripped = metrics.recordFailure(NOW).recordFailure(NOW).recordFailure(NOW);
 
       // When
@@ -215,7 +215,7 @@ class GradualDecayMetricsTest {
     @Test
     void should_preserve_max_failure_count_after_reset() {
       // Given
-      var metrics = GradualDecayMetrics.initial(7);
+      var metrics = GradualDecayMetrics.initial(7, 0);
 
       // When
       var afterReset = (GradualDecayMetrics) metrics.reset(LATER);
@@ -233,7 +233,7 @@ class GradualDecayMetricsTest {
     @Test
     void should_not_modify_original_when_recording_failure() {
       // Given
-      var original = GradualDecayMetrics.initial(5);
+      var original = GradualDecayMetrics.initial(5, 0);
 
       // When
       original.recordFailure(NOW);
@@ -245,7 +245,7 @@ class GradualDecayMetricsTest {
     @Test
     void should_not_modify_original_when_recording_success() {
       // Given
-      var original = (GradualDecayMetrics) GradualDecayMetrics.initial(5)
+      var original = (GradualDecayMetrics) GradualDecayMetrics.initial(5, 0)
           .recordFailure(NOW).recordFailure(NOW);
 
       // When
@@ -264,7 +264,7 @@ class GradualDecayMetricsTest {
     @Test
     void should_include_failure_count_and_threshold_in_reason() {
       // Given
-      var metrics = GradualDecayMetrics.initial(3);
+      var metrics = GradualDecayMetrics.initial(3, 0);
       var tripped = metrics.recordFailure(NOW).recordFailure(NOW).recordFailure(NOW);
 
       // When

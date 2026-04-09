@@ -2,6 +2,7 @@ package eu.inqudium.core.element.circuitbreaker.metrics;
 
 import java.util.Arrays;
 import java.util.Locale;
+import java.util.function.LongFunction;
 
 /**
  * Immutable implementation of a time-based sliding window failure tracking strategy.
@@ -64,7 +65,9 @@ public record TimeBasedSlidingWindowMetrics(
    * @return a fresh instance with all buckets zeroed
    * @throws IllegalArgumentException if {@code windowSizeInSeconds <= 0}
    */
-  public static TimeBasedSlidingWindowMetrics initial(int maxFailuresInWindow, int windowSizeInSeconds, long nowNanos) {
+  public static TimeBasedSlidingWindowMetrics initial(int maxFailuresInWindow,
+                                                      int windowSizeInSeconds,
+                                                      long nowNanos) {
     if (windowSizeInSeconds <= 0) {
       throw new IllegalArgumentException("windowSizeInSeconds must be greater than 0");
     }
@@ -73,6 +76,21 @@ public record TimeBasedSlidingWindowMetrics(
         windowSizeInSeconds,
         new int[windowSizeInSeconds],
         toSeconds(nowNanos));
+  }
+
+  /**
+   * Returns a factory function that produces a fresh instance of this metrics strategy.
+   *
+   * @return a {@link LongFunction} that accepts a nanosecond timestamp and produces a
+   *         fresh {@link FailureMetrics} instance with identical configuration
+   */
+  @Override
+  public LongFunction<FailureMetrics> metricsFactory() {
+    return (long nowNanos)-> TimeBasedSlidingWindowMetrics.initial(
+        maxFailuresInWindow,
+        windowSizeInSeconds,
+        nowNanos
+    );
   }
 
   /**

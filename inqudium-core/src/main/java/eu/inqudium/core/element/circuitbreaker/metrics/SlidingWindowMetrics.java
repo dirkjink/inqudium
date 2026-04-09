@@ -2,6 +2,7 @@ package eu.inqudium.core.element.circuitbreaker.metrics;
 
 import java.util.Arrays;
 import java.util.Locale;
+import java.util.function.LongFunction;
 
 /**
  * Immutable implementation of a count-based sliding window failure tracking strategy.
@@ -65,7 +66,9 @@ public record SlidingWindowMetrics(
    * @throws IllegalArgumentException if {@code windowSize <= 0} or
    *                                  {@code minimumNumberOfCalls} is outside [1, windowSize]
    */
-  public static SlidingWindowMetrics initial(int maxFailuresInWindow, int windowSize, int minimumNumberOfCalls) {
+  public static SlidingWindowMetrics initial(int maxFailuresInWindow,
+                                             int windowSize,
+                                             int minimumNumberOfCalls) {
     if (windowSize <= 0) {
       throw new IllegalArgumentException("windowSize must be greater than 0");
     }
@@ -80,6 +83,21 @@ public record SlidingWindowMetrics(
         -1,  // headIndex starts at -1 indicating an empty buffer
         0,
         0);
+  }
+
+  /**
+   * Returns a factory function that produces a fresh instance of this metrics strategy.
+   *
+   * @return a {@link LongFunction} that accepts a nanosecond timestamp and produces a
+   *         fresh {@link FailureMetrics} instance with identical configuration
+   */
+  @Override
+  public LongFunction<FailureMetrics> metricsFactory() {
+    return (long nowNanos)-> SlidingWindowMetrics.initial(
+        maxFailuresInWindow,
+        windowSize,
+        minimumNumberOfCalls
+    );
   }
 
   /**

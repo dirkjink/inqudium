@@ -4,6 +4,7 @@ import eu.inqudium.core.algo.ContinuousTimeEwma;
 
 import java.time.Duration;
 import java.util.Locale;
+import java.util.function.LongFunction;
 
 /**
  * Immutable implementation of a failure tracking strategy using a Continuous-Time
@@ -51,6 +52,7 @@ import java.util.Locale;
  *
  * @param failureRatePercent   the threshold as a percentage (1–100); rounded at construction
  * @param ewmaCalculator       the stateless continuous-time EWMA calculator holding tau
+ * @param timeConstant         the EWMA time constant (tau); controls decay speed
  * @param minimumNumberOfCalls minimum samples required before the threshold is evaluated
  * @param currentRate          the current EWMA failure rate (0.0–1.0 scale)
  * @param callsCount           how many outcomes have been recorded (capped at minimumNumberOfCalls)
@@ -59,6 +61,7 @@ import java.util.Locale;
 public record ContinuousTimeEwmaMetrics(
     double failureRatePercent,
     ContinuousTimeEwma ewmaCalculator,
+    Duration timeConstant,
     int minimumNumberOfCalls,
     double currentRate,
     int callsCount,
@@ -68,7 +71,7 @@ public record ContinuousTimeEwmaMetrics(
   /**
    * Creates an initial instance with a zero failure rate, anchored at the given time.
    *
-   * @param failureThreshold     the failure rate percentage (1–100) at which the circuit trips
+   * @param failureRatePercent     the failure rate percentage (1–100) at which the circuit trips
    * @param timeConstant         the EWMA time constant (tau); controls decay speed
    * @param minimumNumberOfCalls minimum number of calls before evaluation; must be > 0
    * @param nowNanos             the initial timestamp anchor
@@ -76,7 +79,7 @@ public record ContinuousTimeEwmaMetrics(
    * @throws IllegalArgumentException if {@code minimumNumberOfCalls <= 0}
    */
   public static ContinuousTimeEwmaMetrics initial(
-      double failureThreshold,
+      double failureRatePercent,
       Duration timeConstant,
       int minimumNumberOfCalls,
       long nowNanos
@@ -85,11 +88,28 @@ public record ContinuousTimeEwmaMetrics(
       throw new IllegalArgumentException("minimumNumberOfCalls must be greater than 0");
     }
     return new ContinuousTimeEwmaMetrics(
-        Math.round(failureThreshold),
+        failureRatePercent,
         new ContinuousTimeEwma(timeConstant),
+        timeConstant,
         minimumNumberOfCalls,
         0.0,
         0,
+        nowNanos
+    );
+  }
+
+  /**
+   * Returns a factory function that produces a fresh instance of this metrics strategy.
+   *
+   * @return a {@link LongFunction} that accepts a nanosecond timestamp and produces a
+   *         fresh {@link FailureMetrics} instance with identical configuration
+   */
+  @Override
+  public LongFunction<FailureMetrics> metricsFactory() {
+    return (long nowNanos)-> ContinuousTimeEwmaMetrics.initial(
+        failureRatePercent,
+        timeConstant,
+        minimumNumberOfCalls,
         nowNanos
     );
   }
@@ -134,8 +154,13 @@ public record ContinuousTimeEwmaMetrics(
     long newLastUpdateNanos = Math.max(lastUpdateNanos, nowNanos);
 
     return new ContinuousTimeEwmaMetrics(
-        failureRatePercent, ewmaCalculator, minimumNumberOfCalls,
-        newRate, newCount, newLastUpdateNanos
+        failureRatePercent,
+        ewmaCalculator,
+        timeConstant,
+        minimumNumberOfCalls,
+        newRate,
+        newCount,
+        newLastUpdateNanos
     );
   }
 
@@ -168,8 +193,13 @@ public record ContinuousTimeEwmaMetrics(
   @Override
   public FailureMetrics reset(long nowNanos) {
     return new ContinuousTimeEwmaMetrics(
-        failureRatePercent, ewmaCalculator, minimumNumberOfCalls,
-        0.0, 0, nowNanos
+        failureRatePercent,
+        ewmaCalculator,
+        timeConstant,
+        minimumNumberOfCalls,
+        0.0,
+        0,
+        nowNanos
     );
   }
 

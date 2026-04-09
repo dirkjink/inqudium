@@ -60,26 +60,20 @@ public class ImperativeCircuitBreaker<A, R> implements CircuitBreaker<A, R> {
   // Lock exclusively used to serialize state transitions (NOT for event emissions)
   private final ReentrantLock transitionLock = new ReentrantLock();
 
-  public ImperativeCircuitBreaker(InqCircuitBreakerConfig config) {
-    this(config, InqNanoTimeSource.system());
-  }
-
-  public ImperativeCircuitBreaker(InqCircuitBreakerConfig config, InqNanoTimeSource timeSource) {
-    this(config, timeSource, InqEventPublisher.create(config.name(), InqElementType.CIRCUIT_BREAKER));
-  }
-
-  public ImperativeCircuitBreaker(InqCircuitBreakerConfig config, InqNanoTimeSource timeSource, InqEventPublisher eventPublisher) {
+  public ImperativeCircuitBreaker(InqCircuitBreakerConfig config,
+                                  LongFunction<FailureMetrics> metricsFactory,
+                                  Predicate<Throwable> recordFailurePredicate) {
     Objects.requireNonNull(config, "config must not be null");
-    this.timeSource = Objects.requireNonNull(timeSource, "timeSource must not be null");
-    this.eventPublisher = Objects.requireNonNull(eventPublisher, "eventPublisher must not be null");
+    this.timeSource = config.general().nanoTimesource();
+    this.eventPublisher = config.eventPublisher();
 
     // Extract all config values into fields
     this.name = config.name();
     this.waitDurationNanos = config.waitDurationNanos();
     this.permittedCallsInHalfOpen = config.permittedCallsInHalfOpen();
     this.successThresholdInHalfOpen = config.successThresholdInHalfOpen();
-    this.recordFailurePredicate = config.recordFailurePredicate();
-    this.metricsFactory = config.metricsFactory();
+    this.recordFailurePredicate = recordFailurePredicate;
+    this.metricsFactory = metricsFactory;
 
     long nowNanos = timeSource.now();
     FailureMetrics initialMetrics = metricsFactory.apply(nowNanos);

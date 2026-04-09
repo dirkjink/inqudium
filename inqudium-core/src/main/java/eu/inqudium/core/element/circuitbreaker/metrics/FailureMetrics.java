@@ -1,5 +1,7 @@
 package eu.inqudium.core.element.circuitbreaker.metrics;
 
+import java.util.function.LongFunction;
+
 /**
  * Strategy interface for tracking failures and determining if a circuit breaker should open.
  *
@@ -109,4 +111,20 @@ public interface FailureMetrics {
    * @return a non-null descriptive string; meaningful even if the threshold is not currently reached
    */
   String getTripReason(long nowNanos);
-}
+
+  /**
+   * Returns a factory function that produces a fresh instance of this metrics strategy.
+   *
+   * <p>The returned {@link LongFunction} accepts a nanosecond timestamp and creates a new,
+   * pristine {@link FailureMetrics} instance with the same configuration (thresholds, window
+   * sizes, smoothing factors, etc.) but zeroed-out counters and windows. The timestamp is
+   * used by time-aware implementations to anchor decay baselines or window boundaries.
+   *
+   * <p>This factory is invoked by the circuit breaker on creation and on every reset
+   * (transition back to CLOSED), ensuring that the new metrics instance starts from a
+   * clean slate while preserving the operator's chosen algorithm and parameters.
+   *
+   * @return a {@link LongFunction} that accepts a nanosecond timestamp and produces a
+   *         fresh {@link FailureMetrics} instance with identical configuration
+   */
+  LongFunction<FailureMetrics> metricsFactory();}

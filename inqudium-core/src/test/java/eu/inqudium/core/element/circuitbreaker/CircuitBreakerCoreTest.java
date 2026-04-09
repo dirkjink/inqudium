@@ -1,5 +1,6 @@
 package eu.inqudium.core.element.circuitbreaker;
 
+import eu.inqudium.core.element.circuitbreaker.config.InqCircuitBreakerConfig;
 import eu.inqudium.core.element.circuitbreaker.metrics.ConsecutiveFailuresMetrics;
 import eu.inqudium.core.element.circuitbreaker.metrics.FailureMetrics;
 import eu.inqudium.core.element.circuitbreaker.metrics.SlidingWindowMetrics;
@@ -18,7 +19,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * Tests for the pure functional core of the circuit breaker state machine.
  *
  * <p>All methods under test are static, side-effect-free, and have no dependency
- * on {@link CircuitBreakerConfig}. Each parameter is passed explicitly as a
+ * on {@link InqCircuitBreakerConfig}. Each parameter is passed explicitly as a
  * primitive, making every test self-contained and trivially readable.
  *
  * <p>No concurrency, no I/O — only immutable snapshot transformations.
@@ -42,7 +43,7 @@ class CircuitBreakerCoreTest {
    * Creates a fresh CLOSED snapshot with ConsecutiveFailuresMetrics.
    */
   private CircuitBreakerSnapshot closedSnapshot() {
-    FailureMetrics metrics = ConsecutiveFailuresMetrics.initial(FAILURE_THRESHOLD);
+    FailureMetrics metrics = ConsecutiveFailuresMetrics.initial(FAILURE_THRESHOLD, 0);
     return CircuitBreakerSnapshot.initial(T0, metrics);
   }
 
@@ -656,7 +657,7 @@ class CircuitBreakerCoreTest {
     @Test
     void should_not_decrement_below_zero() {
       // Given
-      var metrics = ConsecutiveFailuresMetrics.initial(FAILURE_THRESHOLD);
+      var metrics = ConsecutiveFailuresMetrics.initial(FAILURE_THRESHOLD, 0);
       var snapshot = new CircuitBreakerSnapshot(
           CircuitState.HALF_OPEN, metrics, 0, 0, T0, "test");
 

@@ -1,6 +1,7 @@
 package eu.inqudium.core.element.circuitbreaker.metrics;
 
 import java.util.Locale;
+import java.util.function.LongFunction;
 
 /**
  * Immutable implementation of a Leaky Bucket failure tracking strategy.
@@ -64,11 +65,28 @@ public record LeakyBucketMetrics(
    * @return a new instance with {@code currentLevel == 0.0}
    * @throws IllegalArgumentException if {@code leakRatePerSecond} is negative
    */
-  public static LeakyBucketMetrics initial(int bucketCapacity, double leakRatePerSecond, long nowNanos) {
+  public static LeakyBucketMetrics initial(int bucketCapacity,
+                                           double leakRatePerSecond,
+                                           long nowNanos) {
     if (leakRatePerSecond < 0) {
       throw new IllegalArgumentException("leakRatePerSecond cannot be negative");
     }
     return new LeakyBucketMetrics(bucketCapacity, leakRatePerSecond, 0.0, nowNanos);
+  }
+
+  /**
+   * Returns a factory function that produces a fresh instance of this metrics strategy.
+   *
+   * @return a {@link LongFunction} that accepts a nanosecond timestamp and produces a
+   *         fresh {@link FailureMetrics} instance with identical configuration
+   */
+  @Override
+  public LongFunction<FailureMetrics> metricsFactory() {
+    return (long nowNanos)-> LeakyBucketMetrics.initial(
+        bucketCapacity,
+        leakRatePerSecond,
+        nowNanos
+    );
   }
 
   /**

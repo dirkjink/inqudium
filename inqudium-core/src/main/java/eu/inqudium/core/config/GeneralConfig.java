@@ -5,6 +5,7 @@ import eu.inqudium.core.log.LoggerFactory;
 import eu.inqudium.core.time.InqClock;
 import eu.inqudium.core.time.InqNanoTimeSource;
 
+import java.time.Instant;
 import java.util.Map;
 import java.util.Optional;
 
@@ -40,6 +41,16 @@ public record GeneralConfig(
     LoggerFactory loggerFactory,
     Map<Class<?>, ConfigExtension<?>> extensions
 ) {
+
+  static public GeneralConfig standard() {
+    return new GeneralConfig(
+        Instant::now,
+        System::nanoTime,
+        null,
+        LoggerFactory.NO_OP_LOGGER_FACTORY,
+        Map.of()
+    );
+  }
 
   /**
    * Retrieves a registered configuration extension by its concrete class.

@@ -21,7 +21,7 @@ class ConsecutiveFailuresMetricsTest {
     @Test
     void should_start_with_zero_consecutive_failures() {
       // Given
-      var metrics = ConsecutiveFailuresMetrics.initial(5);
+      var metrics = ConsecutiveFailuresMetrics.initial(5, 0);
 
       // When
       boolean reached = metrics.isThresholdReached(NOW);
@@ -34,7 +34,7 @@ class ConsecutiveFailuresMetricsTest {
     @Test
     void should_store_the_configured_max_consecutive_failures() {
       // Given / When
-      var metrics = ConsecutiveFailuresMetrics.initial(10);
+      var metrics = ConsecutiveFailuresMetrics.initial(10, 0);
 
       // Then
       assertThat(metrics.maxConsecutiveFailures()).isEqualTo(10);
@@ -49,7 +49,7 @@ class ConsecutiveFailuresMetricsTest {
     @Test
     void should_increment_consecutive_failures_on_each_failure() {
       // Given
-      var metrics = ConsecutiveFailuresMetrics.initial(5);
+      var metrics = ConsecutiveFailuresMetrics.initial(5, 0);
 
       // When
       var after1 = metrics.recordFailure(NOW);
@@ -65,7 +65,7 @@ class ConsecutiveFailuresMetricsTest {
     @Test
     void should_reach_threshold_after_exactly_n_consecutive_failures() {
       // Given
-      var metrics = ConsecutiveFailuresMetrics.initial(3);
+      var metrics = ConsecutiveFailuresMetrics.initial(3, 0);
 
       // When
       var updated = metrics;
@@ -80,7 +80,7 @@ class ConsecutiveFailuresMetricsTest {
     @Test
     void should_not_reach_threshold_with_one_fewer_failure_than_required() {
       // Given
-      var metrics = ConsecutiveFailuresMetrics.initial(3);
+      var metrics = ConsecutiveFailuresMetrics.initial(3, 0);
 
       // When
       var updated = metrics.recordFailure(NOW).recordFailure(NOW);
@@ -92,7 +92,7 @@ class ConsecutiveFailuresMetricsTest {
     @Test
     void should_still_be_above_threshold_after_exceeding_it() {
       // Given
-      var metrics = ConsecutiveFailuresMetrics.initial(2);
+      var metrics = ConsecutiveFailuresMetrics.initial(2, 0);
 
       // When
       var updated = metrics.recordFailure(NOW).recordFailure(NOW).recordFailure(NOW);
@@ -111,7 +111,7 @@ class ConsecutiveFailuresMetricsTest {
     @Test
     void should_reset_consecutive_failure_counter_on_a_single_success() {
       // Given
-      var metrics = ConsecutiveFailuresMetrics.initial(5);
+      var metrics = ConsecutiveFailuresMetrics.initial(5, 0);
       var withFailures = metrics.recordFailure(NOW).recordFailure(NOW).recordFailure(NOW);
 
       // When
@@ -125,7 +125,7 @@ class ConsecutiveFailuresMetricsTest {
     @Test
     void should_not_go_below_zero_when_recording_success_on_fresh_state() {
       // Given
-      var metrics = ConsecutiveFailuresMetrics.initial(5);
+      var metrics = ConsecutiveFailuresMetrics.initial(5, 0);
 
       // When
       var afterSuccess = metrics.recordSuccess(NOW);
@@ -137,7 +137,7 @@ class ConsecutiveFailuresMetricsTest {
     @Test
     void should_allow_rebuilding_failures_after_a_success_interrupts_the_streak() {
       // Given
-      var metrics = ConsecutiveFailuresMetrics.initial(3);
+      var metrics = ConsecutiveFailuresMetrics.initial(3, 0);
       var twoFailures = metrics.recordFailure(NOW).recordFailure(NOW);
 
       // When — success breaks the streak, then failures start again
@@ -158,7 +158,7 @@ class ConsecutiveFailuresMetricsTest {
     @Test
     void should_return_to_initial_state_after_reset() {
       // Given
-      var metrics = ConsecutiveFailuresMetrics.initial(3);
+      var metrics = ConsecutiveFailuresMetrics.initial(3, 0);
       var withFailures = metrics.recordFailure(NOW).recordFailure(NOW).recordFailure(NOW);
       assertThat(withFailures.isThresholdReached(NOW)).isTrue();
 
@@ -173,7 +173,7 @@ class ConsecutiveFailuresMetricsTest {
     @Test
     void should_preserve_max_consecutive_failures_after_reset() {
       // Given
-      var metrics = ConsecutiveFailuresMetrics.initial(7);
+      var metrics = ConsecutiveFailuresMetrics.initial(7, 0);
 
       // When
       var afterReset = (ConsecutiveFailuresMetrics) metrics.reset(LATER);
@@ -191,7 +191,7 @@ class ConsecutiveFailuresMetricsTest {
     @Test
     void should_not_modify_original_instance_when_recording_failure() {
       // Given
-      var original = ConsecutiveFailuresMetrics.initial(5);
+      var original = ConsecutiveFailuresMetrics.initial(5, 0);
 
       // When
       original.recordFailure(NOW);
@@ -203,7 +203,7 @@ class ConsecutiveFailuresMetricsTest {
     @Test
     void should_not_modify_original_instance_when_recording_success() {
       // Given
-      var original = (ConsecutiveFailuresMetrics) ConsecutiveFailuresMetrics.initial(5)
+      var original = (ConsecutiveFailuresMetrics) ConsecutiveFailuresMetrics.initial(5, 0)
           .recordFailure(NOW).recordFailure(NOW);
 
       // When
@@ -222,7 +222,7 @@ class ConsecutiveFailuresMetricsTest {
     @Test
     void should_include_current_count_and_threshold_in_trip_reason() {
       // Given
-      var metrics = ConsecutiveFailuresMetrics.initial(3);
+      var metrics = ConsecutiveFailuresMetrics.initial(3, 0);
       var tripped = metrics.recordFailure(NOW).recordFailure(NOW).recordFailure(NOW);
 
       // When
@@ -244,7 +244,7 @@ class ConsecutiveFailuresMetricsTest {
     @Test
     void should_trip_after_a_single_failure_when_threshold_is_one() {
       // Given
-      var metrics = ConsecutiveFailuresMetrics.initial(1);
+      var metrics = ConsecutiveFailuresMetrics.initial(1, 0);
 
       // When
       var updated = metrics.recordFailure(NOW);
@@ -256,7 +256,7 @@ class ConsecutiveFailuresMetricsTest {
     @Test
     void should_recover_immediately_after_one_success_when_threshold_is_one() {
       // Given
-      var metrics = ConsecutiveFailuresMetrics.initial(1);
+      var metrics = ConsecutiveFailuresMetrics.initial(1, 0);
       var tripped = metrics.recordFailure(NOW);
 
       // When

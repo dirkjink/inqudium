@@ -3,6 +3,7 @@ package eu.inqudium.core.element.circuitbreaker.metrics;
 import java.util.Arrays;
 import java.util.Locale;
 import java.util.Objects;
+import java.util.function.LongFunction;
 
 /**
  * Immutable implementation of a time-based error rate failure tracking strategy.
@@ -103,6 +104,22 @@ public record TimeBasedErrorRateMetrics(
         new int[windowSizeInSeconds],
         new int[windowSizeInSeconds],
         toSeconds(nowNanos));
+  }
+
+  /**
+   * Returns a factory function that produces a fresh instance of this metrics strategy.
+   *
+   * @return a {@link LongFunction} that accepts a nanosecond timestamp and produces a
+   *         fresh {@link FailureMetrics} instance with identical configuration
+   */
+  @Override
+  public LongFunction<FailureMetrics> metricsFactory() {
+    return (long nowNanos)-> TimeBasedErrorRateMetrics.initial(
+        failureRatePercent,
+        windowSizeInSeconds,
+        minimumNumberOfCalls,
+        nowNanos
+    );
   }
 
   /**

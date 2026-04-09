@@ -1,6 +1,7 @@
 package eu.inqudium.core.element.circuitbreaker.metrics;
 
 import java.util.Locale;
+import java.util.function.LongFunction;
 
 /**
  * Immutable implementation of a gradual-decay failure tracking strategy.
@@ -49,8 +50,22 @@ public record GradualDecayMetrics(
    * @param maxFailureCount the threshold at which the circuit should trip
    * @return a new {@code GradualDecayMetrics} with {@code failureCount == 0}
    */
-  public static GradualDecayMetrics initial(int maxFailureCount) {
-    return new GradualDecayMetrics(maxFailureCount, 0);
+  public static GradualDecayMetrics initial(int maxFailureCount, int initialFailureCount) {
+    return new GradualDecayMetrics(maxFailureCount, initialFailureCount);
+  }
+
+  /**
+   * Returns a factory function that produces a fresh instance of this metrics strategy.
+   *
+   * @return a {@link LongFunction} that accepts a nanosecond timestamp and produces a
+   *         fresh {@link FailureMetrics} instance with identical configuration
+   */
+  @Override
+  public LongFunction<FailureMetrics> metricsFactory() {
+    return (long nowNanos)-> GradualDecayMetrics.initial(
+        maxFailureCount,
+        failureCount
+    );
   }
 
   /**

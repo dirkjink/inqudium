@@ -3,6 +3,7 @@ package eu.inqudium.core.element.circuitbreaker.metrics;
 import eu.inqudium.core.algo.RequestBasedEwma;
 
 import java.util.Locale;
+import java.util.function.LongFunction;
 
 /**
  * Immutable implementation of a failure tracking strategy using a Request-Based
@@ -48,6 +49,7 @@ import java.util.Locale;
  *
  * @param failureRatePercent   the threshold as a percentage (1–100); stored as rounded value
  * @param ewmaCalculator       the stateless EWMA calculator holding the smoothing factor (alpha)
+ * @param smoothingFactor      the EWMA alpha value (0 < alpha ≤ 1); higher = more reactive
  * @param minimumNumberOfCalls minimum samples required before the threshold is evaluated
  * @param currentRate          the current EWMA failure rate (0.0–1.0 scale)
  * @param callsCount           how many outcomes have been recorded (capped at minimumNumberOfCalls)
@@ -55,6 +57,7 @@ import java.util.Locale;
 public record RequestBasedEwmaMetrics(
     double failureRatePercent,
     RequestBasedEwma ewmaCalculator,
+    double smoothingFactor,
     int minimumNumberOfCalls,
     double currentRate,
     int callsCount
@@ -63,14 +66,14 @@ public record RequestBasedEwmaMetrics(
   /**
    * Creates an initial instance with a zero failure rate and zero recorded calls.
    *
-   * @param failureThreshold     the failure rate percentage (1–100) at which the circuit trips
+   * @param failureRatePercent     the failure rate percentage (1–100) at which the circuit trips
    * @param smoothingFactor      the EWMA alpha value (0 < alpha ≤ 1); higher = more reactive
    * @param minimumNumberOfCalls the minimum number of calls before evaluation; must be > 0
    * @return a fresh instance ready to accept outcomes
    * @throws IllegalArgumentException if {@code minimumNumberOfCalls <= 0}
    */
   public static RequestBasedEwmaMetrics initial(
-      double failureThreshold,
+      double failureRatePercent,
       double smoothingFactor,
       int minimumNumberOfCalls
   ) {
@@ -78,11 +81,27 @@ public record RequestBasedEwmaMetrics(
       throw new IllegalArgumentException("minimumNumberOfCalls must be greater than 0");
     }
     return new RequestBasedEwmaMetrics(
-        Math.round(failureThreshold),
+        failureRatePercent,
         new RequestBasedEwma(smoothingFactor),
+        smoothingFactor,
         minimumNumberOfCalls,
         0.0,
         0
+    );
+  }
+
+  /**
+   * Returns a factory function that produces a fresh instance of this metrics strategy.
+   *
+   * @return a {@link LongFunction} that accepts a nanosecond timestamp and produces a
+   *         fresh {@link FailureMetrics} instance with identical configuration
+   */
+  @Override
+  public LongFunction<FailureMetrics> metricsFactory() {
+    return (long nowNanos)-> RequestBasedEwmaMetrics.initial(
+        failureRatePercent,
+        smoothingFactor,
+        minimumNumberOfCalls
     );
   }
 
@@ -118,7 +137,12 @@ public record RequestBasedEwmaMetrics(
     double newRate = ewmaCalculator.calculate(currentRate, sample);
     // Cap the count at minimumNumberOfCalls to prevent unnecessary growth
     int newCount = Math.min(minimumNumberOfCalls, callsCount + 1);
-    return new RequestBasedEwmaMetrics(failureRatePercent, ewmaCalculator, minimumNumberOfCalls, newRate, newCount);
+    return new RequestBasedEwmaMetrics(failureRatePercent,
+        ewmaCalculator,
+        smoothingFactor,
+        minimumNumberOfCalls,
+        newRate,
+        newCount);
   }
 
   /**
@@ -144,7 +168,12 @@ public record RequestBasedEwmaMetrics(
    */
   @Override
   public FailureMetrics reset(long nowNanos) {
-    return new RequestBasedEwmaMetrics(failureRatePercent, ewmaCalculator, minimumNumberOfCalls, 0.0, 0);
+    return new RequestBasedEwmaMetrics(failureRatePercent,
+        ewmaCalculator,
+        smoothingFactor,
+        minimumNumberOfCalls,
+        0.0,
+        0);
   }
 
   /**

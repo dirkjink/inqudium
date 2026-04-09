@@ -34,7 +34,9 @@ class CompositeFailureMetricsTest {
     @Test
     void should_accept_a_single_delegate() {
       // Given / When
-      var composite = CompositeFailureMetrics.of(ConsecutiveFailuresMetrics.initial(3));
+      var composite = CompositeFailureMetrics.of(
+          ConsecutiveFailuresMetrics.initial(3,0)
+      );
 
       // Then
       assertThat(composite.delegates()).hasSize(1);
@@ -44,8 +46,8 @@ class CompositeFailureMetricsTest {
     void should_accept_multiple_delegates() {
       // Given / When
       var composite = CompositeFailureMetrics.of(
-          ConsecutiveFailuresMetrics.initial(3),
-          GradualDecayMetrics.initial(5)
+          ConsecutiveFailuresMetrics.initial(3, 0),
+          GradualDecayMetrics.initial(5, 0)
       );
 
       // Then
@@ -62,8 +64,8 @@ class CompositeFailureMetricsTest {
     void should_not_trip_when_no_delegate_has_reached_its_threshold() {
       // Given — consecutive threshold=5, gradual threshold=5
       var composite = CompositeFailureMetrics.of(
-          ConsecutiveFailuresMetrics.initial(5),
-          GradualDecayMetrics.initial(5)
+          ConsecutiveFailuresMetrics.initial(5, 0),
+          GradualDecayMetrics.initial(5, 0)
       );
 
       // When — 2 failures (below both thresholds)
@@ -77,8 +79,8 @@ class CompositeFailureMetricsTest {
     void should_trip_when_first_delegate_reaches_threshold() {
       // Given — consecutive threshold=2, gradual threshold=10
       var composite = CompositeFailureMetrics.of(
-          ConsecutiveFailuresMetrics.initial(2),
-          GradualDecayMetrics.initial(10)
+          ConsecutiveFailuresMetrics.initial(2, 0),
+          GradualDecayMetrics.initial(10, 0)
       );
 
       // When — 2 consecutive failures (trips first, not second)
@@ -92,8 +94,8 @@ class CompositeFailureMetricsTest {
     void should_trip_when_second_delegate_reaches_threshold() {
       // Given — consecutive threshold=10, gradual threshold=2
       var composite = CompositeFailureMetrics.of(
-          ConsecutiveFailuresMetrics.initial(10),
-          GradualDecayMetrics.initial(2)
+          ConsecutiveFailuresMetrics.initial(10, 0),
+          GradualDecayMetrics.initial(2, 0)
       );
 
       // When — 2 failures (trips gradual, not consecutive)
@@ -107,8 +109,8 @@ class CompositeFailureMetricsTest {
     void should_trip_when_both_delegates_reach_threshold_simultaneously() {
       // Given — both threshold=3
       var composite = CompositeFailureMetrics.of(
-          ConsecutiveFailuresMetrics.initial(3),
-          GradualDecayMetrics.initial(3)
+          ConsecutiveFailuresMetrics.initial(3, 0),
+          GradualDecayMetrics.initial(3, 0)
       );
 
       // When — 3 failures
@@ -128,8 +130,8 @@ class CompositeFailureMetricsTest {
     void should_propagate_success_to_all_delegates() {
       // Given — consecutive=3 resets on success, gradual=5 decrements by 1
       var composite = CompositeFailureMetrics.of(
-          ConsecutiveFailuresMetrics.initial(3),
-          GradualDecayMetrics.initial(5)
+          ConsecutiveFailuresMetrics.initial(3, 0),
+          GradualDecayMetrics.initial(5, 0)
       );
       var withFailures = composite.recordFailure(NOW).recordFailure(NOW);
 
@@ -146,8 +148,8 @@ class CompositeFailureMetricsTest {
     void should_recover_composite_after_success_breaks_consecutive_streak() {
       // Given — consecutive threshold=2 is the only one that could trip
       var composite = CompositeFailureMetrics.of(
-          ConsecutiveFailuresMetrics.initial(2),
-          GradualDecayMetrics.initial(100)
+          ConsecutiveFailuresMetrics.initial(2, 0),
+          GradualDecayMetrics.initial(100, 0)
       );
       var tripped = composite.recordFailure(NOW).recordFailure(NOW);
       assertThat(tripped.isThresholdReached(NOW)).isTrue();
@@ -169,8 +171,8 @@ class CompositeFailureMetricsTest {
     void should_reset_all_delegates() {
       // Given
       var composite = CompositeFailureMetrics.of(
-          ConsecutiveFailuresMetrics.initial(3),
-          GradualDecayMetrics.initial(5)
+          ConsecutiveFailuresMetrics.initial(3, 0),
+          GradualDecayMetrics.initial(5, 0)
       );
       var filled = composite.recordFailure(NOW).recordFailure(NOW).recordFailure(NOW);
       assertThat(filled.isThresholdReached(NOW)).isTrue();
@@ -186,9 +188,9 @@ class CompositeFailureMetricsTest {
     void should_preserve_delegate_count_after_reset() {
       // Given
       var composite = CompositeFailureMetrics.of(
-          ConsecutiveFailuresMetrics.initial(3),
-          GradualDecayMetrics.initial(5),
-          ConsecutiveFailuresMetrics.initial(10)
+          ConsecutiveFailuresMetrics.initial(3, 0),
+          GradualDecayMetrics.initial(5, 0),
+          ConsecutiveFailuresMetrics.initial(10, 0)
       );
 
       // When
@@ -207,7 +209,9 @@ class CompositeFailureMetricsTest {
     @Test
     void should_not_modify_original_when_recording() {
       // Given
-      var original = CompositeFailureMetrics.of(ConsecutiveFailuresMetrics.initial(2));
+      var original = CompositeFailureMetrics.of(
+          ConsecutiveFailuresMetrics.initial(2, 0)
+      );
 
       // When
       original.recordFailure(NOW);
@@ -219,10 +223,14 @@ class CompositeFailureMetricsTest {
     @Test
     void should_have_immutable_delegate_list() {
       // Given
-      var composite = CompositeFailureMetrics.of(ConsecutiveFailuresMetrics.initial(3));
+      var composite = CompositeFailureMetrics.of(
+          ConsecutiveFailuresMetrics.initial(3,0)
+      );
 
       // When / Then
-      assertThatThrownBy(() -> composite.delegates().add(GradualDecayMetrics.initial(5)))
+      assertThatThrownBy(() -> composite.delegates().add(
+          GradualDecayMetrics.initial(5, 0))
+      )
           .isInstanceOf(UnsupportedOperationException.class);
     }
   }
@@ -236,8 +244,8 @@ class CompositeFailureMetricsTest {
     void should_list_only_triggering_components_in_reason() {
       // Given — consecutive threshold=2 trips, gradual threshold=100 does not
       var composite = CompositeFailureMetrics.of(
-          ConsecutiveFailuresMetrics.initial(2),
-          GradualDecayMetrics.initial(100)
+          ConsecutiveFailuresMetrics.initial(2, 0),
+          GradualDecayMetrics.initial(100, 0)
       );
       var tripped = composite.recordFailure(NOW).recordFailure(NOW);
 
@@ -255,8 +263,8 @@ class CompositeFailureMetricsTest {
     void should_list_all_triggering_components_when_multiple_trip() {
       // Given — both threshold=2
       var composite = CompositeFailureMetrics.of(
-          ConsecutiveFailuresMetrics.initial(2),
-          GradualDecayMetrics.initial(2)
+          ConsecutiveFailuresMetrics.initial(2, 0),
+          GradualDecayMetrics.initial(2, 0)
       );
       var tripped = composite.recordFailure(NOW).recordFailure(NOW);
 
@@ -279,7 +287,7 @@ class CompositeFailureMetricsTest {
     void should_work_with_time_based_and_count_based_delegates_together() {
       // Given — time-based window + consecutive failures
       var timeBased = TimeBasedSlidingWindowMetrics.initial(3, 5, NOW);
-      var consecutive = ConsecutiveFailuresMetrics.initial(10);
+      var consecutive = ConsecutiveFailuresMetrics.initial(10, 0);
       var composite = CompositeFailureMetrics.of(timeBased, consecutive);
 
       // When — 3 failures (trips time-based but not consecutive)

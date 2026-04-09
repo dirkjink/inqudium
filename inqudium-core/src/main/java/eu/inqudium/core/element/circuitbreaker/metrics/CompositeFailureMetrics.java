@@ -1,6 +1,7 @@
 package eu.inqudium.core.element.circuitbreaker.metrics;
 
 import java.util.List;
+import java.util.function.LongFunction;
 
 /**
  * Immutable implementation of a Composite FailureMetrics strategy using the
@@ -64,6 +65,33 @@ public record CompositeFailureMetrics(List<FailureMetrics> delegates) implements
       throw new IllegalArgumentException("At least one FailureMetrics instance must be provided");
     }
     return new CompositeFailureMetrics(List.of(metrics));
+  }
+
+  /**
+   * Returns a factory that recreates the entire composite structure from scratch.
+   *
+   * <p>The returned factory captures each delegate's individual {@link FailureMetrics#metricsFactory()}
+   * at creation time. When invoked with a nanosecond timestamp, it applies every captured factory
+   * to produce fresh delegate instances and wraps them in a new {@code CompositeFailureMetrics}.
+   *
+   * <p>As an optimization, if only a single delegate is present, the factory returns that
+   * delegate's metrics directly without the composite wrapper.
+   *
+   * @return a {@link LongFunction} that accepts a nanosecond timestamp and produces a
+   *         pristine {@link FailureMetrics} instance mirroring this composite's structure
+   */
+  @Override
+  public LongFunction<FailureMetrics> metricsFactory() {
+    List<LongFunction<FailureMetrics>> factories = delegates.stream()
+        .map(FailureMetrics::metricsFactory)
+        .toList();
+
+    return nowNanos -> {
+      List<FailureMetrics> fresh = factories.stream()
+          .map(f -> f.apply(nowNanos))
+          .toList();
+      return fresh.size() == 1 ? fresh.getFirst() : new CompositeFailureMetrics(fresh);
+    };
   }
 
   /**
