@@ -197,7 +197,7 @@ class InqBulkheadConfigTest {
 
             // Then the default values should be correctly instantiated
             assertThat(config.of(InqImperativeBulkheadConfig.class)).isPresent().get().satisfies(bulkheadConfig -> {
-                assertThat(bulkheadConfig.maxWaitDuration()).isEqualTo(Duration.ZERO);
+                assertThat(bulkheadConfig.maxWaitDuration()).isEqualTo(Duration.ofMillis(500));
                 assertThat(bulkheadConfig.eventPublisher()).isNotNull();
             });
         }

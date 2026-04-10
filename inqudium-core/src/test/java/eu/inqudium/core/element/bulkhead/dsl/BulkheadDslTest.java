@@ -48,7 +48,7 @@ class BulkheadDslTest {
             BulkheadConfig config =
                     isolateWithBulkhead()
                             .named("test-1")
-                            .applyStrictProfile();
+                            .applyProtectiveProfile();
 
             // Then
             assertThat(config.maxConcurrentCalls()).isEqualTo(10);

@@ -1,6 +1,8 @@
 package eu.inqudium.core.element.bulkhead.dsl;
 
 import eu.inqudium.core.config.InqConfig;
+import eu.inqudium.core.element.bulkhead.config.BulkheadEventConfig;
+import eu.inqudium.core.element.bulkhead.config.InqBulkheadConfig;
 import eu.inqudium.core.element.bulkhead.config.InqBulkheadConfigBuilder;
 
 import java.time.Duration;
@@ -38,26 +40,26 @@ public final class DefaultBulkheadProtection implements BulkheadNaming, Bulkhead
     }
 
     @Override
-    public BulkheadConfig applyStrictProfile() {
-        // Strict: Very low concurrency, absolute fail-fast (no waiting)
-        return new BulkheadConfig(10, Duration.ZERO, createInqConfig());
+    public BulkheadConfig applyProtectiveProfile() {
+        InqBulkheadConfig cfg = new InternalBulkheadConfigBuilder().protective().build();
+        return new BulkheadConfig(name, cfg.maxConcurrentCalls(), cfg.maxWaitDuration(), createInqConfig());
     }
 
     @Override
     public BulkheadConfig applyBalancedProfile() {
-        // Balanced: Good concurrency, short queueing allowed
-        return new BulkheadConfig(50, Duration.ofMillis(500), createInqConfig());
+        InqBulkheadConfig cfg = new InternalBulkheadConfigBuilder().balanced().build();
+        return new BulkheadConfig(name, cfg.maxConcurrentCalls(), cfg.maxWaitDuration(), createInqConfig());
     }
 
     @Override
     public BulkheadConfig applyPermissiveProfile() {
-        // Permissive: High concurrency, long waiting allowed
-        return new BulkheadConfig(200, Duration.ofSeconds(5), createInqConfig());
+        InqBulkheadConfig cfg = new InternalBulkheadConfigBuilder().permissive().build();
+        return new BulkheadConfig(name, cfg.maxConcurrentCalls(), cfg.maxWaitDuration(), createInqConfig());
     }
 
     @Override
     public BulkheadConfig apply() {
-        return new BulkheadConfig(maxConcurrentCalls, maxWaitDuration, createInqConfig());
+        return new BulkheadConfig(name, maxConcurrentCalls, maxWaitDuration, createInqConfig());
     }
 
     private InqConfig createInqConfig() {
@@ -65,9 +67,27 @@ public final class DefaultBulkheadProtection implements BulkheadNaming, Bulkhead
         return InqConfig.configure()
                 .general()
                 .with(inqBuilder, b -> b
+                        .name(name)
                         .maxConcurrentCalls(maxConcurrentCalls)
                         .maxWaitDuration(maxWaitDuration)
                 )
                 .build();
+    }
+}
+
+class InternalBulkheadConfigBuilder
+        extends InqBulkheadConfigBuilder<InternalBulkheadConfigBuilder, InqBulkheadConfig> {
+
+    InternalBulkheadConfigBuilder() {
+    }
+
+    @Override
+    public InqBulkheadConfig build() {
+        return common().inference();
+    }
+
+    @Override
+    protected InternalBulkheadConfigBuilder self() {
+        return this;
     }
 }

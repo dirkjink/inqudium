@@ -9,6 +9,7 @@ import java.util.function.Function;
  * @param <T> The expected return type of the protected method.
  */
 public record FallbackConfig<T>(
+        String name,
         List<Class<? extends Throwable>> handledExceptions,
         List<Class<? extends Throwable>> ignoredExceptions,
         Function<Throwable, T> fallbackAction

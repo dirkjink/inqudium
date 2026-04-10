@@ -6,11 +6,21 @@ import java.util.function.Function;
 import java.util.function.Supplier;
 
 // Die Klasse implementiert beide States des Builders
-class DefaultFallbackProtection<T> implements FallbackProtection<T>, TerminalFallbackProtection<T> {
+class DefaultFallbackProtection<T> implements FallbackNaming<T>, FallbackProtection<T>, TerminalFallbackProtection<T> {
 
     private List<Class<? extends Throwable>> handledExceptions = List.of(Exception.class);
     private List<Class<? extends Throwable>> ignoredExceptions = List.of();
     private Function<Throwable, T> fallbackAction;
+    private String name;
+
+    @Override
+    public FallbackProtection named(String name) {
+        if (name == null || name.isBlank()) {
+            throw new IllegalArgumentException("Bulkhead name must not be blank");
+        }
+        this.name = name;
+        return this;
+    }
 
     @SafeVarargs
     @Override
@@ -40,12 +50,12 @@ class DefaultFallbackProtection<T> implements FallbackProtection<T>, TerminalFal
 
     @Override
     public FallbackConfig<T> applyUniversalProfile() {
-        return new FallbackConfig<>(List.of(Throwable.class), List.of(), fallbackAction);
+        return new FallbackConfig<>(name, List.of(Throwable.class), List.of(), fallbackAction);
     }
 
     @Override
     public FallbackConfig<T> applySafeProfile() {
-        return new FallbackConfig<>(
+        return new FallbackConfig<>(name,
                 List.of(Exception.class),
                 List.of(IllegalArgumentException.class, IllegalStateException.class),
                 fallbackAction
@@ -54,6 +64,6 @@ class DefaultFallbackProtection<T> implements FallbackProtection<T>, TerminalFal
 
     @Override
     public FallbackConfig<T> apply() {
-        return new FallbackConfig<>(List.copyOf(handledExceptions), List.copyOf(ignoredExceptions), fallbackAction);
+        return new FallbackConfig<>(name, List.copyOf(handledExceptions), List.copyOf(ignoredExceptions), fallbackAction);
     }
 }

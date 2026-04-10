@@ -90,7 +90,7 @@ public class VegasLimitAlgorithmConfigBuilder extends ExtensionBuilder<VegasLimi
      * @return this builder, configured with performant defaults
      * @throws IllegalStateException if individual setters have already been called
      */
-    public VegasLimitAlgorithmConfigBuilder performant() {
+    public VegasLimitAlgorithmConfigBuilder permissive() {
         guardPreset();
         this.initialLimit = 100;
         this.minLimit = 10;

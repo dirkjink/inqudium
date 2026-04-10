@@ -83,6 +83,7 @@ class DefaultCircuitBreakerProtection implements CircuitBreakerNaming, CircuitBr
         var hub = InqConfig.configure()
                 .general()
                 .with(inqBuilder, b -> b
+                        .name(name)
                         .waitDurationInOpenState(waitDurationInOpenState)
                         .permittedCallsInHalfOpen(permittedNumberOfCallsInHalfOpenState)
                 )

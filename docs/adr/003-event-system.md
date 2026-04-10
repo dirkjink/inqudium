@@ -546,8 +546,8 @@ do not flow **in**.
   This is enforced by behavioral contract tests in core (given a mock publisher and `BulkheadEventConfig.diagnostic()`,
   verify the correct events are emitted for each scenario).
 - The two-tier model requires the Micrometer binder (`inqudium-micrometer`) to implement both gauge registration (Tier
-  1) and optional event subscription (Tier 2). This is more complex than a pure event-consumer binder, but the
-  performance benefit (0 B/op vs ~80 B/op) justifies it.
+    1) and optional event subscription (Tier 2). This is more complex than a pure event-consumer binder, but the
+       performance benefit (0 B/op vs ~80 B/op) justifies it.
 - Exporter implementations must handle their own buffering and error recovery — Inqudium provides the SPI, not a
   production-ready exporter for every target system.
 

@@ -16,7 +16,8 @@ uses copy-on-write arrays for optimal CPU cache locality. A JMH benchmark under 
 ops/ms with zero GC pressure when both consumers and exporters are active.
 
 > **Important:** The event system is strictly for diagnostic observation and analysis. It is designed to be enabled
-> on-demand for troubleshooting. Consumers and exporters must not trigger business logic, external I/O, or any side effect
+> on-demand for troubleshooting. Consumers and exporters must not trigger business logic, external I/O, or any side
+> effect
 > that could affect the application's functional behavior.
 
 ## Quick Start

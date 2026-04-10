@@ -6,6 +6,7 @@ import java.time.Duration;
  * The immutable configuration for a Rate Limiter instance.
  */
 public record RateLimiterConfig(
+        String name,
         int limitForPeriod,
         Duration limitRefreshPeriod,
         Duration timeoutDuration

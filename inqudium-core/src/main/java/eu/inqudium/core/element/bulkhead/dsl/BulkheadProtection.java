@@ -10,7 +10,7 @@ public interface BulkheadProtection {
     BulkheadProtection waitingAtMostFor(Duration maxWait);
 
     // Terminal Operations (Profiles)
-    BulkheadConfig applyStrictProfile();
+    BulkheadConfig applyProtectiveProfile();
 
     BulkheadConfig applyBalancedProfile();
 

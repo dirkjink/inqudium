@@ -101,7 +101,7 @@ public class AimdLimitAlgorithmConfigBuilder extends ExtensionBuilder<AimdLimitA
      * @return this builder, configured with performant defaults
      * @throws IllegalStateException if individual setters have already been called
      */
-    public AimdLimitAlgorithmConfigBuilder performant() {
+    public AimdLimitAlgorithmConfigBuilder permissive() {
         guardPreset();
         this.initialLimit = 100;
         this.minLimit = 10;

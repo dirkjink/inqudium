@@ -143,12 +143,12 @@ public abstract class InqCircuitBreakerConfigBuilder
      *
      * @return this builder for chaining
      */
-    public InqCircuitBreakerConfigBuilder<B, E> protective() {
+    public B protective() {
         this.waitDurationInOpenState = Duration.ofSeconds(5);
         this.waitDurationNanos = Duration.ofSeconds(5).toNanos();
         this.permittedCallsInHalfOpen = 1;
         this.successThresholdInHalfOpen = 1;
-        return this;
+        return self();
     }
 
     /**
@@ -169,12 +169,12 @@ public abstract class InqCircuitBreakerConfigBuilder
      *
      * @return this builder for chaining
      */
-    public InqCircuitBreakerConfigBuilder<B, E> balanced() {
+    public B balanced() {
         this.waitDurationInOpenState = Duration.ofSeconds(30);
         this.waitDurationNanos = Duration.ofSeconds(30).toNanos();
         this.permittedCallsInHalfOpen = 3;
         this.successThresholdInHalfOpen = 2;
-        return this;
+        return self();
     }
 
     /**
@@ -196,12 +196,12 @@ public abstract class InqCircuitBreakerConfigBuilder
      *
      * @return this builder for chaining
      */
-    public InqCircuitBreakerConfigBuilder<B, E> permissive() {
+    public B permissive() {
         this.waitDurationInOpenState = Duration.ofSeconds(120);
         this.waitDurationNanos = Duration.ofSeconds(120).toNanos();
         this.permittedCallsInHalfOpen = 5;
         this.successThresholdInHalfOpen = 3;
-        return this;
+        return self();
     }
 
     // ---------------------------------------------------------------------------
@@ -215,9 +215,9 @@ public abstract class InqCircuitBreakerConfigBuilder
      * @param successThresholdInHalfOpen the success threshold (> 0)
      * @return this builder for chaining
      */
-    public InqCircuitBreakerConfigBuilder<B, E> successThresholdInHalfOpen(Integer successThresholdInHalfOpen) {
+    public B successThresholdInHalfOpen(Integer successThresholdInHalfOpen) {
         this.successThresholdInHalfOpen = successThresholdInHalfOpen;
-        return this;
+        return self();
     }
 
     /**
@@ -227,9 +227,9 @@ public abstract class InqCircuitBreakerConfigBuilder
      * @param permittedCallsInHalfOpen the maximum number of probe calls
      * @return this builder for chaining
      */
-    public InqCircuitBreakerConfigBuilder<B, E> permittedCallsInHalfOpen(Integer permittedCallsInHalfOpen) {
+    public B permittedCallsInHalfOpen(Integer permittedCallsInHalfOpen) {
         this.permittedCallsInHalfOpen = permittedCallsInHalfOpen;
-        return this;
+        return self();
     }
 
     /**
@@ -239,9 +239,9 @@ public abstract class InqCircuitBreakerConfigBuilder
      * @param waitDurationNanos the wait duration in nanoseconds
      * @return this builder for chaining
      */
-    public InqCircuitBreakerConfigBuilder<B, E> waitDurationNanos(Long waitDurationNanos) {
+    public B waitDurationNanos(Long waitDurationNanos) {
         this.waitDurationNanos = waitDurationNanos;
-        return this;
+        return self();
     }
 
     /**
@@ -251,9 +251,9 @@ public abstract class InqCircuitBreakerConfigBuilder
      * @param waitDurationInOpenState the wait duration as a {@link Duration}
      * @return this builder for chaining
      */
-    public InqCircuitBreakerConfigBuilder<B, E> waitDurationInOpenState(Duration waitDurationInOpenState) {
+    public B waitDurationInOpenState(Duration waitDurationInOpenState) {
         this.waitDurationInOpenState = waitDurationInOpenState;
-        return this;
+        return self();
     }
 
     /**
@@ -272,11 +272,11 @@ public abstract class InqCircuitBreakerConfigBuilder
      * @param customizer a consumer that configures the failure predicate builder
      * @return this builder for chaining
      */
-    public InqCircuitBreakerConfigBuilder<B, E> withRecordFailurePredicates(Consumer<FailurePredicateConfigBuilder> customizer) {
+    public B withRecordFailurePredicates(Consumer<FailurePredicateConfigBuilder> customizer) {
         FailurePredicateConfigBuilder builderInstance = FailurePredicateConfigBuilder.failurePredicate();
         customizer.accept(builderInstance);
         recordFailurePredicate = builderInstance.build().finalPredicate();
-        return this;
+        return self();
     }
 
     /**
@@ -287,9 +287,9 @@ public abstract class InqCircuitBreakerConfigBuilder
      * @param recordFailurePredicate the predicate classifying failures
      * @return this builder for chaining
      */
-    public InqCircuitBreakerConfigBuilder<B, E> recordFailurePredicate(Predicate<Throwable> recordFailurePredicate) {
+    public B recordFailurePredicate(Predicate<Throwable> recordFailurePredicate) {
         this.recordFailurePredicate = recordFailurePredicate;
-        return this;
+        return self();
     }
 
     /**
@@ -300,9 +300,9 @@ public abstract class InqCircuitBreakerConfigBuilder
      * @param metricsFactory the metrics factory function
      * @return this builder for chaining
      */
-    public InqCircuitBreakerConfigBuilder<B, E> metricsFactory(LongFunction<FailureMetrics> metricsFactory) {
+    public B metricsFactory(LongFunction<FailureMetrics> metricsFactory) {
         this.metricsFactory = metricsFactory;
-        return this;
+        return self();
     }
 
     /**
@@ -330,10 +330,10 @@ public abstract class InqCircuitBreakerConfigBuilder
      * @return this builder for chaining
      * @throws NullPointerException if the argument is null
      */
-    public InqCircuitBreakerConfigBuilder<B, E> enableExceptionOptimization(Boolean enableExceptionOptimization) {
+    public B enableExceptionOptimization(Boolean enableExceptionOptimization) {
         Objects.requireNonNull(enableExceptionOptimization, "enableExceptionOptimization must not be null");
         this.enableExceptionOptimization = enableExceptionOptimization;
-        return this;
+        return self();
     }
 
     /**

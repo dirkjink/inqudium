@@ -45,6 +45,24 @@ public abstract class InqBulkheadConfigBuilder
 
     protected abstract B self();
 
+    public B protective() {
+        this.maxConcurrentCalls = 10;
+        this.maxWaitDuration = Duration.ZERO;
+        return self();
+    }
+
+    public B balanced() {
+        this.maxConcurrentCalls = 50;
+        this.maxWaitDuration = Duration.ofMillis(500);
+        return self();
+    }
+
+    public B permissive() {
+        this.maxConcurrentCalls = 200;
+        this.maxWaitDuration = Duration.ofSeconds(5);
+        return self();
+    }
+
     // ──────────────────────────────────────────────────────────────────────────
     // Individual Setters — each guards its own value immediately
     // ──────────────────────────────────────────────────────────────────────────
@@ -125,10 +143,10 @@ public abstract class InqBulkheadConfigBuilder
         return self();
     }
 
-    public InqBulkheadConfigBuilder<B, E> enableExceptionOptimization(Boolean enableExceptionOptimization) {
+    public B enableExceptionOptimization(Boolean enableExceptionOptimization) {
         Objects.requireNonNull(enableExceptionOptimization, "enableExceptionOptimization must not be null");
         this.enableExceptionOptimization = enableExceptionOptimization;
-        return this;
+        return self();
     }
 
     /**
