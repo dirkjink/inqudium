@@ -17,9 +17,6 @@ public interface CircuitBreakerProtection {
   CircuitBreakerProtection ignoringOn(Class<? extends Throwable>... exceptions);
 
 
-  CircuitBreakerProtection evaluatedBy(FailureMetricsConfig metricsConfig);
-
-  CircuitBreakerProtection evaluatedBy(FailureTrackingStrategy.Builder strategyBuilder);
-
-  CircuitBreakerConfig apply();
+  CircuitBreakerCountEvaluation evaluatingByCountingCalls();
+  CircuitBreakerTimeEvaluation evaluatingByTimeWindow();
 }

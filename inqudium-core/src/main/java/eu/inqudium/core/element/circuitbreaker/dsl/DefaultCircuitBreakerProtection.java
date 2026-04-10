@@ -54,15 +54,13 @@ class DefaultCircuitBreakerProtection implements CircuitBreakerNaming, CircuitBr
   }
 
   @Override
-  public CircuitBreakerProtection evaluatedBy(FailureMetricsConfig metricsConfig) {
-    this.metricsConfig = metricsConfig;
-    return this;
+  public CircuitBreakerCountEvaluation evaluatingByCountingCalls() {
+    return new CountEvaluationBuilder();
   }
 
   @Override
-  public CircuitBreakerProtection evaluatedBy(FailureTrackingStrategy.Builder strategyBuilder) {
-    this.metricsConfig = strategyBuilder.apply();
-    return this;
+  public CircuitBreakerTimeEvaluation evaluatingByTimeWindow() {
+    return new TimeEvaluationBuilder();
   }
 
   @SafeVarargs
@@ -79,23 +77,9 @@ class DefaultCircuitBreakerProtection implements CircuitBreakerNaming, CircuitBr
     return this;
   }
 
-  @Override
-  public CircuitBreakerConfig apply() {
-    if (metricsConfig == null) {
-      throw new IllegalStateException("A FailureMetricsConfig must be provided via evaluatedBy()");
-    }
-    return new CircuitBreakerConfig(
-        failureThreshold,
-        waitDurationInOpenState,
-        permittedNumberOfCallsInHalfOpenState,
-        metricsConfig,
-        recordedExceptions,
-        ignoredExceptions,
-        createInqConfig()
-    );
-  }
-
   private InqConfig createInqConfig() {
+    if (inqBuilder == null) return null;
+
     var hub = InqConfig.configure()
         .general()
         .with(inqBuilder, b -> b
@@ -108,20 +92,86 @@ class DefaultCircuitBreakerProtection implements CircuitBreakerNaming, CircuitBr
         );
 
     if (metricsConfig instanceof SlidingWindowConfig cfg) {
-      var maxFailuresInWindow = cfg.maxFailuresInWindow() < 0 ? this.failureThreshold : cfg.maxFailuresInWindow();
       hub = hub.with(new SlidingWindowConfigBuilder(), b -> b
-          .maxFailuresInWindow(maxFailuresInWindow)
+          .maxFailuresInWindow(failureThreshold)
           .windowSize(cfg.windowSize())
           .minimumNumberOfCalls(cfg.minimumNumberOfCalls())
       );
     } else if (metricsConfig instanceof TimeBasedSlidingWindowConfig cfg) {
-      var maxFailuresInWindow = cfg.maxFailuresInWindow() < 0 ? this.failureThreshold : cfg.maxFailuresInWindow();
       hub = hub.with(new TimeBasedSlidingWindowConfigBuilder(), b -> b
-          .maxFailuresInWindow(maxFailuresInWindow)
+          .maxFailuresInWindow(failureThreshold)
           .windowSizeInSeconds(cfg.windowSizeInSeconds())
       );
     }
 
     return hub.build();
+  }
+
+  private CircuitBreakerConfig buildFinalConfig(FailureMetricsConfig metricsConfig) {
+    return new CircuitBreakerConfig(
+        name,
+        failureThreshold,
+        waitDurationInOpenState,
+        permittedNumberOfCallsInHalfOpenState,
+        List.copyOf(recordedExceptions),
+        List.copyOf(ignoredExceptions),
+        metricsConfig,
+        createInqConfig()
+    );
+  }
+
+  private class CountEvaluationBuilder implements CircuitBreakerCountEvaluation {
+    private int windowSize = 50;
+    private int minimumCalls = 20;
+
+    @Override
+    public CircuitBreakerCountEvaluation keepingHistoryOf(int numberOfCalls) {
+      this.windowSize = numberOfCalls;
+      return this;
+    }
+
+    @Override
+    public CircuitBreakerCountEvaluation requiringAtLeast(int minimumCalls) {
+      this.minimumCalls = minimumCalls;
+      return this;
+    }
+
+    @Override
+    public CircuitBreakerConfig applyBalancedProfile() {
+      return buildFinalConfig(new SlidingWindowConfig(50, 20));
+    }
+
+    @Override
+    public CircuitBreakerConfig applyProtectiveProfile() { return buildFinalConfig(new SlidingWindowConfig(10, 5)); }
+
+    @Override
+    public CircuitBreakerConfig applyPermissiveProfile() { return buildFinalConfig(new SlidingWindowConfig(200, 100)); }
+
+    @Override
+    public CircuitBreakerConfig apply() {
+      return buildFinalConfig(new SlidingWindowConfig(windowSize, minimumCalls));
+    }
+  }
+
+  private class TimeEvaluationBuilder implements CircuitBreakerTimeEvaluation {
+    private int seconds = 60;
+
+    @Override
+    public CircuitBreakerTimeEvaluation lookingAtTheLast(int seconds) {
+      this.seconds = seconds;
+      return this;
+    }
+
+    @Override
+    public CircuitBreakerConfig applyBalancedProfile() { return buildFinalConfig(new TimeBasedSlidingWindowConfig(60)); }
+
+    @Override
+    public CircuitBreakerConfig applyProtectiveProfile() { return buildFinalConfig(new TimeBasedSlidingWindowConfig(5)); }
+
+    @Override
+    public CircuitBreakerConfig applyPermissiveProfile() { return buildFinalConfig(new TimeBasedSlidingWindowConfig(300)); }
+
+    @Override
+    public CircuitBreakerConfig apply() { return buildFinalConfig(new TimeBasedSlidingWindowConfig(seconds)); }
   }
 }
