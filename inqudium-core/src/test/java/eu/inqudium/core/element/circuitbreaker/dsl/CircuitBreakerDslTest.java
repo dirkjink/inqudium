@@ -122,7 +122,7 @@ class CircuitBreakerDslTest {
       SlidingWindowConfig metricsConfig = (SlidingWindowConfig) config.metricsConfig();
 
       assertThat(metricsConfig.windowSize()).isEqualTo(200);
-      assertThat(metricsConfig.minimumNumberOfCalls()).isEqualTo(100);
+      assertThat(metricsConfig.minimumNumberOfCalls()).isEqualTo(50);
     }
   }
 
