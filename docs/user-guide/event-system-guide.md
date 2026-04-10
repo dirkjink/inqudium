@@ -40,7 +40,7 @@ For full control — particularly in tests — use the four-argument factory:
 var registry = new InqEventExporterRegistry();  // isolated for testing
 var config = InqPublisherConfig.of(64, 128, Duration.ofMillis(500));
 var publisher = InqEventPublisher.create("paymentService", InqElementType.CIRCUIT_BREAKER,
-    registry, config);
+        registry, config);
 ```
 
 ### Subscribing to events
@@ -51,10 +51,12 @@ InqSubscription sub = publisher.onEvent(event -> log.info("Event: {}", event));
 
 // Receive only state transition events
 InqSubscription sub = publisher.onEvent(CircuitBreakerOnStateTransitionEvent.class,
-    event -> log.info("State: {} → {}", event.getFromState(), event.getToState()));
+        event -> log.info("State: {} → {}", event.getFromState(), event.getToState()));
 
 // Unsubscribe when no longer needed
-sub.cancel();
+sub.
+
+cancel();
 ```
 
 ### Exporting events globally
@@ -73,7 +75,9 @@ public class KafkaEventExporter implements InqEventExporter {
 Register before the first event is published:
 
 ```java
-InqEventExporterRegistry.getDefault().register(new KafkaEventExporter());
+InqEventExporterRegistry.getDefault().
+
+register(new KafkaEventExporter());
 ```
 
 Or use ServiceLoader discovery by adding a `META-INF/services/eu.inqudium.core.event.InqEventExporter` file.
@@ -132,10 +136,14 @@ InqSubscription sub = publisher.onEvent(event -> {
 Receive only events assignable to the specified class:
 
 ```java
-publisher.onEvent(RetryOnRetryEvent.class, event -> {
-    log.info("Retry attempt #{}, waiting {}",
-        event.getAttemptNumber(), event.getWaitDuration());
-});
+publisher.onEvent(RetryOnRetryEvent .class, event ->{
+        log.
+
+info("Retry attempt #{}, waiting {}",
+     event.getAttemptNumber(),event.
+
+getWaitDuration());
+        });
 ```
 
 Non-matching events are silently skipped. The type check (`isInstance`) is performed per event.
@@ -148,11 +156,11 @@ background watchdog:
 ```java
 // Auto-removed after 5 minutes
 InqSubscription sub = publisher.onEvent(event -> collectDiagnostics(event),
-    Duration.ofMinutes(5));
+                Duration.ofMinutes(5));
 
 // Also works with typed consumers
 InqSubscription sub = publisher.onEvent(SomeEvent.class,
-    event -> collectDiagnostics(event), Duration.ofMinutes(5));
+        event -> collectDiagnostics(event), Duration.ofMinutes(5));
 ```
 
 Early cancellation is always safe:
@@ -187,7 +195,9 @@ event, and each registration receives an independent subscription for independen
 ### Programmatic registration
 
 ```java
-InqEventExporterRegistry.getDefault().register(new MyExporter());
+InqEventExporterRegistry.getDefault().
+
+register(new MyExporter());
 ```
 
 Registration must happen **before** the first event is exported. After the first `export()` call, the registry freezes
@@ -279,9 +289,11 @@ Trace events are typically high-volume, fine-grained events that are too expensi
 
 ```java
 // The supplier is only invoked if tracing is enabled
-publisher.publishTrace(() -> new DetailedTraceEvent(
-    callId, elementName, elementType, Instant.now(),
-    /* expensive diagnostic data */));
+publisher.publishTrace(() ->new
+
+DetailedTraceEvent(
+        callId, elementName, elementType, Instant.now(),
+/* expensive diagnostic data */));
 ```
 
 If `isTraceEnabled()` returns `false` (the default), the supplier is never called and no event object is allocated.
@@ -333,24 +345,32 @@ Always use a dedicated `InqEventExporterRegistry` in tests to avoid cross-test p
 ```java
 var registry = new InqEventExporterRegistry();
 var publisher = InqEventPublisher.create("test-element", InqElementType.CIRCUIT_BREAKER,
-    registry, InqPublisherConfig.defaultConfig());
+        registry, InqPublisherConfig.defaultConfig());
 ```
 
 ### Asserting events
 
 ```java
 var received = new CopyOnWriteArrayList<InqEvent>();
-publisher.onEvent(received::add);
+publisher.
+
+onEvent(received::add);
 
 // ... exercise the element ...
 
 assertThat(received)
-    .hasSize(3)
-    .extracting(InqEvent::getClass)
-    .containsExactly(
-        CircuitBreakerOnSuccessEvent.class,
-        CircuitBreakerOnSuccessEvent.class,
-        CircuitBreakerOnStateTransitionEvent.class);
+    .
+
+hasSize(3)
+    .
+
+extracting(InqEvent::getClass)
+    .
+
+containsExactly(
+        CircuitBreakerOnSuccessEvent .class,
+        CircuitBreakerOnSuccessEvent .class,
+        CircuitBreakerOnStateTransitionEvent .class);
 ```
 
 ### Testing TTL behavior
@@ -360,13 +380,23 @@ Avoid `Thread.sleep()` in tests. Instead, cast to `DefaultInqEventPublisher` and
 ```java
 var publisher = (DefaultInqEventPublisher) InqEventPublisher.create(...);
 
-publisher.onEvent(consumer, Duration.ofMillis(1));
-Thread.sleep(50);  // only wait long enough for the TTL to expire
+        publisher.
 
-publisher.performExpirySweep();  // trigger sweep deterministically
-publisher.publish(event);
+onEvent(consumer, Duration.ofMillis(1));
+        Thread.
 
-assertThat(consumer.received()).isEmpty();  // consumer was swept
+sleep(50);  // only wait long enough for the TTL to expire
+
+publisher.
+
+performExpirySweep();  // trigger sweep deterministically
+publisher.
+
+publish(event);
+
+assertThat(consumer.received()).
+
+isEmpty();  // consumer was swept
 ```
 
 ### Registry reset
@@ -374,6 +404,7 @@ assertThat(consumer.received()).isEmpty();  // consumer was swept
 For test suites that share a registry instance across methods:
 
 ```java
+
 @AfterEach
 void tearDown() {
     registry.reset();  // returns to Open state, accepts new registrations

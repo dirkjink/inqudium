@@ -12,4 +12,5 @@ public record BulkheadConfig(
         int maxConcurrentCalls,
         Duration maxWaitDuration,
         InqConfig inqConfig
-) { }
+) {
+}
