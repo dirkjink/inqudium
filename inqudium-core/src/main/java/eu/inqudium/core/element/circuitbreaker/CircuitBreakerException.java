@@ -5,20 +5,20 @@ package eu.inqudium.core.element.circuitbreaker;
  */
 public class CircuitBreakerException extends RuntimeException {
 
-  private final String circuitBreakerName;
-  private final CircuitState state;
+    private final String circuitBreakerName;
+    private final CircuitState state;
 
-  public CircuitBreakerException(String circuitBreakerName, CircuitState state) {
-    super("CircuitBreaker '%s' is %s — call not permitted".formatted(circuitBreakerName, state));
-    this.circuitBreakerName = circuitBreakerName;
-    this.state = state;
-  }
+    public CircuitBreakerException(String circuitBreakerName, CircuitState state) {
+        super("CircuitBreaker '%s' is %s — call not permitted".formatted(circuitBreakerName, state));
+        this.circuitBreakerName = circuitBreakerName;
+        this.state = state;
+    }
 
-  public String getCircuitBreakerName() {
-    return circuitBreakerName;
-  }
+    public String getCircuitBreakerName() {
+        return circuitBreakerName;
+    }
 
-  public CircuitState getState() {
-    return state;
-  }
+    public CircuitState getState() {
+        return state;
+    }
 }

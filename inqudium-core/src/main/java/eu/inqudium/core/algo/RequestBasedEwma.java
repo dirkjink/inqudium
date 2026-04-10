@@ -20,32 +20,32 @@ package eu.inqudium.core.algo;
  */
 public record RequestBasedEwma(double alpha) {
 
-  /**
-   * Creates a new Request-Based EWMA calculator.
-   *
-   * @param alpha The EWMA alpha factor. Clamped to [0.01, 1.0].
-   *              Lower values mean the average reacts more slowly to new samples.
-   *              A value of 1.0 disables smoothing entirely (each sample fully
-   *              overwrites the previous rate).
-   */
-  public RequestBasedEwma(double alpha) {
-    // Clamping to [0.01, 1.0] to prevent degenerate states like 0.0 (permanently frozen)
-    // or > 1.0 (mathematically invalid for EWMA).
-    this.alpha = Math.max(0.01, Math.min(1.0, alpha));
-  }
+    /**
+     * Creates a new Request-Based EWMA calculator.
+     *
+     * @param alpha The EWMA alpha factor. Clamped to [0.01, 1.0].
+     *              Lower values mean the average reacts more slowly to new samples.
+     *              A value of 1.0 disables smoothing entirely (each sample fully
+     *              overwrites the previous rate).
+     */
+    public RequestBasedEwma(double alpha) {
+        // Clamping to [0.01, 1.0] to prevent degenerate states like 0.0 (permanently frozen)
+        // or > 1.0 (mathematically invalid for EWMA).
+        this.alpha = Math.max(0.01, Math.min(1.0, alpha));
+    }
 
-  /**
-   * Calculates the new smoothed value based on a new sample.
-   *
-   * <p>This method is a pure function and holds no internal state. It is perfectly
-   * safe to use inside lock-free CAS (Compare-And-Swap) retry loops.
-   *
-   * @param currentValue The current smoothed value before this update.
-   * @param sample       The new sample value to blend into the average
-   *                     (e.g., 0.0 for success, 1.0 for failure).
-   * @return The newly calculated smoothed value.
-   */
-  public double calculate(double currentValue, double sample) {
-    return currentValue * (1.0 - alpha) + sample * alpha;
-  }
+    /**
+     * Calculates the new smoothed value based on a new sample.
+     *
+     * <p>This method is a pure function and holds no internal state. It is perfectly
+     * safe to use inside lock-free CAS (Compare-And-Swap) retry loops.
+     *
+     * @param currentValue The current smoothed value before this update.
+     * @param sample       The new sample value to blend into the average
+     *                     (e.g., 0.0 for success, 1.0 for failure).
+     * @return The newly calculated smoothed value.
+     */
+    public double calculate(double currentValue, double sample) {
+        return currentValue * (1.0 - alpha) + sample * alpha;
+    }
 }

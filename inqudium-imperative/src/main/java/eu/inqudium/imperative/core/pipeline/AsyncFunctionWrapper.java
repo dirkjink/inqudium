@@ -14,29 +14,29 @@ import java.util.function.Function;
  * @param <O> the result type carried by the CompletionStage
  */
 public class AsyncFunctionWrapper<I, O>
-    extends AsyncBaseWrapper<Function<I, CompletionStage<O>>, I, O, AsyncFunctionWrapper<I, O>>
-    implements Function<I, CompletionStage<O>> {
+        extends AsyncBaseWrapper<Function<I, CompletionStage<O>>, I, O, AsyncFunctionWrapper<I, O>>
+        implements Function<I, CompletionStage<O>> {
 
-  public AsyncFunctionWrapper(InqAsyncDecorator<I, O> decorator,
-                              Function<I, CompletionStage<O>> delegate) {
-    super(decorator, delegate, coreFor(delegate));
-  }
+    public AsyncFunctionWrapper(InqAsyncDecorator<I, O> decorator,
+                                Function<I, CompletionStage<O>> delegate) {
+        super(decorator, delegate, coreFor(delegate));
+    }
 
-  public AsyncFunctionWrapper(String name, Function<I, CompletionStage<O>> delegate,
-                              AsyncLayerAction<I, O> layerAction) {
-    super(name, delegate, coreFor(delegate), layerAction);
-  }
+    public AsyncFunctionWrapper(String name, Function<I, CompletionStage<O>> delegate,
+                                AsyncLayerAction<I, O> layerAction) {
+        super(name, delegate, coreFor(delegate), layerAction);
+    }
 
-  public AsyncFunctionWrapper(String name, Function<I, CompletionStage<O>> delegate) {
-    this(name, delegate, AsyncLayerAction.passThrough());
-  }
+    public AsyncFunctionWrapper(String name, Function<I, CompletionStage<O>> delegate) {
+        this(name, delegate, AsyncLayerAction.passThrough());
+    }
 
-  private static <I, O> InternalAsyncExecutor<I, O> coreFor(Function<I, CompletionStage<O>> delegate) {
-    return (chainId, callId, input) -> delegate.apply(input);
-  }
+    private static <I, O> InternalAsyncExecutor<I, O> coreFor(Function<I, CompletionStage<O>> delegate) {
+        return (chainId, callId, input) -> delegate.apply(input);
+    }
 
-  @Override
-  public CompletionStage<O> apply(I input) {
-    return initiateChain(input);
-  }
+    @Override
+    public CompletionStage<O> apply(I input) {
+        return initiateChain(input);
+    }
 }

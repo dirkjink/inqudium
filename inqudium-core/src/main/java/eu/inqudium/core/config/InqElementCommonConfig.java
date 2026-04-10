@@ -39,53 +39,53 @@ import java.util.concurrent.atomic.AtomicInteger;
  * @see ConfigExtension#inference()
  */
 public record InqElementCommonConfig(
-    String name,
-    InqElementType elementType,
-    InqEventPublisher eventPublisher,
-    Boolean enableExceptionOptimization
+        String name,
+        InqElementType elementType,
+        InqEventPublisher eventPublisher,
+        Boolean enableExceptionOptimization
 ) implements InqElementConfig, ConfigExtension<InqElementCommonConfig> {
 
-  /**
-   * Global counter for auto-generating unique element names when none is provided.
-   */
-  private final static AtomicInteger counter = new AtomicInteger(1);
+    /**
+     * Global counter for auto-generating unique element names when none is provided.
+     */
+    private final static AtomicInteger counter = new AtomicInteger(1);
 
-  /**
-   * Returns a new instance with all {@code null} fields replaced by sensible defaults.
-   *
-   * <p>Inference order matters: the name is resolved first because the event publisher
-   * derivation depends on it.
-   *
-   * @return a fully populated {@code InqElementCommonConfig}; no field is {@code null}
-   */
-  @Override
-  public InqElementCommonConfig inference() {
-    // Infer name first — other defaults depend on it
-    String nameInference = name;
-    if (name == null) {
-      nameInference = elementType.name() + "-" + counter.getAndIncrement();
+    /**
+     * Returns a new instance with all {@code null} fields replaced by sensible defaults.
+     *
+     * <p>Inference order matters: the name is resolved first because the event publisher
+     * derivation depends on it.
+     *
+     * @return a fully populated {@code InqElementCommonConfig}; no field is {@code null}
+     */
+    @Override
+    public InqElementCommonConfig inference() {
+        // Infer name first — other defaults depend on it
+        String nameInference = name;
+        if (name == null) {
+            nameInference = elementType.name() + "-" + counter.getAndIncrement();
+        }
+
+        // Infer event publisher using the (possibly auto-generated) name
+        InqEventPublisher eventPublisherInference = eventPublisher;
+        if (eventPublisher == null) {
+            eventPublisherInference = InqEventPublisher.create(nameInference, elementType);
+        }
+
+        // Default exception optimization to enabled
+        Boolean enableExceptionOptimizationInference = enableExceptionOptimization;
+        if (enableExceptionOptimization == null) {
+            enableExceptionOptimizationInference = true;
+        }
+
+        return new InqElementCommonConfig(nameInference,
+                elementType,
+                eventPublisherInference,
+                enableExceptionOptimizationInference);
     }
 
-    // Infer event publisher using the (possibly auto-generated) name
-    InqEventPublisher eventPublisherInference = eventPublisher;
-    if (eventPublisher == null) {
-      eventPublisherInference = InqEventPublisher.create(nameInference, elementType);
+    @Override
+    public InqElementCommonConfig self() {
+        return this;
     }
-
-    // Default exception optimization to enabled
-    Boolean enableExceptionOptimizationInference = enableExceptionOptimization;
-    if (enableExceptionOptimization == null) {
-      enableExceptionOptimizationInference = true;
-    }
-
-    return new InqElementCommonConfig(nameInference,
-        elementType,
-        eventPublisherInference,
-        enableExceptionOptimizationInference);
-  }
-
-  @Override
-  public InqElementCommonConfig self() {
-    return this;
-  }
 }

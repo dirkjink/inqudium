@@ -10,16 +10,16 @@ package eu.inqudium.core.element.circuitbreaker;
  * @param reason         the human-readable explanation of why the transition happened
  */
 public record StateTransition(
-    String name,
-    CircuitState fromState,
-    CircuitState toState,
-    long timestampNanos,
-    String reason
+        String name,
+        CircuitState fromState,
+        CircuitState toState,
+        long timestampNanos,
+        String reason
 ) {
 
-  @Override
-  public String toString() {
-    return "CircuitBreaker '%s': %s -> %s at nanos=%d. Reason: %s"
-        .formatted(name, fromState, toState, timestampNanos, reason);
-  }
+    @Override
+    public String toString() {
+        return "CircuitBreaker '%s': %s -> %s at nanos=%d. Reason: %s"
+                .formatted(name, fromState, toState, timestampNanos, reason);
+    }
 }

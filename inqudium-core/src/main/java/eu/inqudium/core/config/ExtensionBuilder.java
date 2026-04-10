@@ -26,26 +26,26 @@ package eu.inqudium.core.config;
  */
 public abstract class ExtensionBuilder<E extends ConfigExtension<E>> {
 
-  /**
-   * Receives the framework-wide general configuration. Called by the assembly process
-   * <em>before</em> the user customizer and {@link #build()}.
-   *
-   * <p>The default implementation is a no-op. Subclasses that need access to general
-   * settings (e.g., {@link eu.inqudium.core.element.circuitbreaker.config.InqCircuitBreakerConfigBuilder})
-   * should override this method and store the reference.
-   *
-   * @param generalConfig the general configuration; never {@code null} when called by the framework
-   */
-  protected void general(GeneralConfig generalConfig) {
-  }
+    /**
+     * Receives the framework-wide general configuration. Called by the assembly process
+     * <em>before</em> the user customizer and {@link #build()}.
+     *
+     * <p>The default implementation is a no-op. Subclasses that need access to general
+     * settings (e.g., {@link eu.inqudium.core.element.circuitbreaker.config.InqCircuitBreakerConfigBuilder})
+     * should override this method and store the reference.
+     *
+     * @param generalConfig the general configuration; never {@code null} when called by the framework
+     */
+    protected void general(GeneralConfig generalConfig) {
+    }
 
-  /**
-   * Builds and returns the final, immutable configuration extension.
-   *
-   * <p>Implementations should validate all required fields, apply any remaining defaults,
-   * and construct the concrete {@link ConfigExtension} record.
-   *
-   * @return a fully initialized and validated configuration extension; must not be {@code null}
-   */
-  public abstract E build();
+    /**
+     * Builds and returns the final, immutable configuration extension.
+     *
+     * <p>Implementations should validate all required fields, apply any remaining defaults,
+     * and construct the concrete {@link ConfigExtension} record.
+     *
+     * @return a fully initialized and validated configuration extension; must not be {@code null}
+     */
+    public abstract E build();
 }

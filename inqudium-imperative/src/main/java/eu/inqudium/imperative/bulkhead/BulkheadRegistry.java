@@ -16,45 +16,45 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public final class BulkheadRegistry implements InqRegistry<Bulkhead, InqImperativeBulkheadConfig> {
 
-  private final InqImperativeBulkheadConfig defaultConfig;
-  private final ConcurrentHashMap<String, Bulkhead> instances = new ConcurrentHashMap<>();
+    private final InqImperativeBulkheadConfig defaultConfig;
+    private final ConcurrentHashMap<String, Bulkhead> instances = new ConcurrentHashMap<>();
 
-  public BulkheadRegistry(InqImperativeBulkheadConfig defaultConfig) {
-    this.defaultConfig = Objects.requireNonNull(defaultConfig);
-  }
+    public BulkheadRegistry(InqImperativeBulkheadConfig defaultConfig) {
+        this.defaultConfig = Objects.requireNonNull(defaultConfig);
+    }
 
-  @Override
-  public Bulkhead get(String name) {
-    return get(name, defaultConfig);
-  }
+    @Override
+    public Bulkhead get(String name) {
+        return get(name, defaultConfig);
+    }
 
-  @Override
-  public Bulkhead get(String name, InqImperativeBulkheadConfig config) {
-    return instances.computeIfAbsent(name, n -> Bulkhead.of(config));
-  }
+    @Override
+    public Bulkhead get(String name, InqImperativeBulkheadConfig config) {
+        return instances.computeIfAbsent(name, n -> Bulkhead.of(config));
+    }
 
-  @Override
-  public void register(String name, InqImperativeBulkheadConfig config) {
-    instances.computeIfAbsent(name, n -> Bulkhead.of(config));
-  }
+    @Override
+    public void register(String name, InqImperativeBulkheadConfig config) {
+        instances.computeIfAbsent(name, n -> Bulkhead.of(config));
+    }
 
-  @Override
-  public Optional<Bulkhead> find(String name) {
-    return Optional.ofNullable(instances.get(name));
-  }
+    @Override
+    public Optional<Bulkhead> find(String name) {
+        return Optional.ofNullable(instances.get(name));
+    }
 
-  @Override
-  public Set<String> getAllNames() {
-    return Set.copyOf(instances.keySet());
-  }
+    @Override
+    public Set<String> getAllNames() {
+        return Set.copyOf(instances.keySet());
+    }
 
-  @Override
-  public Map<String, Bulkhead> getAll() {
-    return Map.copyOf(instances);
-  }
+    @Override
+    public Map<String, Bulkhead> getAll() {
+        return Map.copyOf(instances);
+    }
 
-  @Override
-  public InqImperativeBulkheadConfig getDefaultConfig() {
-    return defaultConfig;
-  }
+    @Override
+    public InqImperativeBulkheadConfig getDefaultConfig() {
+        return defaultConfig;
+    }
 }

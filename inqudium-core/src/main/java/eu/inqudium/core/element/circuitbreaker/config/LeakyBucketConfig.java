@@ -17,12 +17,12 @@ import eu.inqudium.core.config.ConfigExtension;
  * @see LeakyBucketConfigBuilder
  */
 public record LeakyBucketConfig(
-    int bucketCapacity,
-    double leakRatePerSecond
+        int bucketCapacity,
+        double leakRatePerSecond
 ) implements ConfigExtension<LeakyBucketConfig> {
 
-  @Override
-  public LeakyBucketConfig self() {
-    return this;
-  }
+    @Override
+    public LeakyBucketConfig self() {
+        return this;
+    }
 }

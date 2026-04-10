@@ -32,14 +32,14 @@ import java.util.Map;
  */
 public interface InqCompatibilityOptions {
 
-  /**
-   * Returns the flags this provider configures.
-   *
-   * <p>Only flags explicitly present in the returned map are set.
-   * Absent flags retain their defaults. Return an empty map to
-   * configure nothing.
-   *
-   * @return the flag configuration
-   */
-  Map<InqFlag, Boolean> flags();
+    /**
+     * Returns the flags this provider configures.
+     *
+     * <p>Only flags explicitly present in the returned map are set.
+     * Absent flags retain their defaults. Return an empty map to
+     * configure nothing.
+     *
+     * @return the flag configuration
+     */
+    Map<InqFlag, Boolean> flags();
 }

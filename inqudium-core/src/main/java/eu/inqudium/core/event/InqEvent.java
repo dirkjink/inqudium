@@ -23,86 +23,86 @@ import java.util.Objects;
  */
 public abstract class InqEvent {
 
-  private final long chainId;
-  private final long callId;
-  private final String elementName;
-  private final InqElementType elementType;
-  private final Instant timestamp;
+    private final long chainId;
+    private final long callId;
+    private final String elementName;
+    private final InqElementType elementType;
+    private final Instant timestamp;
 
-  /**
-   * Creates a new event with the given identity fields.
-   *
-   * @param callId      the unique call identifier (shared across the pipeline)
-   * @param elementName the name of the element instance
-   * @param elementType the type of the element
-   * @param timestamp   when the event occurred
-   * @throws IllegalArgumentException if callId or elementName is blank
-   */
-  protected InqEvent(long chainId, long callId, String elementName, InqElementType elementType, Instant timestamp) {
-    // Validate correlation identifiers are not blank — empty strings
-    // are silently useless for correlation and hard to debug downstream.
-    this.chainId = chainId;
-    this.callId = callId;
-    this.elementName = requireNonBlank(elementName, "elementName");
-    this.elementType = Objects.requireNonNull(elementType, "elementType must not be null");
-    this.timestamp = Objects.requireNonNull(timestamp, "timestamp must not be null");
-  }
-
-  /**
-   * Validates that a string is neither null nor blank.
-   *
-   * @param value the value to validate
-   * @param name  the field name for the error message
-   * @return the validated value
-   */
-  private static String requireNonBlank(String value, String name) {
-    Objects.requireNonNull(value, name + " must not be null");
-    if (value.isBlank()) {
-      throw new IllegalArgumentException(name + " must not be blank");
+    /**
+     * Creates a new event with the given identity fields.
+     *
+     * @param callId      the unique call identifier (shared across the pipeline)
+     * @param elementName the name of the element instance
+     * @param elementType the type of the element
+     * @param timestamp   when the event occurred
+     * @throws IllegalArgumentException if callId or elementName is blank
+     */
+    protected InqEvent(long chainId, long callId, String elementName, InqElementType elementType, Instant timestamp) {
+        // Validate correlation identifiers are not blank — empty strings
+        // are silently useless for correlation and hard to debug downstream.
+        this.chainId = chainId;
+        this.callId = callId;
+        this.elementName = requireNonBlank(elementName, "elementName");
+        this.elementType = Objects.requireNonNull(elementType, "elementType must not be null");
+        this.timestamp = Objects.requireNonNull(timestamp, "timestamp must not be null");
     }
-    return value;
-  }
 
-  public long getChainId() {
-    return chainId;
-  }
+    /**
+     * Validates that a string is neither null nor blank.
+     *
+     * @param value the value to validate
+     * @param name  the field name for the error message
+     * @return the validated value
+     */
+    private static String requireNonBlank(String value, String name) {
+        Objects.requireNonNull(value, name + " must not be null");
+        if (value.isBlank()) {
+            throw new IllegalArgumentException(name + " must not be blank");
+        }
+        return value;
+    }
 
-  /**
-   * Returns the unique call identifier shared across all elements in the pipeline.
-   */
-  public long getCallId() {
-    return callId;
-  }
+    public long getChainId() {
+        return chainId;
+    }
 
-  /**
-   * Returns the name of the element instance that emitted this event.
-   */
-  public String getElementName() {
-    return elementName;
-  }
+    /**
+     * Returns the unique call identifier shared across all elements in the pipeline.
+     */
+    public long getCallId() {
+        return callId;
+    }
 
-  /**
-   * Returns the type of the element that emitted this event.
-   */
-  public InqElementType getElementType() {
-    return elementType;
-  }
+    /**
+     * Returns the name of the element instance that emitted this event.
+     */
+    public String getElementName() {
+        return elementName;
+    }
 
-  /**
-   * Returns the timestamp when this event occurred.
-   */
-  public Instant getTimestamp() {
-    return timestamp;
-  }
+    /**
+     * Returns the type of the element that emitted this event.
+     */
+    public InqElementType getElementType() {
+        return elementType;
+    }
 
-  @Override
-  public String toString() {
-    return getClass().getSimpleName() + "{" +
-        "chainId='" + chainId + '\'' +
-        ", callId='" + callId + '\'' +
-        ", elementName='" + elementName + '\'' +
-        ", elementType=" + elementType +
-        ", timestamp=" + timestamp +
-        '}';
-  }
+    /**
+     * Returns the timestamp when this event occurred.
+     */
+    public Instant getTimestamp() {
+        return timestamp;
+    }
+
+    @Override
+    public String toString() {
+        return getClass().getSimpleName() + "{" +
+                "chainId='" + chainId + '\'' +
+                ", callId='" + callId + '\'' +
+                ", elementName='" + elementName + '\'' +
+                ", elementType=" + elementType +
+                ", timestamp=" + timestamp +
+                '}';
+    }
 }

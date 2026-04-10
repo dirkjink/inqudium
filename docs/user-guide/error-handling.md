@@ -1,22 +1,24 @@
 # Error Handling
 
-Inqudium throws its own exceptions only when an element actively intervenes. When the downstream call fails, the original exception propagates unchanged.
+Inqudium throws its own exceptions only when an element actively intervenes. When the downstream call fails, the
+original exception propagates unchanged.
 
 ## Exception hierarchy
 
 Every `InqException` carries a structured error code, element name, and element type:
 
-| Code | Exception | When |
-|------|-----------|------|
-| `INQ-CB-001` | `InqCallNotPermittedException` | Circuit breaker is OPEN |
-| `INQ-RT-001` | `InqRetryExhaustedException` | All retry attempts exhausted |
-| `INQ-RL-001` | `InqRequestNotPermittedException` | Rate limiter denied |
-| `INQ-BH-001` | `InqBulkheadFullException` | Bulkhead full |
-| `INQ-TL-001` | `InqTimeLimitExceededException` | Timeout exceeded |
+| Code         | Exception                         | When                         |
+|--------------|-----------------------------------|------------------------------|
+| `INQ-CB-001` | `InqCallNotPermittedException`    | Circuit breaker is OPEN      |
+| `INQ-RT-001` | `InqRetryExhaustedException`      | All retry attempts exhausted |
+| `INQ-RL-001` | `InqRequestNotPermittedException` | Rate limiter denied          |
+| `INQ-BH-001` | `InqBulkheadFullException`        | Bulkhead full                |
+| `INQ-TL-001` | `InqTimeLimitExceededException`   | Timeout exceeded             |
 
 ## Error codes
 
-Error codes follow the format `INQ-XX-NNN` where `XX` is the two-character element symbol and `NNN` is a three-digit number. They are designed for log aggregation, alerting, and runbook linking:
+Error codes follow the format `INQ-XX-NNN` where `XX` is the two-character element symbol and `NNN` is a three-digit
+number. They are designed for log aggregation, alerting, and runbook linking:
 
 ```java
 catch (InqException e) {
@@ -40,7 +42,8 @@ ExecutionException
             └─ InqCallNotPermittedException   ← this is what you need
 ```
 
-`InqFailure.find()` traverses the entire cause chain (handling circular references) and provides a fluent API for handling:
+`InqFailure.find()` traverses the entire cause chain (handling circular references) and provides a fluent API for
+handling:
 
 ```java
 try {
@@ -70,21 +73,21 @@ try {
 
 ### Element codes
 
-| Code | Exception | Description |
-|------|-----------|-------------|
-| `INQ-CB-001` | `InqCallNotPermittedException` | Call rejected — circuit breaker is OPEN |
-| `INQ-CB-002` | `InqCallNotPermittedException` | Call rejected — HALF_OPEN probe limit reached |
-| `INQ-RT-001` | `InqRetryExhaustedException` | All retry attempts exhausted |
-| `INQ-RL-001` | `InqRequestNotPermittedException` | Request denied — no permits available |
-| `INQ-BH-001` | `InqBulkheadFullException` | Call rejected — max concurrent calls reached |
-| `INQ-TL-001` | `InqTimeLimitExceededException` | Caller wait time exceeded configured timeout |
+| Code         | Exception                         | Description                                   |
+|--------------|-----------------------------------|-----------------------------------------------|
+| `INQ-CB-001` | `InqCallNotPermittedException`    | Call rejected — circuit breaker is OPEN       |
+| `INQ-CB-002` | `InqCallNotPermittedException`    | Call rejected — HALF_OPEN probe limit reached |
+| `INQ-RT-001` | `InqRetryExhaustedException`      | All retry attempts exhausted                  |
+| `INQ-RL-001` | `InqRequestNotPermittedException` | Request denied — no permits available         |
+| `INQ-BH-001` | `InqBulkheadFullException`        | Call rejected — max concurrent calls reached  |
+| `INQ-TL-001` | `InqTimeLimitExceededException`   | Caller wait time exceeded configured timeout  |
 
 ### System codes
 
-| Code | Type | Description |
-|------|------|-------------|
+| Code         | Type                    | Description                                       |
+|--------------|-------------------------|---------------------------------------------------|
 | `INQ-SY-001` | `InqProviderErrorEvent` | ServiceLoader provider failed during construction |
-| `INQ-SY-002` | `InqProviderErrorEvent` | ServiceLoader provider failed during execution |
-| `INQ-SY-003` | log warning | Registry name collision (first-registration-wins) |
-| `INQ-SY-004` | log warning | Pipeline anti-pattern detected |
-| `INQ-SY-005` | `IllegalStateException` | Registry frozen — late registration rejected |
+| `INQ-SY-002` | `InqProviderErrorEvent` | ServiceLoader provider failed during execution    |
+| `INQ-SY-003` | log warning             | Registry name collision (first-registration-wins) |
+| `INQ-SY-004` | log warning             | Pipeline anti-pattern detected                    |
+| `INQ-SY-005` | `IllegalStateException` | Registry frozen — late registration rejected      |

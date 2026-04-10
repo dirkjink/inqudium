@@ -35,35 +35,35 @@ import java.util.Optional;
  * @see InqConfig
  */
 public record GeneralConfig(
-    InqClock clock,
-    InqNanoTimeSource nanoTimesource,
-    InqCompatibility compatibility,
-    LoggerFactory loggerFactory,
-    Map<Class<?>, ConfigExtension<?>> extensions
+        InqClock clock,
+        InqNanoTimeSource nanoTimesource,
+        InqCompatibility compatibility,
+        LoggerFactory loggerFactory,
+        Map<Class<?>, ConfigExtension<?>> extensions
 ) {
 
-  static public GeneralConfig standard() {
-    return new GeneralConfig(
-        Instant::now,
-        System::nanoTime,
-        null,
-        LoggerFactory.NO_OP_LOGGER_FACTORY,
-        Map.of()
-    );
-  }
+    static public GeneralConfig standard() {
+        return new GeneralConfig(
+                Instant::now,
+                System::nanoTime,
+                null,
+                LoggerFactory.NO_OP_LOGGER_FACTORY,
+                Map.of()
+        );
+    }
 
-  /**
-   * Retrieves a registered configuration extension by its concrete class.
-   *
-   * <p>Returns {@link Optional#empty()} if no extension of the given type has been
-   * registered. The cast is safe because extensions are stored under their own class key.
-   *
-   * @param type the concrete class of the desired extension
-   * @param <T>  the extension type
-   * @return an {@link Optional} containing the extension, or empty if not registered
-   */
-  public <T extends ConfigExtension<?>> Optional<T> of(Class<T> type) {
-    ConfigExtension<?> extension = extensions.get(type);
-    return Optional.ofNullable(type.cast(extension));
-  }
+    /**
+     * Retrieves a registered configuration extension by its concrete class.
+     *
+     * <p>Returns {@link Optional#empty()} if no extension of the given type has been
+     * registered. The cast is safe because extensions are stored under their own class key.
+     *
+     * @param type the concrete class of the desired extension
+     * @param <T>  the extension type
+     * @return an {@link Optional} containing the extension, or empty if not registered
+     */
+    public <T extends ConfigExtension<?>> Optional<T> of(Class<T> type) {
+        ConfigExtension<?> extension = extensions.get(type);
+        return Optional.ofNullable(type.cast(extension));
+    }
 }

@@ -4,18 +4,18 @@ import java.time.Duration;
 
 public interface BulkheadProtection {
 
-  // Modifiers
-  BulkheadProtection limitingConcurrentCallsTo(int maxCalls);
+    // Modifiers
+    BulkheadProtection limitingConcurrentCallsTo(int maxCalls);
 
-  BulkheadProtection waitingAtMostFor(Duration maxWait);
+    BulkheadProtection waitingAtMostFor(Duration maxWait);
 
-  // Terminal Operations (Profiles)
-  BulkheadConfig applyStrictProfile();
+    // Terminal Operations (Profiles)
+    BulkheadConfig applyStrictProfile();
 
-  BulkheadConfig applyBalancedProfile();
+    BulkheadConfig applyBalancedProfile();
 
-  BulkheadConfig applyPermissiveProfile();
+    BulkheadConfig applyPermissiveProfile();
 
-  // Terminal Operation for custom configuration
-  BulkheadConfig apply();
+    // Terminal Operation for custom configuration
+    BulkheadConfig apply();
 }

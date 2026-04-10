@@ -5,9 +5,9 @@ import eu.inqudium.core.config.ConfigExtension;
 import java.util.function.Predicate;
 
 public record FailurePredicateConfig(
-    Predicate<Throwable> finalPredicate) implements ConfigExtension<FailurePredicateConfig> {
-  @Override
-  public FailurePredicateConfig self() {
-    return this;
-  }
+        Predicate<Throwable> finalPredicate) implements ConfigExtension<FailurePredicateConfig> {
+    @Override
+    public FailurePredicateConfig self() {
+        return this;
+    }
 }

@@ -6,17 +6,26 @@
 
 ## Context
 
-A resilience library wraps application calls and must decide how to signal failures — both failures from the protected downstream service and failures caused by the resilience elements themselves (circuit breaker open, rate limit exceeded, etc.).
+A resilience library wraps application calls and must decide how to signal failures — both failures from the protected
+downstream service and failures caused by the resilience elements themselves (circuit breaker open, rate limit exceeded,
+etc.).
 
 There are three competing concerns:
 
-1. **Transparency.** When a downstream call fails, the application should see the original exception — not a library-specific wrapper. A `ServiceUnavailableException` thrown by a REST client should arrive at the catch-site as a `ServiceUnavailableException`, regardless of how many resilience elements the call passed through.
+1. **Transparency.** When a downstream call fails, the application should see the original exception — not a
+   library-specific wrapper. A `ServiceUnavailableException` thrown by a REST client should arrive at the catch-site as
+   a `ServiceUnavailableException`, regardless of how many resilience elements the call passed through.
 
-2. **Distinguishability.** When a resilience element intervenes (rejects a call, exhausts retries), the application must be able to distinguish "the downstream service failed" from "the library blocked the call." These are fundamentally different situations requiring different handling.
+2. **Distinguishability.** When a resilience element intervenes (rejects a call, exhausts retries), the application must
+   be able to distinguish "the downstream service failed" from "the library blocked the call." These are fundamentally
+   different situations requiring different handling.
 
-3. **Decoupling.** The application should not become deeply coupled to library-specific exception types. If `catch (CallNotPermittedException e)` appears in controllers, service layers, and error handlers throughout the codebase, the resilience library has become an invasive dependency — the opposite of its purpose.
+3. **Decoupling.** The application should not become deeply coupled to library-specific exception types. If
+   `catch (CallNotPermittedException e)` appears in controllers, service layers, and error handlers throughout the
+   codebase, the resilience library has become an invasive dependency — the opposite of its purpose.
 
-Additionally, exception typing is fragile in practice. Between the throw-site and the catch-site, exceptions are routinely wrapped by frameworks, proxies, and reflection machinery:
+Additionally, exception typing is fragile in practice. Between the throw-site and the catch-site, exceptions are
+routinely wrapped by frameworks, proxies, and reflection machinery:
 
 ```
 Origin:         TimeoutException
@@ -25,37 +34,41 @@ Origin:         TimeoutException
 ↓ JDK Proxy     InvocationTargetException(cause: ...)
 ```
 
-At the catch-site, the original type may be buried several layers deep. Developers who write `catch (TimeoutException e)` rarely implement recursive cause-chain traversal — and those who do face edge cases like circular cause references and double-wrapping.
+At the catch-site, the original type may be buried several layers deep. Developers who write
+`catch (TimeoutException e)` rarely implement recursive cause-chain traversal — and those who do face edge cases like
+circular cause references and double-wrapping.
 
 ## Decision
 
 ### Principle: four exception categories with clear rules
 
-Inqudium classifies every exception it creates or encounters into exactly one of four categories. Each category has a fixed exception type, a clear purpose, and a rule for when it applies.
+Inqudium classifies every exception it creates or encounters into exactly one of four categories. Each category has a
+fixed exception type, a clear purpose, and a rule for when it applies.
 
-| Category | Exception type | When | Element context |
-|---|---|---|---|
-| **Active intervention** | `InqException` subclass | Element prevents or alters a call | Always (name, type, error code) |
-| **Checked exception wrapper** | `InqRuntimeException` | Downstream `Callable` throws checked exception during a call | Always (name, type) |
-| **Precondition violation** | `IllegalArgumentException` | Invalid config parameter at build time | None (element does not exist yet) |
-| **State violation** | `IllegalStateException` | Operation on frozen/invalid object | None (infrastructure error) |
+| Category                      | Exception type             | When                                                         | Element context                   |
+|-------------------------------|----------------------------|--------------------------------------------------------------|-----------------------------------|
+| **Active intervention**       | `InqException` subclass    | Element prevents or alters a call                            | Always (name, type, error code)   |
+| **Checked exception wrapper** | `InqRuntimeException`      | Downstream `Callable` throws checked exception during a call | Always (name, type)               |
+| **Precondition violation**    | `IllegalArgumentException` | Invalid config parameter at build time                       | None (element does not exist yet) |
+| **State violation**           | `IllegalStateException`    | Operation on frozen/invalid object                           | None (infrastructure error)       |
 
 The following subsections define each category in detail.
 
 ### Category 1: Active intervention — InqException
 
-Inqudium throws an `InqException` subclass **only** when the resilience element itself prevents or alters the call. When the downstream call executes and fails, the original exception propagates unchanged.
+Inqudium throws an `InqException` subclass **only** when the resilience element itself prevents or alters the call. When
+the downstream call executes and fails, the original exception propagates unchanged.
 
-| Situation | What Inqudium does | What the application sees |
-|---|---|---|
-| Call succeeds | Returns result | The result |
-| Call fails, Circuit Breaker CLOSED | Records failure, propagates | **Original exception** |
-| Call fails, Retry has attempts left | Retries, eventually propagates | **Last original exception** |
-| Retry exhausted | All attempts failed | `InqRetryExhaustedException` wrapping last cause |
-| Circuit Breaker OPEN | Call never made | `InqCallNotPermittedException` |
-| Rate Limiter denied | Call never made | `InqRequestNotPermittedException` |
-| Bulkhead full | Call never made | `InqBulkheadFullException` |
-| TimeLimiter fires | Caller stops waiting | `InqTimeLimitExceededException` |
+| Situation                           | What Inqudium does             | What the application sees                        |
+|-------------------------------------|--------------------------------|--------------------------------------------------|
+| Call succeeds                       | Returns result                 | The result                                       |
+| Call fails, Circuit Breaker CLOSED  | Records failure, propagates    | **Original exception**                           |
+| Call fails, Retry has attempts left | Retries, eventually propagates | **Last original exception**                      |
+| Retry exhausted                     | All attempts failed            | `InqRetryExhaustedException` wrapping last cause |
+| Circuit Breaker OPEN                | Call never made                | `InqCallNotPermittedException`                   |
+| Rate Limiter denied                 | Call never made                | `InqRequestNotPermittedException`                |
+| Bulkhead full                       | Call never made                | `InqBulkheadFullException`                       |
+| TimeLimiter fires                   | Caller stops waiting           | `InqTimeLimitExceededException`                  |
 
 Every `InqException` carries:
 
@@ -73,9 +86,12 @@ Subclasses add element-specific context:
 
 ### Category 2: Checked exception wrapper — InqRuntimeException
 
-The functional decoration API (ADR-002) uses `Supplier<T>`, `Runnable`, and other functional interfaces that do not declare checked exceptions. When an element decorates a `Callable<T>` (which declares `throws Exception`), checked exceptions must be converted to unchecked exceptions.
+The functional decoration API (ADR-002) uses `Supplier<T>`, `Runnable`, and other functional interfaces that do not
+declare checked exceptions. When an element decorates a `Callable<T>` (which declares `throws Exception`), checked
+exceptions must be converted to unchecked exceptions.
 
-A bare `RuntimeException` loses all Inqudium context — the catch-site cannot tell which element was involved or that Inqudium was involved at all. `InqRuntimeException` preserves this context:
+A bare `RuntimeException` loses all Inqudium context — the catch-site cannot tell which element was involved or that
+Inqudium was involved at all. `InqRuntimeException` preserves this context:
 
 ```java
 // Inside decorateCallable:
@@ -88,16 +104,26 @@ try {
 }
 ```
 
-`InqRuntimeException` extends `InqException` but carries a distinct error code suffix (`000`) that distinguishes it from active interventions (`001+`):
+`InqRuntimeException` extends `InqException` but carries a distinct error code suffix (`000`) that distinguishes it from
+active interventions (`001+`):
 
-- `InqException` subclasses with codes `001+` = "the element actively intervened" (circuit breaker opened, retries exhausted)
-- `InqRuntimeException` with code `000` = "the downstream call threw a checked exception, and the element wrapped it for API convenience"
+- `InqException` subclasses with codes `001+` = "the element actively intervened" (circuit breaker opened, retries
+  exhausted)
+- `InqRuntimeException` with code `000` = "the downstream call threw a checked exception, and the element wrapped it for
+  API convenience"
 
-This means `catch (InqException e)` catches both interventions and wrappings. The catch-site can distinguish them via `e.getCode()` (suffix `000` vs. `001+`) or via `instanceof InqRuntimeException`. Sharing the `InqException` base ensures that all Inqudium exceptions carry the same context fields (`code`, `elementName`, `elementType`) and work with `InqFailure.find()` uniformly.
+This means `catch (InqException e)` catches both interventions and wrappings. The catch-site can distinguish them via
+`e.getCode()` (suffix `000` vs. `001+`) or via `instanceof InqRuntimeException`. Sharing the `InqException` base ensures
+that all Inqudium exceptions carry the same context fields (`code`, `elementName`, `elementType`) and work with
+`InqFailure.find()` uniformly.
 
-`InqRuntimeException` is also used by `InqFailure.orElseThrow()` and `InqFailure.orElseThrowIfAbsent()` when the original exception is a checked exception that must be rethrown as unchecked. In this case, no element context is available (the utility operates outside an element), and the contextless constructor is used.
+`InqRuntimeException` is also used by `InqFailure.orElseThrow()` and `InqFailure.orElseThrowIfAbsent()` when the
+original exception is a checked exception that must be rethrown as unchecked. In this case, no element context is
+available (the utility operates outside an element), and the contextless constructor is used.
 
-**Rule:** Every `new RuntimeException(cause)` inside an element implementation must be `new InqRuntimeException(name, elementType, cause)` instead. There must be zero bare `RuntimeException` instantiations in element code.
+**Rule:** Every `new RuntimeException(cause)` inside an element implementation must be
+`new InqRuntimeException(name, elementType, cause)` instead. There must be zero bare `RuntimeException` instantiations
+in element code.
 
 ### Category 3: Precondition violation — IllegalArgumentException
 
@@ -116,11 +142,15 @@ if (factor < 1.0) throw new IllegalArgumentException("Safety margin factor must 
 
 These use `IllegalArgumentException` — the Java standard for precondition violations — because:
 
-1. **No element context exists.** The element has not been created yet. There is no instance name, no element type, no error code. An `InqRuntimeException` with null context would be misleading.
-2. **Developer expectation.** Every Java developer expects `IllegalArgumentException` for invalid arguments. Using a library-specific exception for this would be surprising and non-idiomatic.
-3. **These are not resilience events.** A negative window size is a bug in the application code, not a runtime condition that the resilience library should handle.
+1. **No element context exists.** The element has not been created yet. There is no instance name, no element type, no
+   error code. An `InqRuntimeException` with null context would be misleading.
+2. **Developer expectation.** Every Java developer expects `IllegalArgumentException` for invalid arguments. Using a
+   library-specific exception for this would be surprising and non-idiomatic.
+3. **These are not resilience events.** A negative window size is a bug in the application code, not a runtime condition
+   that the resilience library should handle.
 
-**Rule:** Config builders and SPI constructors use `IllegalArgumentException` for invalid parameters. This is the only category where non-Inq exceptions are thrown.
+**Rule:** Config builders and SPI constructors use `IllegalArgumentException` for invalid parameters. This is the only
+category where non-Inq exceptions are thrown.
 
 ### Category 4: State violation — IllegalStateException
 
@@ -131,7 +161,8 @@ Operations on objects in an invalid state use `IllegalStateException`:
 if (frozen) throw new IllegalStateException("Registry is frozen — late registration rejected");
 ```
 
-The same rationale as Category 3 applies: these are programming errors detected at infrastructure level, not resilience events, and the Java convention is clear.
+The same rationale as Category 3 applies: these are programming errors detected at infrastructure level, not resilience
+events, and the Java convention is clear.
 
 **Rule:** Infrastructure classes (registries, ServiceLoader wrappers) use `IllegalStateException` for state violations.
 
@@ -151,9 +182,12 @@ RuntimeException
 └── IllegalStateException                                  — state violation (Category 4)
 ```
 
-All Inqudium exceptions share `InqException` as their common base, including `InqRuntimeException`. This means `catch (InqException e)` catches both active interventions and wrapped checked exceptions. The error code suffix distinguishes them: `000` = wrapping, `001+` = intervention (ADR-021).
+All Inqudium exceptions share `InqException` as their common base, including `InqRuntimeException`. This means
+`catch (InqException e)` catches both active interventions and wrapped checked exceptions. The error code suffix
+distinguishes them: `000` = wrapping, `001+` = intervention (ADR-021).
 
-All Inqudium exceptions extend `RuntimeException` (unchecked). This is non-negotiable for the functional decoration API (ADR-002) — `Supplier.get()`, `Runnable.run()`, and `Function.apply()` do not declare checked exceptions.
+All Inqudium exceptions extend `RuntimeException` (unchecked). This is non-negotiable for the functional decoration
+API (ADR-002) — `Supplier.get()`, `Runnable.run()`, and `Function.apply()` do not declare checked exceptions.
 
 ### Cause-chain navigation utility
 
@@ -179,44 +213,69 @@ InqFailure.find(exception)
     .orElseThrow(); // re-throw if no Inqudium intervention found
 ```
 
-`InqFailure.find()` walks the entire cause chain recursively, handles circular references, and returns the first `InqException` it encounters — regardless of how many layers of `ExecutionException`, `InvocationTargetException`, or `UndeclaredThrowableException` surround it.
+`InqFailure.find()` walks the entire cause chain recursively, handles circular references, and returns the first
+`InqException` it encounters — regardless of how many layers of `ExecutionException`, `InvocationTargetException`, or
+`UndeclaredThrowableException` surround it.
 
-`orElseThrow()` and `orElseThrowIfAbsent()` re-throw the original exception. If the original is a checked exception, it is wrapped in `InqRuntimeException` (without element context, since `InqFailure` operates outside an element).
+`orElseThrow()` and `orElseThrowIfAbsent()` re-throw the original exception. If the original is a checked exception, it
+is wrapped in `InqRuntimeException` (without element context, since `InqFailure` operates outside an element).
 
 ### What Inqudium does NOT do with exceptions
 
-- **No wrapping of original exceptions.** If the downstream throws `ServiceUnavailableException`, the application sees `ServiceUnavailableException` — never `InqException(cause: ServiceUnavailableException)`. The only exception is `InqRetryExhaustedException`, which wraps the last cause because the application needs to know that retries were attempted.
-- **No custom exception hierarchy that mirrors standard exceptions.** There is no `InqTimeoutException extends TimeoutException`. This would pollute catch-sites: every `catch (TimeoutException e)` would silently catch Inqudium timeouts too, blurring the line between "the service timed out" and "Inqudium stopped waiting."
-- **No checked exceptions.** All Inqudium exceptions are unchecked. Checked exceptions cannot propagate through functional interfaces.
-- **No bare RuntimeException.** Every `RuntimeException` that Inqudium creates is either an `InqException` subclass (active intervention) or an `InqRuntimeException` (checked exception wrapper with element context). There is no code path where a bare `new RuntimeException(cause)` is thrown from element code.
+- **No wrapping of original exceptions.** If the downstream throws `ServiceUnavailableException`, the application sees
+  `ServiceUnavailableException` — never `InqException(cause: ServiceUnavailableException)`. The only exception is
+  `InqRetryExhaustedException`, which wraps the last cause because the application needs to know that retries were
+  attempted.
+- **No custom exception hierarchy that mirrors standard exceptions.** There is no
+  `InqTimeoutException extends TimeoutException`. This would pollute catch-sites: every `catch (TimeoutException e)`
+  would silently catch Inqudium timeouts too, blurring the line between "the service timed out" and "Inqudium stopped
+  waiting."
+- **No checked exceptions.** All Inqudium exceptions are unchecked. Checked exceptions cannot propagate through
+  functional interfaces.
+- **No bare RuntimeException.** Every `RuntimeException` that Inqudium creates is either an `InqException` subclass (
+  active intervention) or an `InqRuntimeException` (checked exception wrapper with element context). There is no code
+  path where a bare `new RuntimeException(cause)` is thrown from element code.
 
 ### Enforcement rules summary
 
-| Rule | Applies to | Exception type |
-|---|---|---|
-| Element actively intervenes | Element implementations | `InqException` subclass with error code |
-| Checked exception during a call | `decorateCallable`, `ExecutionException` unwrapping | `InqRuntimeException(name, type, cause)` |
-| Checked exception in utility | `InqFailure.orElseThrow` | `InqRuntimeException(cause)` |
-| Invalid config parameter | Config builders, SPI constructors | `IllegalArgumentException` |
-| Invalid object state | Frozen registries | `IllegalStateException` |
-| Everything else | — | **Not permitted.** No other exception types are created by Inqudium. |
+| Rule                            | Applies to                                          | Exception type                                                       |
+|---------------------------------|-----------------------------------------------------|----------------------------------------------------------------------|
+| Element actively intervenes     | Element implementations                             | `InqException` subclass with error code                              |
+| Checked exception during a call | `decorateCallable`, `ExecutionException` unwrapping | `InqRuntimeException(name, type, cause)`                             |
+| Checked exception in utility    | `InqFailure.orElseThrow`                            | `InqRuntimeException(cause)`                                         |
+| Invalid config parameter        | Config builders, SPI constructors                   | `IllegalArgumentException`                                           |
+| Invalid object state            | Frozen registries                                   | `IllegalStateException`                                              |
+| Everything else                 | —                                                   | **Not permitted.** No other exception types are created by Inqudium. |
 
 ## Consequences
 
 **Positive:**
+
 - Maximum transparency: original exceptions pass through untouched in the common case (call made, call failed).
 - Minimal coupling: applications only encounter Inqudium exceptions when the library actively intervenes.
-- Complete context: every exception Inqudium creates carries enough information to identify the source — element name and type for call-time exceptions, error code for interventions, descriptive message for config violations.
-- No context loss: checked exceptions are wrapped in `InqRuntimeException` with element context, not in bare `RuntimeException`.
+- Complete context: every exception Inqudium creates carries enough information to identify the source — element name
+  and type for call-time exceptions, error code for interventions, descriptive message for config violations.
+- No context loss: checked exceptions are wrapped in `InqRuntimeException` with element context, not in bare
+  `RuntimeException`.
 - Clear rules: four categories, each with a fixed exception type, a clear purpose, and a strict rule. No ambiguity.
-- Framework-resilient: `InqFailure.find()` handles the real-world cause-chain wrapping that makes type-based catching unreliable.
+- Framework-resilient: `InqFailure.find()` handles the real-world cause-chain wrapping that makes type-based catching
+  unreliable.
 
 **Negative:**
-- `InqRetryExhaustedException` wrapping the last cause is a deviation from the "no wrapping" principle. Justified because the application needs to know retries were attempted — the retry count is not available on the original exception.
-- `InqFailure.find()` is an opt-in utility. Developers who don't know about it will fall back to `catch (InqException e)` — which works but doesn't solve the cause-chain wrapping problem.
-- Two error code ranges within `InqException` (`000` for wrappings, `001+` for interventions) require developers to understand the distinction. The error code suffix makes this unambiguous, and `instanceof InqRuntimeException` provides type-safe discrimination at the catch-site.
+
+- `InqRetryExhaustedException` wrapping the last cause is a deviation from the "no wrapping" principle. Justified
+  because the application needs to know retries were attempted — the retry count is not available on the original
+  exception.
+- `InqFailure.find()` is an opt-in utility. Developers who don't know about it will fall back to
+  `catch (InqException e)` — which works but doesn't solve the cause-chain wrapping problem.
+- Two error code ranges within `InqException` (`000` for wrappings, `001+` for interventions) require developers to
+  understand the distinction. The error code suffix makes this unambiguous, and `instanceof InqRuntimeException`
+  provides type-safe discrimination at the catch-site.
 
 **Neutral:**
+
 - The exception hierarchy lives in `inqudium-core`. All paradigm implementations throw the same exception types.
-- The Retry element ignores all `InqException` subtypes by default (ADR-017) — retrying against an open Circuit Breaker or an exhausted Rate Limiter is pointless and would worsen the situation.
-- `InqRuntimeException` carries the error code `INQ-XX-000` (ADR-021). The `000` suffix is permanently reserved for wrapped checked exceptions and will never be reassigned to an active intervention.
+- The Retry element ignores all `InqException` subtypes by default (ADR-017) — retrying against an open Circuit Breaker
+  or an exhausted Rate Limiter is pointless and would worsen the situation.
+- `InqRuntimeException` carries the error code `INQ-XX-000` (ADR-021). The `000` suffix is permanently reserved for
+  wrapped checked exceptions and will never be reassigned to an active intervention.

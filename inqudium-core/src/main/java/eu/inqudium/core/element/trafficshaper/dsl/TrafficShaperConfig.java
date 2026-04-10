@@ -6,8 +6,8 @@ import java.time.Duration;
  * The immutable configuration for a Traffic Shaper instance.
  */
 public record TrafficShaperConfig(
-    int permittedCalls,
-    Duration evaluationPeriod,
-    Duration maxWaitDuration
+        int permittedCalls,
+        Duration evaluationPeriod,
+        Duration maxWaitDuration
 ) {
 }

@@ -10,15 +10,15 @@ import java.util.Objects;
  */
 public record FixedBackoffStrategy(Duration delay) implements BackoffStrategy {
 
-  public FixedBackoffStrategy {
-    Objects.requireNonNull(delay, "delay must not be null");
-    if (delay.isNegative()) {
-      throw new IllegalArgumentException("delay must not be negative");
+    public FixedBackoffStrategy {
+        Objects.requireNonNull(delay, "delay must not be null");
+        if (delay.isNegative()) {
+            throw new IllegalArgumentException("delay must not be negative");
+        }
     }
-  }
 
-  @Override
-  public Duration computeDelay(int attemptIndex) {
-    return delay;
-  }
+    @Override
+    public Duration computeDelay(int attemptIndex) {
+        return delay;
+    }
 }

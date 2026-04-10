@@ -21,12 +21,12 @@ import eu.inqudium.core.config.ConfigExtension;
  * @see TimeBasedSlidingWindowConfigBuilder
  */
 public record TimeBasedSlidingWindowConfig(
-    int maxFailuresInWindow,
-    int windowSizeInSeconds
+        int maxFailuresInWindow,
+        int windowSizeInSeconds
 ) implements ConfigExtension<TimeBasedSlidingWindowConfig> {
 
-  @Override
-  public TimeBasedSlidingWindowConfig self() {
-    return this;
-  }
+    @Override
+    public TimeBasedSlidingWindowConfig self() {
+        return this;
+    }
 }

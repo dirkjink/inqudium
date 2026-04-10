@@ -23,16 +23,16 @@ package eu.inqudium.core.element.bulkhead.strategy;
  */
 public interface NonBlockingBulkheadStrategy extends BulkheadStrategy {
 
-  /**
-   * Attempts to acquire a permit without blocking.
-   *
-   * <p>Returns immediately. If a permit is available, it is claimed atomically
-   * and {@code null} is returned (the happy path — no object allocation). If the
-   * bulkhead is at capacity, a {@link RejectionContext} captured at the exact
-   * moment of rejection is returned.
-   *
-   * @return {@code null} if a permit was acquired, or a {@link RejectionContext}
-   * describing why the request was rejected
-   */
-  RejectionContext tryAcquire();
+    /**
+     * Attempts to acquire a permit without blocking.
+     *
+     * <p>Returns immediately. If a permit is available, it is claimed atomically
+     * and {@code null} is returned (the happy path — no object allocation). If the
+     * bulkhead is at capacity, a {@link RejectionContext} captured at the exact
+     * moment of rejection is returned.
+     *
+     * @return {@code null} if a permit was acquired, or a {@link RejectionContext}
+     * describing why the request was rejected
+     */
+    RejectionContext tryAcquire();
 }

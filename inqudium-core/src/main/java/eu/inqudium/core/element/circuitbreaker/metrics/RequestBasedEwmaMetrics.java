@@ -55,137 +55,137 @@ import java.util.function.LongFunction;
  * @param callsCount           how many outcomes have been recorded (capped at minimumNumberOfCalls)
  */
 public record RequestBasedEwmaMetrics(
-    double failureRatePercent,
-    RequestBasedEwma ewmaCalculator,
-    double smoothingFactor,
-    int minimumNumberOfCalls,
-    double currentRate,
-    int callsCount
+        double failureRatePercent,
+        RequestBasedEwma ewmaCalculator,
+        double smoothingFactor,
+        int minimumNumberOfCalls,
+        double currentRate,
+        int callsCount
 ) implements FailureMetrics {
 
-  /**
-   * Creates an initial instance with a zero failure rate and zero recorded calls.
-   *
-   * @param failureRatePercent   the failure rate percentage (1–100) at which the circuit trips
-   * @param smoothingFactor      the EWMA alpha value (0 < alpha ≤ 1); higher = more reactive
-   * @param minimumNumberOfCalls the minimum number of calls before evaluation; must be > 0
-   * @return a fresh instance ready to accept outcomes
-   * @throws IllegalArgumentException if {@code minimumNumberOfCalls <= 0}
-   */
-  public static RequestBasedEwmaMetrics initial(
-      double failureRatePercent,
-      double smoothingFactor,
-      int minimumNumberOfCalls
-  ) {
-    if (minimumNumberOfCalls <= 0) {
-      throw new IllegalArgumentException("minimumNumberOfCalls must be greater than 0");
+    /**
+     * Creates an initial instance with a zero failure rate and zero recorded calls.
+     *
+     * @param failureRatePercent   the failure rate percentage (1–100) at which the circuit trips
+     * @param smoothingFactor      the EWMA alpha value (0 < alpha ≤ 1); higher = more reactive
+     * @param minimumNumberOfCalls the minimum number of calls before evaluation; must be > 0
+     * @return a fresh instance ready to accept outcomes
+     * @throws IllegalArgumentException if {@code minimumNumberOfCalls <= 0}
+     */
+    public static RequestBasedEwmaMetrics initial(
+            double failureRatePercent,
+            double smoothingFactor,
+            int minimumNumberOfCalls
+    ) {
+        if (minimumNumberOfCalls <= 0) {
+            throw new IllegalArgumentException("minimumNumberOfCalls must be greater than 0");
+        }
+        return new RequestBasedEwmaMetrics(
+                failureRatePercent,
+                new RequestBasedEwma(smoothingFactor),
+                smoothingFactor,
+                minimumNumberOfCalls,
+                0.0,
+                0
+        );
     }
-    return new RequestBasedEwmaMetrics(
-        failureRatePercent,
-        new RequestBasedEwma(smoothingFactor),
-        smoothingFactor,
-        minimumNumberOfCalls,
-        0.0,
-        0
-    );
-  }
 
-  /**
-   * Returns a factory function that produces a fresh instance of this metrics strategy.
-   *
-   * @return a {@link LongFunction} that accepts a nanosecond timestamp and produces a
-   * fresh {@link FailureMetrics} instance with identical configuration
-   */
-  @Override
-  public LongFunction<FailureMetrics> metricsFactory() {
-    return (long nowNanos) -> RequestBasedEwmaMetrics.initial(
-        failureRatePercent,
-        smoothingFactor,
-        minimumNumberOfCalls
-    );
-  }
-
-  /**
-   * Records a successful call by feeding a sample of 0.0 into the EWMA.
-   * This pulls the running average downward.
-   *
-   * @param nowNanos ignored — this algorithm is request-based, not time-based
-   */
-  @Override
-  public FailureMetrics recordSuccess(long nowNanos) {
-    return recordOutcome(0.0);
-  }
-
-  /**
-   * Records a failed call by feeding a sample of 1.0 into the EWMA.
-   * This pulls the running average upward.
-   *
-   * @param nowNanos ignored — this algorithm is request-based, not time-based
-   */
-  @Override
-  public FailureMetrics recordFailure(long nowNanos) {
-    return recordOutcome(1.0);
-  }
-
-  /**
-   * Internal helper that applies a single EWMA update and increments the call count.
-   *
-   * @param sample 0.0 for success, 1.0 for failure
-   * @return a new instance with the updated rate and call count
-   */
-  private RequestBasedEwmaMetrics recordOutcome(double sample) {
-    double newRate = ewmaCalculator.calculate(currentRate, sample);
-    // Cap the count at minimumNumberOfCalls to prevent unnecessary growth
-    int newCount = Math.min(minimumNumberOfCalls, callsCount + 1);
-    return new RequestBasedEwmaMetrics(failureRatePercent,
-        ewmaCalculator,
-        smoothingFactor,
-        minimumNumberOfCalls,
-        newRate,
-        newCount);
-  }
-
-  /**
-   * Evaluates whether the EWMA failure rate has reached or exceeded the threshold.
-   * Returns {@code false} unconditionally if fewer than {@code minimumNumberOfCalls}
-   * outcomes have been recorded.
-   *
-   * @param nowNanos ignored — this algorithm is request-based, not time-based
-   */
-  @Override
-  public boolean isThresholdReached(long nowNanos) {
-    if (callsCount < minimumNumberOfCalls) {
-      return false;
+    /**
+     * Returns a factory function that produces a fresh instance of this metrics strategy.
+     *
+     * @return a {@link LongFunction} that accepts a nanosecond timestamp and produces a
+     * fresh {@link FailureMetrics} instance with identical configuration
+     */
+    @Override
+    public LongFunction<FailureMetrics> metricsFactory() {
+        return (long nowNanos) -> RequestBasedEwmaMetrics.initial(
+                failureRatePercent,
+                smoothingFactor,
+                minimumNumberOfCalls
+        );
     }
-    double rateThreshold = failureRatePercent / 100.0;
-    return currentRate >= rateThreshold;
-  }
 
-  /**
-   * Resets the EWMA rate to 0.0 and the call count to 0, preserving configuration.
-   *
-   * @param nowNanos ignored — this algorithm is request-based, not time-based
-   */
-  @Override
-  public FailureMetrics reset(long nowNanos) {
-    return new RequestBasedEwmaMetrics(failureRatePercent,
-        ewmaCalculator,
-        smoothingFactor,
-        minimumNumberOfCalls,
-        0.0,
-        0);
-  }
+    /**
+     * Records a successful call by feeding a sample of 0.0 into the EWMA.
+     * This pulls the running average downward.
+     *
+     * @param nowNanos ignored — this algorithm is request-based, not time-based
+     */
+    @Override
+    public FailureMetrics recordSuccess(long nowNanos) {
+        return recordOutcome(0.0);
+    }
 
-  /**
-   * Produces a diagnostic message showing the current EWMA rate, threshold, and alpha.
-   *
-   * @param nowNanos ignored — this algorithm is request-based, not time-based
-   */
-  @Override
-  public String getTripReason(long nowNanos) {
-    return String.format(
-        Locale.ROOT, "Request-based EWMA threshold reached: " +
-            "Current failure rate is %.1f%% (Threshold: %f%%). Alpha: %.2f.",
-        currentRate * 100.0, failureRatePercent, ewmaCalculator.alpha());
-  }
+    /**
+     * Records a failed call by feeding a sample of 1.0 into the EWMA.
+     * This pulls the running average upward.
+     *
+     * @param nowNanos ignored — this algorithm is request-based, not time-based
+     */
+    @Override
+    public FailureMetrics recordFailure(long nowNanos) {
+        return recordOutcome(1.0);
+    }
+
+    /**
+     * Internal helper that applies a single EWMA update and increments the call count.
+     *
+     * @param sample 0.0 for success, 1.0 for failure
+     * @return a new instance with the updated rate and call count
+     */
+    private RequestBasedEwmaMetrics recordOutcome(double sample) {
+        double newRate = ewmaCalculator.calculate(currentRate, sample);
+        // Cap the count at minimumNumberOfCalls to prevent unnecessary growth
+        int newCount = Math.min(minimumNumberOfCalls, callsCount + 1);
+        return new RequestBasedEwmaMetrics(failureRatePercent,
+                ewmaCalculator,
+                smoothingFactor,
+                minimumNumberOfCalls,
+                newRate,
+                newCount);
+    }
+
+    /**
+     * Evaluates whether the EWMA failure rate has reached or exceeded the threshold.
+     * Returns {@code false} unconditionally if fewer than {@code minimumNumberOfCalls}
+     * outcomes have been recorded.
+     *
+     * @param nowNanos ignored — this algorithm is request-based, not time-based
+     */
+    @Override
+    public boolean isThresholdReached(long nowNanos) {
+        if (callsCount < minimumNumberOfCalls) {
+            return false;
+        }
+        double rateThreshold = failureRatePercent / 100.0;
+        return currentRate >= rateThreshold;
+    }
+
+    /**
+     * Resets the EWMA rate to 0.0 and the call count to 0, preserving configuration.
+     *
+     * @param nowNanos ignored — this algorithm is request-based, not time-based
+     */
+    @Override
+    public FailureMetrics reset(long nowNanos) {
+        return new RequestBasedEwmaMetrics(failureRatePercent,
+                ewmaCalculator,
+                smoothingFactor,
+                minimumNumberOfCalls,
+                0.0,
+                0);
+    }
+
+    /**
+     * Produces a diagnostic message showing the current EWMA rate, threshold, and alpha.
+     *
+     * @param nowNanos ignored — this algorithm is request-based, not time-based
+     */
+    @Override
+    public String getTripReason(long nowNanos) {
+        return String.format(
+                Locale.ROOT, "Request-based EWMA threshold reached: " +
+                        "Current failure rate is %.1f%% (Threshold: %f%%). Alpha: %.2f.",
+                currentRate * 100.0, failureRatePercent, ewmaCalculator.alpha());
+    }
 }

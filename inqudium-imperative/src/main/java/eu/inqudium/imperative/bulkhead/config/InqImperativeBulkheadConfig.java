@@ -17,83 +17,83 @@ import java.time.Duration;
 import java.util.Optional;
 
 public record InqImperativeBulkheadConfig(
-    GeneralConfig general,
-    InqBulkheadConfig bulkhead
+        GeneralConfig general,
+        InqBulkheadConfig bulkhead
 ) implements ConfigExtension<InqImperativeBulkheadConfig>, InqElementConfig {
-  @Override
-  public String name() {
-    return bulkhead.name();
-  }
-
-  public BulkheadStrategy strategy() {
-    return bulkhead.strategy();
-  }
-
-  public int maxConcurrentCalls() {
-    return bulkhead.maxConcurrentCalls();
-  }
-
-  public Duration maxWaitDuration() {
-    return bulkhead.maxWaitDuration();
-  }
-
-  public InqLimitAlgorithm limitAlgorithm() {
-    return bulkhead.limitAlgorithm();
-  }
-
-  @Override
-  public Boolean enableExceptionOptimization() {
-    return bulkhead.enableExceptionOptimization();
-  }
-
-  @Override
-  public InqElementType elementType() {
-    return bulkhead.elementType();
-  }
-
-  @Override
-  public InqEventPublisher eventPublisher() {
-    return bulkhead.eventPublisher();
-  }
-
-  public BulkheadEventConfig eventConfig() {
-    return bulkhead.eventConfig();
-  }
-
-  @Override
-  public InqImperativeBulkheadConfig inference() {
-    BulkheadStrategy strategy = strategy();
-    if (strategy() == null) {
-      Optional<VegasLimitAlgorithmConfig> vegas = general.of(VegasLimitAlgorithmConfig.class);
-      Optional<AimdLimitAlgorithmConfig> aimd = general.of(AimdLimitAlgorithmConfig.class);
-
-      if (vegas.filter(v -> aimd.isEmpty())
-          .map(ConfigExtension.class::cast)
-          .or(() ->
-              aimd.filter(a -> vegas.isEmpty())
-                  .map(ConfigExtension.class::cast)
-          ).isEmpty()) {
-        strategy = new SemaphoreBulkheadStrategy(maxConcurrentCalls());
-      }
+    @Override
+    public String name() {
+        return bulkhead.name();
     }
 
-    return new InqImperativeBulkheadConfig(
-        this.general,
-        new InqBulkheadConfig(
-            this.general,
-            this.bulkhead.common(),
-            this.bulkhead.maxConcurrentCalls(),
-            strategy,
-            this.bulkhead.maxWaitDuration(),
-            this.bulkhead.limitAlgorithm(),
-            this.bulkhead.eventConfig()
-        )
-    );
-  }
+    public BulkheadStrategy strategy() {
+        return bulkhead.strategy();
+    }
 
-  @Override
-  public InqImperativeBulkheadConfig self() {
-    return this;
-  }
+    public int maxConcurrentCalls() {
+        return bulkhead.maxConcurrentCalls();
+    }
+
+    public Duration maxWaitDuration() {
+        return bulkhead.maxWaitDuration();
+    }
+
+    public InqLimitAlgorithm limitAlgorithm() {
+        return bulkhead.limitAlgorithm();
+    }
+
+    @Override
+    public Boolean enableExceptionOptimization() {
+        return bulkhead.enableExceptionOptimization();
+    }
+
+    @Override
+    public InqElementType elementType() {
+        return bulkhead.elementType();
+    }
+
+    @Override
+    public InqEventPublisher eventPublisher() {
+        return bulkhead.eventPublisher();
+    }
+
+    public BulkheadEventConfig eventConfig() {
+        return bulkhead.eventConfig();
+    }
+
+    @Override
+    public InqImperativeBulkheadConfig inference() {
+        BulkheadStrategy strategy = strategy();
+        if (strategy() == null) {
+            Optional<VegasLimitAlgorithmConfig> vegas = general.of(VegasLimitAlgorithmConfig.class);
+            Optional<AimdLimitAlgorithmConfig> aimd = general.of(AimdLimitAlgorithmConfig.class);
+
+            if (vegas.filter(v -> aimd.isEmpty())
+                    .map(ConfigExtension.class::cast)
+                    .or(() ->
+                            aimd.filter(a -> vegas.isEmpty())
+                                    .map(ConfigExtension.class::cast)
+                    ).isEmpty()) {
+                strategy = new SemaphoreBulkheadStrategy(maxConcurrentCalls());
+            }
+        }
+
+        return new InqImperativeBulkheadConfig(
+                this.general,
+                new InqBulkheadConfig(
+                        this.general,
+                        this.bulkhead.common(),
+                        this.bulkhead.maxConcurrentCalls(),
+                        strategy,
+                        this.bulkhead.maxWaitDuration(),
+                        this.bulkhead.limitAlgorithm(),
+                        this.bulkhead.eventConfig()
+                )
+        );
+    }
+
+    @Override
+    public InqImperativeBulkheadConfig self() {
+        return this;
+    }
 }
 

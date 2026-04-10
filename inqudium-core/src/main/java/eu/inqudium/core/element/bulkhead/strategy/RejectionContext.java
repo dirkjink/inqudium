@@ -38,93 +38,93 @@ package eu.inqudium.core.element.bulkhead.strategy;
  * @since 0.3.0
  */
 public record RejectionContext(
-    RejectionReason reason,
-    int limitAtDecision,
-    int activeCallsAtDecision,
-    long waitedNanos,
-    long sojournNanos
+        RejectionReason reason,
+        int limitAtDecision,
+        int activeCallsAtDecision,
+        long waitedNanos,
+        long sojournNanos
 ) {
 
-  // ──────────────────────────────────────────────────────────────────────────
-  // Factory Methods — one per rejection scenario
-  // ──────────────────────────────────────────────────────────────────────────
+    // ──────────────────────────────────────────────────────────────────────────
+    // Factory Methods — one per rejection scenario
+    // ──────────────────────────────────────────────────────────────────────────
 
-  /**
-   * The concurrency limit was reached. No permit was available at the instant
-   * the strategy checked. Used by all non-CoDel strategies for immediate rejection
-   * (non-blocking) or when no permit becomes free within the timeout (blocking).
-   *
-   * @param limit       the limit enforced at the moment of rejection
-   * @param activeCalls the number of active calls at the moment of rejection
-   */
-  public static RejectionContext capacityReached(int limit, int activeCalls) {
-    return new RejectionContext(RejectionReason.CAPACITY_REACHED, limit, activeCalls, 0L, 0L);
-  }
-
-  /**
-   * The caller's timeout expired while waiting for a permit to become available.
-   * The bulkhead was at capacity for the entire wait duration.
-   *
-   * @param limit       the limit enforced at the moment of rejection
-   * @param activeCalls the number of active calls at the moment of rejection
-   * @param waitedNanos the actual time spent waiting before giving up
-   */
-  public static RejectionContext timeoutExpired(int limit, int activeCalls, long waitedNanos) {
-    return new RejectionContext(RejectionReason.TIMEOUT_EXPIRED, limit, activeCalls, waitedNanos, 0L);
-  }
-
-  /**
-   * CoDel determined that the request waited too long (sojourn time exceeded the
-   * target delay for longer than one interval). A permit <em>was</em> available,
-   * but the request was dropped to shed load during sustained congestion.
-   *
-   * @param limit        the concurrency limit at the moment of rejection
-   * @param activeCalls  the number of active calls at the moment of rejection
-   * @param waitedNanos  the total wall-clock time spent in tryAcquire
-   * @param sojournNanos the CoDel sojourn time (post-lock queue wait)
-   */
-  public static RejectionContext codelDrop(int limit, int activeCalls,
-                                           long waitedNanos, long sojournNanos) {
-    return new RejectionContext(
-        RejectionReason.CODEL_SOJOURN_EXCEEDED, limit, activeCalls, waitedNanos, sojournNanos);
-  }
-
-  // ──────────────────────────────────────────────────────────────────────────
-  // Formatting
-  // ──────────────────────────────────────────────────────────────────────────
-
-  private static String formatNanos(long nanos) {
-    if (nanos < 1_000_000L) {
-      return nanos / 1_000L + "µs";
+    /**
+     * The concurrency limit was reached. No permit was available at the instant
+     * the strategy checked. Used by all non-CoDel strategies for immediate rejection
+     * (non-blocking) or when no permit becomes free within the timeout (blocking).
+     *
+     * @param limit       the limit enforced at the moment of rejection
+     * @param activeCalls the number of active calls at the moment of rejection
+     */
+    public static RejectionContext capacityReached(int limit, int activeCalls) {
+        return new RejectionContext(RejectionReason.CAPACITY_REACHED, limit, activeCalls, 0L, 0L);
     }
-    return nanos / 1_000_000L + "ms";
-  }
 
-  /**
-   * Human-readable summary suitable for exception messages and log output.
-   *
-   * <p>Examples:
-   * <ul>
-   *   <li>{@code CAPACITY_REACHED (10/10 concurrent calls)}</li>
-   *   <li>{@code TIMEOUT_EXPIRED (10/10 concurrent calls, waited 500ms)}</li>
-   *   <li>{@code CODEL_SOJOURN_EXCEEDED (8/10 concurrent calls, sojourn 1200ms, waited 1500ms)}</li>
-   * </ul>
-   */
-  @Override
-  public String toString() {
-    return switch (reason) {
-      case CAPACITY_REACHED -> String.format(
-          "%s (%d/%d concurrent calls, no wait)",
-          reason, activeCallsAtDecision, limitAtDecision);
+    /**
+     * The caller's timeout expired while waiting for a permit to become available.
+     * The bulkhead was at capacity for the entire wait duration.
+     *
+     * @param limit       the limit enforced at the moment of rejection
+     * @param activeCalls the number of active calls at the moment of rejection
+     * @param waitedNanos the actual time spent waiting before giving up
+     */
+    public static RejectionContext timeoutExpired(int limit, int activeCalls, long waitedNanos) {
+        return new RejectionContext(RejectionReason.TIMEOUT_EXPIRED, limit, activeCalls, waitedNanos, 0L);
+    }
 
-      case TIMEOUT_EXPIRED -> String.format(
-          "%s (%d/%d concurrent calls, waited %s)",
-          reason, activeCallsAtDecision, limitAtDecision, formatNanos(waitedNanos));
+    /**
+     * CoDel determined that the request waited too long (sojourn time exceeded the
+     * target delay for longer than one interval). A permit <em>was</em> available,
+     * but the request was dropped to shed load during sustained congestion.
+     *
+     * @param limit        the concurrency limit at the moment of rejection
+     * @param activeCalls  the number of active calls at the moment of rejection
+     * @param waitedNanos  the total wall-clock time spent in tryAcquire
+     * @param sojournNanos the CoDel sojourn time (post-lock queue wait)
+     */
+    public static RejectionContext codelDrop(int limit, int activeCalls,
+                                             long waitedNanos, long sojournNanos) {
+        return new RejectionContext(
+                RejectionReason.CODEL_SOJOURN_EXCEEDED, limit, activeCalls, waitedNanos, sojournNanos);
+    }
 
-      case CODEL_SOJOURN_EXCEEDED -> String.format(
-          "%s (%d/%d concurrent calls, sojourn %s, waited %s)",
-          reason, activeCallsAtDecision, limitAtDecision,
-          formatNanos(sojournNanos), formatNanos(waitedNanos));
-    };
-  }
+    // ──────────────────────────────────────────────────────────────────────────
+    // Formatting
+    // ──────────────────────────────────────────────────────────────────────────
+
+    private static String formatNanos(long nanos) {
+        if (nanos < 1_000_000L) {
+            return nanos / 1_000L + "µs";
+        }
+        return nanos / 1_000_000L + "ms";
+    }
+
+    /**
+     * Human-readable summary suitable for exception messages and log output.
+     *
+     * <p>Examples:
+     * <ul>
+     *   <li>{@code CAPACITY_REACHED (10/10 concurrent calls)}</li>
+     *   <li>{@code TIMEOUT_EXPIRED (10/10 concurrent calls, waited 500ms)}</li>
+     *   <li>{@code CODEL_SOJOURN_EXCEEDED (8/10 concurrent calls, sojourn 1200ms, waited 1500ms)}</li>
+     * </ul>
+     */
+    @Override
+    public String toString() {
+        return switch (reason) {
+            case CAPACITY_REACHED -> String.format(
+                    "%s (%d/%d concurrent calls, no wait)",
+                    reason, activeCallsAtDecision, limitAtDecision);
+
+            case TIMEOUT_EXPIRED -> String.format(
+                    "%s (%d/%d concurrent calls, waited %s)",
+                    reason, activeCallsAtDecision, limitAtDecision, formatNanos(waitedNanos));
+
+            case CODEL_SOJOURN_EXCEEDED -> String.format(
+                    "%s (%d/%d concurrent calls, sojourn %s, waited %s)",
+                    reason, activeCallsAtDecision, limitAtDecision,
+                    formatNanos(sojournNanos), formatNanos(waitedNanos));
+        };
+    }
 }

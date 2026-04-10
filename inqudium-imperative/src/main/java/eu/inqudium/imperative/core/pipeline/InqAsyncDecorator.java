@@ -40,72 +40,72 @@ import java.util.function.Supplier;
  */
 public interface InqAsyncDecorator<A, R> extends InqElement, AsyncLayerAction<A, R> {
 
-  /**
-   * Wraps an async runnable in an {@link AsyncRunnableWrapper}.
-   *
-   * @param delegate the async operation to protect
-   *                 /**
-   *                 Wraps a {@link Runnable} in an {@link AsyncRunnableWrapper}.
-   *
-   *                 <p>The Runnable executes synchronously at the core of the chain. The async
-   *                 behavior comes from the surrounding {@link AsyncLayerAction} layers (e.g.
-   *                 acquire permit synchronously, release on stage completion).</p>
-   * @param delegate the operation to protect
-   * @return a decorated supplier that returns {@code CompletionStage<Void>} on each {@code get()}
-   */
-  @SuppressWarnings("unchecked")
-  default Supplier<CompletionStage<Void>> decorateAsyncRunnable(Runnable delegate) {
-    return new AsyncRunnableWrapper((InqAsyncDecorator<Void, Void>) this, delegate);
-  }
+    /**
+     * Wraps an async runnable in an {@link AsyncRunnableWrapper}.
+     *
+     * @param delegate the async operation to protect
+     *                 /**
+     *                 Wraps a {@link Runnable} in an {@link AsyncRunnableWrapper}.
+     *
+     *                 <p>The Runnable executes synchronously at the core of the chain. The async
+     *                 behavior comes from the surrounding {@link AsyncLayerAction} layers (e.g.
+     *                 acquire permit synchronously, release on stage completion).</p>
+     * @param delegate the operation to protect
+     * @return a decorated supplier that returns {@code CompletionStage<Void>} on each {@code get()}
+     */
+    @SuppressWarnings("unchecked")
+    default Supplier<CompletionStage<Void>> decorateAsyncRunnable(Runnable delegate) {
+        return new AsyncRunnableWrapper((InqAsyncDecorator<Void, Void>) this, delegate);
+    }
 
-  /**
-   * Wraps an async supplier in an {@link AsyncSupplierWrapper}.
-   *
-   * @param delegate the async operation to protect
-   * @param <T>      the result type
-   * @return a decorated supplier that returns {@code CompletionStage<T>} on each {@code get()}
-   */
-  @SuppressWarnings("unchecked")
-  default <T> Supplier<CompletionStage<T>> decorateAsyncSupplier(
-      Supplier<CompletionStage<T>> delegate) {
-    return new AsyncSupplierWrapper<>((InqAsyncDecorator<Void, T>) this, delegate);
-  }
+    /**
+     * Wraps an async supplier in an {@link AsyncSupplierWrapper}.
+     *
+     * @param delegate the async operation to protect
+     * @param <T>      the result type
+     * @return a decorated supplier that returns {@code CompletionStage<T>} on each {@code get()}
+     */
+    @SuppressWarnings("unchecked")
+    default <T> Supplier<CompletionStage<T>> decorateAsyncSupplier(
+            Supplier<CompletionStage<T>> delegate) {
+        return new AsyncSupplierWrapper<>((InqAsyncDecorator<Void, T>) this, delegate);
+    }
 
-  /**
-   * Wraps an async callable in an {@link AsyncCallableWrapper}.
-   *
-   * @param delegate the async operation to protect (may throw checked exceptions on start)
-   * @param <V>      the result type
-   * @return a decorated callable that returns {@code CompletionStage<V>} on each {@code call()}
-   */
-  @SuppressWarnings("unchecked")
-  default <V> Callable<CompletionStage<V>> decorateAsyncCallable(
-      Callable<CompletionStage<V>> delegate) {
-    return new AsyncCallableWrapper<>((InqAsyncDecorator<Void, V>) this, delegate);
-  }
+    /**
+     * Wraps an async callable in an {@link AsyncCallableWrapper}.
+     *
+     * @param delegate the async operation to protect (may throw checked exceptions on start)
+     * @param <V>      the result type
+     * @return a decorated callable that returns {@code CompletionStage<V>} on each {@code call()}
+     */
+    @SuppressWarnings("unchecked")
+    default <V> Callable<CompletionStage<V>> decorateAsyncCallable(
+            Callable<CompletionStage<V>> delegate) {
+        return new AsyncCallableWrapper<>((InqAsyncDecorator<Void, V>) this, delegate);
+    }
 
-  /**
-   * Wraps an async function in an {@link AsyncFunctionWrapper}.
-   * Fully type-safe — {@code A} and {@code R} match the function's types.
-   *
-   * @param delegate the async operation to protect
-   * @return a decorated function that returns {@code CompletionStage<R>} on each {@code apply()}
-   */
-  default Function<A, CompletionStage<R>> decorateAsyncFunction(
-      Function<A, CompletionStage<R>> delegate) {
-    return new AsyncFunctionWrapper<>(this, delegate);
-  }
+    /**
+     * Wraps an async function in an {@link AsyncFunctionWrapper}.
+     * Fully type-safe — {@code A} and {@code R} match the function's types.
+     *
+     * @param delegate the async operation to protect
+     * @return a decorated function that returns {@code CompletionStage<R>} on each {@code apply()}
+     */
+    default Function<A, CompletionStage<R>> decorateAsyncFunction(
+            Function<A, CompletionStage<R>> delegate) {
+        return new AsyncFunctionWrapper<>(this, delegate);
+    }
 
-  /**
-   * Wraps an async proxy execution in an {@link AsyncJoinPointWrapper}.
-   *
-   * @param delegate the async proxy operation to protect
-   * @param <T>      the result type
-   * @return a decorated proxy execution that returns {@code CompletionStage<T>} on each {@code proceed()}
-   */
-  @SuppressWarnings("unchecked")
-  default <T> JoinPointExecutor<CompletionStage<T>> decorateAsyncJoinPoint(
-      JoinPointExecutor<CompletionStage<T>> delegate) {
-    return new AsyncJoinPointWrapper<>((InqAsyncDecorator<Void, T>) this, delegate);
-  }
+    /**
+     * Wraps an async proxy execution in an {@link AsyncJoinPointWrapper}.
+     *
+     * @param delegate the async proxy operation to protect
+     * @param <T>      the result type
+     * @return a decorated proxy execution that returns {@code CompletionStage<T>} on each {@code proceed()}
+     */
+    @SuppressWarnings("unchecked")
+    default <T> JoinPointExecutor<CompletionStage<T>> decorateAsyncJoinPoint(
+            JoinPointExecutor<CompletionStage<T>> delegate) {
+        return new AsyncJoinPointWrapper<>((InqAsyncDecorator<Void, T>) this, delegate);
+    }
 }

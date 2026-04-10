@@ -13,29 +13,29 @@ import java.util.function.Supplier;
  * @param <T> the result type carried by the CompletionStage
  */
 public class AsyncSupplierWrapper<T>
-    extends AsyncBaseWrapper<Supplier<CompletionStage<T>>, Void, T, AsyncSupplierWrapper<T>>
-    implements Supplier<CompletionStage<T>> {
+        extends AsyncBaseWrapper<Supplier<CompletionStage<T>>, Void, T, AsyncSupplierWrapper<T>>
+        implements Supplier<CompletionStage<T>> {
 
-  public AsyncSupplierWrapper(InqAsyncDecorator<Void, T> decorator,
-                              Supplier<CompletionStage<T>> delegate) {
-    super(decorator, delegate, coreFor(delegate));
-  }
+    public AsyncSupplierWrapper(InqAsyncDecorator<Void, T> decorator,
+                                Supplier<CompletionStage<T>> delegate) {
+        super(decorator, delegate, coreFor(delegate));
+    }
 
-  public AsyncSupplierWrapper(String name, Supplier<CompletionStage<T>> delegate,
-                              AsyncLayerAction<Void, T> layerAction) {
-    super(name, delegate, coreFor(delegate), layerAction);
-  }
+    public AsyncSupplierWrapper(String name, Supplier<CompletionStage<T>> delegate,
+                                AsyncLayerAction<Void, T> layerAction) {
+        super(name, delegate, coreFor(delegate), layerAction);
+    }
 
-  public AsyncSupplierWrapper(String name, Supplier<CompletionStage<T>> delegate) {
-    this(name, delegate, AsyncLayerAction.passThrough());
-  }
+    public AsyncSupplierWrapper(String name, Supplier<CompletionStage<T>> delegate) {
+        this(name, delegate, AsyncLayerAction.passThrough());
+    }
 
-  private static <T> InternalAsyncExecutor<Void, T> coreFor(Supplier<CompletionStage<T>> delegate) {
-    return (chainId, callId, arg) -> delegate.get();
-  }
+    private static <T> InternalAsyncExecutor<Void, T> coreFor(Supplier<CompletionStage<T>> delegate) {
+        return (chainId, callId, arg) -> delegate.get();
+    }
 
-  @Override
-  public CompletionStage<T> get() {
-    return initiateChain(null);
-  }
+    @Override
+    public CompletionStage<T> get() {
+        return initiateChain(null);
+    }
 }

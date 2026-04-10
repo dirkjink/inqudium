@@ -6,13 +6,18 @@
 
 ## Context
 
-Resilience4J is the de facto standard for fault tolerance in Spring Boot applications. Thousands of production systems use its annotations (`@CircuitBreaker`, `@Retry`, `@RateLimiter`, `@Bulkhead`, `@TimeLimiter`), its YAML configuration (`resilience4j.*` properties), and its Micrometer metrics (exposed under `resilience4j.*` metric names). Grafana dashboards, Prometheus alerting rules, and Datadog monitors are built around these metric names.
+Resilience4J is the de facto standard for fault tolerance in Spring Boot applications. Thousands of production systems
+use its annotations (`@CircuitBreaker`, `@Retry`, `@RateLimiter`, `@Bulkhead`, `@TimeLimiter`), its YAML configuration (
+`resilience4j.*` properties), and its Micrometer metrics (exposed under `resilience4j.*` metric names). Grafana
+dashboards, Prometheus alerting rules, and Datadog monitors are built around these metric names.
 
-Migrating away from Resilience4J requires changing annotations, rewriting YAML, and updating every dashboard. This migration cost prevents adoption of alternatives — even when the alternative is technically superior.
+Migrating away from Resilience4J requires changing annotations, rewriting YAML, and updating every dashboard. This
+migration cost prevents adoption of alternatives — even when the alternative is technically superior.
 
 ## Decision
 
-We provide `inqudium-compat-resilience4j`, a compatibility module (ADR-001) that makes migration a **dependency swap with zero code changes**.
+We provide `inqudium-compat-resilience4j`, a compatibility module (ADR-001) that makes migration a **dependency swap
+with zero code changes**.
 
 ### Four compatibility layers
 
@@ -26,7 +31,8 @@ An AOP interceptor recognizes the five Resilience4J annotations and routes them 
 - `@io.github.resilience4j.bulkhead.annotation.Bulkhead` → Inqudium Bulkhead
 - `@io.github.resilience4j.timelimiter.annotation.TimeLimiter` → Inqudium Time Limiter
 
-The interceptor reads the `name`, `fallbackMethod`, and other annotation attributes and maps them to equivalent Inqudium configuration.
+The interceptor reads the `name`, `fallbackMethod`, and other annotation attributes and maps them to equivalent Inqudium
+configuration.
 
 **2. Property compatibility**
 
@@ -43,11 +49,14 @@ resilience4j:
         sliding-window-size: 10
 ```
 
-Every Resilience4J property is mapped to its Inqudium equivalent. Properties that have no Inqudium equivalent (if any) are logged as warnings at startup.
+Every Resilience4J property is mapped to its Inqudium equivalent. Properties that have no Inqudium equivalent (if any)
+are logged as warnings at startup.
 
 **3. Metric name compatibility**
 
-Micrometer metrics are exposed under the original `resilience4j.*` names in addition to the native `inqudium.*` names. This is implemented as a metric name alias — both names point to the same underlying meter. Existing Grafana dashboards and Prometheus alerts continue working without changes.
+Micrometer metrics are exposed under the original `resilience4j.*` names in addition to the native `inqudium.*` names.
+This is implemented as a metric name alias — both names point to the same underlying meter. Existing Grafana dashboards
+and Prometheus alerts continue working without changes.
 
 The alias can be disabled via configuration once the consumer has updated their dashboards:
 
@@ -61,7 +70,9 @@ inqudium:
 
 **4. Registry API compatibility**
 
-Code that programmatically accesses `CircuitBreakerRegistry.of(...)` through the Resilience4J API receives an adapter that delegates to `InqRegistry`. This covers edge cases where consumers interact with the registry directly rather than through annotations.
+Code that programmatically accesses `CircuitBreakerRegistry.of(...)` through the Resilience4J API receives an adapter
+that delegates to `InqRegistry`. This covers edge cases where consumers interact with the registry directly rather than
+through annotations.
 
 ### Migration path
 
@@ -81,21 +92,29 @@ Each step is independent. A project can stay at step 1 indefinitely.
 - It does not support Resilience4J's internal extension points (custom `CircuitBreakerStateMachineFactory` etc.).
 - It does not provide runtime co-existence with actual Resilience4J on the classpath — one or the other, not both.
 
-For projects that want Resilience4J's element ordering during migration, `PipelineOrder.RESILIENCE4J` is available as a pipeline composition strategy (ADR-017). This preserves the behavioral semantics of R4J's aspect ordering while running on Inqudium's engine.
+For projects that want Resilience4J's element ordering during migration, `PipelineOrder.RESILIENCE4J` is available as a
+pipeline composition strategy (ADR-017). This preserves the behavioral semantics of R4J's aspect ordering while running
+on Inqudium's engine.
 
 ## Consequences
 
 **Positive:**
+
 - Zero-friction adoption path. The cost of trying Inqudium in an existing project is exactly one line in the build file.
 - Existing operational infrastructure (dashboards, alerts) continues to work throughout the migration.
 - Incremental migration reduces risk — teams can migrate annotation by annotation, service by service.
 
 **Negative:**
-- Maintenance burden: the compat module must track Resilience4J's annotation and property API as new versions are released.
+
+- Maintenance burden: the compat module must track Resilience4J's annotation and property API as new versions are
+  released.
 - Potential confusion: two sets of annotations and two sets of property keys work simultaneously during migration.
-- The compat module cannot achieve 100% behavioral parity with Resilience4J for every edge case — differences must be documented.
+- The compat module cannot achieve 100% behavioral parity with Resilience4J for every edge case — differences must be
+  documented.
 
 **Risk mitigation:**
-- The compat module has its own comprehensive test suite that verifies Resilience4J annotations trigger the correct Inqudium behavior.
+
+- The compat module has its own comprehensive test suite that verifies Resilience4J annotations trigger the correct
+  Inqudium behavior.
 - Property mapping fidelity tests compare R4J YAML parsing against Inqudium config output for every property.
 - A migration guide documents known behavioral differences.

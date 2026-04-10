@@ -11,15 +11,15 @@ package eu.inqudium.core.element.circuitbreaker;
  * @param permitted whether the call may proceed
  */
 public record PermissionResult(
-    CircuitBreakerSnapshot snapshot,
-    boolean permitted
+        CircuitBreakerSnapshot snapshot,
+        boolean permitted
 ) {
 
-  public static PermissionResult permitted(CircuitBreakerSnapshot snapshot) {
-    return new PermissionResult(snapshot, true);
-  }
+    public static PermissionResult permitted(CircuitBreakerSnapshot snapshot) {
+        return new PermissionResult(snapshot, true);
+    }
 
-  public static PermissionResult rejected(CircuitBreakerSnapshot snapshot) {
-    return new PermissionResult(snapshot, false);
-  }
+    public static PermissionResult rejected(CircuitBreakerSnapshot snapshot) {
+        return new PermissionResult(snapshot, false);
+    }
 }

@@ -25,13 +25,13 @@ import eu.inqudium.core.config.ConfigExtension;
  * @see TimeBasedErrorRateConfigBuilder
  */
 public record TimeBasedErrorRateConfig(
-    double failureRatePercent,
-    int windowSizeInSeconds,
-    int minimumNumberOfCalls
+        double failureRatePercent,
+        int windowSizeInSeconds,
+        int minimumNumberOfCalls
 ) implements ConfigExtension<TimeBasedErrorRateConfig> {
 
-  @Override
-  public TimeBasedErrorRateConfig self() {
-    return this;
-  }
+    @Override
+    public TimeBasedErrorRateConfig self() {
+        return this;
+    }
 }

@@ -59,162 +59,162 @@ import java.util.function.LongFunction;
  * @param lastUpdateNanos      the nanosecond timestamp of the most recent recording
  */
 public record ContinuousTimeEwmaMetrics(
-    double failureRatePercent,
-    ContinuousTimeEwma ewmaCalculator,
-    Duration timeConstant,
-    int minimumNumberOfCalls,
-    double currentRate,
-    int callsCount,
-    long lastUpdateNanos
+        double failureRatePercent,
+        ContinuousTimeEwma ewmaCalculator,
+        Duration timeConstant,
+        int minimumNumberOfCalls,
+        double currentRate,
+        int callsCount,
+        long lastUpdateNanos
 ) implements FailureMetrics {
 
-  /**
-   * Creates an initial instance with a zero failure rate, anchored at the given time.
-   *
-   * @param failureRatePercent   the failure rate percentage (1–100) at which the circuit trips
-   * @param timeConstant         the EWMA time constant (tau); controls decay speed
-   * @param minimumNumberOfCalls minimum number of calls before evaluation; must be > 0
-   * @param nowNanos             the initial timestamp anchor
-   * @return a fresh instance ready to accept outcomes
-   * @throws IllegalArgumentException if {@code minimumNumberOfCalls <= 0}
-   */
-  public static ContinuousTimeEwmaMetrics initial(
-      double failureRatePercent,
-      Duration timeConstant,
-      int minimumNumberOfCalls,
-      long nowNanos
-  ) {
-    if (minimumNumberOfCalls <= 0) {
-      throw new IllegalArgumentException("minimumNumberOfCalls must be greater than 0");
+    /**
+     * Creates an initial instance with a zero failure rate, anchored at the given time.
+     *
+     * @param failureRatePercent   the failure rate percentage (1–100) at which the circuit trips
+     * @param timeConstant         the EWMA time constant (tau); controls decay speed
+     * @param minimumNumberOfCalls minimum number of calls before evaluation; must be > 0
+     * @param nowNanos             the initial timestamp anchor
+     * @return a fresh instance ready to accept outcomes
+     * @throws IllegalArgumentException if {@code minimumNumberOfCalls <= 0}
+     */
+    public static ContinuousTimeEwmaMetrics initial(
+            double failureRatePercent,
+            Duration timeConstant,
+            int minimumNumberOfCalls,
+            long nowNanos
+    ) {
+        if (minimumNumberOfCalls <= 0) {
+            throw new IllegalArgumentException("minimumNumberOfCalls must be greater than 0");
+        }
+        return new ContinuousTimeEwmaMetrics(
+                failureRatePercent,
+                new ContinuousTimeEwma(timeConstant),
+                timeConstant,
+                minimumNumberOfCalls,
+                0.0,
+                0,
+                nowNanos
+        );
     }
-    return new ContinuousTimeEwmaMetrics(
-        failureRatePercent,
-        new ContinuousTimeEwma(timeConstant),
-        timeConstant,
-        minimumNumberOfCalls,
-        0.0,
-        0,
-        nowNanos
-    );
-  }
 
-  /**
-   * Returns a factory function that produces a fresh instance of this metrics strategy.
-   *
-   * @return a {@link LongFunction} that accepts a nanosecond timestamp and produces a
-   * fresh {@link FailureMetrics} instance with identical configuration
-   */
-  @Override
-  public LongFunction<FailureMetrics> metricsFactory() {
-    return (long nowNanos) -> ContinuousTimeEwmaMetrics.initial(
-        failureRatePercent,
-        timeConstant,
-        minimumNumberOfCalls,
-        nowNanos
-    );
-  }
-
-  /**
-   * Records a successful call (sample = 0.0), pulling the EWMA rate downward.
-   *
-   * @param nowNanos the current timestamp; used to compute time-based decay since the last update
-   */
-  @Override
-  public FailureMetrics recordSuccess(long nowNanos) {
-    return recordOutcome(nowNanos, 0.0);
-  }
-
-  /**
-   * Records a failed call (sample = 1.0), pulling the EWMA rate upward.
-   *
-   * @param nowNanos the current timestamp; used to compute time-based decay since the last update
-   */
-  @Override
-  public FailureMetrics recordFailure(long nowNanos) {
-    return recordOutcome(nowNanos, 1.0);
-  }
-
-  /**
-   * Internal helper that applies a continuous-time EWMA update.
-   *
-   * <p>The EWMA calculator uses the elapsed time between {@code lastUpdateNanos} and
-   * {@code nowNanos} to determine the decay factor, then blends the new sample into
-   * the running rate.
-   *
-   * <p>The {@code lastUpdateNanos} is updated to the maximum of the old and new timestamps,
-   * guarding against clock regression.
-   *
-   * @param nowNanos the current timestamp in nanoseconds
-   * @param sample   0.0 for success, 1.0 for failure
-   * @return a new instance with the updated rate, call count, and timestamp
-   */
-  private ContinuousTimeEwmaMetrics recordOutcome(long nowNanos, double sample) {
-    double newRate = ewmaCalculator.calculate(currentRate, lastUpdateNanos, nowNanos, sample);
-    int newCount = Math.min(minimumNumberOfCalls, callsCount + 1);
-    long newLastUpdateNanos = Math.max(lastUpdateNanos, nowNanos);
-
-    return new ContinuousTimeEwmaMetrics(
-        failureRatePercent,
-        ewmaCalculator,
-        timeConstant,
-        minimumNumberOfCalls,
-        newRate,
-        newCount,
-        newLastUpdateNanos
-    );
-  }
-
-  /**
-   * Evaluates whether the time-decayed failure rate meets or exceeds the threshold.
-   *
-   * <p>First checks the minimum-calls guard. Then decays the current rate forward to
-   * {@code nowNanos} by computing the EWMA with a 0.0 sample (pure decay, no new data).
-   * This allows the rate to decrease naturally during idle periods.
-   *
-   * @param nowNanos the current timestamp in nanoseconds
-   * @return {@code true} if the decayed rate >= threshold and minimum calls have been met
-   */
-  @Override
-  public boolean isThresholdReached(long nowNanos) {
-    if (callsCount < minimumNumberOfCalls) {
-      return false;
+    /**
+     * Returns a factory function that produces a fresh instance of this metrics strategy.
+     *
+     * @return a {@link LongFunction} that accepts a nanosecond timestamp and produces a
+     * fresh {@link FailureMetrics} instance with identical configuration
+     */
+    @Override
+    public LongFunction<FailureMetrics> metricsFactory() {
+        return (long nowNanos) -> ContinuousTimeEwmaMetrics.initial(
+                failureRatePercent,
+                timeConstant,
+                minimumNumberOfCalls,
+                nowNanos
+        );
     }
-    // Decay the rate to the current time without adding a new sample
-    double decayedRate = ewmaCalculator.calculate(currentRate, lastUpdateNanos, nowNanos, 0.0);
-    double rateThreshold = failureRatePercent / 100.0;
-    return decayedRate >= rateThreshold;
-  }
 
-  /**
-   * Resets the EWMA rate to 0.0, the call count to 0, and re-anchors the timestamp.
-   *
-   * @param nowNanos the new timestamp anchor
-   */
-  @Override
-  public FailureMetrics reset(long nowNanos) {
-    return new ContinuousTimeEwmaMetrics(
-        failureRatePercent,
-        ewmaCalculator,
-        timeConstant,
-        minimumNumberOfCalls,
-        0.0,
-        0,
-        nowNanos
-    );
-  }
+    /**
+     * Records a successful call (sample = 0.0), pulling the EWMA rate downward.
+     *
+     * @param nowNanos the current timestamp; used to compute time-based decay since the last update
+     */
+    @Override
+    public FailureMetrics recordSuccess(long nowNanos) {
+        return recordOutcome(nowNanos, 0.0);
+    }
 
-  /**
-   * Produces a diagnostic message showing the time-decayed EWMA rate, threshold, and tau.
-   * The rate is decayed to {@code nowNanos} for an accurate snapshot.
-   *
-   * @param nowNanos the current timestamp in nanoseconds
-   */
-  @Override
-  public String getTripReason(long nowNanos) {
-    double decayedRate = ewmaCalculator.calculate(currentRate, lastUpdateNanos, nowNanos, 0.0);
-    return String.format(
-        Locale.ROOT, "Continuous-time EWMA threshold reached: " +
-            "Current failure rate is %.1f%% (Threshold: %f%%). Time Constant (Tau): %s.",
-        decayedRate * 100.0, failureRatePercent, ewmaCalculator.tauDurationNanos());
-  }
+    /**
+     * Records a failed call (sample = 1.0), pulling the EWMA rate upward.
+     *
+     * @param nowNanos the current timestamp; used to compute time-based decay since the last update
+     */
+    @Override
+    public FailureMetrics recordFailure(long nowNanos) {
+        return recordOutcome(nowNanos, 1.0);
+    }
+
+    /**
+     * Internal helper that applies a continuous-time EWMA update.
+     *
+     * <p>The EWMA calculator uses the elapsed time between {@code lastUpdateNanos} and
+     * {@code nowNanos} to determine the decay factor, then blends the new sample into
+     * the running rate.
+     *
+     * <p>The {@code lastUpdateNanos} is updated to the maximum of the old and new timestamps,
+     * guarding against clock regression.
+     *
+     * @param nowNanos the current timestamp in nanoseconds
+     * @param sample   0.0 for success, 1.0 for failure
+     * @return a new instance with the updated rate, call count, and timestamp
+     */
+    private ContinuousTimeEwmaMetrics recordOutcome(long nowNanos, double sample) {
+        double newRate = ewmaCalculator.calculate(currentRate, lastUpdateNanos, nowNanos, sample);
+        int newCount = Math.min(minimumNumberOfCalls, callsCount + 1);
+        long newLastUpdateNanos = Math.max(lastUpdateNanos, nowNanos);
+
+        return new ContinuousTimeEwmaMetrics(
+                failureRatePercent,
+                ewmaCalculator,
+                timeConstant,
+                minimumNumberOfCalls,
+                newRate,
+                newCount,
+                newLastUpdateNanos
+        );
+    }
+
+    /**
+     * Evaluates whether the time-decayed failure rate meets or exceeds the threshold.
+     *
+     * <p>First checks the minimum-calls guard. Then decays the current rate forward to
+     * {@code nowNanos} by computing the EWMA with a 0.0 sample (pure decay, no new data).
+     * This allows the rate to decrease naturally during idle periods.
+     *
+     * @param nowNanos the current timestamp in nanoseconds
+     * @return {@code true} if the decayed rate >= threshold and minimum calls have been met
+     */
+    @Override
+    public boolean isThresholdReached(long nowNanos) {
+        if (callsCount < minimumNumberOfCalls) {
+            return false;
+        }
+        // Decay the rate to the current time without adding a new sample
+        double decayedRate = ewmaCalculator.calculate(currentRate, lastUpdateNanos, nowNanos, 0.0);
+        double rateThreshold = failureRatePercent / 100.0;
+        return decayedRate >= rateThreshold;
+    }
+
+    /**
+     * Resets the EWMA rate to 0.0, the call count to 0, and re-anchors the timestamp.
+     *
+     * @param nowNanos the new timestamp anchor
+     */
+    @Override
+    public FailureMetrics reset(long nowNanos) {
+        return new ContinuousTimeEwmaMetrics(
+                failureRatePercent,
+                ewmaCalculator,
+                timeConstant,
+                minimumNumberOfCalls,
+                0.0,
+                0,
+                nowNanos
+        );
+    }
+
+    /**
+     * Produces a diagnostic message showing the time-decayed EWMA rate, threshold, and tau.
+     * The rate is decayed to {@code nowNanos} for an accurate snapshot.
+     *
+     * @param nowNanos the current timestamp in nanoseconds
+     */
+    @Override
+    public String getTripReason(long nowNanos) {
+        double decayedRate = ewmaCalculator.calculate(currentRate, lastUpdateNanos, nowNanos, 0.0);
+        return String.format(
+                Locale.ROOT, "Continuous-time EWMA threshold reached: " +
+                        "Current failure rate is %.1f%% (Threshold: %f%%). Time Constant (Tau): %s.",
+                decayedRate * 100.0, failureRatePercent, ewmaCalculator.tauDurationNanos());
+    }
 }

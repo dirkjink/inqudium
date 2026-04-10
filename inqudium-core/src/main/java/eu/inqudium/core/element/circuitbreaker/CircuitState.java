@@ -13,24 +13,24 @@ package eu.inqudium.core.element.circuitbreaker;
  */
 public enum CircuitState {
 
-  /**
-   * Circuit is closed — all calls are permitted.
-   * Failures are tracked, and if the failure threshold is reached,
-   * the circuit transitions to {@link #OPEN}.
-   */
-  CLOSED,
+    /**
+     * Circuit is closed — all calls are permitted.
+     * Failures are tracked, and if the failure threshold is reached,
+     * the circuit transitions to {@link #OPEN}.
+     */
+    CLOSED,
 
-  /**
-   * Circuit is open — all calls are rejected immediately.
-   * After the configured wait duration expires, the circuit
-   * transitions to {@link #HALF_OPEN}.
-   */
-  OPEN,
+    /**
+     * Circuit is open — all calls are rejected immediately.
+     * After the configured wait duration expires, the circuit
+     * transitions to {@link #HALF_OPEN}.
+     */
+    OPEN,
 
-  /**
-   * Circuit is half-open — a limited number of probe calls are permitted.
-   * If enough succeed, the circuit transitions back to {@link #CLOSED}.
-   * If any fails, it transitions back to {@link #OPEN}.
-   */
-  HALF_OPEN
+    /**
+     * Circuit is half-open — a limited number of probe calls are permitted.
+     * If enough succeed, the circuit transitions back to {@link #CLOSED}.
+     * If any fails, it transitions back to {@link #OPEN}.
+     */
+    HALF_OPEN
 }

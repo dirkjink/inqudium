@@ -6,10 +6,10 @@ import eu.inqudium.imperative.bulkhead.config.InqImperativeBulkheadConfigBuilder
 
 public final class Resilience {
 
-  private Resilience() {
-  }
+    private Resilience() {
+    }
 
-  public static BulkheadNaming isolateWithBulkhead() {
-    return new DefaultBulkheadProtection(InqImperativeBulkheadConfigBuilder.bulkhead());
-  }
+    public static BulkheadNaming isolateWithBulkhead() {
+        return new DefaultBulkheadProtection(InqImperativeBulkheadConfigBuilder.bulkhead());
+    }
 }

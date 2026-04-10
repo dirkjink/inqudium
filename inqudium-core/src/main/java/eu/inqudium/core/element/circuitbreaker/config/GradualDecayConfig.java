@@ -15,12 +15,12 @@ import eu.inqudium.core.config.ConfigExtension;
  * @see GradualDecayConfigBuilder
  */
 public record GradualDecayConfig(
-    int maxFailureCount,
-    int initialFailureCount
+        int maxFailureCount,
+        int initialFailureCount
 ) implements ConfigExtension<GradualDecayConfig> {
 
-  @Override
-  public GradualDecayConfig self() {
-    return this;
-  }
+    @Override
+    public GradualDecayConfig self() {
+        return this;
+    }
 }

@@ -44,102 +44,102 @@ import java.time.Duration;
  * @since 0.2.0
  */
 public record InqPublisherConfig(
-    int softLimit,
-    int hardLimit,
-    Duration expiryCheckInterval,
-    boolean traceEnabled
+        int softLimit,
+        int hardLimit,
+        Duration expiryCheckInterval,
+        boolean traceEnabled
 ) {
 
-  /**
-   * Default soft limit threshold.
-   */
-  private static final int DEFAULT_SOFT_LIMIT = 256;
+    /**
+     * Default soft limit threshold.
+     */
+    private static final int DEFAULT_SOFT_LIMIT = 256;
 
-  /**
-   * Default interval between expiry sweeps.
-   */
-  private static final Duration DEFAULT_EXPIRY_CHECK_INTERVAL = Duration.ofSeconds(60);
+    /**
+     * Default interval between expiry sweeps.
+     */
+    private static final Duration DEFAULT_EXPIRY_CHECK_INTERVAL = Duration.ofSeconds(60);
 
-  /**
-   * Default configuration — warns at 256 consumers, no hard limit, 60s expiry check.
-   */
-  private static final InqPublisherConfig DEFAULT =
-      new InqPublisherConfig(DEFAULT_SOFT_LIMIT,
-          Integer.MAX_VALUE,
-          DEFAULT_EXPIRY_CHECK_INTERVAL,
-          false);
+    /**
+     * Default configuration — warns at 256 consumers, no hard limit, 60s expiry check.
+     */
+    private static final InqPublisherConfig DEFAULT =
+            new InqPublisherConfig(DEFAULT_SOFT_LIMIT,
+                    Integer.MAX_VALUE,
+                    DEFAULT_EXPIRY_CHECK_INTERVAL,
+                    false);
 
-  /**
-   * Validates all parameters on construction.
-   */
-  public InqPublisherConfig {
-    if (softLimit < 1) {
-      throw new IllegalArgumentException("softLimit must be >= 1, was: " + softLimit);
+    /**
+     * Validates all parameters on construction.
+     */
+    public InqPublisherConfig {
+        if (softLimit < 1) {
+            throw new IllegalArgumentException("softLimit must be >= 1, was: " + softLimit);
+        }
+        if (hardLimit < softLimit) {
+            throw new IllegalArgumentException(
+                    "hardLimit (" + hardLimit + ") must be >= softLimit (" + softLimit + ")");
+        }
+        if (expiryCheckInterval == null) {
+            throw new IllegalArgumentException("expiryCheckInterval must not be null");
+        }
+        if (expiryCheckInterval.isNegative() || expiryCheckInterval.isZero()) {
+            throw new IllegalArgumentException(
+                    "expiryCheckInterval must be positive, was: " + expiryCheckInterval);
+        }
     }
-    if (hardLimit < softLimit) {
-      throw new IllegalArgumentException(
-          "hardLimit (" + hardLimit + ") must be >= softLimit (" + softLimit + ")");
+
+    /**
+     * Returns the default configuration: soft limit 256, no hard limit, 60s expiry check.
+     *
+     * @return the default configuration
+     */
+    public static InqPublisherConfig defaultConfig() {
+        return DEFAULT;
     }
-    if (expiryCheckInterval == null) {
-      throw new IllegalArgumentException("expiryCheckInterval must not be null");
+
+    /**
+     * Creates a configuration with soft limit, hard limit, custom expiry interval,
+     * and trace flag.
+     *
+     * @param softLimit           the consumer count at which a warning is logged
+     * @param hardLimit           the consumer count at which new registrations are rejected
+     * @param expiryCheckInterval the interval between expiry sweeps
+     * @param traceEnabled        whether trace-level event publishing is enabled
+     * @return a new configuration
+     */
+    public static InqPublisherConfig of(int softLimit,
+                                        int hardLimit,
+                                        Duration expiryCheckInterval,
+                                        boolean traceEnabled) {
+        return new InqPublisherConfig(softLimit,
+                hardLimit,
+                expiryCheckInterval,
+                traceEnabled);
     }
-    if (expiryCheckInterval.isNegative() || expiryCheckInterval.isZero()) {
-      throw new IllegalArgumentException(
-          "expiryCheckInterval must be positive, was: " + expiryCheckInterval);
+
+    /**
+     * Creates a configuration with soft limit, hard limit, and custom expiry interval.
+     * Trace publishing is disabled.
+     *
+     * @param softLimit           the consumer count at which a warning is logged
+     * @param hardLimit           the consumer count at which new registrations are rejected
+     * @param expiryCheckInterval the interval between expiry sweeps
+     * @return a new configuration
+     */
+    public static InqPublisherConfig of(int softLimit,
+                                        int hardLimit,
+                                        Duration expiryCheckInterval) {
+        return new InqPublisherConfig(softLimit,
+                hardLimit,
+                expiryCheckInterval,
+                false);
     }
-  }
 
-  /**
-   * Returns the default configuration: soft limit 256, no hard limit, 60s expiry check.
-   *
-   * @return the default configuration
-   */
-  public static InqPublisherConfig defaultConfig() {
-    return DEFAULT;
-  }
-
-  /**
-   * Creates a configuration with soft limit, hard limit, custom expiry interval,
-   * and trace flag.
-   *
-   * @param softLimit           the consumer count at which a warning is logged
-   * @param hardLimit           the consumer count at which new registrations are rejected
-   * @param expiryCheckInterval the interval between expiry sweeps
-   * @param traceEnabled        whether trace-level event publishing is enabled
-   * @return a new configuration
-   */
-  public static InqPublisherConfig of(int softLimit,
-                                      int hardLimit,
-                                      Duration expiryCheckInterval,
-                                      boolean traceEnabled) {
-    return new InqPublisherConfig(softLimit,
-        hardLimit,
-        expiryCheckInterval,
-        traceEnabled);
-  }
-
-  /**
-   * Creates a configuration with soft limit, hard limit, and custom expiry interval.
-   * Trace publishing is disabled.
-   *
-   * @param softLimit           the consumer count at which a warning is logged
-   * @param hardLimit           the consumer count at which new registrations are rejected
-   * @param expiryCheckInterval the interval between expiry sweeps
-   * @return a new configuration
-   */
-  public static InqPublisherConfig of(int softLimit,
-                                      int hardLimit,
-                                      Duration expiryCheckInterval) {
-    return new InqPublisherConfig(softLimit,
-        hardLimit,
-        expiryCheckInterval,
-        false);
-  }
-
-  /**
-   * Returns {@code true} if a hard limit is configured (not {@link Integer#MAX_VALUE}).
-   */
-  public boolean hasHardLimit() {
-    return hardLimit != Integer.MAX_VALUE;
-  }
+    /**
+     * Returns {@code true} if a hard limit is configured (not {@link Integer#MAX_VALUE}).
+     */
+    public boolean hasHardLimit() {
+        return hardLimit != Integer.MAX_VALUE;
+    }
 }

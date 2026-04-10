@@ -1,6 +1,7 @@
 # Context Propagation
 
-When a resilience element executes a call on a different thread or scope (e.g., a TimeLimiter scheduling on a virtual thread), diagnostic context (MDC, OpenTelemetry Baggage) must propagate.
+When a resilience element executes a call on a different thread or scope (e.g., a TimeLimiter scheduling on a virtual
+thread), diagnostic context (MDC, OpenTelemetry Baggage) must propagate.
 
 ## SPI
 
@@ -19,12 +20,13 @@ try (var scope = InqContextPropagation.activateFor(callId, elementName, elementT
 
 ## Bridge modules
 
-Bridge modules provide propagator implementations. Adding the JAR to the classpath is sufficient — `ServiceLoader` handles registration.
+Bridge modules provide propagator implementations. Adding the JAR to the classpath is sufficient — `ServiceLoader`
+handles registration.
 
-| Module | Context system |
-|--------|---------------|
-| `inqudium-context-slf4j` | SLF4J MDC |
-| `inqudium-context-otel` | OpenTelemetry Baggage (planned) |
+| Module                   | Context system                  |
+|--------------------------|---------------------------------|
+| `inqudium-context-slf4j` | SLF4J MDC                       |
+| `inqudium-context-otel`  | OpenTelemetry Baggage (planned) |
 
 ## MDC entries
 

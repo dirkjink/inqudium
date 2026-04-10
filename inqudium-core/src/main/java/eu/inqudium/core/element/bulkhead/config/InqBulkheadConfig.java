@@ -12,54 +12,54 @@ import eu.inqudium.core.event.InqEventPublisher;
 import java.time.Duration;
 
 public record InqBulkheadConfig(
-    GeneralConfig general,
-    InqElementCommonConfig common,
-    int maxConcurrentCalls,
-    BulkheadStrategy strategy,
-    Duration maxWaitDuration,
-    InqLimitAlgorithm limitAlgorithm,
-    BulkheadEventConfig eventConfig
+        GeneralConfig general,
+        InqElementCommonConfig common,
+        int maxConcurrentCalls,
+        BulkheadStrategy strategy,
+        Duration maxWaitDuration,
+        InqLimitAlgorithm limitAlgorithm,
+        BulkheadEventConfig eventConfig
 ) implements InqElementConfig, ConfigExtension<InqBulkheadConfig> {
-  @Override
-  public String name() {
-    return common.name();
-  }
-
-  @Override
-  public InqElementType elementType() {
-    return common.elementType();
-  }
-
-  @Override
-  public InqEventPublisher eventPublisher() {
-    return common.eventPublisher();
-  }
-
-  @Override
-  public Boolean enableExceptionOptimization() {
-    return common.enableExceptionOptimization();
-  }
-
-  @Override
-  public InqBulkheadConfig self() {
-    return this;
-  }
-
-  @Override
-  public InqBulkheadConfig inference() {
-    BulkheadEventConfig eventConfigInference = eventConfig;
-    if (eventConfig == null) {
-      eventConfigInference = BulkheadEventConfig.standard();
+    @Override
+    public String name() {
+        return common.name();
     }
-    return new InqBulkheadConfig(
-        this.general,
-        this.common,
-        this.maxConcurrentCalls,
-        this.strategy,
-        this.maxWaitDuration,
-        this.limitAlgorithm,
-        eventConfigInference
-    );
-  }
+
+    @Override
+    public InqElementType elementType() {
+        return common.elementType();
+    }
+
+    @Override
+    public InqEventPublisher eventPublisher() {
+        return common.eventPublisher();
+    }
+
+    @Override
+    public Boolean enableExceptionOptimization() {
+        return common.enableExceptionOptimization();
+    }
+
+    @Override
+    public InqBulkheadConfig self() {
+        return this;
+    }
+
+    @Override
+    public InqBulkheadConfig inference() {
+        BulkheadEventConfig eventConfigInference = eventConfig;
+        if (eventConfig == null) {
+            eventConfigInference = BulkheadEventConfig.standard();
+        }
+        return new InqBulkheadConfig(
+                this.general,
+                this.common,
+                this.maxConcurrentCalls,
+                this.strategy,
+                this.maxWaitDuration,
+                this.limitAlgorithm,
+                eventConfigInference
+        );
+    }
 }
 

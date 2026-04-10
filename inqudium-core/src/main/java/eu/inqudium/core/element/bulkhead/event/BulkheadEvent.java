@@ -11,7 +11,7 @@ import java.time.Instant;
  * @since 0.1.0
  */
 public abstract class BulkheadEvent extends InqEvent {
-  protected BulkheadEvent(long chainId, long callId, String elementName, Instant timestamp) {
-    super(chainId, callId, elementName, InqElementType.BULKHEAD, timestamp);
-  }
+    protected BulkheadEvent(long chainId, long callId, String elementName, Instant timestamp) {
+        super(chainId, callId, elementName, InqElementType.BULKHEAD, timestamp);
+    }
 }

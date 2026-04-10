@@ -17,15 +17,15 @@ import java.util.concurrent.atomic.AtomicLong;
  * <p>This class is a stateless utility holder — it cannot be instantiated.</p>
  */
 public final class ChainIdGenerator {
-  /**
-   * Global counter for chain IDs — unique per JVM, monotonically increasing.
-   * Starts at 0; the first chain created gets ID 1.
-   */
-  public static final AtomicLong CHAIN_ID_COUNTER = new AtomicLong();
+    /**
+     * Global counter for chain IDs — unique per JVM, monotonically increasing.
+     * Starts at 0; the first chain created gets ID 1.
+     */
+    public static final AtomicLong CHAIN_ID_COUNTER = new AtomicLong();
 
-  /**
-   * Prevent instantiation — this is a utility class.
-   */
-  private ChainIdGenerator() {
-  }
+    /**
+     * Prevent instantiation — this is a utility class.
+     */
+    private ChainIdGenerator() {
+    }
 }

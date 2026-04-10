@@ -16,41 +16,41 @@ import java.time.Instant;
  */
 public final class TrafficShaperCore {
 
-  private TrafficShaperCore() {
-    // Utility class — not instantiable
-  }
+    private TrafficShaperCore() {
+        // Utility class — not instantiable
+    }
 
-  public static <S extends SchedulingState> ThrottlePermission<S> schedule(
-      S state, TrafficShaperConfig<S> config, Instant now) {
-    return config.strategy().schedule(state, config, now);
-  }
+    public static <S extends SchedulingState> ThrottlePermission<S> schedule(
+            S state, TrafficShaperConfig<S> config, Instant now) {
+        return config.strategy().schedule(state, config, now);
+    }
 
-  public static <S extends SchedulingState> S recordExecution(
-      S state, TrafficShaperConfig<S> config) {
-    return config.strategy().recordExecution(state);
-  }
+    public static <S extends SchedulingState> S recordExecution(
+            S state, TrafficShaperConfig<S> config) {
+        return config.strategy().recordExecution(state);
+    }
 
-  public static <S extends SchedulingState> S reset(
-      S state, TrafficShaperConfig<S> config, Instant now) {
-    return config.strategy().reset(state, config, now);
-  }
+    public static <S extends SchedulingState> S reset(
+            S state, TrafficShaperConfig<S> config, Instant now) {
+        return config.strategy().reset(state, config, now);
+    }
 
-  public static <S extends SchedulingState> Duration estimateWait(
-      S state, TrafficShaperConfig<S> config, Instant now) {
-    return config.strategy().estimateWait(state, config, now);
-  }
+    public static <S extends SchedulingState> Duration estimateWait(
+            S state, TrafficShaperConfig<S> config, Instant now) {
+        return config.strategy().estimateWait(state, config, now);
+    }
 
-  public static <S extends SchedulingState> int queueDepth(
-      S state, TrafficShaperConfig<S> config) {
-    return config.strategy().queueDepth(state);
-  }
+    public static <S extends SchedulingState> int queueDepth(
+            S state, TrafficShaperConfig<S> config) {
+        return config.strategy().queueDepth(state);
+    }
 
-  public static <S extends SchedulingState> boolean isUnboundedQueueWarning(
-      S state, TrafficShaperConfig<S> config, Instant now) {
-    return config.strategy().isUnboundedQueueWarning(state, config, now);
-  }
+    public static <S extends SchedulingState> boolean isUnboundedQueueWarning(
+            S state, TrafficShaperConfig<S> config, Instant now) {
+        return config.strategy().isUnboundedQueueWarning(state, config, now);
+    }
 
-  public static double currentRatePerSecond(TrafficShaperConfig<?> config) {
-    return config.ratePerSecond();
-  }
+    public static double currentRatePerSecond(TrafficShaperConfig<?> config) {
+        return config.ratePerSecond();
+    }
 }

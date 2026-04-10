@@ -27,24 +27,24 @@ package eu.inqudium.core.config;
  */
 public interface ConfigExtension<C extends ConfigExtension<C>> {
 
-  /**
-   * Returns a version of this configuration with all defaults applied and computed
-   * fields derived. Called by the framework during assembly, after user-provided
-   * values have been set but before the configuration is sealed.
-   *
-   * <p>The default implementation performs no inference and returns {@link #self()}.
-   *
-   * @return the inferred configuration; may be a new instance with defaults filled in
-   */
-  default C inference() {
-    return self();
-  }
+    /**
+     * Returns a version of this configuration with all defaults applied and computed
+     * fields derived. Called by the framework during assembly, after user-provided
+     * values have been set but before the configuration is sealed.
+     *
+     * <p>The default implementation performs no inference and returns {@link #self()}.
+     *
+     * @return the inferred configuration; may be a new instance with defaults filled in
+     */
+    default C inference() {
+        return self();
+    }
 
-  /**
-   * Returns {@code this} typed as the concrete configuration type.
-   * Required by the self-type pattern to avoid unchecked casts.
-   *
-   * @return {@code this}
-   */
-  C self();
+    /**
+     * Returns {@code this} typed as the concrete configuration type.
+     * Required by the self-type pattern to avoid unchecked casts.
+     *
+     * @return {@code this}
+     */
+    C self();
 }

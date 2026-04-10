@@ -37,82 +37,82 @@ import java.util.Objects;
  */
 public class GeneralConfigBuilder {
 
-  private InqClock clock = CachedInqClock.getDefault();
-  private InqNanoTimeSource nanoTimeSource = InqNanoTimeSource.system();
-  private InqCompatibility compatibility = InqCompatibility.ofDefaults();
-  private LoggerFactory loggerFactory = LoggerFactory.NO_OP_LOGGER_FACTORY;
+    private InqClock clock = CachedInqClock.getDefault();
+    private InqNanoTimeSource nanoTimeSource = InqNanoTimeSource.system();
+    private InqCompatibility compatibility = InqCompatibility.ofDefaults();
+    private LoggerFactory loggerFactory = LoggerFactory.NO_OP_LOGGER_FACTORY;
 
-  /**
-   * Sets the wall-clock implementation. Used for human-readable timestamps in logging
-   * and event metadata.
-   *
-   * @param clock the clock implementation; must not be null
-   * @return this builder for chaining
-   */
-  public GeneralConfigBuilder clock(InqClock clock) {
-    this.clock = Objects.requireNonNull(clock, "clock must not be null");
-    return this;
-  }
+    /**
+     * Sets the wall-clock implementation. Used for human-readable timestamps in logging
+     * and event metadata.
+     *
+     * @param clock the clock implementation; must not be null
+     * @return this builder for chaining
+     */
+    public GeneralConfigBuilder clock(InqClock clock) {
+        this.clock = Objects.requireNonNull(clock, "clock must not be null");
+        return this;
+    }
 
-  /**
-   * Sets the logger factory. All framework-internal logging is routed through
-   * loggers created by this factory.
-   *
-   * @param loggerFactory the logger factory; must not be null
-   * @return this builder for chaining
-   */
-  public GeneralConfigBuilder loggerFactory(LoggerFactory loggerFactory) {
-    this.loggerFactory = Objects.requireNonNull(loggerFactory,
-        "loggerFactory must not be null");
-    return this;
-  }
+    /**
+     * Sets the logger factory. All framework-internal logging is routed through
+     * loggers created by this factory.
+     *
+     * @param loggerFactory the logger factory; must not be null
+     * @return this builder for chaining
+     */
+    public GeneralConfigBuilder loggerFactory(LoggerFactory loggerFactory) {
+        this.loggerFactory = Objects.requireNonNull(loggerFactory,
+                "loggerFactory must not be null");
+        return this;
+    }
 
-  /**
-   * Sets the nanosecond time source. This is the high-resolution, monotonic time source
-   * used by time-sensitive components like circuit breaker metrics. Injecting a custom
-   * implementation enables deterministic testing without {@code Thread.sleep()}.
-   *
-   * @param nanoTimeSource the nanosecond time source; must not be null
-   * @return this builder for chaining
-   */
-  public GeneralConfigBuilder nanoTimeSource(InqNanoTimeSource nanoTimeSource) {
-    this.nanoTimeSource = Objects.requireNonNull(nanoTimeSource,
-        "nanoTimeSource must not be null");
-    return this;
-  }
+    /**
+     * Sets the nanosecond time source. This is the high-resolution, monotonic time source
+     * used by time-sensitive components like circuit breaker metrics. Injecting a custom
+     * implementation enables deterministic testing without {@code Thread.sleep()}.
+     *
+     * @param nanoTimeSource the nanosecond time source; must not be null
+     * @return this builder for chaining
+     */
+    public GeneralConfigBuilder nanoTimeSource(InqNanoTimeSource nanoTimeSource) {
+        this.nanoTimeSource = Objects.requireNonNull(nanoTimeSource,
+                "nanoTimeSource must not be null");
+        return this;
+    }
 
-  /**
-   * Sets the compatibility configuration for cross-version behavior adjustments.
-   *
-   * @param compatibility the compatibility settings; must not be null
-   * @return this builder for chaining
-   */
-  public GeneralConfigBuilder compatibility(InqCompatibility compatibility) {
-    this.compatibility = Objects.requireNonNull(compatibility,
-        "compatibility must not be null");
-    return this;
-  }
+    /**
+     * Sets the compatibility configuration for cross-version behavior adjustments.
+     *
+     * @param compatibility the compatibility settings; must not be null
+     * @return this builder for chaining
+     */
+    public GeneralConfigBuilder compatibility(InqCompatibility compatibility) {
+        this.compatibility = Objects.requireNonNull(compatibility,
+                "compatibility must not be null");
+        return this;
+    }
 
-  /**
-   * Builds the {@link GeneralConfig} with the given extension map.
-   *
-   * <p><strong>Package-private by design.</strong> External callers should not invoke
-   * this method directly. The framework's assembly process provides the extension map
-   * (collected from all registered {@link ExtensionBuilder}s) and triggers the build
-   * at the appropriate point in the configuration lifecycle.
-   *
-   * @param extensions the registered configuration extensions (unmodifiable)
-   * @return the fully initialized general configuration
-   * @throws NullPointerException if {@code extensions} is null
-   */
-  GeneralConfig build(Map<Class<?>, ConfigExtension<?>> extensions) {
-    Objects.requireNonNull(extensions, "extensions map must not be null");
-    return new GeneralConfig(
-        clock,
-        nanoTimeSource,
-        compatibility,
-        loggerFactory,
-        extensions
-    );
-  }
+    /**
+     * Builds the {@link GeneralConfig} with the given extension map.
+     *
+     * <p><strong>Package-private by design.</strong> External callers should not invoke
+     * this method directly. The framework's assembly process provides the extension map
+     * (collected from all registered {@link ExtensionBuilder}s) and triggers the build
+     * at the appropriate point in the configuration lifecycle.
+     *
+     * @param extensions the registered configuration extensions (unmodifiable)
+     * @return the fully initialized general configuration
+     * @throws NullPointerException if {@code extensions} is null
+     */
+    GeneralConfig build(Map<Class<?>, ConfigExtension<?>> extensions) {
+        Objects.requireNonNull(extensions, "extensions map must not be null");
+        return new GeneralConfig(
+                clock,
+                nanoTimeSource,
+                compatibility,
+                loggerFactory,
+                extensions
+        );
+    }
 }

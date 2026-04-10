@@ -6,8 +6,8 @@ import java.time.Duration;
 
 public record CoDelBulkheadStrategyConfig(Duration targetDelay,
                                           Duration interval) implements ConfigExtension<CoDelBulkheadStrategyConfig> {
-  @Override
-  public CoDelBulkheadStrategyConfig self() {
-    return this;
-  }
+    @Override
+    public CoDelBulkheadStrategyConfig self() {
+        return this;
+    }
 }

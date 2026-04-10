@@ -22,18 +22,18 @@ import java.time.Duration;
  */
 public interface BlockingBulkheadStrategy extends BulkheadStrategy {
 
-  /**
-   * Attempts to acquire a permit, potentially blocking up to the timeout.
-   *
-   * <p>Returns {@code null} if a permit was successfully acquired (the happy path —
-   * no object allocation). Returns a {@link RejectionContext} captured at the exact
-   * moment of rejection if the bulkhead denied the request.
-   *
-   * @param timeout the maximum duration to wait; {@link Duration#ZERO} for a non-blocking
-   *                attempt (returns immediately if no permit is available)
-   * @return {@code null} if a permit was acquired, or a {@link RejectionContext}
-   * describing why the request was rejected
-   * @throws InterruptedException if the thread is interrupted while waiting
-   */
-  RejectionContext tryAcquire(Duration timeout) throws InterruptedException;
+    /**
+     * Attempts to acquire a permit, potentially blocking up to the timeout.
+     *
+     * <p>Returns {@code null} if a permit was successfully acquired (the happy path —
+     * no object allocation). Returns a {@link RejectionContext} captured at the exact
+     * moment of rejection if the bulkhead denied the request.
+     *
+     * @param timeout the maximum duration to wait; {@link Duration#ZERO} for a non-blocking
+     *                attempt (returns immediately if no permit is available)
+     * @return {@code null} if a permit was acquired, or a {@link RejectionContext}
+     * describing why the request was rejected
+     * @throws InterruptedException if the thread is interrupted while waiting
+     */
+    RejectionContext tryAcquire(Duration timeout) throws InterruptedException;
 }

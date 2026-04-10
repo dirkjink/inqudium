@@ -2,11 +2,7 @@ package eu.inqudium.core.config.compatibility;
 
 import eu.inqudium.core.exception.InqException;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.EnumMap;
-import java.util.Map;
-import java.util.ServiceLoader;
+import java.util.*;
 
 /**
  * Resolved compatibility flag state for an element configuration.
@@ -26,208 +22,208 @@ import java.util.ServiceLoader;
  */
 public final class InqCompatibility {
 
-  private static final InqCompatibility DEFAULT = new InqCompatibility(Map.of());
+    private static final InqCompatibility DEFAULT = new InqCompatibility(Map.of());
 
-  private final Map<InqFlag, Boolean> flags;
+    private final Map<InqFlag, Boolean> flags;
 
-  private InqCompatibility(Map<InqFlag, Boolean> flags) {
-    var map = new EnumMap<InqFlag, Boolean>(InqFlag.class);
-    map.putAll(flags);
-    this.flags = Collections.unmodifiableMap(map);
-  }
-
-  /**
-   * Returns the default compatibility — all flags at their built-in defaults.
-   *
-   * @return the default instance
-   */
-  public static InqCompatibility ofDefaults() {
-    return DEFAULT;
-  }
-
-  /**
-   * Creates a compatibility that adopts all new behaviors.
-   *
-   * @return an instance with all flags set to {@code true}
-   */
-  public static InqCompatibility adoptAll() {
-    var map = new EnumMap<InqFlag, Boolean>(InqFlag.class);
-    for (var flag : InqFlag.values()) {
-      map.put(flag, true);
-    }
-    return new InqCompatibility(map);
-  }
-
-  /**
-   * Creates a compatibility that preserves all old behaviors.
-   *
-   * @return an instance with all flags set to {@code false}
-   */
-  public static InqCompatibility preserveAll() {
-    var map = new EnumMap<InqFlag, Boolean>(InqFlag.class);
-    for (var flag : InqFlag.values()) {
-      map.put(flag, false);
-    }
-    return new InqCompatibility(map);
-  }
-
-  /**
-   * Creates a new builder for fine-grained flag configuration.
-   *
-   * @return a new builder
-   */
-  public static Builder builder() {
-    return new Builder();
-  }
-
-  /**
-   * Returns whether the given flag is enabled.
-   *
-   * <p>If the flag was not explicitly set, returns {@code false} (the built-in default).
-   *
-   * @param flag the flag to check
-   * @return {@code true} if the new behavior is enabled
-   */
-  public boolean isEnabled(InqFlag flag) {
-    return flags.getOrDefault(flag, false);
-  }
-
-  /**
-   * Returns an unmodifiable view of all explicitly configured flags.
-   *
-   * @return the flag map
-   */
-  public Map<InqFlag, Boolean> getFlags() {
-    return flags;
-  }
-
-  /**
-   * Builder for {@link InqCompatibility} with three-layer resolution.
-   */
-  public static final class Builder {
-
-    private static final org.slf4j.Logger LOGGER = org.slf4j.LoggerFactory.getLogger(InqCompatibility.class);
-
-    private final EnumMap<InqFlag, Boolean> programmaticFlags = new EnumMap<>(InqFlag.class);
-    private final ClassLoader spiClassLoader;
-    private boolean ignoreServiceLoader = false;
-
-    private Builder() {
-      var tccl = Thread.currentThread().getContextClassLoader();
-      this.spiClassLoader = tccl != null ? tccl : InqCompatibilityOptions.class.getClassLoader();
+    private InqCompatibility(Map<InqFlag, Boolean> flags) {
+        var map = new EnumMap<InqFlag, Boolean>(InqFlag.class);
+        map.putAll(flags);
+        this.flags = Collections.unmodifiableMap(map);
     }
 
     /**
-     * Sets a specific flag value.
+     * Returns the default compatibility — all flags at their built-in defaults.
      *
-     * @param flag    the flag to set
-     * @param enabled {@code true} for new behavior, {@code false} for old
-     * @return this builder
+     * @return the default instance
      */
-    public Builder flag(InqFlag flag, boolean enabled) {
-      programmaticFlags.put(flag, enabled);
-      return this;
+    public static InqCompatibility ofDefaults() {
+        return DEFAULT;
     }
 
     /**
-     * Ignores all ServiceLoader-discovered providers for this compatibility
-     * instance (Strategy A). Only programmatic flags and defaults apply.
+     * Creates a compatibility that adopts all new behaviors.
      *
-     * @return this builder
+     * @return an instance with all flags set to {@code true}
      */
-    public Builder ignoreServiceLoader() {
-      this.ignoreServiceLoader = true;
-      return this;
+    public static InqCompatibility adoptAll() {
+        var map = new EnumMap<InqFlag, Boolean>(InqFlag.class);
+        for (var flag : InqFlag.values()) {
+            map.put(flag, true);
+        }
+        return new InqCompatibility(map);
     }
 
     /**
-     * Builds the resolved compatibility by merging defaults, ServiceLoader,
-     * and programmatic flags.
+     * Creates a compatibility that preserves all old behaviors.
      *
-     * @return the resolved compatibility
+     * @return an instance with all flags set to {@code false}
      */
-    public InqCompatibility build() {
-      var resolved = new EnumMap<InqFlag, Boolean>(InqFlag.class);
-
-      // Layer 1: built-in defaults (all false) — implicit via getOrDefault
-
-      // Layer 2: ServiceLoader providers (unless ignored)
-      if (!ignoreServiceLoader) {
-        resolved.putAll(loadServiceLoaderFlags());
-      }
-
-      // Layer 3: programmatic flags override per-flag
-      resolved.putAll(programmaticFlags);
-
-      return new InqCompatibility(resolved);
+    public static InqCompatibility preserveAll() {
+        var map = new EnumMap<InqFlag, Boolean>(InqFlag.class);
+        for (var flag : InqFlag.values()) {
+            map.put(flag, false);
+        }
+        return new InqCompatibility(map);
     }
 
-    @SuppressWarnings("unchecked")
-    private Map<InqFlag, Boolean> loadServiceLoaderFlags() {
-      var result = new EnumMap<InqFlag, Boolean>(InqFlag.class);
-      var providers = new ArrayList<InqCompatibilityOptions>();
-
-      try {
-        var loader = ServiceLoader.load(InqCompatibilityOptions.class, spiClassLoader);
-        var iterator = loader.iterator();
-        while (true) {
-          boolean hasNext;
-          try {
-            hasNext = iterator.hasNext();
-          } catch (Throwable t) {
-            InqException.rethrowIfFatal(t);
-            LOGGER.warn("ServiceLoader iterator.hasNext() failed for InqCompatibilityOptions " +
-                "— remaining providers skipped.", t);
-            break;
-          }
-          if (!hasNext) {
-            break;
-          }
-          try {
-            providers.add(iterator.next());
-          } catch (Throwable t) {
-            InqException.rethrowIfFatal(t);
-            LOGGER.warn("Failed to load InqCompatibilityOptions provider — provider skipped.", t);
-          }
-        }
-      } catch (Throwable t) {
-        InqException.rethrowIfFatal(t);
-        LOGGER.warn("ServiceLoader discovery for InqCompatibilityOptions failed.", t);
-      }
-
-      // Sort: Comparable providers first (ascending), then non-Comparable
-      var comparable = new ArrayList<InqCompatibilityOptions>();
-      var nonComparable = new ArrayList<InqCompatibilityOptions>();
-      for (var provider : providers) {
-        if (provider instanceof Comparable) {
-          comparable.add(provider);
-        } else {
-          nonComparable.add(provider);
-        }
-      }
-      comparable.sort((a, b) -> ((Comparable<InqCompatibilityOptions>) a).compareTo(b));
-
-      // Merge in order — later providers override earlier for the same flag
-      for (var provider : comparable) {
-        mergeFlags(result, provider);
-      }
-      for (var provider : nonComparable) {
-        mergeFlags(result, provider);
-      }
-
-      return result;
+    /**
+     * Creates a new builder for fine-grained flag configuration.
+     *
+     * @return a new builder
+     */
+    public static Builder builder() {
+        return new Builder();
     }
 
-    private void mergeFlags(EnumMap<InqFlag, Boolean> target, InqCompatibilityOptions provider) {
-      try {
-        var flags = provider.flags();
-        if (flags != null) {
-          target.putAll(flags);
-        }
-      } catch (Throwable t) {
-        InqException.rethrowIfFatal(t);
-        LOGGER.warn("InqCompatibilityOptions.flags() threw", t);
-      }
+    /**
+     * Returns whether the given flag is enabled.
+     *
+     * <p>If the flag was not explicitly set, returns {@code false} (the built-in default).
+     *
+     * @param flag the flag to check
+     * @return {@code true} if the new behavior is enabled
+     */
+    public boolean isEnabled(InqFlag flag) {
+        return flags.getOrDefault(flag, false);
     }
-  }
+
+    /**
+     * Returns an unmodifiable view of all explicitly configured flags.
+     *
+     * @return the flag map
+     */
+    public Map<InqFlag, Boolean> getFlags() {
+        return flags;
+    }
+
+    /**
+     * Builder for {@link InqCompatibility} with three-layer resolution.
+     */
+    public static final class Builder {
+
+        private static final org.slf4j.Logger LOGGER = org.slf4j.LoggerFactory.getLogger(InqCompatibility.class);
+
+        private final EnumMap<InqFlag, Boolean> programmaticFlags = new EnumMap<>(InqFlag.class);
+        private final ClassLoader spiClassLoader;
+        private boolean ignoreServiceLoader = false;
+
+        private Builder() {
+            var tccl = Thread.currentThread().getContextClassLoader();
+            this.spiClassLoader = tccl != null ? tccl : InqCompatibilityOptions.class.getClassLoader();
+        }
+
+        /**
+         * Sets a specific flag value.
+         *
+         * @param flag    the flag to set
+         * @param enabled {@code true} for new behavior, {@code false} for old
+         * @return this builder
+         */
+        public Builder flag(InqFlag flag, boolean enabled) {
+            programmaticFlags.put(flag, enabled);
+            return this;
+        }
+
+        /**
+         * Ignores all ServiceLoader-discovered providers for this compatibility
+         * instance (Strategy A). Only programmatic flags and defaults apply.
+         *
+         * @return this builder
+         */
+        public Builder ignoreServiceLoader() {
+            this.ignoreServiceLoader = true;
+            return this;
+        }
+
+        /**
+         * Builds the resolved compatibility by merging defaults, ServiceLoader,
+         * and programmatic flags.
+         *
+         * @return the resolved compatibility
+         */
+        public InqCompatibility build() {
+            var resolved = new EnumMap<InqFlag, Boolean>(InqFlag.class);
+
+            // Layer 1: built-in defaults (all false) — implicit via getOrDefault
+
+            // Layer 2: ServiceLoader providers (unless ignored)
+            if (!ignoreServiceLoader) {
+                resolved.putAll(loadServiceLoaderFlags());
+            }
+
+            // Layer 3: programmatic flags override per-flag
+            resolved.putAll(programmaticFlags);
+
+            return new InqCompatibility(resolved);
+        }
+
+        @SuppressWarnings("unchecked")
+        private Map<InqFlag, Boolean> loadServiceLoaderFlags() {
+            var result = new EnumMap<InqFlag, Boolean>(InqFlag.class);
+            var providers = new ArrayList<InqCompatibilityOptions>();
+
+            try {
+                var loader = ServiceLoader.load(InqCompatibilityOptions.class, spiClassLoader);
+                var iterator = loader.iterator();
+                while (true) {
+                    boolean hasNext;
+                    try {
+                        hasNext = iterator.hasNext();
+                    } catch (Throwable t) {
+                        InqException.rethrowIfFatal(t);
+                        LOGGER.warn("ServiceLoader iterator.hasNext() failed for InqCompatibilityOptions " +
+                                "— remaining providers skipped.", t);
+                        break;
+                    }
+                    if (!hasNext) {
+                        break;
+                    }
+                    try {
+                        providers.add(iterator.next());
+                    } catch (Throwable t) {
+                        InqException.rethrowIfFatal(t);
+                        LOGGER.warn("Failed to load InqCompatibilityOptions provider — provider skipped.", t);
+                    }
+                }
+            } catch (Throwable t) {
+                InqException.rethrowIfFatal(t);
+                LOGGER.warn("ServiceLoader discovery for InqCompatibilityOptions failed.", t);
+            }
+
+            // Sort: Comparable providers first (ascending), then non-Comparable
+            var comparable = new ArrayList<InqCompatibilityOptions>();
+            var nonComparable = new ArrayList<InqCompatibilityOptions>();
+            for (var provider : providers) {
+                if (provider instanceof Comparable) {
+                    comparable.add(provider);
+                } else {
+                    nonComparable.add(provider);
+                }
+            }
+            comparable.sort((a, b) -> ((Comparable<InqCompatibilityOptions>) a).compareTo(b));
+
+            // Merge in order — later providers override earlier for the same flag
+            for (var provider : comparable) {
+                mergeFlags(result, provider);
+            }
+            for (var provider : nonComparable) {
+                mergeFlags(result, provider);
+            }
+
+            return result;
+        }
+
+        private void mergeFlags(EnumMap<InqFlag, Boolean> target, InqCompatibilityOptions provider) {
+            try {
+                var flags = provider.flags();
+                if (flags != null) {
+                    target.putAll(flags);
+                }
+            } catch (Throwable t) {
+                InqException.rethrowIfFatal(t);
+                LOGGER.warn("InqCompatibilityOptions.flags() threw", t);
+            }
+        }
+    }
 }

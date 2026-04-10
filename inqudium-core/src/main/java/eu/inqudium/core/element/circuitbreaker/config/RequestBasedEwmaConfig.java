@@ -20,13 +20,13 @@ import eu.inqudium.core.config.ConfigExtension;
  * @see RequestBasedEwmaConfigBuilder
  */
 public record RequestBasedEwmaConfig(
-    double failureRatePercent,
-    double smoothingFactor,
-    int minimumNumberOfCalls
+        double failureRatePercent,
+        double smoothingFactor,
+        int minimumNumberOfCalls
 ) implements ConfigExtension<RequestBasedEwmaConfig> {
 
-  @Override
-  public RequestBasedEwmaConfig self() {
-    return this;
-  }
+    @Override
+    public RequestBasedEwmaConfig self() {
+        return this;
+    }
 }

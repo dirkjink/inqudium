@@ -31,60 +31,60 @@ import java.util.concurrent.ThreadLocalRandom;
  */
 public record DecorrelatedJitterBackoffStrategy(Duration initialDelay, Duration maxDelay) implements BackoffStrategy {
 
-  public DecorrelatedJitterBackoffStrategy {
-    Objects.requireNonNull(initialDelay, "initialDelay must not be null");
-    Objects.requireNonNull(maxDelay, "maxDelay must not be null");
-    if (initialDelay.isNegative() || initialDelay.isZero()) {
-      throw new IllegalArgumentException("initialDelay must be positive");
-    }
-    if (maxDelay.isNegative() || maxDelay.isZero()) {
-      throw new IllegalArgumentException("maxDelay must be positive");
-    }
-  }
-
-  /**
-   * Stateless fallback — uses initialDelay as the previous delay baseline.
-   * The retry core calls the two-argument form; this exists for direct usage.
-   */
-  @Override
-  public Duration computeDelay(int attemptIndex) {
-    return computeDelay(attemptIndex, Duration.ZERO);
-  }
-
-  /**
-   * Computes the decorrelated jitter delay based on the previous delay.
-   *
-   * @param attemptIndex  ignored (delay depends on previousDelay, not index)
-   * @param previousDelay the delay from the previous retry cycle
-   * @return a random duration in {@code [initialDelay, min(maxDelay, previousDelay * 3)]}
-   */
-  @Override
-  public Duration computeDelay(int attemptIndex, Duration previousDelay) {
-    long initialNanos = initialDelay.toNanos();
-    long maxNanos = maxDelay.toNanos();
-
-    // On the first retry or if previous delay was zero, use initialDelay as baseline
-    long baseNanos = (previousDelay == null || previousDelay.isZero())
-        ? initialNanos
-        : previousDelay.toNanos();
-
-    // Upper bound: previousDelay * 3, capped at maxDelay
-    long upperBound = Math.min(maxNanos, baseNanos * 3);
-
-    // Guard against overflow: baseNanos * 3 can overflow for very large delays
-    if (upperBound < 0 || baseNanos < 0) {
-      upperBound = maxNanos;
+    public DecorrelatedJitterBackoffStrategy {
+        Objects.requireNonNull(initialDelay, "initialDelay must not be null");
+        Objects.requireNonNull(maxDelay, "maxDelay must not be null");
+        if (initialDelay.isNegative() || initialDelay.isZero()) {
+            throw new IllegalArgumentException("initialDelay must be positive");
+        }
+        if (maxDelay.isNegative() || maxDelay.isZero()) {
+            throw new IllegalArgumentException("maxDelay must be positive");
+        }
     }
 
-    // Ensure lower bound does not exceed upper bound
-    long lowerBound = Math.min(initialNanos, upperBound);
-
-    if (lowerBound >= upperBound) {
-      return Duration.ofNanos(lowerBound);
+    /**
+     * Stateless fallback — uses initialDelay as the previous delay baseline.
+     * The retry core calls the two-argument form; this exists for direct usage.
+     */
+    @Override
+    public Duration computeDelay(int attemptIndex) {
+        return computeDelay(attemptIndex, Duration.ZERO);
     }
 
-    // Random in [lowerBound, upperBound]
-    long jitteredNanos = ThreadLocalRandom.current().nextLong(lowerBound, upperBound + 1);
-    return Duration.ofNanos(jitteredNanos);
-  }
+    /**
+     * Computes the decorrelated jitter delay based on the previous delay.
+     *
+     * @param attemptIndex  ignored (delay depends on previousDelay, not index)
+     * @param previousDelay the delay from the previous retry cycle
+     * @return a random duration in {@code [initialDelay, min(maxDelay, previousDelay * 3)]}
+     */
+    @Override
+    public Duration computeDelay(int attemptIndex, Duration previousDelay) {
+        long initialNanos = initialDelay.toNanos();
+        long maxNanos = maxDelay.toNanos();
+
+        // On the first retry or if previous delay was zero, use initialDelay as baseline
+        long baseNanos = (previousDelay == null || previousDelay.isZero())
+                ? initialNanos
+                : previousDelay.toNanos();
+
+        // Upper bound: previousDelay * 3, capped at maxDelay
+        long upperBound = Math.min(maxNanos, baseNanos * 3);
+
+        // Guard against overflow: baseNanos * 3 can overflow for very large delays
+        if (upperBound < 0 || baseNanos < 0) {
+            upperBound = maxNanos;
+        }
+
+        // Ensure lower bound does not exceed upper bound
+        long lowerBound = Math.min(initialNanos, upperBound);
+
+        if (lowerBound >= upperBound) {
+            return Duration.ofNanos(lowerBound);
+        }
+
+        // Random in [lowerBound, upperBound]
+        long jitteredNanos = ThreadLocalRandom.current().nextLong(lowerBound, upperBound + 1);
+        return Duration.ofNanos(jitteredNanos);
+    }
 }

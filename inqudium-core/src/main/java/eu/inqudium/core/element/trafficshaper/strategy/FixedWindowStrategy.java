@@ -31,108 +31,108 @@ import java.util.Objects;
  * @param maxPerWindow   maximum requests admitted per window
  */
 public record FixedWindowStrategy(
-    Duration windowDuration,
-    int maxPerWindow
+        Duration windowDuration,
+        int maxPerWindow
 ) implements SchedulingStrategy<FixedWindowState> {
 
-  public FixedWindowStrategy {
-    Objects.requireNonNull(windowDuration, "windowDuration must not be null");
-    if (windowDuration.isNegative() || windowDuration.isZero()) {
-      throw new IllegalArgumentException("windowDuration must be positive");
-    }
-    if (maxPerWindow < 1) {
-      throw new IllegalArgumentException("maxPerWindow must be >= 1, got " + maxPerWindow);
-    }
-  }
-
-  @Override
-  public FixedWindowState initial(TrafficShaperConfig<FixedWindowState> config, Instant now) {
-    return FixedWindowState.initial(now);
-  }
-
-  @Override
-  public ThrottlePermission<FixedWindowState> schedule(
-      FixedWindowState state,
-      TrafficShaperConfig<FixedWindowState> config,
-      Instant now) {
-
-    // Advance to the current window if time has passed
-    FixedWindowState current = advanceWindow(state, now);
-
-    if (current.requestsInWindow() < maxPerWindow) {
-      // Room in this window — admit immediately
-      return ThrottlePermission.immediate(current.withAdmittedImmediate(), now);
+    public FixedWindowStrategy {
+        Objects.requireNonNull(windowDuration, "windowDuration must not be null");
+        if (windowDuration.isNegative() || windowDuration.isZero()) {
+            throw new IllegalArgumentException("windowDuration must be positive");
+        }
+        if (maxPerWindow < 1) {
+            throw new IllegalArgumentException("maxPerWindow must be >= 1, got " + maxPerWindow);
+        }
     }
 
-    // Window full — delay until next window
-    Instant nextWindowStart = current.windowStart().plus(windowDuration);
-    Duration waitDuration = Duration.between(now, nextWindowStart);
-    if (waitDuration.isNegative()) waitDuration = Duration.ZERO;
-
-    // Check overflow rules
-    if (!config.isQueuingAllowed()
-        && config.throttleMode() == ThrottleMode.SHAPE_AND_REJECT_OVERFLOW) {
-      return ThrottlePermission.rejected(current.withRequestRejected(), waitDuration);
-    }
-    if (config.throttleMode() == ThrottleMode.SHAPE_AND_REJECT_OVERFLOW
-        && shouldReject(current, config, waitDuration)) {
-      return ThrottlePermission.rejected(current.withRequestRejected(), waitDuration);
+    @Override
+    public FixedWindowState initial(TrafficShaperConfig<FixedWindowState> config, Instant now) {
+        return FixedWindowState.initial(now);
     }
 
-    // Admit the request into the NEXT window's count
-    FixedWindowState nextWindowState = current.withNewWindow(nextWindowStart)
-        .withAdmittedDelayed(nextWindowStart);
-    return ThrottlePermission.delayed(nextWindowState, waitDuration, nextWindowStart);
-  }
+    @Override
+    public ThrottlePermission<FixedWindowState> schedule(
+            FixedWindowState state,
+            TrafficShaperConfig<FixedWindowState> config,
+            Instant now) {
 
-  @Override
-  public FixedWindowState recordExecution(FixedWindowState state) {
-    return state.withRequestDequeued();
-  }
+        // Advance to the current window if time has passed
+        FixedWindowState current = advanceWindow(state, now);
 
-  @Override
-  public FixedWindowState reset(
-      FixedWindowState state,
-      TrafficShaperConfig<FixedWindowState> config,
-      Instant now) {
-    return state.withNextEpoch(now);
-  }
+        if (current.requestsInWindow() < maxPerWindow) {
+            // Room in this window — admit immediately
+            return ThrottlePermission.immediate(current.withAdmittedImmediate(), now);
+        }
 
-  @Override
-  public Duration estimateWait(
-      FixedWindowState state,
-      TrafficShaperConfig<FixedWindowState> config,
-      Instant now) {
-    FixedWindowState current = advanceWindow(state, now);
-    if (current.requestsInWindow() < maxPerWindow) return Duration.ZERO;
-    Instant nextWindowStart = current.windowStart().plus(windowDuration);
-    Duration wait = Duration.between(now, nextWindowStart);
-    return wait.isNegative() ? Duration.ZERO : wait;
-  }
+        // Window full — delay until next window
+        Instant nextWindowStart = current.windowStart().plus(windowDuration);
+        Duration waitDuration = Duration.between(now, nextWindowStart);
+        if (waitDuration.isNegative()) waitDuration = Duration.ZERO;
 
-  @Override
-  public int queueDepth(FixedWindowState state) {
-    return state.queueDepth();
-  }
+        // Check overflow rules
+        if (!config.isQueuingAllowed()
+                && config.throttleMode() == ThrottleMode.SHAPE_AND_REJECT_OVERFLOW) {
+            return ThrottlePermission.rejected(current.withRequestRejected(), waitDuration);
+        }
+        if (config.throttleMode() == ThrottleMode.SHAPE_AND_REJECT_OVERFLOW
+                && shouldReject(current, config, waitDuration)) {
+            return ThrottlePermission.rejected(current.withRequestRejected(), waitDuration);
+        }
 
-  @Override
-  public boolean isUnboundedQueueWarning(
-      FixedWindowState state,
-      TrafficShaperConfig<FixedWindowState> config,
-      Instant now) {
-    return checkUnboundedWarning(state, config, now);
-  }
-
-  private FixedWindowState advanceWindow(FixedWindowState state, Instant now) {
-    if (!now.isBefore(state.windowStart().plus(windowDuration))) {
-      // Current window has passed — start a new one aligned to `now`
-      // (skip intermediate empty windows)
-      long elapsedNanos = Duration.between(state.windowStart(), now).toNanos();
-      long windowNanos = windowDuration.toNanos();
-      long windowsPassed = elapsedNanos / windowNanos;
-      Instant newWindowStart = state.windowStart().plusNanos(windowsPassed * windowNanos);
-      return state.withNewWindow(newWindowStart);
+        // Admit the request into the NEXT window's count
+        FixedWindowState nextWindowState = current.withNewWindow(nextWindowStart)
+                .withAdmittedDelayed(nextWindowStart);
+        return ThrottlePermission.delayed(nextWindowState, waitDuration, nextWindowStart);
     }
-    return state;
-  }
+
+    @Override
+    public FixedWindowState recordExecution(FixedWindowState state) {
+        return state.withRequestDequeued();
+    }
+
+    @Override
+    public FixedWindowState reset(
+            FixedWindowState state,
+            TrafficShaperConfig<FixedWindowState> config,
+            Instant now) {
+        return state.withNextEpoch(now);
+    }
+
+    @Override
+    public Duration estimateWait(
+            FixedWindowState state,
+            TrafficShaperConfig<FixedWindowState> config,
+            Instant now) {
+        FixedWindowState current = advanceWindow(state, now);
+        if (current.requestsInWindow() < maxPerWindow) return Duration.ZERO;
+        Instant nextWindowStart = current.windowStart().plus(windowDuration);
+        Duration wait = Duration.between(now, nextWindowStart);
+        return wait.isNegative() ? Duration.ZERO : wait;
+    }
+
+    @Override
+    public int queueDepth(FixedWindowState state) {
+        return state.queueDepth();
+    }
+
+    @Override
+    public boolean isUnboundedQueueWarning(
+            FixedWindowState state,
+            TrafficShaperConfig<FixedWindowState> config,
+            Instant now) {
+        return checkUnboundedWarning(state, config, now);
+    }
+
+    private FixedWindowState advanceWindow(FixedWindowState state, Instant now) {
+        if (!now.isBefore(state.windowStart().plus(windowDuration))) {
+            // Current window has passed — start a new one aligned to `now`
+            // (skip intermediate empty windows)
+            long elapsedNanos = Duration.between(state.windowStart(), now).toNanos();
+            long windowNanos = windowDuration.toNanos();
+            long windowsPassed = elapsedNanos / windowNanos;
+            Instant newWindowStart = state.windowStart().plusNanos(windowsPassed * windowNanos);
+            return state.withNewWindow(newWindowStart);
+        }
+        return state;
+    }
 }

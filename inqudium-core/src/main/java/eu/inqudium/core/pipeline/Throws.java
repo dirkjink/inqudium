@@ -34,38 +34,38 @@ package eu.inqudium.core.pipeline;
  */
 public final class Throws {
 
-  /**
-   * Prevent instantiation — this is a utility class.
-   */
-  private Throws() {
-  }
-
-  /**
-   * Rethrows any {@link Throwable} without wrapping, bypassing checked-exception rules.
-   *
-   * <p>Usage pattern: {@code throw Throws.rethrow(cause);}</p>
-   *
-   * <p>The outer {@code throw} keyword is never executed — the internal
-   * {@code throw (E) t} fires first via the sneaky-throw mechanism. The
-   * outer {@code throw} serves only as a compiler hint that control flow
-   * terminates here.</p>
-   *
-   * @param t   the throwable to rethrow (must not be {@code null})
-   * @param <E> the inferred exception type (erased at runtime)
-   * @return never — declared as {@code RuntimeException} solely for control-flow analysis
-   * @throws NullPointerException if {@code t} is {@code null}
-   */
-  @SuppressWarnings("unchecked")
-  public static <E extends Throwable> RuntimeException rethrow(Throwable t) throws E {
-    // Null guard: rethrowing null would produce a confusing NullPointerException
-    // deep in the call stack — fail fast with a clear message instead
-    if (t == null) {
-      throw new NullPointerException("Cannot rethrow null cause");
+    /**
+     * Prevent instantiation — this is a utility class.
+     */
+    private Throws() {
     }
-    // The cast to E is erased at runtime — this effectively becomes
-    // "throw (Throwable) t", which the JVM executes without any
-    // checked-exception verification. The compiler sees "throws E" and
-    // infers the type from context, but at bytecode level no wrapping occurs.
-    throw (E) t;
-  }
+
+    /**
+     * Rethrows any {@link Throwable} without wrapping, bypassing checked-exception rules.
+     *
+     * <p>Usage pattern: {@code throw Throws.rethrow(cause);}</p>
+     *
+     * <p>The outer {@code throw} keyword is never executed — the internal
+     * {@code throw (E) t} fires first via the sneaky-throw mechanism. The
+     * outer {@code throw} serves only as a compiler hint that control flow
+     * terminates here.</p>
+     *
+     * @param t   the throwable to rethrow (must not be {@code null})
+     * @param <E> the inferred exception type (erased at runtime)
+     * @return never — declared as {@code RuntimeException} solely for control-flow analysis
+     * @throws NullPointerException if {@code t} is {@code null}
+     */
+    @SuppressWarnings("unchecked")
+    public static <E extends Throwable> RuntimeException rethrow(Throwable t) throws E {
+        // Null guard: rethrowing null would produce a confusing NullPointerException
+        // deep in the call stack — fail fast with a clear message instead
+        if (t == null) {
+            throw new NullPointerException("Cannot rethrow null cause");
+        }
+        // The cast to E is erased at runtime — this effectively becomes
+        // "throw (Throwable) t", which the JVM executes without any
+        // checked-exception verification. The compiler sees "throws E" and
+        // infers the type from context, but at bytecode level no wrapping occurs.
+        throw (E) t;
+    }
 }

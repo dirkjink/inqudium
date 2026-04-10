@@ -4,20 +4,20 @@ import java.time.Duration;
 
 public interface TrafficShaperProtection {
 
-  // Modifiers
-  TrafficShaperProtection permittingCalls(int limit);
+    // Modifiers
+    TrafficShaperProtection permittingCalls(int limit);
 
-  TrafficShaperProtection withinPeriod(Duration period);
+    TrafficShaperProtection withinPeriod(Duration period);
 
-  TrafficShaperProtection queueingForAtMost(Duration maxWait);
+    TrafficShaperProtection queueingForAtMost(Duration maxWait);
 
-  // Terminal Operations (Profiles)
-  TrafficShaperConfig applyStrictProfile();
+    // Terminal Operations (Profiles)
+    TrafficShaperConfig applyStrictProfile();
 
-  TrafficShaperConfig applyBalancedProfile();
+    TrafficShaperConfig applyBalancedProfile();
 
-  TrafficShaperConfig applyPermissiveProfile();
+    TrafficShaperConfig applyPermissiveProfile();
 
-  // Terminal Operation for custom configuration
-  TrafficShaperConfig apply();
+    // Terminal Operation for custom configuration
+    TrafficShaperConfig apply();
 }

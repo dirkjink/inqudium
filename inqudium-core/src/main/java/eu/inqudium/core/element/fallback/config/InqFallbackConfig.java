@@ -8,40 +8,40 @@ import eu.inqudium.core.element.InqElementType;
 import eu.inqudium.core.event.InqEventPublisher;
 
 public record InqFallbackConfig(
-    GeneralConfig general,
-    InqElementCommonConfig common
+        GeneralConfig general,
+        InqElementCommonConfig common
 ) implements InqElementConfig, ConfigExtension<InqFallbackConfig> {
-  @Override
-  public String name() {
-    return common.name();
-  }
+    @Override
+    public String name() {
+        return common.name();
+    }
 
-  @Override
-  public InqElementType elementType() {
-    return common.elementType();
-  }
+    @Override
+    public InqElementType elementType() {
+        return common.elementType();
+    }
 
-  @Override
-  public InqEventPublisher eventPublisher() {
-    return common.eventPublisher();
-  }
+    @Override
+    public InqEventPublisher eventPublisher() {
+        return common.eventPublisher();
+    }
 
-  @Override
-  public Boolean enableExceptionOptimization() {
-    return common.enableExceptionOptimization();
-  }
+    @Override
+    public Boolean enableExceptionOptimization() {
+        return common.enableExceptionOptimization();
+    }
 
-  @Override
-  public InqFallbackConfig self() {
-    return this;
-  }
+    @Override
+    public InqFallbackConfig self() {
+        return this;
+    }
 
-  @Override
-  public InqFallbackConfig inference() {
-    return new InqFallbackConfig(
-        this.general,
-        this.common
-    );
-  }
+    @Override
+    public InqFallbackConfig inference() {
+        return new InqFallbackConfig(
+                this.general,
+                this.common
+        );
+    }
 }
 

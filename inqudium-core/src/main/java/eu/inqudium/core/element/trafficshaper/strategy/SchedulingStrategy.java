@@ -32,67 +32,67 @@ import java.time.Instant;
  */
 public interface SchedulingStrategy<S extends SchedulingState> {
 
-  S initial(TrafficShaperConfig<S> config, Instant now);
+    S initial(TrafficShaperConfig<S> config, Instant now);
 
-  ThrottlePermission<S> schedule(S state, TrafficShaperConfig<S> config, Instant now);
+    ThrottlePermission<S> schedule(S state, TrafficShaperConfig<S> config, Instant now);
 
-  S recordExecution(S state);
+    S recordExecution(S state);
 
-  S reset(S state, TrafficShaperConfig<S> config, Instant now);
+    S reset(S state, TrafficShaperConfig<S> config, Instant now);
 
-  Duration estimateWait(S state, TrafficShaperConfig<S> config, Instant now);
+    Duration estimateWait(S state, TrafficShaperConfig<S> config, Instant now);
 
-  int queueDepth(S state);
+    int queueDepth(S state);
 
-  boolean isUnboundedQueueWarning(S state, TrafficShaperConfig<S> config, Instant now);
+    boolean isUnboundedQueueWarning(S state, TrafficShaperConfig<S> config, Instant now);
 
-  /**
-   * Records that a shaped request completed successfully.
-   *
-   * <p>Adaptive strategies (e.g., {@link AdaptiveRateStrategy}, {@link AimdStrategy})
-   * override this to increase the throughput rate. Non-adaptive strategies return
-   * the state unchanged.
-   *
-   * @param state the current state
-   * @return the updated state (possibly with adjusted rate)
-   */
-  default S recordSuccess(S state) {
-    return state;
-  }
-
-  /**
-   * Records that a shaped request failed.
-   *
-   * <p>Adaptive strategies override this to decrease the throughput rate.
-   * Non-adaptive strategies return the state unchanged.
-   *
-   * @param state the current state
-   * @return the updated state (possibly with adjusted rate)
-   */
-  default S recordFailure(S state) {
-    return state;
-  }
-
-  // ======================== Shared overflow check ========================
-
-  /**
-   * Shared helper for overflow detection used by multiple strategies.
-   * Checks queue depth and wait duration limits in SHAPE_AND_REJECT_OVERFLOW mode.
-   */
-  default boolean shouldReject(S state, TrafficShaperConfig<S> config, Duration waitDuration) {
-    if (config.hasQueueDepthLimit() && state.queueDepth() >= config.maxQueueDepth()) {
-      return true;
+    /**
+     * Records that a shaped request completed successfully.
+     *
+     * <p>Adaptive strategies (e.g., {@link AdaptiveRateStrategy}, {@link AimdStrategy})
+     * override this to increase the throughput rate. Non-adaptive strategies return
+     * the state unchanged.
+     *
+     * @param state the current state
+     * @return the updated state (possibly with adjusted rate)
+     */
+    default S recordSuccess(S state) {
+        return state;
     }
-    return config.hasMaxWaitDurationLimit()
-        && waitDuration.compareTo(config.maxWaitDuration()) > 0;
-  }
 
-  /**
-   * Shared helper for unbounded queue warning detection.
-   */
-  default boolean checkUnboundedWarning(S state, TrafficShaperConfig<S> config, Instant now) {
-    if (config.throttleMode() != ThrottleMode.SHAPE_UNBOUNDED) return false;
-    if (config.unboundedWarnAfter() == null) return false;
-    return state.projectedTailWait(now).compareTo(config.unboundedWarnAfter()) > 0;
-  }
+    /**
+     * Records that a shaped request failed.
+     *
+     * <p>Adaptive strategies override this to decrease the throughput rate.
+     * Non-adaptive strategies return the state unchanged.
+     *
+     * @param state the current state
+     * @return the updated state (possibly with adjusted rate)
+     */
+    default S recordFailure(S state) {
+        return state;
+    }
+
+    // ======================== Shared overflow check ========================
+
+    /**
+     * Shared helper for overflow detection used by multiple strategies.
+     * Checks queue depth and wait duration limits in SHAPE_AND_REJECT_OVERFLOW mode.
+     */
+    default boolean shouldReject(S state, TrafficShaperConfig<S> config, Duration waitDuration) {
+        if (config.hasQueueDepthLimit() && state.queueDepth() >= config.maxQueueDepth()) {
+            return true;
+        }
+        return config.hasMaxWaitDurationLimit()
+                && waitDuration.compareTo(config.maxWaitDuration()) > 0;
+    }
+
+    /**
+     * Shared helper for unbounded queue warning detection.
+     */
+    default boolean checkUnboundedWarning(S state, TrafficShaperConfig<S> config, Instant now) {
+        if (config.throttleMode() != ThrottleMode.SHAPE_UNBOUNDED) return false;
+        if (config.unboundedWarnAfter() == null) return false;
+        return state.projectedTailWait(now).compareTo(config.unboundedWarnAfter()) > 0;
+    }
 }

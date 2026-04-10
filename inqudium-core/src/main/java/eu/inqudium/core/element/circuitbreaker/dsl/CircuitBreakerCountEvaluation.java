@@ -1,15 +1,15 @@
 package eu.inqudium.core.element.circuitbreaker.dsl;
 
 public interface CircuitBreakerCountEvaluation {
-  CircuitBreakerCountEvaluation keepingHistoryOf(int numberOfCalls);
+    CircuitBreakerCountEvaluation keepingHistoryOf(int numberOfCalls);
 
-  CircuitBreakerCountEvaluation requiringAtLeast(int minimumCalls);
+    CircuitBreakerCountEvaluation requiringAtLeast(int minimumCalls);
 
-  CircuitBreakerConfig applyProtectiveProfile();
+    CircuitBreakerConfig applyProtectiveProfile();
 
-  CircuitBreakerConfig applyBalancedProfile();
+    CircuitBreakerConfig applyBalancedProfile();
 
-  CircuitBreakerConfig applyPermissiveProfile();
+    CircuitBreakerConfig applyPermissiveProfile();
 
-  CircuitBreakerConfig apply();
+    CircuitBreakerConfig apply();
 }

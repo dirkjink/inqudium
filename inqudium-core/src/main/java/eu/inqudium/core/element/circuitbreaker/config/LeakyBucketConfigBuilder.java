@@ -40,98 +40,98 @@ import eu.inqudium.core.config.ExtensionBuilder;
  */
 public class LeakyBucketConfigBuilder extends ExtensionBuilder<LeakyBucketConfig> {
 
-  private Integer bucketCapacity;
-  private Double leakRatePerSecond;
+    private Integer bucketCapacity;
+    private Double leakRatePerSecond;
 
-  /**
-   * Sets the bucket capacity (threshold). The circuit opens when the water level
-   * reaches or exceeds this value.
-   *
-   * @param bucketCapacity the bucket capacity (> 0)
-   * @return this builder for chaining
-   */
-  public LeakyBucketConfigBuilder bucketCapacity(int bucketCapacity) {
-    this.bucketCapacity = bucketCapacity;
-    return this;
-  }
-
-  /**
-   * Sets the rate at which the bucket drains, in units per second.
-   * A higher leak rate means failures are forgotten faster.
-   *
-   * @param rate the leak rate (≥ 0)
-   * @return this builder for chaining
-   */
-  public LeakyBucketConfigBuilder leakRatePerSecond(double rate) {
-    this.leakRatePerSecond = rate;
-    return this;
-  }
-
-  /**
-   * <strong>Protective preset</strong> — small bucket with a slow leak; trips very fast
-   * on failure bursts because the bucket fills quickly and drains slowly. Best for
-   * critical dependencies where even a brief burst of errors is concerning.
-   *
-   * <table>
-   *   <tr><th>Parameter</th><th>Value</th></tr>
-   *   <tr><td>bucketCapacity</td><td>5</td></tr>
-   *   <tr><td>leakRatePerSecond</td><td>0.1</td></tr>
-   * </table>
-   *
-   * @return this builder for chaining
-   */
-  public LeakyBucketConfigBuilder protective() {
-    this.bucketCapacity = 5;
-    this.leakRatePerSecond = 0.1;
-    return this;
-  }
-
-  /**
-   * <strong>Balanced preset</strong> — medium bucket with moderate leak; allows a steady
-   * stream of occasional failures while preventing sustained errors from going undetected.
-   *
-   * <table>
-   *   <tr><th>Parameter</th><th>Value</th></tr>
-   *   <tr><td>bucketCapacity</td><td>10</td></tr>
-   *   <tr><td>leakRatePerSecond</td><td>1.0</td></tr>
-   * </table>
-   *
-   * @return this builder for chaining
-   */
-  public LeakyBucketConfigBuilder balanced() {
-    this.bucketCapacity = 10;
-    this.leakRatePerSecond = 1.0;
-    return this;
-  }
-
-  /**
-   * <strong>Permissive preset</strong> — large bucket with fast leak; requires a
-   * high-frequency error stream to overflow. Best for non-critical services or
-   * dependencies known to produce intermittent transient errors.
-   *
-   * <table>
-   *   <tr><th>Parameter</th><th>Value</th></tr>
-   *   <tr><td>bucketCapacity</td><td>30</td></tr>
-   *   <tr><td>leakRatePerSecond</td><td>5.0</td></tr>
-   * </table>
-   *
-   * @return this builder for chaining
-   */
-  public LeakyBucketConfigBuilder permissive() {
-    this.bucketCapacity = 30;
-    this.leakRatePerSecond = 5.0;
-    return this;
-  }
-
-  /**
-   * Builds the configuration. Falls back to {@link #balanced()} if any field is unset.
-   *
-   * @return a fully initialized {@link LeakyBucketConfig}
-   */
-  public LeakyBucketConfig build() {
-    if (bucketCapacity == null || leakRatePerSecond == null) {
-      balanced();
+    /**
+     * Sets the bucket capacity (threshold). The circuit opens when the water level
+     * reaches or exceeds this value.
+     *
+     * @param bucketCapacity the bucket capacity (> 0)
+     * @return this builder for chaining
+     */
+    public LeakyBucketConfigBuilder bucketCapacity(int bucketCapacity) {
+        this.bucketCapacity = bucketCapacity;
+        return this;
     }
-    return new LeakyBucketConfig(bucketCapacity, leakRatePerSecond);
-  }
+
+    /**
+     * Sets the rate at which the bucket drains, in units per second.
+     * A higher leak rate means failures are forgotten faster.
+     *
+     * @param rate the leak rate (≥ 0)
+     * @return this builder for chaining
+     */
+    public LeakyBucketConfigBuilder leakRatePerSecond(double rate) {
+        this.leakRatePerSecond = rate;
+        return this;
+    }
+
+    /**
+     * <strong>Protective preset</strong> — small bucket with a slow leak; trips very fast
+     * on failure bursts because the bucket fills quickly and drains slowly. Best for
+     * critical dependencies where even a brief burst of errors is concerning.
+     *
+     * <table>
+     *   <tr><th>Parameter</th><th>Value</th></tr>
+     *   <tr><td>bucketCapacity</td><td>5</td></tr>
+     *   <tr><td>leakRatePerSecond</td><td>0.1</td></tr>
+     * </table>
+     *
+     * @return this builder for chaining
+     */
+    public LeakyBucketConfigBuilder protective() {
+        this.bucketCapacity = 5;
+        this.leakRatePerSecond = 0.1;
+        return this;
+    }
+
+    /**
+     * <strong>Balanced preset</strong> — medium bucket with moderate leak; allows a steady
+     * stream of occasional failures while preventing sustained errors from going undetected.
+     *
+     * <table>
+     *   <tr><th>Parameter</th><th>Value</th></tr>
+     *   <tr><td>bucketCapacity</td><td>10</td></tr>
+     *   <tr><td>leakRatePerSecond</td><td>1.0</td></tr>
+     * </table>
+     *
+     * @return this builder for chaining
+     */
+    public LeakyBucketConfigBuilder balanced() {
+        this.bucketCapacity = 10;
+        this.leakRatePerSecond = 1.0;
+        return this;
+    }
+
+    /**
+     * <strong>Permissive preset</strong> — large bucket with fast leak; requires a
+     * high-frequency error stream to overflow. Best for non-critical services or
+     * dependencies known to produce intermittent transient errors.
+     *
+     * <table>
+     *   <tr><th>Parameter</th><th>Value</th></tr>
+     *   <tr><td>bucketCapacity</td><td>30</td></tr>
+     *   <tr><td>leakRatePerSecond</td><td>5.0</td></tr>
+     * </table>
+     *
+     * @return this builder for chaining
+     */
+    public LeakyBucketConfigBuilder permissive() {
+        this.bucketCapacity = 30;
+        this.leakRatePerSecond = 5.0;
+        return this;
+    }
+
+    /**
+     * Builds the configuration. Falls back to {@link #balanced()} if any field is unset.
+     *
+     * @return a fully initialized {@link LeakyBucketConfig}
+     */
+    public LeakyBucketConfig build() {
+        if (bucketCapacity == null || leakRatePerSecond == null) {
+            balanced();
+        }
+        return new LeakyBucketConfig(bucketCapacity, leakRatePerSecond);
+    }
 }

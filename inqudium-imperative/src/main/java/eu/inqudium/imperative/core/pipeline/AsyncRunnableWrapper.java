@@ -13,36 +13,36 @@ import java.util.function.Supplier;
  * synchronously and wraps the result in an already-completed {@link CompletionStage}.</p>
  */
 public class AsyncRunnableWrapper
-    extends AsyncBaseWrapper<Runnable, Void, Void, AsyncRunnableWrapper>
-    implements Supplier<CompletionStage<Void>>, Runnable {
+        extends AsyncBaseWrapper<Runnable, Void, Void, AsyncRunnableWrapper>
+        implements Supplier<CompletionStage<Void>>, Runnable {
 
-  public AsyncRunnableWrapper(InqAsyncDecorator<Void, Void> decorator, Runnable delegate) {
-    super(decorator, delegate, coreFor(delegate));
-  }
+    public AsyncRunnableWrapper(InqAsyncDecorator<Void, Void> decorator, Runnable delegate) {
+        super(decorator, delegate, coreFor(delegate));
+    }
 
-  public AsyncRunnableWrapper(String name, Runnable delegate,
-                              AsyncLayerAction<Void, Void> layerAction) {
-    super(name, delegate, coreFor(delegate), layerAction);
-  }
+    public AsyncRunnableWrapper(String name, Runnable delegate,
+                                AsyncLayerAction<Void, Void> layerAction) {
+        super(name, delegate, coreFor(delegate), layerAction);
+    }
 
-  public AsyncRunnableWrapper(String name, Runnable delegate) {
-    this(name, delegate, AsyncLayerAction.passThrough());
-  }
+    public AsyncRunnableWrapper(String name, Runnable delegate) {
+        this(name, delegate, AsyncLayerAction.passThrough());
+    }
 
-  private static InternalAsyncExecutor<Void, Void> coreFor(Runnable delegate) {
-    return (chainId, callId, arg) -> {
-      delegate.run();
-      return CompletableFuture.completedFuture(null);
-    };
-  }
+    private static InternalAsyncExecutor<Void, Void> coreFor(Runnable delegate) {
+        return (chainId, callId, arg) -> {
+            delegate.run();
+            return CompletableFuture.completedFuture(null);
+        };
+    }
 
-  @Override
-  public CompletionStage<Void> get() {
-    return initiateChain(null);
-  }
+    @Override
+    public CompletionStage<Void> get() {
+        return initiateChain(null);
+    }
 
-  @Override
-  public void run() {
-    initiateChain(null);
-  }
+    @Override
+    public void run() {
+        initiateChain(null);
+    }
 }

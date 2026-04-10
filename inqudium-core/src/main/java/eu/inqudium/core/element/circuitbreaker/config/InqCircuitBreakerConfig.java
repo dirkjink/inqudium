@@ -65,50 +65,50 @@ import java.util.function.Predicate;
  * @see FailureMetrics
  */
 public record InqCircuitBreakerConfig(
-    GeneralConfig general,
-    InqElementCommonConfig common,
-    long waitDurationNanos,
-    int successThresholdInHalfOpen,
-    int permittedCallsInHalfOpen,
-    Duration waitDurationInOpenState,
-    Predicate<Throwable> recordFailurePredicate,
-    LongFunction<FailureMetrics> metricsFactory
+        GeneralConfig general,
+        InqElementCommonConfig common,
+        long waitDurationNanos,
+        int successThresholdInHalfOpen,
+        int permittedCallsInHalfOpen,
+        Duration waitDurationInOpenState,
+        Predicate<Throwable> recordFailurePredicate,
+        LongFunction<FailureMetrics> metricsFactory
 ) implements InqElementConfig, ConfigExtension<InqCircuitBreakerConfig> {
 
-  /**
-   * Delegates to the common config's name.
-   */
-  @Override
-  public String name() {
-    return common.name();
-  }
+    /**
+     * Delegates to the common config's name.
+     */
+    @Override
+    public String name() {
+        return common.name();
+    }
 
-  /**
-   * Delegates to the common config's element type.
-   */
-  @Override
-  public InqElementType elementType() {
-    return common.elementType();
-  }
+    /**
+     * Delegates to the common config's element type.
+     */
+    @Override
+    public InqElementType elementType() {
+        return common.elementType();
+    }
 
-  /**
-   * Delegates to the common config's event publisher.
-   */
-  @Override
-  public InqEventPublisher eventPublisher() {
-    return common.eventPublisher();
-  }
+    /**
+     * Delegates to the common config's event publisher.
+     */
+    @Override
+    public InqEventPublisher eventPublisher() {
+        return common.eventPublisher();
+    }
 
-  /**
-   * Delegates to the common config's exception optimization flag.
-   */
-  @Override
-  public Boolean enableExceptionOptimization() {
-    return common.enableExceptionOptimization();
-  }
+    /**
+     * Delegates to the common config's exception optimization flag.
+     */
+    @Override
+    public Boolean enableExceptionOptimization() {
+        return common.enableExceptionOptimization();
+    }
 
-  @Override
-  public InqCircuitBreakerConfig self() {
-    return this;
-  }
+    @Override
+    public InqCircuitBreakerConfig self() {
+        return this;
+    }
 }

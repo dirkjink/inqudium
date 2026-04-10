@@ -24,33 +24,33 @@ import java.util.function.Supplier;
  */
 public interface TimeLimiterSyncExecutor {
 
-  /**
-   * Executes the callable with a timeout, blocking the caller until completion.
-   *
-   * @param callable the operation to execute
-   * @param timeout  the maximum duration to wait
-   * @return the callable's result
-   * @throws Exception if the callable fails, the timeout expires, or the thread is interrupted
-   */
-  <T> T execute(Callable<T> callable, Duration timeout) throws Exception;
+    /**
+     * Executes the callable with a timeout, blocking the caller until completion.
+     *
+     * @param callable the operation to execute
+     * @param timeout  the maximum duration to wait
+     * @return the callable's result
+     * @throws Exception if the callable fails, the timeout expires, or the thread is interrupted
+     */
+    <T> T execute(Callable<T> callable, Duration timeout) throws Exception;
 
-  /**
-   * Awaits an external {@link Future} with a timeout, blocking the caller.
-   *
-   * @param futureSupplier supplier for the already-running future
-   * @param timeout        the maximum duration to wait
-   * @return the future's result
-   * @throws Exception if the future fails, the timeout expires, or the thread is interrupted
-   */
-  <T> T executeFuture(Supplier<Future<T>> futureSupplier, Duration timeout) throws Exception;
+    /**
+     * Awaits an external {@link Future} with a timeout, blocking the caller.
+     *
+     * @param futureSupplier supplier for the already-running future
+     * @param timeout        the maximum duration to wait
+     * @return the future's result
+     * @throws Exception if the future fails, the timeout expires, or the thread is interrupted
+     */
+    <T> T executeFuture(Supplier<Future<T>> futureSupplier, Duration timeout) throws Exception;
 
-  /**
-   * Awaits a {@link CompletionStage} with a timeout, blocking the caller.
-   *
-   * @param stageSupplier supplier for the already-running completion stage
-   * @param timeout       the maximum duration to wait
-   * @return the stage's result
-   * @throws Exception if the stage fails, the timeout expires, or the thread is interrupted
-   */
-  <T> T executeCompletionStage(Supplier<CompletionStage<T>> stageSupplier, Duration timeout) throws Exception;
+    /**
+     * Awaits a {@link CompletionStage} with a timeout, blocking the caller.
+     *
+     * @param stageSupplier supplier for the already-running completion stage
+     * @param timeout       the maximum duration to wait
+     * @return the stage's result
+     * @throws Exception if the stage fails, the timeout expires, or the thread is interrupted
+     */
+    <T> T executeCompletionStage(Supplier<CompletionStage<T>> stageSupplier, Duration timeout) throws Exception;
 }

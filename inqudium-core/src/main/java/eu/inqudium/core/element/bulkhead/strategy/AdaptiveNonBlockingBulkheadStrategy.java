@@ -62,138 +62,138 @@ import java.util.concurrent.atomic.AtomicInteger;
  */
 public final class AdaptiveNonBlockingBulkheadStrategy implements NonBlockingBulkheadStrategy {
 
-  private final InqLimitAlgorithm limitAlgorithm;
-  private final AtomicInteger activeCalls = new AtomicInteger(0);
+    private final InqLimitAlgorithm limitAlgorithm;
+    private final AtomicInteger activeCalls = new AtomicInteger(0);
 
-  /**
-   * Creates an adaptive non-blocking strategy.
-   *
-   * @param limitAlgorithm the algorithm computing the dynamic concurrency limit
-   *                       (e.g., {@link AimdLimitAlgorithm}, {@link VegasLimitAlgorithm})
-   */
-  public AdaptiveNonBlockingBulkheadStrategy(InqLimitAlgorithm limitAlgorithm) {
-    this.limitAlgorithm = Objects.requireNonNull(limitAlgorithm, "limitAlgorithm must not be null");
-  }
-
-  /**
-   * Attempts to acquire a permit without blocking.
-   *
-   * <p>CAS loop: reads the algorithm's current limit and the active count on each
-   * iteration. Succeeds if {@code activeCalls < limit}, fails immediately if at or
-   * over capacity.
-   *
-   * <p>The limit is read inside the loop (not cached before it) because the algorithm
-   * may adjust it concurrently via {@link #onCallComplete}. A stale limit read is
-   * harmless: the CAS will either succeed (correct decision) or fail and retry with
-   * a fresh read.
-   *
-   * @return {@code null} if a permit was acquired, or a {@link RejectionContext} if at capacity
-   */
-  @Override
-  public RejectionContext tryAcquire() {
-    while (true) {
-      int current = activeCalls.get();
-      int limit = limitAlgorithm.getLimit();
-      if (current >= limit) {
-        return RejectionContext.capacityReached(limit, current);
-      }
-      if (activeCalls.compareAndSet(current, current + 1)) {
-        return null; // permit acquired — no allocation
-      }
-      // CAS failed — another thread modified activeCalls. Retry with fresh reads.
+    /**
+     * Creates an adaptive non-blocking strategy.
+     *
+     * @param limitAlgorithm the algorithm computing the dynamic concurrency limit
+     *                       (e.g., {@link AimdLimitAlgorithm}, {@link VegasLimitAlgorithm})
+     */
+    public AdaptiveNonBlockingBulkheadStrategy(InqLimitAlgorithm limitAlgorithm) {
+        this.limitAlgorithm = Objects.requireNonNull(limitAlgorithm, "limitAlgorithm must not be null");
     }
-  }
 
-  @Override
-  public void release() {
-    releaseInternal();
-  }
-
-  @Override
-  public void rollback() {
-    releaseInternal();
-  }
-
-  /**
-   * Feeds the call outcome to the algorithm for limit recalculation.
-   *
-   * <p>This is what makes this strategy adaptive. Without calling this method,
-   * the algorithm never updates and the strategy behaves like a static limiter
-   * at the algorithm's initial limit.
-   *
-   * <p>The algorithm's {@link InqLimitAlgorithm#update(long, boolean, int)} is
-   * CAS-based internally — no lock needed. The updated limit is visible to
-   * concurrent {@link #tryAcquire()} calls on the next CAS iteration.
-   *
-   * <p><b>Important:</b> This method must be called <em>before</em> {@link #release()},
-   * so the in-flight count passed to the algorithm includes this call. Prefer
-   * {@link #completeAndRelease(long, boolean)} which guarantees the correct
-   * ordering.
-   */
-  @Override
-  public void onCallComplete(long rttNanos, boolean isSuccess) {
-    limitAlgorithm.update(rttNanos, isSuccess, activeCalls.get());
-  }
-
-  /**
-   * Combined feedback and release in the correct order.
-   *
-   * <p>This is the recommended way to complete a call. It guarantees that:
-   * <ol>
-   *   <li>The algorithm receives feedback <em>before</em> the permit is released,
-   *       ensuring the in-flight count passed to the algorithm includes this call.</li>
-   *   <li>The permit is always released, even if the algorithm update throws.</li>
-   * </ol>
-   *
-   * <p>Using {@link #onCallComplete(long, boolean)} and {@link #release()} separately
-   * is error-prone: if the caller reverses the order, the algorithm sees an artificially
-   * low in-flight count, which can suppress limit increases when
-   * {@code minUtilizationThreshold > 0}. If the caller forgets {@code onCallComplete}
-   * entirely, the strategy silently degrades to a static limiter.
-   *
-   * @param rttNanos  the round-trip time of the completed call in nanoseconds
-   * @param isSuccess {@code true} if the call succeeded
-   */
-  public void completeAndRelease(long rttNanos, boolean isSuccess) {
-    try {
-      onCallComplete(rttNanos, isSuccess);
-    } finally {
-      release();
+    /**
+     * Attempts to acquire a permit without blocking.
+     *
+     * <p>CAS loop: reads the algorithm's current limit and the active count on each
+     * iteration. Succeeds if {@code activeCalls < limit}, fails immediately if at or
+     * over capacity.
+     *
+     * <p>The limit is read inside the loop (not cached before it) because the algorithm
+     * may adjust it concurrently via {@link #onCallComplete}. A stale limit read is
+     * harmless: the CAS will either succeed (correct decision) or fail and retry with
+     * a fresh read.
+     *
+     * @return {@code null} if a permit was acquired, or a {@link RejectionContext} if at capacity
+     */
+    @Override
+    public RejectionContext tryAcquire() {
+        while (true) {
+            int current = activeCalls.get();
+            int limit = limitAlgorithm.getLimit();
+            if (current >= limit) {
+                return RejectionContext.capacityReached(limit, current);
+            }
+            if (activeCalls.compareAndSet(current, current + 1)) {
+                return null; // permit acquired — no allocation
+            }
+            // CAS failed — another thread modified activeCalls. Retry with fresh reads.
+        }
     }
-  }
 
-  @Override
-  public int availablePermits() {
-    return Math.max(0, limitAlgorithm.getLimit() - activeCalls.get());
-  }
-
-  @Override
-  public int concurrentCalls() {
-    return activeCalls.get();
-  }
-
-  /**
-   * Returns the algorithm's current dynamic limit.
-   * May differ between consecutive calls as the algorithm adjusts.
-   */
-  @Override
-  public int maxConcurrentCalls() {
-    return limitAlgorithm.getLimit();
-  }
-
-  /**
-   * Atomic decrement-if-positive. Over-release guard: if {@code activeCalls}
-   * is already 0, the CAS loop is a no-op.
-   */
-  private void releaseInternal() {
-    while (true) {
-      int current = activeCalls.get();
-      if (current <= 0) {
-        return;
-      }
-      if (activeCalls.compareAndSet(current, current - 1)) {
-        return;
-      }
+    @Override
+    public void release() {
+        releaseInternal();
     }
-  }
+
+    @Override
+    public void rollback() {
+        releaseInternal();
+    }
+
+    /**
+     * Feeds the call outcome to the algorithm for limit recalculation.
+     *
+     * <p>This is what makes this strategy adaptive. Without calling this method,
+     * the algorithm never updates and the strategy behaves like a static limiter
+     * at the algorithm's initial limit.
+     *
+     * <p>The algorithm's {@link InqLimitAlgorithm#update(long, boolean, int)} is
+     * CAS-based internally — no lock needed. The updated limit is visible to
+     * concurrent {@link #tryAcquire()} calls on the next CAS iteration.
+     *
+     * <p><b>Important:</b> This method must be called <em>before</em> {@link #release()},
+     * so the in-flight count passed to the algorithm includes this call. Prefer
+     * {@link #completeAndRelease(long, boolean)} which guarantees the correct
+     * ordering.
+     */
+    @Override
+    public void onCallComplete(long rttNanos, boolean isSuccess) {
+        limitAlgorithm.update(rttNanos, isSuccess, activeCalls.get());
+    }
+
+    /**
+     * Combined feedback and release in the correct order.
+     *
+     * <p>This is the recommended way to complete a call. It guarantees that:
+     * <ol>
+     *   <li>The algorithm receives feedback <em>before</em> the permit is released,
+     *       ensuring the in-flight count passed to the algorithm includes this call.</li>
+     *   <li>The permit is always released, even if the algorithm update throws.</li>
+     * </ol>
+     *
+     * <p>Using {@link #onCallComplete(long, boolean)} and {@link #release()} separately
+     * is error-prone: if the caller reverses the order, the algorithm sees an artificially
+     * low in-flight count, which can suppress limit increases when
+     * {@code minUtilizationThreshold > 0}. If the caller forgets {@code onCallComplete}
+     * entirely, the strategy silently degrades to a static limiter.
+     *
+     * @param rttNanos  the round-trip time of the completed call in nanoseconds
+     * @param isSuccess {@code true} if the call succeeded
+     */
+    public void completeAndRelease(long rttNanos, boolean isSuccess) {
+        try {
+            onCallComplete(rttNanos, isSuccess);
+        } finally {
+            release();
+        }
+    }
+
+    @Override
+    public int availablePermits() {
+        return Math.max(0, limitAlgorithm.getLimit() - activeCalls.get());
+    }
+
+    @Override
+    public int concurrentCalls() {
+        return activeCalls.get();
+    }
+
+    /**
+     * Returns the algorithm's current dynamic limit.
+     * May differ between consecutive calls as the algorithm adjusts.
+     */
+    @Override
+    public int maxConcurrentCalls() {
+        return limitAlgorithm.getLimit();
+    }
+
+    /**
+     * Atomic decrement-if-positive. Over-release guard: if {@code activeCalls}
+     * is already 0, the CAS loop is a no-op.
+     */
+    private void releaseInternal() {
+        while (true) {
+            int current = activeCalls.get();
+            if (current <= 0) {
+                return;
+            }
+            if (activeCalls.compareAndSet(current, current - 1)) {
+                return;
+            }
+        }
+    }
 }

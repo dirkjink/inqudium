@@ -1,6 +1,7 @@
 # Compatibility Flags
 
-When Inqudium makes a behavioral change (e.g., a corrected algorithm boundary), the change is gated by a flag. The old behavior is preserved by default. You opt in to new behavior explicitly.
+When Inqudium makes a behavioral change (e.g., a corrected algorithm boundary), the change is gated by a flag. The old
+behavior is preserved by default. You opt in to new behavior explicitly.
 
 ## Quick start
 

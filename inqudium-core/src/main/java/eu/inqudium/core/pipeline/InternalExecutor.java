@@ -27,23 +27,23 @@ package eu.inqudium.core.pipeline;
  */
 public interface InternalExecutor<A, R> {
 
-  /**
-   * Executes this layer's logic and propagates to the next layer in the chain.
-   *
-   * <p>Implementations typically delegate to a {@link LayerAction} which decides
-   * when and whether to call the next step. The terminal implementation at the
-   * end of the chain invokes the actual delegate (e.g. calls
-   * {@code delegate.run()}, {@code delegate.get()}, etc.).</p>
-   *
-   * @param chainId  identifies the wrapper chain — shared across all layers,
-   *                 useful for correlating log entries from the same chain
-   * @param callId   identifies this particular invocation — unique per call,
-   *                 incremented by the outermost wrapper before chain traversal
-   * @param argument the argument flowing through the chain; {@code null} for
-   *                 argument-free interfaces like {@link Runnable} and
-   *                 {@link java.util.function.Supplier}
-   * @return the result of the innermost delegate's execution, potentially
-   * modified by intermediate layers
-   */
-  R execute(long chainId, long callId, A argument);
+    /**
+     * Executes this layer's logic and propagates to the next layer in the chain.
+     *
+     * <p>Implementations typically delegate to a {@link LayerAction} which decides
+     * when and whether to call the next step. The terminal implementation at the
+     * end of the chain invokes the actual delegate (e.g. calls
+     * {@code delegate.run()}, {@code delegate.get()}, etc.).</p>
+     *
+     * @param chainId  identifies the wrapper chain — shared across all layers,
+     *                 useful for correlating log entries from the same chain
+     * @param callId   identifies this particular invocation — unique per call,
+     *                 incremented by the outermost wrapper before chain traversal
+     * @param argument the argument flowing through the chain; {@code null} for
+     *                 argument-free interfaces like {@link Runnable} and
+     *                 {@link java.util.function.Supplier}
+     * @return the result of the innermost delegate's execution, potentially
+     * modified by intermediate layers
+     */
+    R execute(long chainId, long callId, A argument);
 }

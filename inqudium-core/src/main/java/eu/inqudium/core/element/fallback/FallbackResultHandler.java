@@ -9,43 +9,43 @@ import java.util.function.Predicate;
  */
 public sealed interface FallbackResultHandler<T> {
 
-  /**
-   * Returns a descriptive name for this handler (used in events/logging).
-   */
-  String name();
+    /**
+     * Returns a descriptive name for this handler (used in events/logging).
+     */
+    String name();
 
-  /**
-   * Tests whether this handler matches the given result (i.e. if a fallback is needed).
-   */
-  boolean matches(T result);
+    /**
+     * Tests whether this handler matches the given result (i.e. if a fallback is needed).
+     */
+    boolean matches(T result);
 
-  /**
-   * Applies the fallback function to produce a substitute value based on the rejected result.
-   */
-  T apply(T result);
+    /**
+     * Applies the fallback function to produce a substitute value based on the rejected result.
+     */
+    T apply(T result);
 
-  // ======================== Implementations ========================
+    // ======================== Implementations ========================
 
-  record ForResult<T>(
-      String name,
-      Predicate<T> predicate,
-      Function<T, T> fallback // Fix 1: Nutzt nun Function statt Supplier
-  ) implements FallbackResultHandler<T> {
+    record ForResult<T>(
+            String name,
+            Predicate<T> predicate,
+            Function<T, T> fallback // Fix 1: Nutzt nun Function statt Supplier
+    ) implements FallbackResultHandler<T> {
 
-    public ForResult {
-      Objects.requireNonNull(name);
-      Objects.requireNonNull(predicate);
-      Objects.requireNonNull(fallback);
+        public ForResult {
+            Objects.requireNonNull(name);
+            Objects.requireNonNull(predicate);
+            Objects.requireNonNull(fallback);
+        }
+
+        @Override
+        public boolean matches(T result) {
+            return predicate.test(result);
+        }
+
+        @Override
+        public T apply(T result) {
+            return fallback.apply(result); // Fix 1: Übergibt das Original-Ergebnis
+        }
     }
-
-    @Override
-    public boolean matches(T result) {
-      return predicate.test(result);
-    }
-
-    @Override
-    public T apply(T result) {
-      return fallback.apply(result); // Fix 1: Übergibt das Original-Ergebnis
-    }
-  }
 }

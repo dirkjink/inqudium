@@ -22,47 +22,47 @@ import java.util.concurrent.Future;
  */
 public interface TimeLimiterContext {
 
-  /**
-   * Returns the time limiter configuration.
-   */
-  TimeLimiterConfig config();
+    /**
+     * Returns the time limiter configuration.
+     */
+    TimeLimiterConfig config();
 
-  /**
-   * Returns the clock used for timestamps in events and snapshots.
-   */
-  Clock clock();
+    /**
+     * Returns the clock used for timestamps in events and snapshots.
+     */
+    Clock clock();
 
-  /**
-   * Returns the unique instance identifier for exception identity matching.
-   */
-  String instanceId();
+    /**
+     * Returns the unique instance identifier for exception identity matching.
+     */
+    String instanceId();
 
-  /**
-   * Emits an event to all registered listeners.
-   * Listener exceptions are caught and logged — they never propagate to the caller.
-   */
-  void emitEvent(TimeLimiterEvent event);
+    /**
+     * Emits an event to all registered listeners.
+     * Listener exceptions are caught and logged — they never propagate to the caller.
+     */
+    void emitEvent(TimeLimiterEvent event);
 
-  /**
-   * Creates the timeout exception via the configured factory with the instanceId injected.
-   *
-   * @param effectiveTimeout the actual timeout that was exceeded
-   * @return the timeout exception ready to throw
-   */
-  RuntimeException createTimeoutException(java.time.Duration effectiveTimeout);
+    /**
+     * Creates the timeout exception via the configured factory with the instanceId injected.
+     *
+     * @param effectiveTimeout the actual timeout that was exceeded
+     * @return the timeout exception ready to throw
+     */
+    RuntimeException createTimeoutException(java.time.Duration effectiveTimeout);
 
-  /**
-   * Safely cancels a future, catching and logging any exceptions from the cancel call.
-   */
-  void cancelSafely(Future<?> future);
+    /**
+     * Safely cancels a future, catching and logging any exceptions from the cancel call.
+     */
+    void cancelSafely(Future<?> future);
 
-  /**
-   * Returns a unique thread name for a worker virtual thread.
-   */
-  String nextThreadName();
+    /**
+     * Returns a unique thread name for a worker virtual thread.
+     */
+    String nextThreadName();
 
-  /**
-   * Returns a unique thread name for a Future-to-CF bridge virtual thread.
-   */
-  String nextBridgeThreadName();
+    /**
+     * Returns a unique thread name for a Future-to-CF bridge virtual thread.
+     */
+    String nextBridgeThreadName();
 }

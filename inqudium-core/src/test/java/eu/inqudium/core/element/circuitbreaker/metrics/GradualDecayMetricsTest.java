@@ -10,268 +10,268 @@ import static org.assertj.core.api.Assertions.assertThat;
 @DisplayNameGeneration(DisplayNameGenerator.ReplaceUnderscores.class)
 class GradualDecayMetricsTest {
 
-  private static final long NOW = 1_000_000_000L;
-  private static final long LATER = 2_000_000_000L;
+    private static final long NOW = 1_000_000_000L;
+    private static final long LATER = 2_000_000_000L;
 
-  // ======================== Initial State ========================
+    // ======================== Initial State ========================
 
-  @Nested
-  class InitialState {
+    @Nested
+    class InitialState {
 
-    @Test
-    void should_start_with_zero_failure_count() {
-      // Given / When
-      var metrics = GradualDecayMetrics.initial(5, 0);
+        @Test
+        void should_start_with_zero_failure_count() {
+            // Given / When
+            var metrics = GradualDecayMetrics.initial(5, 0);
 
-      // Then
-      assertThat(metrics.failureCount()).isZero();
-      assertThat(metrics.isThresholdReached(NOW)).isFalse();
+            // Then
+            assertThat(metrics.failureCount()).isZero();
+            assertThat(metrics.isThresholdReached(NOW)).isFalse();
+        }
+
+        @Test
+        void should_store_the_configured_max_failure_count() {
+            // Given / When
+            var metrics = GradualDecayMetrics.initial(10, 0);
+
+            // Then
+            assertThat(metrics.maxFailureCount()).isEqualTo(10);
+        }
     }
 
-    @Test
-    void should_store_the_configured_max_failure_count() {
-      // Given / When
-      var metrics = GradualDecayMetrics.initial(10, 0);
+    // ======================== Recording Failures ========================
 
-      // Then
-      assertThat(metrics.maxFailureCount()).isEqualTo(10);
-    }
-  }
+    @Nested
+    class RecordingFailures {
 
-  // ======================== Recording Failures ========================
+        @Test
+        void should_increment_failure_count_on_each_failure() {
+            // Given
+            var metrics = GradualDecayMetrics.initial(5, 0);
 
-  @Nested
-  class RecordingFailures {
+            // When
+            var after = metrics.recordFailure(NOW).recordFailure(NOW).recordFailure(NOW);
 
-    @Test
-    void should_increment_failure_count_on_each_failure() {
-      // Given
-      var metrics = GradualDecayMetrics.initial(5, 0);
+            // Then
+            assertThat(((GradualDecayMetrics) after).failureCount()).isEqualTo(3);
+        }
 
-      // When
-      var after = metrics.recordFailure(NOW).recordFailure(NOW).recordFailure(NOW);
+        @Test
+        void should_reach_threshold_at_exactly_n_failures() {
+            // Given
+            var metrics = GradualDecayMetrics.initial(3, 0);
 
-      // Then
-      assertThat(((GradualDecayMetrics) after).failureCount()).isEqualTo(3);
-    }
+            // When
+            var updated = metrics.recordFailure(NOW).recordFailure(NOW).recordFailure(NOW);
 
-    @Test
-    void should_reach_threshold_at_exactly_n_failures() {
-      // Given
-      var metrics = GradualDecayMetrics.initial(3, 0);
+            // Then
+            assertThat(updated.isThresholdReached(NOW)).isTrue();
+        }
 
-      // When
-      var updated = metrics.recordFailure(NOW).recordFailure(NOW).recordFailure(NOW);
+        @Test
+        void should_not_reach_threshold_with_fewer_failures_than_required() {
+            // Given
+            var metrics = GradualDecayMetrics.initial(3, 0);
 
-      // Then
-      assertThat(updated.isThresholdReached(NOW)).isTrue();
-    }
+            // When
+            var updated = metrics.recordFailure(NOW).recordFailure(NOW);
 
-    @Test
-    void should_not_reach_threshold_with_fewer_failures_than_required() {
-      // Given
-      var metrics = GradualDecayMetrics.initial(3, 0);
+            // Then
+            assertThat(updated.isThresholdReached(NOW)).isFalse();
+        }
 
-      // When
-      var updated = metrics.recordFailure(NOW).recordFailure(NOW);
+        @Test
+        void should_allow_failure_count_to_exceed_threshold() {
+            // Given
+            var metrics = GradualDecayMetrics.initial(2, 0);
 
-      // Then
-      assertThat(updated.isThresholdReached(NOW)).isFalse();
-    }
+            // When
+            var updated = metrics.recordFailure(NOW).recordFailure(NOW)
+                    .recordFailure(NOW).recordFailure(NOW);
 
-    @Test
-    void should_allow_failure_count_to_exceed_threshold() {
-      // Given
-      var metrics = GradualDecayMetrics.initial(2, 0);
-
-      // When
-      var updated = metrics.recordFailure(NOW).recordFailure(NOW)
-          .recordFailure(NOW).recordFailure(NOW);
-
-      // Then
-      assertThat(((GradualDecayMetrics) updated).failureCount()).isEqualTo(4);
-      assertThat(updated.isThresholdReached(NOW)).isTrue();
-    }
-  }
-
-  // ======================== Recording Successes (Gradual Decay) ========================
-
-  @Nested
-  class RecordingSuccesses {
-
-    @Test
-    void should_decrement_failure_count_by_one_per_success() {
-      // Given
-      var metrics = GradualDecayMetrics.initial(5, 0);
-      var withFailures = metrics.recordFailure(NOW).recordFailure(NOW).recordFailure(NOW);
-
-      // When
-      var afterOneSuccess = withFailures.recordSuccess(NOW);
-
-      // Then
-      assertThat(((GradualDecayMetrics) afterOneSuccess).failureCount()).isEqualTo(2);
+            // Then
+            assertThat(((GradualDecayMetrics) updated).failureCount()).isEqualTo(4);
+            assertThat(updated.isThresholdReached(NOW)).isTrue();
+        }
     }
 
-    @Test
-    void should_require_as_many_successes_as_failures_to_fully_heal() {
-      // Given
-      var metrics = GradualDecayMetrics.initial(5, 0);
-      var tripped = metrics.recordFailure(NOW).recordFailure(NOW).recordFailure(NOW);
+    // ======================== Recording Successes (Gradual Decay) ========================
 
-      // When
-      var healed = tripped.recordSuccess(NOW).recordSuccess(NOW).recordSuccess(NOW);
+    @Nested
+    class RecordingSuccesses {
 
-      // Then
-      assertThat(((GradualDecayMetrics) healed).failureCount()).isZero();
+        @Test
+        void should_decrement_failure_count_by_one_per_success() {
+            // Given
+            var metrics = GradualDecayMetrics.initial(5, 0);
+            var withFailures = metrics.recordFailure(NOW).recordFailure(NOW).recordFailure(NOW);
+
+            // When
+            var afterOneSuccess = withFailures.recordSuccess(NOW);
+
+            // Then
+            assertThat(((GradualDecayMetrics) afterOneSuccess).failureCount()).isEqualTo(2);
+        }
+
+        @Test
+        void should_require_as_many_successes_as_failures_to_fully_heal() {
+            // Given
+            var metrics = GradualDecayMetrics.initial(5, 0);
+            var tripped = metrics.recordFailure(NOW).recordFailure(NOW).recordFailure(NOW);
+
+            // When
+            var healed = tripped.recordSuccess(NOW).recordSuccess(NOW).recordSuccess(NOW);
+
+            // Then
+            assertThat(((GradualDecayMetrics) healed).failureCount()).isZero();
+        }
+
+        @Test
+        void should_not_allow_failure_count_to_drop_below_zero() {
+            // Given
+            var metrics = GradualDecayMetrics.initial(5, 0);
+
+            // When
+            var afterSuccess = metrics.recordSuccess(NOW).recordSuccess(NOW);
+
+            // Then
+            assertThat(((GradualDecayMetrics) afterSuccess).failureCount()).isZero();
+        }
+
+        @Test
+        void should_drop_below_threshold_after_enough_successes() {
+            // Given — threshold is 3, we have 4 failures, so we need 2 successes to drop below
+            var metrics = GradualDecayMetrics.initial(3, 0);
+            var above = metrics.recordFailure(NOW).recordFailure(NOW)
+                    .recordFailure(NOW).recordFailure(NOW);
+            assertThat(above.isThresholdReached(NOW)).isTrue();
+
+            // When
+            var belowThreshold = above.recordSuccess(NOW).recordSuccess(NOW);
+
+            // Then
+            assertThat(((GradualDecayMetrics) belowThreshold).failureCount()).isEqualTo(2);
+            assertThat(belowThreshold.isThresholdReached(NOW)).isFalse();
+        }
     }
 
-    @Test
-    void should_not_allow_failure_count_to_drop_below_zero() {
-      // Given
-      var metrics = GradualDecayMetrics.initial(5, 0);
+    // ======================== Interleaved Successes and Failures ========================
 
-      // When
-      var afterSuccess = metrics.recordSuccess(NOW).recordSuccess(NOW);
+    @Nested
+    class InterleavedOutcomes {
 
-      // Then
-      assertThat(((GradualDecayMetrics) afterSuccess).failureCount()).isZero();
+        @Test
+        void should_correctly_track_interleaved_successes_and_failures() {
+            // Given
+            var metrics = GradualDecayMetrics.initial(3, 0);
+
+            // When — F, F, S, F, F, S → count should be 2
+            var result = metrics
+                    .recordFailure(NOW).recordFailure(NOW)
+                    .recordSuccess(NOW)
+                    .recordFailure(NOW).recordFailure(NOW)
+                    .recordSuccess(NOW);
+
+            // Then
+            assertThat(((GradualDecayMetrics) result).failureCount()).isEqualTo(2);
+            assertThat(result.isThresholdReached(NOW)).isFalse();
+        }
+
+        @Test
+        void should_trip_when_failures_outpace_successes() {
+            // Given
+            var metrics = GradualDecayMetrics.initial(2, 0);
+
+            // When — F, F, S, F → count should be 2 (3 failures - 1 success)
+            var result = metrics
+                    .recordFailure(NOW).recordFailure(NOW)
+                    .recordSuccess(NOW)
+                    .recordFailure(NOW);
+
+            // Then
+            assertThat(((GradualDecayMetrics) result).failureCount()).isEqualTo(2);
+            assertThat(result.isThresholdReached(NOW)).isTrue();
+        }
     }
 
-    @Test
-    void should_drop_below_threshold_after_enough_successes() {
-      // Given — threshold is 3, we have 4 failures, so we need 2 successes to drop below
-      var metrics = GradualDecayMetrics.initial(3, 0);
-      var above = metrics.recordFailure(NOW).recordFailure(NOW)
-          .recordFailure(NOW).recordFailure(NOW);
-      assertThat(above.isThresholdReached(NOW)).isTrue();
+    // ======================== Reset ========================
 
-      // When
-      var belowThreshold = above.recordSuccess(NOW).recordSuccess(NOW);
+    @Nested
+    class Resetting {
 
-      // Then
-      assertThat(((GradualDecayMetrics) belowThreshold).failureCount()).isEqualTo(2);
-      assertThat(belowThreshold.isThresholdReached(NOW)).isFalse();
-    }
-  }
+        @Test
+        void should_return_failure_count_to_zero_after_reset() {
+            // Given
+            var metrics = GradualDecayMetrics.initial(3, 0);
+            var tripped = metrics.recordFailure(NOW).recordFailure(NOW).recordFailure(NOW);
 
-  // ======================== Interleaved Successes and Failures ========================
+            // When
+            var afterReset = tripped.reset(LATER);
 
-  @Nested
-  class InterleavedOutcomes {
+            // Then
+            assertThat(afterReset.isThresholdReached(LATER)).isFalse();
+            assertThat(((GradualDecayMetrics) afterReset).failureCount()).isZero();
+        }
 
-    @Test
-    void should_correctly_track_interleaved_successes_and_failures() {
-      // Given
-      var metrics = GradualDecayMetrics.initial(3, 0);
+        @Test
+        void should_preserve_max_failure_count_after_reset() {
+            // Given
+            var metrics = GradualDecayMetrics.initial(7, 0);
 
-      // When — F, F, S, F, F, S → count should be 2
-      var result = metrics
-          .recordFailure(NOW).recordFailure(NOW)
-          .recordSuccess(NOW)
-          .recordFailure(NOW).recordFailure(NOW)
-          .recordSuccess(NOW);
+            // When
+            var afterReset = (GradualDecayMetrics) metrics.reset(LATER);
 
-      // Then
-      assertThat(((GradualDecayMetrics) result).failureCount()).isEqualTo(2);
-      assertThat(result.isThresholdReached(NOW)).isFalse();
+            // Then
+            assertThat(afterReset.maxFailureCount()).isEqualTo(7);
+        }
     }
 
-    @Test
-    void should_trip_when_failures_outpace_successes() {
-      // Given
-      var metrics = GradualDecayMetrics.initial(2, 0);
+    // ======================== Immutability ========================
 
-      // When — F, F, S, F → count should be 2 (3 failures - 1 success)
-      var result = metrics
-          .recordFailure(NOW).recordFailure(NOW)
-          .recordSuccess(NOW)
-          .recordFailure(NOW);
+    @Nested
+    class Immutability {
 
-      // Then
-      assertThat(((GradualDecayMetrics) result).failureCount()).isEqualTo(2);
-      assertThat(result.isThresholdReached(NOW)).isTrue();
-    }
-  }
+        @Test
+        void should_not_modify_original_when_recording_failure() {
+            // Given
+            var original = GradualDecayMetrics.initial(5, 0);
 
-  // ======================== Reset ========================
+            // When
+            original.recordFailure(NOW);
 
-  @Nested
-  class Resetting {
+            // Then
+            assertThat(original.failureCount()).isZero();
+        }
 
-    @Test
-    void should_return_failure_count_to_zero_after_reset() {
-      // Given
-      var metrics = GradualDecayMetrics.initial(3, 0);
-      var tripped = metrics.recordFailure(NOW).recordFailure(NOW).recordFailure(NOW);
+        @Test
+        void should_not_modify_original_when_recording_success() {
+            // Given
+            var original = (GradualDecayMetrics) GradualDecayMetrics.initial(5, 0)
+                    .recordFailure(NOW).recordFailure(NOW);
 
-      // When
-      var afterReset = tripped.reset(LATER);
+            // When
+            original.recordSuccess(NOW);
 
-      // Then
-      assertThat(afterReset.isThresholdReached(LATER)).isFalse();
-      assertThat(((GradualDecayMetrics) afterReset).failureCount()).isZero();
+            // Then
+            assertThat(original.failureCount()).isEqualTo(2);
+        }
     }
 
-    @Test
-    void should_preserve_max_failure_count_after_reset() {
-      // Given
-      var metrics = GradualDecayMetrics.initial(7, 0);
+    // ======================== Trip Reason ========================
 
-      // When
-      var afterReset = (GradualDecayMetrics) metrics.reset(LATER);
+    @Nested
+    class TripReason {
 
-      // Then
-      assertThat(afterReset.maxFailureCount()).isEqualTo(7);
+        @Test
+        void should_include_failure_count_and_threshold_in_reason() {
+            // Given
+            var metrics = GradualDecayMetrics.initial(3, 0);
+            var tripped = metrics.recordFailure(NOW).recordFailure(NOW).recordFailure(NOW);
+
+            // When
+            String reason = tripped.getTripReason(NOW);
+
+            // Then
+            assertThat(reason).contains("3").contains("Threshold");
+        }
     }
-  }
-
-  // ======================== Immutability ========================
-
-  @Nested
-  class Immutability {
-
-    @Test
-    void should_not_modify_original_when_recording_failure() {
-      // Given
-      var original = GradualDecayMetrics.initial(5, 0);
-
-      // When
-      original.recordFailure(NOW);
-
-      // Then
-      assertThat(original.failureCount()).isZero();
-    }
-
-    @Test
-    void should_not_modify_original_when_recording_success() {
-      // Given
-      var original = (GradualDecayMetrics) GradualDecayMetrics.initial(5, 0)
-          .recordFailure(NOW).recordFailure(NOW);
-
-      // When
-      original.recordSuccess(NOW);
-
-      // Then
-      assertThat(original.failureCount()).isEqualTo(2);
-    }
-  }
-
-  // ======================== Trip Reason ========================
-
-  @Nested
-  class TripReason {
-
-    @Test
-    void should_include_failure_count_and_threshold_in_reason() {
-      // Given
-      var metrics = GradualDecayMetrics.initial(3, 0);
-      var tripped = metrics.recordFailure(NOW).recordFailure(NOW).recordFailure(NOW);
-
-      // When
-      String reason = tripped.getTripReason(NOW);
-
-      // Then
-      assertThat(reason).contains("3").contains("Threshold");
-    }
-  }
 }

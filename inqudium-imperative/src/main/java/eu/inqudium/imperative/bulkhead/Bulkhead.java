@@ -39,60 +39,60 @@ import eu.inqudium.imperative.core.pipeline.InqAsyncExecutor;
  * @since 0.4.0
  */
 public interface Bulkhead<A, R>
-    extends InqDecorator<A, R>,
-    InqExecutor<A, R>,
-    InqAsyncExecutor<A, R>,
-    InqAsyncDecorator<A, R> {
+        extends InqDecorator<A, R>,
+        InqExecutor<A, R>,
+        InqAsyncExecutor<A, R>,
+        InqAsyncDecorator<A, R> {
 
-  /**
-   * Creates a bulkhead from a general {@link InqConfig} container.
-   *
-   * @param config the configuration container holding an {@link InqImperativeBulkheadConfig}
-   * @param <A>    the argument type
-   * @param <R>    the return type
-   * @return a new bulkhead instance
-   */
-  static <A, R> Bulkhead<A, R> of(InqConfig config) {
-    return of(config.of(InqImperativeBulkheadConfig.class).orElseThrow());
-  }
+    /**
+     * Creates a bulkhead from a general {@link InqConfig} container.
+     *
+     * @param config the configuration container holding an {@link InqImperativeBulkheadConfig}
+     * @param <A>    the argument type
+     * @param <R>    the return type
+     * @return a new bulkhead instance
+     */
+    static <A, R> Bulkhead<A, R> of(InqConfig config) {
+        return of(config.of(InqImperativeBulkheadConfig.class).orElseThrow());
+    }
 
-  /**
-   * Creates a bulkhead with the given configuration.
-   *
-   * <p>Uses a {@link SemaphoreBulkheadStrategy} with the configured
-   * maximum concurrent calls.</p>
-   *
-   * @param config the bulkhead configuration
-   * @param <A>    the argument type
-   * @param <R>    the return type
-   * @return a new bulkhead instance
-   */
-  static <A, R> Bulkhead<A, R> of(InqImperativeBulkheadConfig config) {
-    return new ImperativeBulkhead<>(config, new SemaphoreBulkheadStrategy(config.maxConcurrentCalls()));
-  }
+    /**
+     * Creates a bulkhead with the given configuration.
+     *
+     * <p>Uses a {@link SemaphoreBulkheadStrategy} with the configured
+     * maximum concurrent calls.</p>
+     *
+     * @param config the bulkhead configuration
+     * @param <A>    the argument type
+     * @param <R>    the return type
+     * @return a new bulkhead instance
+     */
+    static <A, R> Bulkhead<A, R> of(InqImperativeBulkheadConfig config) {
+        return new ImperativeBulkhead<>(config, new SemaphoreBulkheadStrategy(config.maxConcurrentCalls()));
+    }
 
-  /**
-   * Returns the bulkhead configuration.
-   */
-  InqImperativeBulkheadConfig getConfig();
+    /**
+     * Returns the bulkhead configuration.
+     */
+    InqImperativeBulkheadConfig getConfig();
 
-  /**
-   * Returns the number of currently active concurrent calls.
-   */
-  int getConcurrentCalls();
+    /**
+     * Returns the number of currently active concurrent calls.
+     */
+    int getConcurrentCalls();
 
-  /**
-   * Returns the number of permits currently available.
-   */
-  int getAvailablePermits();
+    /**
+     * Returns the number of permits currently available.
+     */
+    int getAvailablePermits();
 
-  /**
-   * {@inheritDoc}
-   *
-   * <p>Always returns {@link InqElementType#BULKHEAD}.</p>
-   */
-  @Override
-  default InqElementType getElementType() {
-    return InqElementType.BULKHEAD;
-  }
+    /**
+     * {@inheritDoc}
+     *
+     * <p>Always returns {@link InqElementType#BULKHEAD}.</p>
+     */
+    @Override
+    default InqElementType getElementType() {
+        return InqElementType.BULKHEAD;
+    }
 }

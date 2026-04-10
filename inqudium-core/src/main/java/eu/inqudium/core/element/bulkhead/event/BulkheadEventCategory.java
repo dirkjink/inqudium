@@ -52,29 +52,29 @@ import eu.inqudium.core.element.bulkhead.config.BulkheadEventConfig;
  */
 public enum BulkheadEventCategory {
 
-  /**
-   * Acquire and release events — emitted on every successful call.
-   *
-   * <p>Diagnostic tracing of the permit lifecycle. Disabled by default
-   * to avoid per-call allocation overhead (~80 B/op). Enable for
-   * short diagnostic sessions when investigating concurrency issues.
-   */
-  LIFECYCLE,
+    /**
+     * Acquire and release events — emitted on every successful call.
+     *
+     * <p>Diagnostic tracing of the permit lifecycle. Disabled by default
+     * to avoid per-call allocation overhead (~80 B/op). Enable for
+     * short diagnostic sessions when investigating concurrency issues.
+     */
+    LIFECYCLE,
 
-  /**
-   * Rejection events — emitted when a permit request is denied.
-   *
-   * <p>Enabled by default. Rejections are exceptional, operationally
-   * relevant, and their per-event cost is negligible relative to
-   * the rejection path itself.
-   */
-  REJECTION,
+    /**
+     * Rejection events — emitted when a permit request is denied.
+     *
+     * <p>Enabled by default. Rejections are exceptional, operationally
+     * relevant, and their per-event cost is negligible relative to
+     * the rejection path itself.
+     */
+    REJECTION,
 
-  /**
-   * Trace-level diagnostic events (wait times, rollback details).
-   *
-   * <p>The most granular diagnostic category. Disabled by default.
-   * Enable for latency analysis and edge-case debugging.
-   */
-  TRACE
+    /**
+     * Trace-level diagnostic events (wait times, rollback details).
+     *
+     * <p>The most granular diagnostic category. Disabled by default.
+     * Enable for latency analysis and edge-case debugging.
+     */
+    TRACE
 }

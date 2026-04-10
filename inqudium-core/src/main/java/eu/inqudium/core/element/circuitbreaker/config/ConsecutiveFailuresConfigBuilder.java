@@ -32,99 +32,99 @@ package eu.inqudium.core.element.circuitbreaker.config;
  */
 public class ConsecutiveFailuresConfigBuilder {
 
-  private Integer maxConsecutiveFailures;
-  private Integer initialConsecutiveFailures;
+    private Integer maxConsecutiveFailures;
+    private Integer initialConsecutiveFailures;
 
-  /**
-   * Sets the starting failure counter. Typically 0, but can be pre-loaded
-   * to a higher value for advanced scenarios (e.g., warm-start after deployment
-   * against a known-degraded dependency).
-   *
-   * @param count the initial consecutive failure count (>= 0)
-   * @return this builder for chaining
-   */
-  public ConsecutiveFailuresConfigBuilder initialConsecutiveFailures(int count) {
-    this.initialConsecutiveFailures = count;
-    return this;
-  }
-
-  /**
-   * Sets the consecutive failure threshold. Once this many back-to-back failures
-   * are recorded, {@code isThresholdReached()} returns {@code true}.
-   *
-   * @param maxConsecutiveFailures the trip threshold (> 0)
-   * @return this builder for chaining
-   */
-  public ConsecutiveFailuresConfigBuilder maxConsecutiveFailures(int maxConsecutiveFailures) {
-    this.maxConsecutiveFailures = maxConsecutiveFailures;
-    return this;
-  }
-
-  /**
-   * <strong>Protective preset</strong> — high sensitivity for critical, low-latency dependencies
-   * where even a short burst of consecutive errors likely indicates a complete outage.
-   *
-   * <table>
-   *   <tr><th>Parameter</th><th>Value</th></tr>
-   *   <tr><td>maxConsecutiveFailures</td><td>4</td></tr>
-   *   <tr><td>initialConsecutiveFailures</td><td>0</td></tr>
-   * </table>
-   *
-   * @return this builder for chaining
-   */
-  public ConsecutiveFailuresConfigBuilder protective() {
-    this.maxConsecutiveFailures = 4;
-    this.initialConsecutiveFailures = 0;
-    return this;
-  }
-
-  /**
-   * <strong>Balanced preset</strong> — moderate sensitivity suitable for typical distributed
-   * systems where small network hiccups should be tolerated, but sustained connectivity
-   * loss must be detected.
-   *
-   * <table>
-   *   <tr><th>Parameter</th><th>Value</th></tr>
-   *   <tr><td>maxConsecutiveFailures</td><td>15</td></tr>
-   *   <tr><td>initialConsecutiveFailures</td><td>0</td></tr>
-   * </table>
-   *
-   * @return this builder for chaining
-   */
-  public ConsecutiveFailuresConfigBuilder balanced() {
-    this.maxConsecutiveFailures = 15;
-    this.initialConsecutiveFailures = 0;
-    return this;
-  }
-
-  /**
-   * <strong>Permissive preset</strong> — very high tolerance for unstable legacy systems or
-   * non-critical background tasks that should almost never trigger the breaker.
-   *
-   * <table>
-   *   <tr><th>Parameter</th><th>Value</th></tr>
-   *   <tr><td>maxConsecutiveFailures</td><td>50</td></tr>
-   *   <tr><td>initialConsecutiveFailures</td><td>0</td></tr>
-   * </table>
-   *
-   * @return this builder for chaining
-   */
-  public ConsecutiveFailuresConfigBuilder permissive() {
-    this.maxConsecutiveFailures = 50;
-    this.initialConsecutiveFailures = 0;
-    return this;
-  }
-
-  /**
-   * Builds the configuration. If any required field is still {@code null},
-   * the {@link #balanced()} preset is applied first as a safe default.
-   *
-   * @return a fully initialized {@link ConsecutiveFailuresConfig}
-   */
-  public ConsecutiveFailuresConfig build() {
-    if (maxConsecutiveFailures == null || initialConsecutiveFailures == null) {
-      balanced();
+    /**
+     * Sets the starting failure counter. Typically 0, but can be pre-loaded
+     * to a higher value for advanced scenarios (e.g., warm-start after deployment
+     * against a known-degraded dependency).
+     *
+     * @param count the initial consecutive failure count (>= 0)
+     * @return this builder for chaining
+     */
+    public ConsecutiveFailuresConfigBuilder initialConsecutiveFailures(int count) {
+        this.initialConsecutiveFailures = count;
+        return this;
     }
-    return new ConsecutiveFailuresConfig(maxConsecutiveFailures, initialConsecutiveFailures);
-  }
+
+    /**
+     * Sets the consecutive failure threshold. Once this many back-to-back failures
+     * are recorded, {@code isThresholdReached()} returns {@code true}.
+     *
+     * @param maxConsecutiveFailures the trip threshold (> 0)
+     * @return this builder for chaining
+     */
+    public ConsecutiveFailuresConfigBuilder maxConsecutiveFailures(int maxConsecutiveFailures) {
+        this.maxConsecutiveFailures = maxConsecutiveFailures;
+        return this;
+    }
+
+    /**
+     * <strong>Protective preset</strong> — high sensitivity for critical, low-latency dependencies
+     * where even a short burst of consecutive errors likely indicates a complete outage.
+     *
+     * <table>
+     *   <tr><th>Parameter</th><th>Value</th></tr>
+     *   <tr><td>maxConsecutiveFailures</td><td>4</td></tr>
+     *   <tr><td>initialConsecutiveFailures</td><td>0</td></tr>
+     * </table>
+     *
+     * @return this builder for chaining
+     */
+    public ConsecutiveFailuresConfigBuilder protective() {
+        this.maxConsecutiveFailures = 4;
+        this.initialConsecutiveFailures = 0;
+        return this;
+    }
+
+    /**
+     * <strong>Balanced preset</strong> — moderate sensitivity suitable for typical distributed
+     * systems where small network hiccups should be tolerated, but sustained connectivity
+     * loss must be detected.
+     *
+     * <table>
+     *   <tr><th>Parameter</th><th>Value</th></tr>
+     *   <tr><td>maxConsecutiveFailures</td><td>15</td></tr>
+     *   <tr><td>initialConsecutiveFailures</td><td>0</td></tr>
+     * </table>
+     *
+     * @return this builder for chaining
+     */
+    public ConsecutiveFailuresConfigBuilder balanced() {
+        this.maxConsecutiveFailures = 15;
+        this.initialConsecutiveFailures = 0;
+        return this;
+    }
+
+    /**
+     * <strong>Permissive preset</strong> — very high tolerance for unstable legacy systems or
+     * non-critical background tasks that should almost never trigger the breaker.
+     *
+     * <table>
+     *   <tr><th>Parameter</th><th>Value</th></tr>
+     *   <tr><td>maxConsecutiveFailures</td><td>50</td></tr>
+     *   <tr><td>initialConsecutiveFailures</td><td>0</td></tr>
+     * </table>
+     *
+     * @return this builder for chaining
+     */
+    public ConsecutiveFailuresConfigBuilder permissive() {
+        this.maxConsecutiveFailures = 50;
+        this.initialConsecutiveFailures = 0;
+        return this;
+    }
+
+    /**
+     * Builds the configuration. If any required field is still {@code null},
+     * the {@link #balanced()} preset is applied first as a safe default.
+     *
+     * @return a fully initialized {@link ConsecutiveFailuresConfig}
+     */
+    public ConsecutiveFailuresConfig build() {
+        if (maxConsecutiveFailures == null || initialConsecutiveFailures == null) {
+            balanced();
+        }
+        return new ConsecutiveFailuresConfig(maxConsecutiveFailures, initialConsecutiveFailures);
+    }
 }

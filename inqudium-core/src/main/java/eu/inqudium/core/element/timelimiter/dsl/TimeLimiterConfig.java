@@ -6,7 +6,7 @@ import java.time.Duration;
  * The immutable configuration for a Time Limiter instance.
  */
 public record TimeLimiterConfig(
-    Duration timeoutDuration,
-    boolean cancelRunningTask
+        Duration timeoutDuration,
+        boolean cancelRunningTask
 ) {
 }

@@ -29,79 +29,79 @@ import java.util.concurrent.atomic.AtomicInteger;
  */
 public final class SemaphoreBulkheadStrategy implements BlockingBulkheadStrategy {
 
-  private final Semaphore semaphore;
-  private final AtomicInteger acquiredPermits;
-  private final int maxConcurrent;
+    private final Semaphore semaphore;
+    private final AtomicInteger acquiredPermits;
+    private final int maxConcurrent;
 
-  public SemaphoreBulkheadStrategy(int maxConcurrentCalls) {
-    if (maxConcurrentCalls < 0) {
-      throw new IllegalArgumentException(
-          "maxConcurrentCalls must be >= 0, got " + maxConcurrentCalls);
-    }
-    this.maxConcurrent = maxConcurrentCalls;
-    this.semaphore = new Semaphore(maxConcurrentCalls, true);
-    this.acquiredPermits = new AtomicInteger(0);
-  }
-
-  /**
-   * Attempts to acquire a permit, waiting up to the specified timeout.
-   *
-   * <p><b>Fairness note for {@code Duration.ZERO}:</b> Unlike
-   * {@link NonBlockingBulkheadStrategy#tryAcquire()}, which succeeds whenever capacity
-   * is available, this method respects the fair semaphore's FIFO queue even for zero-timeout
-   * attempts. If other threads are already queued, a zero-timeout call may return a
-   * rejection despite available permits. This prevents starvation of waiting threads
-   * but means {@code tryAcquire(Duration.ZERO)} is not semantically identical to a
-   * non-blocking strategy's {@code tryAcquire()}.
-   */
-  @Override
-  public RejectionContext tryAcquire(Duration timeout) throws InterruptedException {
-    boolean acquired = semaphore.tryAcquire(timeout.toNanos(), TimeUnit.NANOSECONDS);
-    if (acquired) {
-      acquiredPermits.incrementAndGet();
-      return null; // permit acquired — no allocation, no nanoTime call
+    public SemaphoreBulkheadStrategy(int maxConcurrentCalls) {
+        if (maxConcurrentCalls < 0) {
+            throw new IllegalArgumentException(
+                    "maxConcurrentCalls must be >= 0, got " + maxConcurrentCalls);
+        }
+        this.maxConcurrent = maxConcurrentCalls;
+        this.semaphore = new Semaphore(maxConcurrentCalls, true);
+        this.acquiredPermits = new AtomicInteger(0);
     }
 
-    // Rejection path only — all allocation and measurement happens here
-    int currentActive = acquiredPermits.get();
-    if (timeout.isZero()) {
-      return RejectionContext.capacityReached(maxConcurrent, currentActive);
+    /**
+     * Attempts to acquire a permit, waiting up to the specified timeout.
+     *
+     * <p><b>Fairness note for {@code Duration.ZERO}:</b> Unlike
+     * {@link NonBlockingBulkheadStrategy#tryAcquire()}, which succeeds whenever capacity
+     * is available, this method respects the fair semaphore's FIFO queue even for zero-timeout
+     * attempts. If other threads are already queued, a zero-timeout call may return a
+     * rejection despite available permits. This prevents starvation of waiting threads
+     * but means {@code tryAcquire(Duration.ZERO)} is not semantically identical to a
+     * non-blocking strategy's {@code tryAcquire()}.
+     */
+    @Override
+    public RejectionContext tryAcquire(Duration timeout) throws InterruptedException {
+        boolean acquired = semaphore.tryAcquire(timeout.toNanos(), TimeUnit.NANOSECONDS);
+        if (acquired) {
+            acquiredPermits.incrementAndGet();
+            return null; // permit acquired — no allocation, no nanoTime call
+        }
+
+        // Rejection path only — all allocation and measurement happens here
+        int currentActive = acquiredPermits.get();
+        if (timeout.isZero()) {
+            return RejectionContext.capacityReached(maxConcurrent, currentActive);
+        }
+        // The semaphore waited approximately the full timeout before returning false.
+        // Using the configured timeout as the waited time avoids a System.nanoTime()
+        // call on every happy-path acquire — a critical optimization under contention,
+        // where nanoTime's native call becomes a secondary contention point.
+        return RejectionContext.timeoutExpired(maxConcurrent, currentActive, timeout.toNanos());
     }
-    // The semaphore waited approximately the full timeout before returning false.
-    // Using the configured timeout as the waited time avoids a System.nanoTime()
-    // call on every happy-path acquire — a critical optimization under contention,
-    // where nanoTime's native call becomes a secondary contention point.
-    return RejectionContext.timeoutExpired(maxConcurrent, currentActive, timeout.toNanos());
-  }
 
-  @Override
-  public void release() {
-    releaseInternal();
-  }
-
-  @Override
-  public void rollback() {
-    releaseInternal();
-  }
-
-  private void releaseInternal() {
-    if (acquiredPermits.getAndUpdate(c -> c > 0 ? c - 1 : 0) > 0) {
-      semaphore.release();
+    @Override
+    public void release() {
+        releaseInternal();
     }
-  }
 
-  @Override
-  public int availablePermits() {
-    return semaphore.availablePermits();
-  }
+    @Override
+    public void rollback() {
+        releaseInternal();
+    }
 
-  @Override
-  public int concurrentCalls() {
-    return acquiredPermits.get();
-  }
+    private void releaseInternal() {
+        if (acquiredPermits.getAndUpdate(c -> c > 0 ? c - 1 : 0) > 0) {
+            semaphore.release();
+        }
+    }
 
-  @Override
-  public int maxConcurrentCalls() {
-    return maxConcurrent;
-  }
+    @Override
+    public int availablePermits() {
+        return semaphore.availablePermits();
+    }
+
+    @Override
+    public int concurrentCalls() {
+        return acquiredPermits.get();
+    }
+
+    @Override
+    public int maxConcurrentCalls() {
+        return maxConcurrent;
+    }
 }

@@ -52,81 +52,81 @@ import java.util.function.Supplier;
  */
 public interface InqDecorator<A, R> extends InqElement, LayerAction<A, R> {
 
-  /**
-   * Wraps a {@link Runnable} in a {@link RunnableWrapper} using this decorator's
-   * name and around-advice.
-   *
-   * <p>Intended for decorators with type parameters {@code <Void, Void>}.
-   * The unchecked cast is safe because {@code Runnable} never uses the
-   * argument or return type — both are always {@code null}.</p>
-   *
-   * @param delegate the runnable to protect
-   * @return a decorated runnable that applies this decorator's logic on every {@code run()}
-   */
-  @SuppressWarnings("unchecked")
-  default Runnable decorateRunnable(Runnable delegate) {
-    return new RunnableWrapper((InqDecorator<Void, Void>) this, delegate);
-  }
+    /**
+     * Wraps a {@link Runnable} in a {@link RunnableWrapper} using this decorator's
+     * name and around-advice.
+     *
+     * <p>Intended for decorators with type parameters {@code <Void, Void>}.
+     * The unchecked cast is safe because {@code Runnable} never uses the
+     * argument or return type — both are always {@code null}.</p>
+     *
+     * @param delegate the runnable to protect
+     * @return a decorated runnable that applies this decorator's logic on every {@code run()}
+     */
+    @SuppressWarnings("unchecked")
+    default Runnable decorateRunnable(Runnable delegate) {
+        return new RunnableWrapper((InqDecorator<Void, Void>) this, delegate);
+    }
 
-  /**
-   * Wraps a {@link Supplier} in a {@link SupplierWrapper} using this decorator's
-   * name and around-advice.
-   *
-   * <p>Intended for decorators with type parameters {@code <Void, T>}.
-   * The unchecked cast is safe because suppliers never use the argument type.</p>
-   *
-   * @param delegate the supplier to protect
-   * @param <T>      the return type of the supplier
-   * @return a decorated supplier that applies this decorator's logic on every {@code get()}
-   */
-  @SuppressWarnings("unchecked")
-  default <T> Supplier<T> decorateSupplier(Supplier<T> delegate) {
-    return new SupplierWrapper<>((InqDecorator<Void, T>) this, delegate);
-  }
+    /**
+     * Wraps a {@link Supplier} in a {@link SupplierWrapper} using this decorator's
+     * name and around-advice.
+     *
+     * <p>Intended for decorators with type parameters {@code <Void, T>}.
+     * The unchecked cast is safe because suppliers never use the argument type.</p>
+     *
+     * @param delegate the supplier to protect
+     * @param <T>      the return type of the supplier
+     * @return a decorated supplier that applies this decorator's logic on every {@code get()}
+     */
+    @SuppressWarnings("unchecked")
+    default <T> Supplier<T> decorateSupplier(Supplier<T> delegate) {
+        return new SupplierWrapper<>((InqDecorator<Void, T>) this, delegate);
+    }
 
-  /**
-   * Wraps a {@link Callable} in a {@link CallableWrapper} using this decorator's
-   * name and around-advice.
-   *
-   * <p>Intended for decorators with type parameters {@code <Void, V>}.
-   * Checked exceptions from the callable are preserved through the chain.</p>
-   *
-   * @param delegate the callable to protect
-   * @param <V>      the return type of the callable
-   * @return a decorated callable that applies this decorator's logic on every {@code call()}
-   */
-  @SuppressWarnings("unchecked")
-  default <V> Callable<V> decorateCallable(Callable<V> delegate) {
-    return new CallableWrapper<>((InqDecorator<Void, V>) this, delegate);
-  }
+    /**
+     * Wraps a {@link Callable} in a {@link CallableWrapper} using this decorator's
+     * name and around-advice.
+     *
+     * <p>Intended for decorators with type parameters {@code <Void, V>}.
+     * Checked exceptions from the callable are preserved through the chain.</p>
+     *
+     * @param delegate the callable to protect
+     * @param <V>      the return type of the callable
+     * @return a decorated callable that applies this decorator's logic on every {@code call()}
+     */
+    @SuppressWarnings("unchecked")
+    default <V> Callable<V> decorateCallable(Callable<V> delegate) {
+        return new CallableWrapper<>((InqDecorator<Void, V>) this, delegate);
+    }
 
-  /**
-   * Wraps a {@link Function} in a {@link FunctionWrapper} using this decorator's
-   * name and around-advice.
-   *
-   * <p>This method is fully type-safe — the decorator's type parameters {@code <A, R>}
-   * naturally match the function's input and output types. No unchecked cast needed.</p>
-   *
-   * @param delegate the function to protect
-   * @return a decorated function that applies this decorator's logic on every {@code apply()}
-   */
-  default Function<A, R> decorateFunction(Function<A, R> delegate) {
-    return new FunctionWrapper<>(this, delegate);
-  }
+    /**
+     * Wraps a {@link Function} in a {@link FunctionWrapper} using this decorator's
+     * name and around-advice.
+     *
+     * <p>This method is fully type-safe — the decorator's type parameters {@code <A, R>}
+     * naturally match the function's input and output types. No unchecked cast needed.</p>
+     *
+     * @param delegate the function to protect
+     * @return a decorated function that applies this decorator's logic on every {@code apply()}
+     */
+    default Function<A, R> decorateFunction(Function<A, R> delegate) {
+        return new FunctionWrapper<>(this, delegate);
+    }
 
-  /**
-   * Wraps a {@link JoinPointExecutor} (e.g. a Spring AOP join point) in a
-   * {@link JoinPointWrapper} using this decorator's name and around-advice.
-   *
-   * <p>Intended for decorators with type parameters {@code <Void, T>}.
-   * All throwable types from the join point are preserved through the chain.</p>
-   *
-   * @param delegate the proxy execution to protect
-   * @param <T>      the return type of the proxy execution
-   * @return a decorated join point that applies this decorator's logic on every {@code proceed()}
-   */
-  @SuppressWarnings("unchecked")
-  default <T> JoinPointExecutor<T> decorateJoinPoint(JoinPointExecutor<T> delegate) {
-    return new JoinPointWrapper<>((InqDecorator<Void, T>) this, delegate);
-  }
+    /**
+     * Wraps a {@link JoinPointExecutor} (e.g. a Spring AOP join point) in a
+     * {@link JoinPointWrapper} using this decorator's name and around-advice.
+     *
+     * <p>Intended for decorators with type parameters {@code <Void, T>}.
+     * All throwable types from the join point are preserved through the chain.</p>
+     *
+     * @param delegate the proxy execution to protect
+     * @param <T>      the return type of the proxy execution
+     * @return a decorated join point that applies this decorator's logic on every {@code proceed()}
+     */
+    @SuppressWarnings("unchecked")
+    default <T> JoinPointExecutor<T> decorateJoinPoint(JoinPointExecutor<T> delegate) {
+        return new JoinPointWrapper<>((InqDecorator<Void, T>) this, delegate);
+    }
 }

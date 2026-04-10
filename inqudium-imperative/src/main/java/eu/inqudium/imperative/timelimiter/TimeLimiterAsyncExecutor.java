@@ -27,31 +27,31 @@ import java.util.function.Supplier;
  */
 public interface TimeLimiterAsyncExecutor {
 
-  /**
-   * Executes the callable asynchronously with a timeout.
-   *
-   * @param callable the operation to execute
-   * @param timeout  the maximum duration before timeout
-   * @return a future that completes with the result or a timeout/failure exception
-   */
-  <T> CompletableFuture<T> executeAsync(Callable<T> callable, Duration timeout);
+    /**
+     * Executes the callable asynchronously with a timeout.
+     *
+     * @param callable the operation to execute
+     * @param timeout  the maximum duration before timeout
+     * @return a future that completes with the result or a timeout/failure exception
+     */
+    <T> CompletableFuture<T> executeAsync(Callable<T> callable, Duration timeout);
 
-  /**
-   * Bridges an external {@link Future} into a timeout-protected {@link CompletableFuture}.
-   *
-   * @param futureSupplier supplier for the already-running future
-   * @param timeout        the maximum duration before timeout
-   * @return a future that completes with the result or a timeout/failure exception
-   */
-  <T> CompletableFuture<T> executeFutureAsync(Supplier<Future<T>> futureSupplier, Duration timeout);
+    /**
+     * Bridges an external {@link Future} into a timeout-protected {@link CompletableFuture}.
+     *
+     * @param futureSupplier supplier for the already-running future
+     * @param timeout        the maximum duration before timeout
+     * @return a future that completes with the result or a timeout/failure exception
+     */
+    <T> CompletableFuture<T> executeFutureAsync(Supplier<Future<T>> futureSupplier, Duration timeout);
 
-  /**
-   * Attaches timeout protection to an existing {@link CompletionStage} pipeline.
-   *
-   * @param stageSupplier supplier for the already-running completion stage
-   * @param timeout       the maximum duration before timeout
-   * @return a future with timeout, events, and exception transformation attached
-   */
-  <T> CompletableFuture<T> executeCompletionStageAsync(
-      Supplier<CompletionStage<T>> stageSupplier, Duration timeout);
+    /**
+     * Attaches timeout protection to an existing {@link CompletionStage} pipeline.
+     *
+     * @param stageSupplier supplier for the already-running completion stage
+     * @param timeout       the maximum duration before timeout
+     * @return a future with timeout, events, and exception transformation attached
+     */
+    <T> CompletableFuture<T> executeCompletionStageAsync(
+            Supplier<CompletionStage<T>> stageSupplier, Duration timeout);
 }

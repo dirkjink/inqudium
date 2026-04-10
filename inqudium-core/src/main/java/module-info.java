@@ -32,40 +32,40 @@
  */
 module inqudium.core {
 
-  // ── Dependencies ──
+    // ── Dependencies ──
 
-  requires org.slf4j;
+    requires org.slf4j;
 
-  // ── Exports: all public packages ──
+    // ── Exports: all public packages ──
 
-  exports eu.inqudium.core;
-  exports eu.inqudium.core.element.circuitbreaker;
-  exports eu.inqudium.core.element.retry;
-  exports eu.inqudium.core.element.ratelimiter;
-  exports eu.inqudium.core.element.ratelimiter.strategy;
-  exports eu.inqudium.core.element.bulkhead;
-  exports eu.inqudium.core.element.timelimiter;
-  exports eu.inqudium.core.element.trafficshaper;
-  exports eu.inqudium.core.element.trafficshaper.strategy;
-  exports eu.inqudium.core.element.fallback;
-  exports eu.inqudium.core.event;
-  exports eu.inqudium.core.context;
-  exports eu.inqudium.core.config.compatibility;
-  exports eu.inqudium.core.exception;
-  exports eu.inqudium.core.pipeline;
-  exports eu.inqudium.core.element.circuitbreaker.metrics;
-  exports eu.inqudium.core.element.retry.strategy;
-  exports eu.inqudium.core.element.bulkhead.strategy;
-  exports eu.inqudium.core.element.bulkhead.algo;
-  exports eu.inqudium.core.config;
-  exports eu.inqudium.core.element;
-  exports eu.inqudium.core.time;
-  exports eu.inqudium.core.log;
+    exports eu.inqudium.core;
+    exports eu.inqudium.core.element.circuitbreaker;
+    exports eu.inqudium.core.element.retry;
+    exports eu.inqudium.core.element.ratelimiter;
+    exports eu.inqudium.core.element.ratelimiter.strategy;
+    exports eu.inqudium.core.element.bulkhead;
+    exports eu.inqudium.core.element.timelimiter;
+    exports eu.inqudium.core.element.trafficshaper;
+    exports eu.inqudium.core.element.trafficshaper.strategy;
+    exports eu.inqudium.core.element.fallback;
+    exports eu.inqudium.core.event;
+    exports eu.inqudium.core.context;
+    exports eu.inqudium.core.config.compatibility;
+    exports eu.inqudium.core.exception;
+    exports eu.inqudium.core.pipeline;
+    exports eu.inqudium.core.element.circuitbreaker.metrics;
+    exports eu.inqudium.core.element.retry.strategy;
+    exports eu.inqudium.core.element.bulkhead.strategy;
+    exports eu.inqudium.core.element.bulkhead.algo;
+    exports eu.inqudium.core.config;
+    exports eu.inqudium.core.element;
+    exports eu.inqudium.core.time;
+    exports eu.inqudium.core.log;
 
 
-  // ── ServiceLoader SPI declarations ──
+    // ── ServiceLoader SPI declarations ──
 
-  uses eu.inqudium.core.context.InqContextPropagator;
-  uses eu.inqudium.core.event.InqEventExporter;
-  uses eu.inqudium.core.config.compatibility.InqCompatibilityOptions;
+    uses eu.inqudium.core.context.InqContextPropagator;
+    uses eu.inqudium.core.event.InqEventExporter;
+    uses eu.inqudium.core.config.compatibility.InqCompatibilityOptions;
 }

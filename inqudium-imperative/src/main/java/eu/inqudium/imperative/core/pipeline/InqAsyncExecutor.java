@@ -33,108 +33,108 @@ import java.util.function.Supplier;
  */
 public interface InqAsyncExecutor<A, R> extends AsyncLayerAction<A, R> {
 
-  /**
-   * Executes an async runnable directly through this layer's around-advice.
-   */
-  @SuppressWarnings("unchecked")
-  default CompletionStage<Void> executeAsyncRunnable(Runnable runnable) {
-    return ((AsyncLayerAction<Void, Void>) this).executeAsync(
-        StandaloneIdGenerator.nextChainId(),
-        StandaloneIdGenerator.nextCallId(),
-        null,
-        (chainId, callId, arg) -> {
-          runnable.run();
-          return null;
+    /**
+     * Executes an async runnable directly through this layer's around-advice.
+     */
+    @SuppressWarnings("unchecked")
+    default CompletionStage<Void> executeAsyncRunnable(Runnable runnable) {
+        return ((AsyncLayerAction<Void, Void>) this).executeAsync(
+                StandaloneIdGenerator.nextChainId(),
+                StandaloneIdGenerator.nextCallId(),
+                null,
+                (chainId, callId, arg) -> {
+                    runnable.run();
+                    return null;
+                }
+        );
+    }
+
+    /**
+     * Executes an async supplier directly through this layer's around-advice.
+     */
+    @SuppressWarnings("unchecked")
+    default <T> CompletionStage<T> executeAsyncSupplier(Supplier<CompletionStage<T>> supplier) {
+        return ((AsyncLayerAction<Void, T>) this).executeAsync(
+                StandaloneIdGenerator.nextChainId(),
+                StandaloneIdGenerator.nextCallId(),
+                null,
+                (chainId, callId, arg) -> supplier.get()
+        );
+    }
+
+    /**
+     * Executes an async callable directly through this layer's around-advice.
+     * Checked exceptions from starting the async operation are preserved.
+     */
+    @SuppressWarnings("unchecked")
+    default <V> CompletionStage<V> executeAsyncCallable(
+            Callable<CompletionStage<V>> callable) throws Exception {
+        try {
+            return ((AsyncLayerAction<Void, V>) this).executeAsync(
+                    StandaloneIdGenerator.nextChainId(),
+                    StandaloneIdGenerator.nextCallId(),
+                    null,
+                    (chainId, callId, arg) -> {
+                        try {
+                            return callable.call();
+                        } catch (RuntimeException | Error e) {
+                            throw e;
+                        } catch (Exception e) {
+                            throw new CompletionException(e);
+                        }
+                    }
+            );
+        } catch (RuntimeException e) {
+            if (e instanceof CompletionException) {
+                Throwable cause = e.getCause();
+                if (cause instanceof Exception) throw (Exception) cause;
+                throw new CompletionException(cause);
+            }
+            throw e;
         }
-    );
-  }
-
-  /**
-   * Executes an async supplier directly through this layer's around-advice.
-   */
-  @SuppressWarnings("unchecked")
-  default <T> CompletionStage<T> executeAsyncSupplier(Supplier<CompletionStage<T>> supplier) {
-    return ((AsyncLayerAction<Void, T>) this).executeAsync(
-        StandaloneIdGenerator.nextChainId(),
-        StandaloneIdGenerator.nextCallId(),
-        null,
-        (chainId, callId, arg) -> supplier.get()
-    );
-  }
-
-  /**
-   * Executes an async callable directly through this layer's around-advice.
-   * Checked exceptions from starting the async operation are preserved.
-   */
-  @SuppressWarnings("unchecked")
-  default <V> CompletionStage<V> executeAsyncCallable(
-      Callable<CompletionStage<V>> callable) throws Exception {
-    try {
-      return ((AsyncLayerAction<Void, V>) this).executeAsync(
-          StandaloneIdGenerator.nextChainId(),
-          StandaloneIdGenerator.nextCallId(),
-          null,
-          (chainId, callId, arg) -> {
-            try {
-              return callable.call();
-            } catch (RuntimeException | Error e) {
-              throw e;
-            } catch (Exception e) {
-              throw new CompletionException(e);
-            }
-          }
-      );
-    } catch (RuntimeException e) {
-      if (e instanceof CompletionException) {
-        Throwable cause = e.getCause();
-        if (cause instanceof Exception) throw (Exception) cause;
-        throw new CompletionException(cause);
-      }
-      throw e;
     }
-  }
 
-  /**
-   * Executes an async function directly through this layer's around-advice.
-   * Fully type-safe — {@code A} and {@code R} match the function's types.
-   */
-  default CompletionStage<R> executeAsyncFunction(
-      Function<A, CompletionStage<R>> function, A input) {
-    return executeAsync(
-        StandaloneIdGenerator.nextChainId(),
-        StandaloneIdGenerator.nextCallId(),
-        input,
-        (chainId, callId, arg) -> function.apply(arg)
-    );
-  }
-
-  /**
-   * Executes an async proxy execution directly through this layer's around-advice.
-   * Checked throwables from starting the async operation are preserved.
-   */
-  @SuppressWarnings("unchecked")
-  default <T> CompletionStage<T> executeAsyncJoinPoint(
-      JoinPointExecutor<CompletionStage<T>> execution) throws Throwable {
-    try {
-      return ((AsyncLayerAction<Void, T>) this).executeAsync(
-          StandaloneIdGenerator.nextChainId(),
-          StandaloneIdGenerator.nextCallId(),
-          null,
-          (chainId, callId, arg) -> {
-            try {
-              return execution.proceed();
-            } catch (RuntimeException | Error e) {
-              throw e;
-            } catch (Throwable t) {
-              throw new CompletionException(t);
-            }
-          }
-      );
-    } catch (RuntimeException e) {
-      if (e instanceof CompletionException) {
-        throw e.getCause();
-      }
-      throw e;
+    /**
+     * Executes an async function directly through this layer's around-advice.
+     * Fully type-safe — {@code A} and {@code R} match the function's types.
+     */
+    default CompletionStage<R> executeAsyncFunction(
+            Function<A, CompletionStage<R>> function, A input) {
+        return executeAsync(
+                StandaloneIdGenerator.nextChainId(),
+                StandaloneIdGenerator.nextCallId(),
+                input,
+                (chainId, callId, arg) -> function.apply(arg)
+        );
     }
-  }
+
+    /**
+     * Executes an async proxy execution directly through this layer's around-advice.
+     * Checked throwables from starting the async operation are preserved.
+     */
+    @SuppressWarnings("unchecked")
+    default <T> CompletionStage<T> executeAsyncJoinPoint(
+            JoinPointExecutor<CompletionStage<T>> execution) throws Throwable {
+        try {
+            return ((AsyncLayerAction<Void, T>) this).executeAsync(
+                    StandaloneIdGenerator.nextChainId(),
+                    StandaloneIdGenerator.nextCallId(),
+                    null,
+                    (chainId, callId, arg) -> {
+                        try {
+                            return execution.proceed();
+                        } catch (RuntimeException | Error e) {
+                            throw e;
+                        } catch (Throwable t) {
+                            throw new CompletionException(t);
+                        }
+                    }
+            );
+        } catch (RuntimeException e) {
+            if (e instanceof CompletionException) {
+                throw e.getCause();
+            }
+            throw e;
+        }
+    }
 }

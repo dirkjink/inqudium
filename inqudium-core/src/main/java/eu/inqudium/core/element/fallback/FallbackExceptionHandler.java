@@ -9,99 +9,99 @@ import java.util.function.Predicate;
  */
 public sealed interface FallbackExceptionHandler<T> {
 
-  /**
-   * Returns a descriptive name for this handler (used in events/logging).
-   */
-  String name();
+    /**
+     * Returns a descriptive name for this handler (used in events/logging).
+     */
+    String name();
 
-  /**
-   * Tests whether this handler matches the given throwable.
-   */
-  boolean matches(Throwable throwable);
+    /**
+     * Tests whether this handler matches the given throwable.
+     */
+    boolean matches(Throwable throwable);
 
-  // ======================== Implementations ========================
+    // ======================== Implementations ========================
 
-  record ForExceptionType<T, E extends Throwable>(
-      String name,
-      Class<E> exceptionType,
-      Function<E, T> fallback
-  ) implements FallbackExceptionHandler<T> {
+    record ForExceptionType<T, E extends Throwable>(
+            String name,
+            Class<E> exceptionType,
+            Function<E, T> fallback
+    ) implements FallbackExceptionHandler<T> {
 
-    public ForExceptionType {
-      Objects.requireNonNull(name);
-      Objects.requireNonNull(exceptionType);
-      Objects.requireNonNull(fallback);
+        public ForExceptionType {
+            Objects.requireNonNull(name);
+            Objects.requireNonNull(exceptionType);
+            Objects.requireNonNull(fallback);
+        }
+
+        @Override
+        public boolean matches(Throwable throwable) {
+            return exceptionType.isInstance(throwable);
+        }
+
+        @SuppressWarnings("unchecked")
+        public T apply(Throwable throwable) {
+            return fallback.apply((E) throwable);
+        }
     }
 
-    @Override
-    public boolean matches(Throwable throwable) {
-      return exceptionType.isInstance(throwable);
+    record ForExceptionPredicate<T>(
+            String name,
+            Predicate<Throwable> predicate,
+            Function<Throwable, T> fallback
+    ) implements FallbackExceptionHandler<T> {
+
+        public ForExceptionPredicate {
+            Objects.requireNonNull(name);
+            Objects.requireNonNull(predicate);
+            Objects.requireNonNull(fallback);
+        }
+
+        @Override
+        public boolean matches(Throwable throwable) {
+            return predicate.test(throwable);
+        }
+
+        public T apply(Throwable throwable) {
+            return fallback.apply(throwable);
+        }
     }
 
-    @SuppressWarnings("unchecked")
-    public T apply(Throwable throwable) {
-      return fallback.apply((E) throwable);
-    }
-  }
+    record CatchAll<T>(
+            String name,
+            Function<Throwable, T> fallback
+    ) implements FallbackExceptionHandler<T> {
 
-  record ForExceptionPredicate<T>(
-      String name,
-      Predicate<Throwable> predicate,
-      Function<Throwable, T> fallback
-  ) implements FallbackExceptionHandler<T> {
+        public CatchAll {
+            Objects.requireNonNull(name);
+            Objects.requireNonNull(fallback);
+        }
 
-    public ForExceptionPredicate {
-      Objects.requireNonNull(name);
-      Objects.requireNonNull(predicate);
-      Objects.requireNonNull(fallback);
-    }
+        @Override
+        public boolean matches(Throwable throwable) {
+            return true;
+        }
 
-    @Override
-    public boolean matches(Throwable throwable) {
-      return predicate.test(throwable);
+        public T apply(Throwable throwable) {
+            return fallback.apply(throwable);
+        }
     }
 
-    public T apply(Throwable throwable) {
-      return fallback.apply(throwable);
+    record ConstantValue<T>(
+            String name,
+            T value
+    ) implements FallbackExceptionHandler<T> {
+
+        public ConstantValue {
+            Objects.requireNonNull(name);
+        }
+
+        @Override
+        public boolean matches(Throwable throwable) {
+            return true;
+        }
+
+        public T apply() {
+            return value;
+        }
     }
-  }
-
-  record CatchAll<T>(
-      String name,
-      Function<Throwable, T> fallback
-  ) implements FallbackExceptionHandler<T> {
-
-    public CatchAll {
-      Objects.requireNonNull(name);
-      Objects.requireNonNull(fallback);
-    }
-
-    @Override
-    public boolean matches(Throwable throwable) {
-      return true;
-    }
-
-    public T apply(Throwable throwable) {
-      return fallback.apply(throwable);
-    }
-  }
-
-  record ConstantValue<T>(
-      String name,
-      T value
-  ) implements FallbackExceptionHandler<T> {
-
-    public ConstantValue {
-      Objects.requireNonNull(name);
-    }
-
-    @Override
-    public boolean matches(Throwable throwable) {
-      return true;
-    }
-
-    public T apply() {
-      return value;
-    }
-  }
 }

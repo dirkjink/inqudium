@@ -35,29 +35,29 @@ import java.util.Set;
  */
 public interface InqEventExporter {
 
-  /**
-   * Called for every event emitted by any element.
-   *
-   * @param event the event to export
-   */
-  void export(InqEvent event);
+    /**
+     * Called for every event emitted by any element.
+     *
+     * @param event the event to export
+     */
+    void export(InqEvent event);
 
-  /**
-   * Returns the set of event types this exporter is interested in.
-   *
-   * <p>If empty (the default), the exporter receives all event types.
-   * If non-empty, only events whose class is assignable to one of the
-   * returned types are forwarded — preventing unnecessary serialization
-   * for exporters that only care about specific events.
-   *
-   * <p><strong>Stability contract:</strong> This method is called once when the
-   * {@link InqEventExporterRegistry} freezes, and the result is cached for the
-   * lifetime of the registry. Implementations must return a stable, immutable set.
-   * Changes to the returned set after registration are silently ignored.
-   *
-   * @return the set of subscribed event types, or empty for all
-   */
-  default Set<Class<? extends InqEvent>> subscribedEventTypes() {
-    return Set.of();
-  }
+    /**
+     * Returns the set of event types this exporter is interested in.
+     *
+     * <p>If empty (the default), the exporter receives all event types.
+     * If non-empty, only events whose class is assignable to one of the
+     * returned types are forwarded — preventing unnecessary serialization
+     * for exporters that only care about specific events.
+     *
+     * <p><strong>Stability contract:</strong> This method is called once when the
+     * {@link InqEventExporterRegistry} freezes, and the result is cached for the
+     * lifetime of the registry. Implementations must return a stable, immutable set.
+     * Changes to the returned set after registration are silently ignored.
+     *
+     * @return the set of subscribed event types, or empty for all
+     */
+    default Set<Class<? extends InqEvent>> subscribedEventTypes() {
+        return Set.of();
+    }
 }

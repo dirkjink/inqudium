@@ -17,30 +17,30 @@ import java.time.Instant;
  */
 public interface SchedulingState {
 
-  /**
-   * Monotonically increasing generation counter. Incremented on reset
-   * to invalidate pending reservations from a previous lifecycle.
-   */
-  long epoch();
+    /**
+     * Monotonically increasing generation counter. Incremented on reset
+     * to invalidate pending reservations from a previous lifecycle.
+     */
+    long epoch();
 
-  /**
-   * Number of requests currently waiting for their scheduled slot.
-   */
-  int queueDepth();
+    /**
+     * Number of requests currently waiting for their scheduled slot.
+     */
+    int queueDepth();
 
-  /**
-   * Total number of requests admitted since creation.
-   */
-  long totalAdmitted();
+    /**
+     * Total number of requests admitted since creation.
+     */
+    long totalAdmitted();
 
-  /**
-   * Total number of requests rejected since creation.
-   */
-  long totalRejected();
+    /**
+     * Total number of requests rejected since creation.
+     */
+    long totalRejected();
 
-  /**
-   * Returns the projected wait time for the tail of the queue.
-   * Used for unbounded queue monitoring.
-   */
-  Duration projectedTailWait(Instant now);
+    /**
+     * Returns the projected wait time for the tail of the queue.
+     * Used for unbounded queue monitoring.
+     */
+    Duration projectedTailWait(Instant now);
 }

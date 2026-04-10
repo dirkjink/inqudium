@@ -7,7 +7,7 @@ import java.time.Instant;
  */
 public interface RateLimiterState {
 
-  long epoch();
+    long epoch();
 
-  RateLimiterState withNextEpoch(Instant now);
+    RateLimiterState withNextEpoch(Instant now);
 }

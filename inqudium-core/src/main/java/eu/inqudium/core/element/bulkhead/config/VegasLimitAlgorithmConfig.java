@@ -12,8 +12,8 @@ public record VegasLimitAlgorithmConfig(int initialLimit,
                                         Duration errorRateSmoothingTimeConstant,
                                         double errorRateThreshold,
                                         double minUtilizationThreshold) implements ConfigExtension<VegasLimitAlgorithmConfig> {
-  @Override
-  public VegasLimitAlgorithmConfig self() {
-    return this;
-  }
+    @Override
+    public VegasLimitAlgorithmConfig self() {
+        return this;
+    }
 }

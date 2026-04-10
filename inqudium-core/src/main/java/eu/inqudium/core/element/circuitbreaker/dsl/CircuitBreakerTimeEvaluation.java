@@ -1,13 +1,13 @@
 package eu.inqudium.core.element.circuitbreaker.dsl;
 
 public interface CircuitBreakerTimeEvaluation {
-  CircuitBreakerTimeEvaluation lookingAtTheLast(int seconds);
+    CircuitBreakerTimeEvaluation lookingAtTheLast(int seconds);
 
-  CircuitBreakerConfig applyProtectiveProfile();
+    CircuitBreakerConfig applyProtectiveProfile();
 
-  CircuitBreakerConfig applyBalancedProfile();
+    CircuitBreakerConfig applyBalancedProfile();
 
-  CircuitBreakerConfig applyPermissiveProfile();
+    CircuitBreakerConfig applyPermissiveProfile();
 
-  CircuitBreakerConfig apply();
+    CircuitBreakerConfig apply();
 }

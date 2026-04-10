@@ -49,78 +49,78 @@ import eu.inqudium.core.pipeline.Wrapper;
  */
 public interface InqProxyFactory {
 
-  /**
-   * Creates a factory that wraps service methods through the given {@link LayerAction}
-   * with a custom layer name.
-   *
-   * <p>The action's type parameters are cast to {@code <Void, Object>} because
-   * proxy dispatch always passes {@code null} as the argument and returns raw
-   * {@code Object}. The unchecked cast is unavoidable due to type erasure but
-   * is guarded by the dispatch contract — the action never uses the argument
-   * parameter for synchronous dispatch.</p>
-   *
-   * @param name   a human-readable name for the proxy layer (appears in
-   *               {@code layerDescription()} and {@code toStringHierarchy()})
-   * @param action the around-advice to apply to every proxied method call
-   * @return a new factory instance ready to create proxies
-   * @throws IllegalArgumentException if {@code action} is null
-   */
-  @SuppressWarnings("unchecked")
-  static InqProxyFactory of(String name, LayerAction<?, ?> action) {
-    // Null check — fail fast with a clear message
-    if (action == null) {
-      throw new IllegalArgumentException("LayerAction must not be null.");
+    /**
+     * Creates a factory that wraps service methods through the given {@link LayerAction}
+     * with a custom layer name.
+     *
+     * <p>The action's type parameters are cast to {@code <Void, Object>} because
+     * proxy dispatch always passes {@code null} as the argument and returns raw
+     * {@code Object}. The unchecked cast is unavoidable due to type erasure but
+     * is guarded by the dispatch contract — the action never uses the argument
+     * parameter for synchronous dispatch.</p>
+     *
+     * @param name   a human-readable name for the proxy layer (appears in
+     *               {@code layerDescription()} and {@code toStringHierarchy()})
+     * @param action the around-advice to apply to every proxied method call
+     * @return a new factory instance ready to create proxies
+     * @throws IllegalArgumentException if {@code action} is null
+     */
+    @SuppressWarnings("unchecked")
+    static InqProxyFactory of(String name, LayerAction<?, ?> action) {
+        // Null check — fail fast with a clear message
+        if (action == null) {
+            throw new IllegalArgumentException("LayerAction must not be null.");
+        }
+
+        // Cast to the proxy dispatch type parameters.
+        // Safe at runtime: SyncDispatchExtension always passes null as the first
+        // generic parameter and forwards the raw Object result. The unchecked cast
+        // is unavoidable due to type erasure but guarded by the dispatch contract.
+        LayerAction<Void, Object> sync = (LayerAction<Void, Object>) action;
+
+        // Create the catch-all sync extension that will handle all method calls
+        SyncDispatchExtension extension = new SyncDispatchExtension(sync);
+
+        // Return an anonymous factory implementation that creates proxies
+        // using ProxyWrapper.createProxy with the single sync extension
+        return new InqProxyFactory() {
+            @Override
+            public <T> T protect(Class<T> serviceInterface, T target) {
+                // Validate that the target type is an interface (required by JDK proxies)
+                ProxyWrapper.validateInterface(serviceInterface);
+                // Create the proxy with the sync extension as the sole (catch-all) extension
+                return ProxyWrapper.createProxy(serviceInterface, target, name, extension);
+            }
+        };
     }
 
-    // Cast to the proxy dispatch type parameters.
-    // Safe at runtime: SyncDispatchExtension always passes null as the first
-    // generic parameter and forwards the raw Object result. The unchecked cast
-    // is unavoidable due to type erasure but guarded by the dispatch contract.
-    LayerAction<Void, Object> sync = (LayerAction<Void, Object>) action;
+    /**
+     * Creates a factory with the default layer name "proxy".
+     *
+     * <p>Convenience overload for cases where the layer name doesn't matter
+     * (e.g. single-layer proxies or quick prototyping).</p>
+     *
+     * @param action the around-advice to apply to every proxied method call
+     * @return a new factory instance with the default name
+     */
+    static InqProxyFactory of(LayerAction<?, ?> action) {
+        return of("proxy", action);
+    }
 
-    // Create the catch-all sync extension that will handle all method calls
-    SyncDispatchExtension extension = new SyncDispatchExtension(sync);
-
-    // Return an anonymous factory implementation that creates proxies
-    // using ProxyWrapper.createProxy with the single sync extension
-    return new InqProxyFactory() {
-      @Override
-      public <T> T protect(Class<T> serviceInterface, T target) {
-        // Validate that the target type is an interface (required by JDK proxies)
-        ProxyWrapper.validateInterface(serviceInterface);
-        // Create the proxy with the sync extension as the sole (catch-all) extension
-        return ProxyWrapper.createProxy(serviceInterface, target, name, extension);
-      }
-    };
-  }
-
-  /**
-   * Creates a factory with the default layer name "proxy".
-   *
-   * <p>Convenience overload for cases where the layer name doesn't matter
-   * (e.g. single-layer proxies or quick prototyping).</p>
-   *
-   * @param action the around-advice to apply to every proxied method call
-   * @return a new factory instance with the default name
-   */
-  static InqProxyFactory of(LayerAction<?, ?> action) {
-    return of("proxy", action);
-  }
-
-  /**
-   * Creates a JDK dynamic proxy that routes all method calls on the
-   * service interface through this factory's configured {@link LayerAction}.
-   *
-   * <p>The returned proxy implements both the service interface and the
-   * {@link Wrapper} interface. It can be used as a drop-in replacement for
-   * the target and also supports chain introspection via casting to
-   * {@code Wrapper}.</p>
-   *
-   * @param serviceInterface the interface to proxy (must be an interface, not a class)
-   * @param target           the real implementation to wrap
-   * @param <T>              the service interface type
-   * @return a proxy that routes all method calls through the layer action
-   * @throws IllegalArgumentException if the type is not an interface
-   */
-  <T> T protect(Class<T> serviceInterface, T target);
+    /**
+     * Creates a JDK dynamic proxy that routes all method calls on the
+     * service interface through this factory's configured {@link LayerAction}.
+     *
+     * <p>The returned proxy implements both the service interface and the
+     * {@link Wrapper} interface. It can be used as a drop-in replacement for
+     * the target and also supports chain introspection via casting to
+     * {@code Wrapper}.</p>
+     *
+     * @param serviceInterface the interface to proxy (must be an interface, not a class)
+     * @param target           the real implementation to wrap
+     * @param <T>              the service interface type
+     * @return a proxy that routes all method calls through the layer action
+     * @throws IllegalArgumentException if the type is not an interface
+     */
+    <T> T protect(Class<T> serviceInterface, T target);
 }

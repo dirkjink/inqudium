@@ -8,18 +8,7 @@ import io.github.resilience4j.bulkhead.BulkheadRegistry;
 import io.github.resilience4j.micrometer.tagged.TaggedBulkheadMetrics;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
-import org.openjdk.jmh.annotations.Benchmark;
-import org.openjdk.jmh.annotations.BenchmarkMode;
-import org.openjdk.jmh.annotations.Fork;
-import org.openjdk.jmh.annotations.Level;
-import org.openjdk.jmh.annotations.Measurement;
-import org.openjdk.jmh.annotations.Mode;
-import org.openjdk.jmh.annotations.OutputTimeUnit;
-import org.openjdk.jmh.annotations.Scope;
-import org.openjdk.jmh.annotations.Setup;
-import org.openjdk.jmh.annotations.State;
-import org.openjdk.jmh.annotations.Threads;
-import org.openjdk.jmh.annotations.Warmup;
+import org.openjdk.jmh.annotations.*;
 import org.openjdk.jmh.infra.Blackhole;
 import org.openjdk.jmh.profile.GCProfiler;
 import org.openjdk.jmh.profile.MemPoolProfiler;
@@ -176,200 +165,200 @@ import static eu.inqudium.imperative.bulkhead.config.InqImperativeBulkheadConfig
 @Fork(3)
 public class HappyPathBulkheadBenchmarkTwo {
 
-  private static final int BULKHEAD_LIMIT = 10;
-  private static final int WAIT_MILLIS = 150;
-  // ── Failsafe metrics counters ──
-  private final LongAdder failsafeSuccess = new LongAdder();
-  private final LongAdder failsafeFailure = new LongAdder();
-  // ── Raw Semaphore (baseline, no metrics) ──
-  private Semaphore semaphore;
-  // ── Pre-decorated wrappers (created once in setUp, invoked per iteration) ──
-  private Runnable decoratedSemaphore;
-  private Runnable decoratedInqDiagnostic;
-  private Runnable decoratedInqOptimized;
-  private Runnable decoratedR4j;
-  private Runnable decoratedFailsafe;
+    private static final int BULKHEAD_LIMIT = 10;
+    private static final int WAIT_MILLIS = 150;
+    // ── Failsafe metrics counters ──
+    private final LongAdder failsafeSuccess = new LongAdder();
+    private final LongAdder failsafeFailure = new LongAdder();
+    // ── Raw Semaphore (baseline, no metrics) ──
+    private Semaphore semaphore;
+    // ── Pre-decorated wrappers (created once in setUp, invoked per iteration) ──
+    private Runnable decoratedSemaphore;
+    private Runnable decoratedInqDiagnostic;
+    private Runnable decoratedInqOptimized;
+    private Runnable decoratedR4j;
+    private Runnable decoratedFailsafe;
 
-  public static void main(String[] args) throws RunnerException {
-    Options opt = new OptionsBuilder()
-        //.addProfiler(StackProfiler.class)
-        .addProfiler(GCProfiler.class)
-        .addProfiler(PausesProfiler.class)
-        .addProfiler(MemPoolProfiler.class)
-        .include(HappyPathBulkheadBenchmarkTwo.class.getSimpleName())
-        //.resultFormat(ResultFormatType.CSV)
-        //.result("ergebnisse.csv")
-        .build();
-    new Runner(opt).run();
-  }
+    public static void main(String[] args) throws RunnerException {
+        Options opt = new OptionsBuilder()
+                //.addProfiler(StackProfiler.class)
+                .addProfiler(GCProfiler.class)
+                .addProfiler(PausesProfiler.class)
+                .addProfiler(MemPoolProfiler.class)
+                .include(HappyPathBulkheadBenchmarkTwo.class.getSimpleName())
+                //.resultFormat(ResultFormatType.CSV)
+                //.result("ergebnisse.csv")
+                .build();
+        new Runner(opt).run();
+    }
 
-  private static void simulateWork() {
-    Blackhole.consumeCPU(100);
-  }
+    private static void simulateWork() {
+        Blackhole.consumeCPU(100);
+    }
 
-  // ════════════════════════════════════════════════════════════════════
-  // BASELINE — no bulkhead
-  // ════════════════════════════════════════════════════════════════════
+    // ════════════════════════════════════════════════════════════════════
+    // BASELINE — no bulkhead
+    // ════════════════════════════════════════════════════════════════════
 
-  @Setup(Level.Trial)
-  public void setUp() {
-    // ── Raw Semaphore ──
-    semaphore = new Semaphore(BULKHEAD_LIMIT, true);
+    @Setup(Level.Trial)
+    public void setUp() {
+        // ── Raw Semaphore ──
+        semaphore = new Semaphore(BULKHEAD_LIMIT, true);
 
-    // ── Inqudium: all events (matches R4j's internal event overhead) ──
-    var allEventsConfig = InqConfig.configure()
-        .general()
-        .with(bulkhead(), c -> c
-            .name("test-all-events")
-            .maxConcurrentCalls(BULKHEAD_LIMIT)
-            .eventConfig(BulkheadEventConfig.diagnostic())
-            .maxWaitDuration(Duration.ofMillis(WAIT_MILLIS))
-        ).build();
-    var inqBulkheadAllEvents = Bulkhead.of(allEventsConfig);
+        // ── Inqudium: all events (matches R4j's internal event overhead) ──
+        var allEventsConfig = InqConfig.configure()
+                .general()
+                .with(bulkhead(), c -> c
+                        .name("test-all-events")
+                        .maxConcurrentCalls(BULKHEAD_LIMIT)
+                        .eventConfig(BulkheadEventConfig.diagnostic())
+                        .maxWaitDuration(Duration.ofMillis(WAIT_MILLIS))
+                ).build();
+        var inqBulkheadAllEvents = Bulkhead.of(allEventsConfig);
 
-    // ── Inqudium: rejections only (optimized) ──
-    var optimizedConfig = InqConfig.configure()
-        .general()
-        .with(bulkhead(), c -> c
-            .name("test-optimized")
-            .maxConcurrentCalls(BULKHEAD_LIMIT)
-            .eventConfig(BulkheadEventConfig.standard())
-            .maxWaitDuration(Duration.ofMillis(WAIT_MILLIS))
-        ).build();
-    var inqBulkheadOptimized = Bulkhead.of(optimizedConfig);
+        // ── Inqudium: rejections only (optimized) ──
+        var optimizedConfig = InqConfig.configure()
+                .general()
+                .with(bulkhead(), c -> c
+                        .name("test-optimized")
+                        .maxConcurrentCalls(BULKHEAD_LIMIT)
+                        .eventConfig(BulkheadEventConfig.standard())
+                        .maxWaitDuration(Duration.ofMillis(WAIT_MILLIS))
+                ).build();
+        var inqBulkheadOptimized = Bulkhead.of(optimizedConfig);
 
-    // ── Resilience4j: BulkheadRegistry + Micrometer (production setup) ──
-    //
-    // This mirrors what Spring Boot auto-configuration does:
-    //   1. BulkheadConfig → BulkheadRegistry → Bulkhead instance
-    //   2. TaggedBulkheadMetrics binds gauge metrics to the MeterRegistry
-    //   3. The MeterRegistry would normally be a PrometheusMeterRegistry;
-    //      SimpleMeterRegistry is functionally equivalent for overhead measurement
-    BulkheadConfig r4jConfig = BulkheadConfig.custom()
-        .maxConcurrentCalls(BULKHEAD_LIMIT)
-        .maxWaitDuration(Duration.ofMillis(WAIT_MILLIS))
-        .fairCallHandlingStrategyEnabled(true)
-        .writableStackTraceEnabled(false)
-        .build();
-    BulkheadRegistry r4jRegistry = BulkheadRegistry.of(r4jConfig);
-    var r4jBulkhead = r4jRegistry.bulkhead("r4j-test");
+        // ── Resilience4j: BulkheadRegistry + Micrometer (production setup) ──
+        //
+        // This mirrors what Spring Boot auto-configuration does:
+        //   1. BulkheadConfig → BulkheadRegistry → Bulkhead instance
+        //   2. TaggedBulkheadMetrics binds gauge metrics to the MeterRegistry
+        //   3. The MeterRegistry would normally be a PrometheusMeterRegistry;
+        //      SimpleMeterRegistry is functionally equivalent for overhead measurement
+        BulkheadConfig r4jConfig = BulkheadConfig.custom()
+                .maxConcurrentCalls(BULKHEAD_LIMIT)
+                .maxWaitDuration(Duration.ofMillis(WAIT_MILLIS))
+                .fairCallHandlingStrategyEnabled(true)
+                .writableStackTraceEnabled(false)
+                .build();
+        BulkheadRegistry r4jRegistry = BulkheadRegistry.of(r4jConfig);
+        var r4jBulkhead = r4jRegistry.bulkhead("r4j-test");
 
-    MeterRegistry meterRegistry = new SimpleMeterRegistry();
-    TaggedBulkheadMetrics.ofBulkheadRegistry(r4jRegistry).bindTo(meterRegistry);
+        MeterRegistry meterRegistry = new SimpleMeterRegistry();
+        TaggedBulkheadMetrics.ofBulkheadRegistry(r4jRegistry).bindTo(meterRegistry);
 
-    // ── Failsafe: event listeners (no Micrometer module available) ──
-    dev.failsafe.Bulkhead<Void> failsafeBulkhead = dev.failsafe.Bulkhead.<Void>builder(BULKHEAD_LIMIT)
-        .withMaxWaitTime(Duration.ofMillis(WAIT_MILLIS))
-        .onSuccess(event -> failsafeSuccess.increment())
-        .onFailure(event -> failsafeFailure.increment())
-        .build();
-    var failsafeExecutor = Failsafe.with(failsafeBulkhead);
+        // ── Failsafe: event listeners (no Micrometer module available) ──
+        dev.failsafe.Bulkhead<Void> failsafeBulkhead = dev.failsafe.Bulkhead.<Void>builder(BULKHEAD_LIMIT)
+                .withMaxWaitTime(Duration.ofMillis(WAIT_MILLIS))
+                .onSuccess(event -> failsafeSuccess.increment())
+                .onFailure(event -> failsafeFailure.increment())
+                .build();
+        var failsafeExecutor = Failsafe.with(failsafeBulkhead);
 
-    // ── Decorate once — all wrappers are created here, not per invocation ──
+        // ── Decorate once — all wrappers are created here, not per invocation ──
 
-    decoratedSemaphore = () -> {
-      try {
-        if (semaphore.tryAcquire(WAIT_MILLIS, TimeUnit.MILLISECONDS)) {
-          try {
-            simulateWork();
-          } finally {
-            semaphore.release();
-          }
-        }
-      } catch (InterruptedException e) {
-        Thread.currentThread().interrupt();
-      }
-    };
+        decoratedSemaphore = () -> {
+            try {
+                if (semaphore.tryAcquire(WAIT_MILLIS, TimeUnit.MILLISECONDS)) {
+                    try {
+                        simulateWork();
+                    } finally {
+                        semaphore.release();
+                    }
+                }
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        };
 
-    decoratedInqDiagnostic = inqBulkheadAllEvents.decorateRunnable(
-        HappyPathBulkheadBenchmarkTwo::simulateWork);
+        decoratedInqDiagnostic = inqBulkheadAllEvents.decorateRunnable(
+                HappyPathBulkheadBenchmarkTwo::simulateWork);
 
-    decoratedInqOptimized = inqBulkheadOptimized.decorateRunnable(
-        HappyPathBulkheadBenchmarkTwo::simulateWork);
+        decoratedInqOptimized = inqBulkheadOptimized.decorateRunnable(
+                HappyPathBulkheadBenchmarkTwo::simulateWork);
 
-    decoratedR4j = io.github.resilience4j.bulkhead.Bulkhead.decorateRunnable(
-        r4jBulkhead, HappyPathBulkheadBenchmarkTwo::simulateWork);
+        decoratedR4j = io.github.resilience4j.bulkhead.Bulkhead.decorateRunnable(
+                r4jBulkhead, HappyPathBulkheadBenchmarkTwo::simulateWork);
 
-    decoratedFailsafe = () -> failsafeExecutor.run(
-        HappyPathBulkheadBenchmarkTwo::simulateWork);
-  }
+        decoratedFailsafe = () -> failsafeExecutor.run(
+                HappyPathBulkheadBenchmarkTwo::simulateWork);
+    }
 
-  // ════════════════════════════════════════════════════════════════════
-  // PURE OVERHEAD — Threads (10) == Permits (10), no contention
-  // Wrappers are pre-created in setUp — the benchmark measures only
-  // the .run() invocation (acquire → work → release), not decoration.
-  // ════════════════════════════════════════════════════════════════════
+    // ════════════════════════════════════════════════════════════════════
+    // PURE OVERHEAD — Threads (10) == Permits (10), no contention
+    // Wrappers are pre-created in setUp — the benchmark measures only
+    // the .run() invocation (acquire → work → release), not decoration.
+    // ════════════════════════════════════════════════════════════════════
 
-  @Benchmark
-  @Threads(10)
-  public void baselineNoBulkhead() {
-    simulateWork();
-  }
+    @Benchmark
+    @Threads(10)
+    public void baselineNoBulkhead() {
+        simulateWork();
+    }
 
-  @Benchmark
-  @Threads(10)
-  public void measurePureOverheadSemaphore() {
-    decoratedSemaphore.run();
-  }
+    @Benchmark
+    @Threads(10)
+    public void measurePureOverheadSemaphore() {
+        decoratedSemaphore.run();
+    }
 
-  @Benchmark
-  @Threads(10)
-  public void measurePureOverheadInqudium() {
-    decoratedInqDiagnostic.run();
-  }
+    @Benchmark
+    @Threads(10)
+    public void measurePureOverheadInqudium() {
+        decoratedInqDiagnostic.run();
+    }
 
-  @Benchmark
-  @Threads(10)
-  public void measurePureOverheadInqudiumOptimized() {
-    decoratedInqOptimized.run();
-  }
+    @Benchmark
+    @Threads(10)
+    public void measurePureOverheadInqudiumOptimized() {
+        decoratedInqOptimized.run();
+    }
 
-  @Benchmark
-  @Threads(10)
-  public void measurePureOverheadResilience4j() {
-    decoratedR4j.run();
-  }
+    @Benchmark
+    @Threads(10)
+    public void measurePureOverheadResilience4j() {
+        decoratedR4j.run();
+    }
 
-  // ════════════════════════════════════════════════════════════════════
-  // CONTENTION — Threads (20) > Permits (10), no rejections
-  // Same pre-created wrappers, more threads than permits.
-  // ════════════════════════════════════════════════════════════════════
+    // ════════════════════════════════════════════════════════════════════
+    // CONTENTION — Threads (20) > Permits (10), no rejections
+    // Same pre-created wrappers, more threads than permits.
+    // ════════════════════════════════════════════════════════════════════
 
-  @Benchmark
-  @Threads(10)
-  public void measurePureOverheadFailsafe() {
-    decoratedFailsafe.run();
-  }
+    @Benchmark
+    @Threads(10)
+    public void measurePureOverheadFailsafe() {
+        decoratedFailsafe.run();
+    }
 
-  @Benchmark
-  @Threads(20)
-  public void measureContentionSemaphore() {
-    decoratedSemaphore.run();
-  }
+    @Benchmark
+    @Threads(20)
+    public void measureContentionSemaphore() {
+        decoratedSemaphore.run();
+    }
 
-  @Benchmark
-  @Threads(20)
-  public void measureContentionInqudium() {
-    decoratedInqDiagnostic.run();
-  }
+    @Benchmark
+    @Threads(20)
+    public void measureContentionInqudium() {
+        decoratedInqDiagnostic.run();
+    }
 
-  @Benchmark
-  @Threads(20)
-  public void measureContentionInqudiumOptimized() {
-    decoratedInqOptimized.run();
-  }
+    @Benchmark
+    @Threads(20)
+    public void measureContentionInqudiumOptimized() {
+        decoratedInqOptimized.run();
+    }
 
-  @Benchmark
-  @Threads(20)
-  public void measureContentionResilience4j() {
-    decoratedR4j.run();
-  }
+    @Benchmark
+    @Threads(20)
+    public void measureContentionResilience4j() {
+        decoratedR4j.run();
+    }
 
-  // ════════════════════════════════════════════════════════════════════
+    // ════════════════════════════════════════════════════════════════════
 
-  @Benchmark
-  @Threads(20)
-  public void measureContentionFailsafe() {
-    decoratedFailsafe.run();
-  }
+    @Benchmark
+    @Threads(20)
+    public void measureContentionFailsafe() {
+        decoratedFailsafe.run();
+    }
 }

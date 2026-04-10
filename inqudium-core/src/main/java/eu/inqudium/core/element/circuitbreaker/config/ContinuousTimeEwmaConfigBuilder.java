@@ -37,116 +37,116 @@ import java.time.Duration;
  */
 public class ContinuousTimeEwmaConfigBuilder extends ExtensionBuilder<ContinuousTimeEwmaConfig> {
 
-  private Double failureRatePercent;
-  private Duration timeConstant;
-  private Integer minimumNumberOfCalls;
+    private Double failureRatePercent;
+    private Duration timeConstant;
+    private Integer minimumNumberOfCalls;
 
-  /**
-   * Sets the EWMA time constant (tau). Shorter durations make the average more
-   * reactive; longer durations make it more stable.
-   *
-   * @param tau the time constant as a {@link Duration}
-   * @return this builder for chaining
-   */
-  public ContinuousTimeEwmaConfigBuilder timeConstant(Duration tau) {
-    this.timeConstant = tau;
-    return this;
-  }
-
-  /**
-   * Sets the failure rate percentage threshold (1–100).
-   *
-   * @param failureRatePercent the threshold percentage
-   * @return this builder for chaining
-   */
-  public ContinuousTimeEwmaConfigBuilder failureRatePercent(double failureRatePercent) {
-    this.failureRatePercent = failureRatePercent;
-    return this;
-  }
-
-  /**
-   * Sets the minimum number of recorded outcomes before the threshold is evaluated.
-   *
-   * @param calls the sample-size guard (> 0)
-   * @return this builder for chaining
-   */
-  public ContinuousTimeEwmaConfigBuilder minimumNumberOfCalls(int calls) {
-    this.minimumNumberOfCalls = calls;
-    return this;
-  }
-
-  /**
-   * <strong>Protective preset</strong> — short time constant makes the rate decay or
-   * increase very rapidly; catches degradation within seconds. Best for critical,
-   * low-latency dependencies.
-   *
-   * <table>
-   *   <tr><th>Parameter</th><th>Value</th></tr>
-   *   <tr><td>failureRatePercent</td><td>30.0</td></tr>
-   *   <tr><td>timeConstant (tau)</td><td>5 seconds</td></tr>
-   *   <tr><td>minimumNumberOfCalls</td><td>5</td></tr>
-   * </table>
-   *
-   * @return this builder for chaining
-   */
-  public ContinuousTimeEwmaConfigBuilder protective() {
-    this.failureRatePercent = 30.0;
-    this.timeConstant = Duration.ofSeconds(5);
-    this.minimumNumberOfCalls = 5;
-    return this;
-  }
-
-  /**
-   * <strong>Balanced preset</strong> — medium time constant suitable for typical cloud
-   * service latencies and traffic patterns.
-   *
-   * <table>
-   *   <tr><th>Parameter</th><th>Value</th></tr>
-   *   <tr><td>failureRatePercent</td><td>50.0</td></tr>
-   *   <tr><td>timeConstant (tau)</td><td>30 seconds</td></tr>
-   *   <tr><td>minimumNumberOfCalls</td><td>10</td></tr>
-   * </table>
-   *
-   * @return this builder for chaining
-   */
-  public ContinuousTimeEwmaConfigBuilder balanced() {
-    this.failureRatePercent = 50.0;
-    this.timeConstant = Duration.ofSeconds(30);
-    this.minimumNumberOfCalls = 10;
-    return this;
-  }
-
-  /**
-   * <strong>Permissive preset</strong> — long time constant provides a very stable,
-   * long-term failure average that resists short-term noise. Best for non-critical
-   * services or dependencies with known transient instability.
-   *
-   * <table>
-   *   <tr><th>Parameter</th><th>Value</th></tr>
-   *   <tr><td>failureRatePercent</td><td>70.0</td></tr>
-   *   <tr><td>timeConstant (tau)</td><td>120 seconds</td></tr>
-   *   <tr><td>minimumNumberOfCalls</td><td>50</td></tr>
-   * </table>
-   *
-   * @return this builder for chaining
-   */
-  public ContinuousTimeEwmaConfigBuilder permissive() {
-    this.failureRatePercent = 70.0;
-    this.timeConstant = Duration.ofSeconds(120);
-    this.minimumNumberOfCalls = 50;
-    return this;
-  }
-
-  /**
-   * Builds the configuration. Falls back to {@link #balanced()} if any field is unset.
-   *
-   * @return a fully initialized {@link ContinuousTimeEwmaConfig}
-   */
-  @Override
-  public ContinuousTimeEwmaConfig build() {
-    if (timeConstant == null || minimumNumberOfCalls == null || failureRatePercent == null) {
-      balanced();
+    /**
+     * Sets the EWMA time constant (tau). Shorter durations make the average more
+     * reactive; longer durations make it more stable.
+     *
+     * @param tau the time constant as a {@link Duration}
+     * @return this builder for chaining
+     */
+    public ContinuousTimeEwmaConfigBuilder timeConstant(Duration tau) {
+        this.timeConstant = tau;
+        return this;
     }
-    return new ContinuousTimeEwmaConfig(failureRatePercent, timeConstant, minimumNumberOfCalls);
-  }
+
+    /**
+     * Sets the failure rate percentage threshold (1–100).
+     *
+     * @param failureRatePercent the threshold percentage
+     * @return this builder for chaining
+     */
+    public ContinuousTimeEwmaConfigBuilder failureRatePercent(double failureRatePercent) {
+        this.failureRatePercent = failureRatePercent;
+        return this;
+    }
+
+    /**
+     * Sets the minimum number of recorded outcomes before the threshold is evaluated.
+     *
+     * @param calls the sample-size guard (> 0)
+     * @return this builder for chaining
+     */
+    public ContinuousTimeEwmaConfigBuilder minimumNumberOfCalls(int calls) {
+        this.minimumNumberOfCalls = calls;
+        return this;
+    }
+
+    /**
+     * <strong>Protective preset</strong> — short time constant makes the rate decay or
+     * increase very rapidly; catches degradation within seconds. Best for critical,
+     * low-latency dependencies.
+     *
+     * <table>
+     *   <tr><th>Parameter</th><th>Value</th></tr>
+     *   <tr><td>failureRatePercent</td><td>30.0</td></tr>
+     *   <tr><td>timeConstant (tau)</td><td>5 seconds</td></tr>
+     *   <tr><td>minimumNumberOfCalls</td><td>5</td></tr>
+     * </table>
+     *
+     * @return this builder for chaining
+     */
+    public ContinuousTimeEwmaConfigBuilder protective() {
+        this.failureRatePercent = 30.0;
+        this.timeConstant = Duration.ofSeconds(5);
+        this.minimumNumberOfCalls = 5;
+        return this;
+    }
+
+    /**
+     * <strong>Balanced preset</strong> — medium time constant suitable for typical cloud
+     * service latencies and traffic patterns.
+     *
+     * <table>
+     *   <tr><th>Parameter</th><th>Value</th></tr>
+     *   <tr><td>failureRatePercent</td><td>50.0</td></tr>
+     *   <tr><td>timeConstant (tau)</td><td>30 seconds</td></tr>
+     *   <tr><td>minimumNumberOfCalls</td><td>10</td></tr>
+     * </table>
+     *
+     * @return this builder for chaining
+     */
+    public ContinuousTimeEwmaConfigBuilder balanced() {
+        this.failureRatePercent = 50.0;
+        this.timeConstant = Duration.ofSeconds(30);
+        this.minimumNumberOfCalls = 10;
+        return this;
+    }
+
+    /**
+     * <strong>Permissive preset</strong> — long time constant provides a very stable,
+     * long-term failure average that resists short-term noise. Best for non-critical
+     * services or dependencies with known transient instability.
+     *
+     * <table>
+     *   <tr><th>Parameter</th><th>Value</th></tr>
+     *   <tr><td>failureRatePercent</td><td>70.0</td></tr>
+     *   <tr><td>timeConstant (tau)</td><td>120 seconds</td></tr>
+     *   <tr><td>minimumNumberOfCalls</td><td>50</td></tr>
+     * </table>
+     *
+     * @return this builder for chaining
+     */
+    public ContinuousTimeEwmaConfigBuilder permissive() {
+        this.failureRatePercent = 70.0;
+        this.timeConstant = Duration.ofSeconds(120);
+        this.minimumNumberOfCalls = 50;
+        return this;
+    }
+
+    /**
+     * Builds the configuration. Falls back to {@link #balanced()} if any field is unset.
+     *
+     * @return a fully initialized {@link ContinuousTimeEwmaConfig}
+     */
+    @Override
+    public ContinuousTimeEwmaConfig build() {
+        if (timeConstant == null || minimumNumberOfCalls == null || failureRatePercent == null) {
+            balanced();
+        }
+        return new ContinuousTimeEwmaConfig(failureRatePercent, timeConstant, minimumNumberOfCalls);
+    }
 }

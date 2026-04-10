@@ -19,13 +19,13 @@ import eu.inqudium.core.config.ConfigExtension;
  * @see SlidingWindowConfigBuilder
  */
 public record SlidingWindowConfig(
-    int maxFailuresInWindow,
-    int windowSize,
-    int minimumNumberOfCalls
+        int maxFailuresInWindow,
+        int windowSize,
+        int minimumNumberOfCalls
 ) implements ConfigExtension<SlidingWindowConfig> {
 
-  @Override
-  public SlidingWindowConfig self() {
-    return this;
-  }
+    @Override
+    public SlidingWindowConfig self() {
+        return this;
+    }
 }

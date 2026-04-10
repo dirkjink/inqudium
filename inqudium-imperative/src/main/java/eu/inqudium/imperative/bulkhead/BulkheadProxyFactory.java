@@ -15,18 +15,18 @@ import eu.inqudium.imperative.core.pipeline.InqAsyncProxyFactory;
  */
 public class BulkheadProxyFactory implements InqProxyFactory {
 
-  private final InqProxyFactory delegate;
+    private final InqProxyFactory delegate;
 
-  public BulkheadProxyFactory(Bulkhead<?, ?> bulkhead) {
-    if (bulkhead instanceof InqAsyncDecorator<?, ?> async) {
-      this.delegate = InqAsyncProxyFactory.of(bulkhead.getName(), bulkhead, async);
-    } else {
-      this.delegate = InqProxyFactory.of(bulkhead.getName(), bulkhead);
+    public BulkheadProxyFactory(Bulkhead<?, ?> bulkhead) {
+        if (bulkhead instanceof InqAsyncDecorator<?, ?> async) {
+            this.delegate = InqAsyncProxyFactory.of(bulkhead.getName(), bulkhead, async);
+        } else {
+            this.delegate = InqProxyFactory.of(bulkhead.getName(), bulkhead);
+        }
     }
-  }
 
-  @Override
-  public <T> T protect(Class<T> serviceInterface, T target) {
-    return delegate.protect(serviceInterface, target);
-  }
+    @Override
+    public <T> T protect(Class<T> serviceInterface, T target) {
+        return delegate.protect(serviceInterface, target);
+    }
 }

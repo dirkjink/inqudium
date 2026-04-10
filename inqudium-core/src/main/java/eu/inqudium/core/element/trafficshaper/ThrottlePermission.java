@@ -24,39 +24,39 @@ import java.time.Instant;
  * @param <S>           the strategy-specific state type
  */
 public record ThrottlePermission<S extends SchedulingState>(
-    S state,
-    boolean admitted,
-    Duration waitDuration,
-    Instant scheduledSlot
+        S state,
+        boolean admitted,
+        Duration waitDuration,
+        Instant scheduledSlot
 ) {
 
-  /**
-   * The request may proceed immediately — no wait required.
-   */
-  public static <S extends SchedulingState> ThrottlePermission<S> immediate(S state, Instant slot) {
-    return new ThrottlePermission<>(state, true, Duration.ZERO, slot);
-  }
+    /**
+     * The request may proceed immediately — no wait required.
+     */
+    public static <S extends SchedulingState> ThrottlePermission<S> immediate(S state, Instant slot) {
+        return new ThrottlePermission<>(state, true, Duration.ZERO, slot);
+    }
 
-  /**
-   * The request is admitted but must wait for its scheduled slot.
-   */
-  public static <S extends SchedulingState> ThrottlePermission<S> delayed(
-      S state, Duration waitDuration, Instant slot) {
-    return new ThrottlePermission<>(state, true, waitDuration, slot);
-  }
+    /**
+     * The request is admitted but must wait for its scheduled slot.
+     */
+    public static <S extends SchedulingState> ThrottlePermission<S> delayed(
+            S state, Duration waitDuration, Instant slot) {
+        return new ThrottlePermission<>(state, true, waitDuration, slot);
+    }
 
-  /**
-   * The request is rejected — queue is full or wait would exceed the limit.
-   */
-  public static <S extends SchedulingState> ThrottlePermission<S> rejected(
-      S state, Duration wouldHaveWaited) {
-    return new ThrottlePermission<>(state, false, wouldHaveWaited, null);
-  }
+    /**
+     * The request is rejected — queue is full or wait would exceed the limit.
+     */
+    public static <S extends SchedulingState> ThrottlePermission<S> rejected(
+            S state, Duration wouldHaveWaited) {
+        return new ThrottlePermission<>(state, false, wouldHaveWaited, null);
+    }
 
-  /**
-   * Returns {@code true} if the request requires a non-zero wait.
-   */
-  public boolean requiresWait() {
-    return admitted && !waitDuration.isZero();
-  }
+    /**
+     * Returns {@code true} if the request requires a non-zero wait.
+     */
+    public boolean requiresWait() {
+        return admitted && !waitDuration.isZero();
+    }
 }

@@ -22,36 +22,36 @@ import eu.inqudium.core.event.InqEventPublisher;
  */
 public interface InqElementConfig {
 
-  /**
-   * The unique name of this element instance, used for identification in logs,
-   * metrics, and events.
-   *
-   * @return the element name; never {@code null} after inference
-   */
-  String name();
+    /**
+     * The unique name of this element instance, used for identification in logs,
+     * metrics, and events.
+     *
+     * @return the element name; never {@code null} after inference
+     */
+    String name();
 
-  /**
-   * The type of this element (e.g., CIRCUIT_BREAKER, BULKHEAD), used for
-   * categorization in logging and event routing.
-   *
-   * @return the element type; never {@code null}
-   */
-  InqElementType elementType();
+    /**
+     * The type of this element (e.g., CIRCUIT_BREAKER, BULKHEAD), used for
+     * categorization in logging and event routing.
+     *
+     * @return the element type; never {@code null}
+     */
+    InqElementType elementType();
 
-  /**
-   * The event publisher associated with this element, responsible for emitting
-   * state-change and lifecycle events.
-   *
-   * @return the event publisher; never {@code null} after inference
-   */
-  InqEventPublisher eventPublisher();
+    /**
+     * The event publisher associated with this element, responsible for emitting
+     * state-change and lifecycle events.
+     *
+     * @return the event publisher; never {@code null} after inference
+     */
+    InqEventPublisher eventPublisher();
 
-  /**
-   * Whether exception handling optimization is enabled for this element.
-   * When {@code true}, the framework may skip filling in stack traces for
-   * internally generated exceptions to reduce overhead.
-   *
-   * @return {@code true} if optimization is enabled; may be {@code null} before inference
-   */
-  Boolean enableExceptionOptimization();
+    /**
+     * Whether exception handling optimization is enabled for this element.
+     * When {@code true}, the framework may skip filling in stack traces for
+     * internally generated exceptions to reduce overhead.
+     *
+     * @return {@code true} if optimization is enabled; may be {@code null} before inference
+     */
+    Boolean enableExceptionOptimization();
 }

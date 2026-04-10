@@ -48,99 +48,99 @@ import java.util.Set;
  */
 public final class BulkheadEventConfig {
 
-  private static final BulkheadEventConfig STANDARD = new BulkheadEventConfig(Collections.emptySet());
+    private static final BulkheadEventConfig STANDARD = new BulkheadEventConfig(Collections.emptySet());
 
-  private static final BulkheadEventConfig DIAGNOSTIC = new BulkheadEventConfig(
-      EnumSet.allOf(BulkheadEventCategory.class));
+    private static final BulkheadEventConfig DIAGNOSTIC = new BulkheadEventConfig(
+            EnumSet.allOf(BulkheadEventCategory.class));
 
-  private final boolean lifecycleEnabled;
-  private final boolean rejectionEnabled;
-  private final boolean traceEnabled;
+    private final boolean lifecycleEnabled;
+    private final boolean rejectionEnabled;
+    private final boolean traceEnabled;
 
-  private BulkheadEventConfig(Set<BulkheadEventCategory> enabled) {
-    this.lifecycleEnabled = enabled.contains(BulkheadEventCategory.LIFECYCLE);
-    this.rejectionEnabled = enabled.contains(BulkheadEventCategory.REJECTION);
-    this.traceEnabled = enabled.contains(BulkheadEventCategory.TRACE);
-  }
+    private BulkheadEventConfig(Set<BulkheadEventCategory> enabled) {
+        this.lifecycleEnabled = enabled.contains(BulkheadEventCategory.LIFECYCLE);
+        this.rejectionEnabled = enabled.contains(BulkheadEventCategory.REJECTION);
+        this.traceEnabled = enabled.contains(BulkheadEventCategory.TRACE);
+    }
 
-  /**
-   * Standard production configuration — only rejection events enabled.
-   *
-   * <p>This is the <b>recommended default</b>. The happy path (acquire → execute →
-   * release) produces zero event allocations. Rejection events fire only when
-   * the bulkhead denies a request, which is inherently exceptional.
-   *
-   * <p>Production metrics (concurrent calls, available permits) are delivered
-   * by polling-based gauges via the strategy's introspection methods —
-   * not by events. This configuration reflects that separation.
-   *
-   * @return the standard production event configuration
-   */
-  public static BulkheadEventConfig standard() {
-    return STANDARD;
-  }
+    /**
+     * Standard production configuration — only rejection events enabled.
+     *
+     * <p>This is the <b>recommended default</b>. The happy path (acquire → execute →
+     * release) produces zero event allocations. Rejection events fire only when
+     * the bulkhead denies a request, which is inherently exceptional.
+     *
+     * <p>Production metrics (concurrent calls, available permits) are delivered
+     * by polling-based gauges via the strategy's introspection methods —
+     * not by events. This configuration reflects that separation.
+     *
+     * @return the standard production event configuration
+     */
+    public static BulkheadEventConfig standard() {
+        return STANDARD;
+    }
 
-  /**
-   * Diagnostic configuration — all event categories enabled.
-   *
-   * <p>Enables lifecycle events (acquire/release on every call), rejection events,
-   * and trace events (wait durations, rollback details). Provides a complete
-   * per-call timeline for troubleshooting.
-   *
-   * <p><b>Overhead:</b> ~80 B/op from lifecycle events (two {@code Instant} objects +
-   * two event instances per successful call). Suitable for short diagnostic sessions,
-   * not for always-on production use.
-   *
-   * <p><b>When to use:</b> Investigating unexpected rejections, debugging fairness
-   * issues, analyzing permit wait times, tracing concurrency anomalies during
-   * incident response.
-   *
-   * @return the full diagnostic event configuration
-   */
-  public static BulkheadEventConfig diagnostic() {
-    return DIAGNOSTIC;
-  }
+    /**
+     * Diagnostic configuration — all event categories enabled.
+     *
+     * <p>Enables lifecycle events (acquire/release on every call), rejection events,
+     * and trace events (wait durations, rollback details). Provides a complete
+     * per-call timeline for troubleshooting.
+     *
+     * <p><b>Overhead:</b> ~80 B/op from lifecycle events (two {@code Instant} objects +
+     * two event instances per successful call). Suitable for short diagnostic sessions,
+     * not for always-on production use.
+     *
+     * <p><b>When to use:</b> Investigating unexpected rejections, debugging fairness
+     * issues, analyzing permit wait times, tracing concurrency anomalies during
+     * incident response.
+     *
+     * @return the full diagnostic event configuration
+     */
+    public static BulkheadEventConfig diagnostic() {
+        return DIAGNOSTIC;
+    }
 
-  /**
-   * Custom set of enabled categories.
-   *
-   * @param first     the first enabled category
-   * @param remaining additional enabled categories
-   * @return an immutable event configuration
-   */
-  public static BulkheadEventConfig of(BulkheadEventCategory first,
-                                       BulkheadEventCategory... remaining) {
-    return new BulkheadEventConfig(EnumSet.of(first, remaining));
-  }
+    /**
+     * Custom set of enabled categories.
+     *
+     * @param first     the first enabled category
+     * @param remaining additional enabled categories
+     * @return an immutable event configuration
+     */
+    public static BulkheadEventConfig of(BulkheadEventCategory first,
+                                         BulkheadEventCategory... remaining) {
+        return new BulkheadEventConfig(EnumSet.of(first, remaining));
+    }
 
-  /**
-   * {@code true} if acquire and release events should be created and published.
-   *
-   * <p>Disabled in {@link #standard()} mode. When {@code false}, the facade
-   * skips all lifecycle event creation — no {@code Instant} allocation, no
-   * event object construction, no publish attempt.
-   */
-  public boolean isLifecycleEnabled() {
-    return lifecycleEnabled;
-  }
+    /**
+     * {@code true} if acquire and release events should be created and published.
+     *
+     * <p>Disabled in {@link #standard()} mode. When {@code false}, the facade
+     * skips all lifecycle event creation — no {@code Instant} allocation, no
+     * event object construction, no publish attempt.
+     */
+    public boolean isLifecycleEnabled() {
+        return lifecycleEnabled;
+    }
 
-  /**
-   * {@code true} if rejection events should be created and published.
-   *
-   * <p>Enabled in both {@link #standard()} and {@link #diagnostic()} mode.
-   */
-  public boolean isRejectionEnabled() {
-    return rejectionEnabled;
-  }
+    /**
+     * {@code true} if rejection events should be created and published.
+     *
+     * <p>Enabled in both {@link #standard()} and {@link #diagnostic()} mode.
+     */
+    public boolean isRejectionEnabled() {
+        return rejectionEnabled;
+    }
 
-  /**
-   * {@code true} if trace-level diagnostic events should be created and published.
-   *
-   * <p>Disabled in {@link #standard()} mode. When {@code false}, the facade
-   * also skips the {@code nanoTimeSource} call for wait-time measurement,
-   * eliminating an additional native call on the happy path.
-   */
-  public boolean isTraceEnabled() {
-    return traceEnabled;
-  }
+    /**
+     * {@code true} if trace-level diagnostic events should be created and published.
+     *
+     * <p>Disabled in {@link #standard()} mode. When {@code false}, the facade
+     * also skips the {@code nanoTimeSource} call for wait-time measurement,
+     * eliminating an additional native call on the happy path.
+     */
+    public boolean isTraceEnabled() {
+        return traceEnabled;
+    }
 }

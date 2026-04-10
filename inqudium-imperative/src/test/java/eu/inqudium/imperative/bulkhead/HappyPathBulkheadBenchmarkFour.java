@@ -8,19 +8,7 @@ import io.github.resilience4j.bulkhead.BulkheadRegistry;
 import io.github.resilience4j.micrometer.tagged.TaggedBulkheadMetrics;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
-import org.openjdk.jmh.annotations.Benchmark;
-import org.openjdk.jmh.annotations.BenchmarkMode;
-import org.openjdk.jmh.annotations.Fork;
-import org.openjdk.jmh.annotations.Level;
-import org.openjdk.jmh.annotations.Measurement;
-import org.openjdk.jmh.annotations.Mode;
-import org.openjdk.jmh.annotations.OperationsPerInvocation;
-import org.openjdk.jmh.annotations.OutputTimeUnit;
-import org.openjdk.jmh.annotations.Scope;
-import org.openjdk.jmh.annotations.Setup;
-import org.openjdk.jmh.annotations.State;
-import org.openjdk.jmh.annotations.Threads;
-import org.openjdk.jmh.annotations.Warmup;
+import org.openjdk.jmh.annotations.*;
 import org.openjdk.jmh.infra.Blackhole;
 import org.openjdk.jmh.profile.GCProfiler;
 import org.openjdk.jmh.profile.MemPoolProfiler;
@@ -113,274 +101,274 @@ import static eu.inqudium.imperative.bulkhead.config.InqImperativeBulkheadConfig
 @Fork(3)
 public class HappyPathBulkheadBenchmarkFour {
 
-  private static final int BATCH_SIZE = 3;
-  private static final int PURE_OVERHEAD_THREADS = 5;
-  private static final int BULKHEAD_LIMIT = PURE_OVERHEAD_THREADS * BATCH_SIZE;  // 15
-  private static final int CONTENTION_THREADS = BULKHEAD_LIMIT * 2;              // 30
-  private static final int WAIT_MILLIS = 150;
-  // ── Failsafe metrics counters ──
-  private final LongAdder failsafeSuccess = new LongAdder();
-  private final LongAdder failsafeFailure = new LongAdder();
+    private static final int BATCH_SIZE = 3;
+    private static final int PURE_OVERHEAD_THREADS = 5;
+    private static final int BULKHEAD_LIMIT = PURE_OVERHEAD_THREADS * BATCH_SIZE;  // 15
+    private static final int CONTENTION_THREADS = BULKHEAD_LIMIT * 2;              // 30
+    private static final int WAIT_MILLIS = 150;
+    // ── Failsafe metrics counters ──
+    private final LongAdder failsafeSuccess = new LongAdder();
+    private final LongAdder failsafeFailure = new LongAdder();
 
-  // ── Pre-decorated async wrappers (created once in setUp, invoked per iteration) ──
-  private Supplier<CompletionStage<Void>> decoratedSemaphore;
-  private Supplier<CompletionStage<Void>> decoratedInqDiagnostic;
-  private Supplier<CompletionStage<Void>> decoratedInqOptimized;
-  private Supplier<CompletionStage<Void>> decoratedR4j;
-  private Supplier<CompletionStage<Void>> decoratedFailsafe;
+    // ── Pre-decorated async wrappers (created once in setUp, invoked per iteration) ──
+    private Supplier<CompletionStage<Void>> decoratedSemaphore;
+    private Supplier<CompletionStage<Void>> decoratedInqDiagnostic;
+    private Supplier<CompletionStage<Void>> decoratedInqOptimized;
+    private Supplier<CompletionStage<Void>> decoratedR4j;
+    private Supplier<CompletionStage<Void>> decoratedFailsafe;
 
-  public static void main(String[] args) throws RunnerException {
-    Options opt = new OptionsBuilder()
-        .addProfiler(GCProfiler.class)
-        .addProfiler(PausesProfiler.class)
-        .addProfiler(MemPoolProfiler.class)
-        .include(HappyPathBulkheadBenchmarkFour.class.getSimpleName())
-        .build();
-    new Runner(opt).run();
-  }
+    public static void main(String[] args) throws RunnerException {
+        Options opt = new OptionsBuilder()
+                .addProfiler(GCProfiler.class)
+                .addProfiler(PausesProfiler.class)
+                .addProfiler(MemPoolProfiler.class)
+                .include(HappyPathBulkheadBenchmarkFour.class.getSimpleName())
+                .build();
+        new Runner(opt).run();
+    }
 
-  private static void simulateWork() {
-    Blackhole.consumeCPU(100);
-  }
+    private static void simulateWork() {
+        Blackhole.consumeCPU(100);
+    }
 
-  // ════════════════════════════════════════════════════════════════════
-  // SETUP — all async wrappers are created here, not per invocation
-  // ════════════════════════════════════════════════════════════════════
+    // ════════════════════════════════════════════════════════════════════
+    // SETUP — all async wrappers are created here, not per invocation
+    // ════════════════════════════════════════════════════════════════════
 
-  @Setup(Level.Trial)
-  public void setUp() {
+    @Setup(Level.Trial)
+    public void setUp() {
 
-    // ── Raw Semaphore (baseline — manual async wrapper) ──
-    Semaphore semaphore = new Semaphore(BULKHEAD_LIMIT, true);
-    decoratedSemaphore = () -> {
-      try {
-        if (semaphore.tryAcquire(WAIT_MILLIS, TimeUnit.MILLISECONDS)) {
-          try {
+        // ── Raw Semaphore (baseline — manual async wrapper) ──
+        Semaphore semaphore = new Semaphore(BULKHEAD_LIMIT, true);
+        decoratedSemaphore = () -> {
+            try {
+                if (semaphore.tryAcquire(WAIT_MILLIS, TimeUnit.MILLISECONDS)) {
+                    try {
+                        simulateWork();
+                    } finally {
+                        semaphore.release();
+                    }
+                }
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+            return CompletableFuture.completedFuture(null);
+        };
+
+        // ── Inqudium diagnostic: all events ──
+        var diagnosticConfig = InqConfig.configure()
+                .general()
+                .with(bulkhead(), c -> c
+                        .name("async-diagnostic")
+                        .maxConcurrentCalls(BULKHEAD_LIMIT)
+                        .eventConfig(BulkheadEventConfig.diagnostic())
+                        .maxWaitDuration(Duration.ofMillis(WAIT_MILLIS))
+                ).build();
+        var inqDiagnostic = Bulkhead.of(diagnosticConfig);
+        decoratedInqDiagnostic = inqDiagnostic.decorateAsyncRunnable(
+                HappyPathBulkheadBenchmarkFour::simulateWork);
+
+        // ── Inqudium optimized: rejections only ──
+        var optimizedConfig = InqConfig.configure()
+                .general()
+                .with(bulkhead(), c -> c
+                        .name("async-optimized")
+                        .maxConcurrentCalls(BULKHEAD_LIMIT)
+                        .eventConfig(BulkheadEventConfig.standard())
+                        .maxWaitDuration(Duration.ofMillis(WAIT_MILLIS))
+                ).build();
+        var inqOptimized = Bulkhead.of(optimizedConfig);
+        decoratedInqOptimized = inqOptimized.decorateAsyncRunnable(
+                HappyPathBulkheadBenchmarkFour::simulateWork);
+
+        // ── Resilience4j: BulkheadRegistry + Micrometer (production setup) ──
+        BulkheadConfig r4jConfig = BulkheadConfig.custom()
+                .maxConcurrentCalls(BULKHEAD_LIMIT)
+                .maxWaitDuration(Duration.ofMillis(WAIT_MILLIS))
+                .fairCallHandlingStrategyEnabled(true)
+                .writableStackTraceEnabled(false)
+                .build();
+        BulkheadRegistry r4jRegistry = BulkheadRegistry.of(r4jConfig);
+        var r4jBulkhead = r4jRegistry.bulkhead("r4j-async-test");
+
+        MeterRegistry meterRegistry = new SimpleMeterRegistry();
+        TaggedBulkheadMetrics.ofBulkheadRegistry(r4jRegistry).bindTo(meterRegistry);
+
+        decoratedR4j = io.github.resilience4j.bulkhead.Bulkhead.decorateCompletionStage(
+                r4jBulkhead, () -> {
+                    simulateWork();
+                    return CompletableFuture.completedFuture(null);
+                });
+
+        // ── Failsafe: event listeners ──
+        dev.failsafe.Bulkhead<Void> failsafeBulkhead = dev.failsafe.Bulkhead.<Void>builder(BULKHEAD_LIMIT)
+                .withMaxWaitTime(Duration.ofMillis(WAIT_MILLIS))
+                .onSuccess(event -> failsafeSuccess.increment())
+                .onFailure(event -> failsafeFailure.increment())
+                .build();
+        var failsafeExecutor = Failsafe.with(failsafeBulkhead);
+        decoratedFailsafe = () -> failsafeExecutor.getStageAsync(() -> {
             simulateWork();
-          } finally {
-            semaphore.release();
-          }
-        }
-      } catch (InterruptedException e) {
-        Thread.currentThread().interrupt();
-      }
-      return CompletableFuture.completedFuture(null);
-    };
-
-    // ── Inqudium diagnostic: all events ──
-    var diagnosticConfig = InqConfig.configure()
-        .general()
-        .with(bulkhead(), c -> c
-            .name("async-diagnostic")
-            .maxConcurrentCalls(BULKHEAD_LIMIT)
-            .eventConfig(BulkheadEventConfig.diagnostic())
-            .maxWaitDuration(Duration.ofMillis(WAIT_MILLIS))
-        ).build();
-    var inqDiagnostic = Bulkhead.of(diagnosticConfig);
-    decoratedInqDiagnostic = inqDiagnostic.decorateAsyncRunnable(
-        HappyPathBulkheadBenchmarkFour::simulateWork);
-
-    // ── Inqudium optimized: rejections only ──
-    var optimizedConfig = InqConfig.configure()
-        .general()
-        .with(bulkhead(), c -> c
-            .name("async-optimized")
-            .maxConcurrentCalls(BULKHEAD_LIMIT)
-            .eventConfig(BulkheadEventConfig.standard())
-            .maxWaitDuration(Duration.ofMillis(WAIT_MILLIS))
-        ).build();
-    var inqOptimized = Bulkhead.of(optimizedConfig);
-    decoratedInqOptimized = inqOptimized.decorateAsyncRunnable(
-        HappyPathBulkheadBenchmarkFour::simulateWork);
-
-    // ── Resilience4j: BulkheadRegistry + Micrometer (production setup) ──
-    BulkheadConfig r4jConfig = BulkheadConfig.custom()
-        .maxConcurrentCalls(BULKHEAD_LIMIT)
-        .maxWaitDuration(Duration.ofMillis(WAIT_MILLIS))
-        .fairCallHandlingStrategyEnabled(true)
-        .writableStackTraceEnabled(false)
-        .build();
-    BulkheadRegistry r4jRegistry = BulkheadRegistry.of(r4jConfig);
-    var r4jBulkhead = r4jRegistry.bulkhead("r4j-async-test");
-
-    MeterRegistry meterRegistry = new SimpleMeterRegistry();
-    TaggedBulkheadMetrics.ofBulkheadRegistry(r4jRegistry).bindTo(meterRegistry);
-
-    decoratedR4j = io.github.resilience4j.bulkhead.Bulkhead.decorateCompletionStage(
-        r4jBulkhead, () -> {
-          simulateWork();
-          return CompletableFuture.completedFuture(null);
+            return CompletableFuture.completedFuture(null);
         });
+    }
 
-    // ── Failsafe: event listeners ──
-    dev.failsafe.Bulkhead<Void> failsafeBulkhead = dev.failsafe.Bulkhead.<Void>builder(BULKHEAD_LIMIT)
-        .withMaxWaitTime(Duration.ofMillis(WAIT_MILLIS))
-        .onSuccess(event -> failsafeSuccess.increment())
-        .onFailure(event -> failsafeFailure.increment())
-        .build();
-    var failsafeExecutor = Failsafe.with(failsafeBulkhead);
-    decoratedFailsafe = () -> failsafeExecutor.getStageAsync(() -> {
-      simulateWork();
-      return CompletableFuture.completedFuture(null);
-    });
-  }
+    // ════════════════════════════════════════════════════════════════════
+    // BASELINE — no bulkhead, only CompletableFuture + batch overhead
+    // ════════════════════════════════════════════════════════════════════
 
-  // ════════════════════════════════════════════════════════════════════
-  // BASELINE — no bulkhead, only CompletableFuture + batch overhead
-  // ════════════════════════════════════════════════════════════════════
+    @Benchmark
+    @Threads(PURE_OVERHEAD_THREADS)
+    @OperationsPerInvocation(BATCH_SIZE)
+    public void baselineNoBulkhead(Blackhole bh) throws Exception {
+        CompletionStage<Void>[] stages = new CompletionStage[BATCH_SIZE];
+        for (int i = 0; i < BATCH_SIZE; i++) {
+            simulateWork();
+            stages[i] = CompletableFuture.completedFuture(null);
+        }
+        for (CompletionStage<Void> stage : stages) {
+            bh.consume(stage.toCompletableFuture().get());
+        }
+    }
 
-  @Benchmark
-  @Threads(PURE_OVERHEAD_THREADS)
-  @OperationsPerInvocation(BATCH_SIZE)
-  public void baselineNoBulkhead(Blackhole bh) throws Exception {
-    CompletionStage<Void>[] stages = new CompletionStage[BATCH_SIZE];
-    for (int i = 0; i < BATCH_SIZE; i++) {
-      simulateWork();
-      stages[i] = CompletableFuture.completedFuture(null);
-    }
-    for (CompletionStage<Void> stage : stages) {
-      bh.consume(stage.toCompletableFuture().get());
-    }
-  }
+    // ════════════════════════════════════════════════════════════════════
+    // PURE OVERHEAD — Threads (10) << Permits (25), no contention
+    // Batch of 8 stages: create all, then consume all.
+    // @OperationsPerInvocation normalizes throughput to per-operation.
+    // ════════════════════════════════════════════════════════════════════
 
-  // ════════════════════════════════════════════════════════════════════
-  // PURE OVERHEAD — Threads (10) << Permits (25), no contention
-  // Batch of 8 stages: create all, then consume all.
-  // @OperationsPerInvocation normalizes throughput to per-operation.
-  // ════════════════════════════════════════════════════════════════════
+    @Benchmark
+    @Threads(PURE_OVERHEAD_THREADS)
+    @OperationsPerInvocation(BATCH_SIZE)
+    public void measurePureOverheadSemaphore(Blackhole bh) throws Exception {
+        CompletionStage<Void>[] stages = new CompletionStage[BATCH_SIZE];
+        for (int i = 0; i < BATCH_SIZE; i++) {
+            stages[i] = decoratedSemaphore.get();
+        }
+        for (CompletionStage<Void> stage : stages) {
+            bh.consume(stage.toCompletableFuture().get());
+        }
+    }
 
-  @Benchmark
-  @Threads(PURE_OVERHEAD_THREADS)
-  @OperationsPerInvocation(BATCH_SIZE)
-  public void measurePureOverheadSemaphore(Blackhole bh) throws Exception {
-    CompletionStage<Void>[] stages = new CompletionStage[BATCH_SIZE];
-    for (int i = 0; i < BATCH_SIZE; i++) {
-      stages[i] = decoratedSemaphore.get();
+    @Benchmark
+    @Threads(PURE_OVERHEAD_THREADS)
+    @OperationsPerInvocation(BATCH_SIZE)
+    public void measurePureOverheadInqudium(Blackhole bh) throws Exception {
+        CompletionStage<Void>[] stages = new CompletionStage[BATCH_SIZE];
+        for (int i = 0; i < BATCH_SIZE; i++) {
+            stages[i] = decoratedInqDiagnostic.get();
+        }
+        for (CompletionStage<Void> stage : stages) {
+            bh.consume(stage.toCompletableFuture().get());
+        }
     }
-    for (CompletionStage<Void> stage : stages) {
-      bh.consume(stage.toCompletableFuture().get());
-    }
-  }
 
-  @Benchmark
-  @Threads(PURE_OVERHEAD_THREADS)
-  @OperationsPerInvocation(BATCH_SIZE)
-  public void measurePureOverheadInqudium(Blackhole bh) throws Exception {
-    CompletionStage<Void>[] stages = new CompletionStage[BATCH_SIZE];
-    for (int i = 0; i < BATCH_SIZE; i++) {
-      stages[i] = decoratedInqDiagnostic.get();
+    @Benchmark
+    @Threads(PURE_OVERHEAD_THREADS)
+    @OperationsPerInvocation(BATCH_SIZE)
+    public void measurePureOverheadInqudiumOptimized(Blackhole bh) throws Exception {
+        CompletionStage<Void>[] stages = new CompletionStage[BATCH_SIZE];
+        for (int i = 0; i < BATCH_SIZE; i++) {
+            stages[i] = decoratedInqOptimized.get();
+        }
+        for (CompletionStage<Void> stage : stages) {
+            bh.consume(stage.toCompletableFuture().get());
+        }
     }
-    for (CompletionStage<Void> stage : stages) {
-      bh.consume(stage.toCompletableFuture().get());
-    }
-  }
 
-  @Benchmark
-  @Threads(PURE_OVERHEAD_THREADS)
-  @OperationsPerInvocation(BATCH_SIZE)
-  public void measurePureOverheadInqudiumOptimized(Blackhole bh) throws Exception {
-    CompletionStage<Void>[] stages = new CompletionStage[BATCH_SIZE];
-    for (int i = 0; i < BATCH_SIZE; i++) {
-      stages[i] = decoratedInqOptimized.get();
+    @Benchmark
+    @Threads(PURE_OVERHEAD_THREADS)
+    @OperationsPerInvocation(BATCH_SIZE)
+    public void measurePureOverheadResilience4j(Blackhole bh) throws Exception {
+        CompletionStage<Void>[] stages = new CompletionStage[BATCH_SIZE];
+        for (int i = 0; i < BATCH_SIZE; i++) {
+            stages[i] = decoratedR4j.get();
+        }
+        for (CompletionStage<Void> stage : stages) {
+            bh.consume(stage.toCompletableFuture().get());
+        }
     }
-    for (CompletionStage<Void> stage : stages) {
-      bh.consume(stage.toCompletableFuture().get());
-    }
-  }
 
-  @Benchmark
-  @Threads(PURE_OVERHEAD_THREADS)
-  @OperationsPerInvocation(BATCH_SIZE)
-  public void measurePureOverheadResilience4j(Blackhole bh) throws Exception {
-    CompletionStage<Void>[] stages = new CompletionStage[BATCH_SIZE];
-    for (int i = 0; i < BATCH_SIZE; i++) {
-      stages[i] = decoratedR4j.get();
+    @Benchmark
+    @Threads(PURE_OVERHEAD_THREADS)
+    @OperationsPerInvocation(BATCH_SIZE)
+    public void measurePureOverheadFailsafe(Blackhole bh) throws Exception {
+        CompletionStage<Void>[] stages = new CompletionStage[BATCH_SIZE];
+        for (int i = 0; i < BATCH_SIZE; i++) {
+            stages[i] = decoratedFailsafe.get();
+        }
+        for (CompletionStage<Void> stage : stages) {
+            bh.consume(stage.toCompletableFuture().get());
+        }
     }
-    for (CompletionStage<Void> stage : stages) {
-      bh.consume(stage.toCompletableFuture().get());
-    }
-  }
 
-  @Benchmark
-  @Threads(PURE_OVERHEAD_THREADS)
-  @OperationsPerInvocation(BATCH_SIZE)
-  public void measurePureOverheadFailsafe(Blackhole bh) throws Exception {
-    CompletionStage<Void>[] stages = new CompletionStage[BATCH_SIZE];
-    for (int i = 0; i < BATCH_SIZE; i++) {
-      stages[i] = decoratedFailsafe.get();
-    }
-    for (CompletionStage<Void> stage : stages) {
-      bh.consume(stage.toCompletableFuture().get());
-    }
-  }
+    // ════════════════════════════════════════════════════════════════════
+    // CONTENTION — Threads (50) > Permits (25), no rejections
+    // Same batch pattern, more threads than permits.
+    // ════════════════════════════════════════════════════════════════════
 
-  // ════════════════════════════════════════════════════════════════════
-  // CONTENTION — Threads (50) > Permits (25), no rejections
-  // Same batch pattern, more threads than permits.
-  // ════════════════════════════════════════════════════════════════════
+    @Benchmark
+    @Threads(CONTENTION_THREADS)
+    @OperationsPerInvocation(BATCH_SIZE)
+    public void measureContentionSemaphore(Blackhole bh) throws Exception {
+        CompletionStage<Void>[] stages = new CompletionStage[BATCH_SIZE];
+        for (int i = 0; i < BATCH_SIZE; i++) {
+            stages[i] = decoratedSemaphore.get();
+        }
+        for (CompletionStage<Void> stage : stages) {
+            bh.consume(stage.toCompletableFuture().get());
+        }
+    }
 
-  @Benchmark
-  @Threads(CONTENTION_THREADS)
-  @OperationsPerInvocation(BATCH_SIZE)
-  public void measureContentionSemaphore(Blackhole bh) throws Exception {
-    CompletionStage<Void>[] stages = new CompletionStage[BATCH_SIZE];
-    for (int i = 0; i < BATCH_SIZE; i++) {
-      stages[i] = decoratedSemaphore.get();
+    @Benchmark
+    @Threads(CONTENTION_THREADS)
+    @OperationsPerInvocation(BATCH_SIZE)
+    public void measureContentionInqudium(Blackhole bh) throws Exception {
+        CompletionStage<Void>[] stages = new CompletionStage[BATCH_SIZE];
+        for (int i = 0; i < BATCH_SIZE; i++) {
+            stages[i] = decoratedInqDiagnostic.get();
+        }
+        for (CompletionStage<Void> stage : stages) {
+            bh.consume(stage.toCompletableFuture().get());
+        }
     }
-    for (CompletionStage<Void> stage : stages) {
-      bh.consume(stage.toCompletableFuture().get());
-    }
-  }
 
-  @Benchmark
-  @Threads(CONTENTION_THREADS)
-  @OperationsPerInvocation(BATCH_SIZE)
-  public void measureContentionInqudium(Blackhole bh) throws Exception {
-    CompletionStage<Void>[] stages = new CompletionStage[BATCH_SIZE];
-    for (int i = 0; i < BATCH_SIZE; i++) {
-      stages[i] = decoratedInqDiagnostic.get();
+    @Benchmark
+    @Threads(CONTENTION_THREADS)
+    @OperationsPerInvocation(BATCH_SIZE)
+    public void measureContentionInqudiumOptimized(Blackhole bh) throws Exception {
+        CompletionStage<Void>[] stages = new CompletionStage[BATCH_SIZE];
+        for (int i = 0; i < BATCH_SIZE; i++) {
+            stages[i] = decoratedInqOptimized.get();
+        }
+        for (CompletionStage<Void> stage : stages) {
+            bh.consume(stage.toCompletableFuture().get());
+        }
     }
-    for (CompletionStage<Void> stage : stages) {
-      bh.consume(stage.toCompletableFuture().get());
-    }
-  }
 
-  @Benchmark
-  @Threads(CONTENTION_THREADS)
-  @OperationsPerInvocation(BATCH_SIZE)
-  public void measureContentionInqudiumOptimized(Blackhole bh) throws Exception {
-    CompletionStage<Void>[] stages = new CompletionStage[BATCH_SIZE];
-    for (int i = 0; i < BATCH_SIZE; i++) {
-      stages[i] = decoratedInqOptimized.get();
+    @Benchmark
+    @Threads(CONTENTION_THREADS)
+    @OperationsPerInvocation(BATCH_SIZE)
+    public void measureContentionResilience4j(Blackhole bh) throws Exception {
+        CompletionStage<Void>[] stages = new CompletionStage[BATCH_SIZE];
+        for (int i = 0; i < BATCH_SIZE; i++) {
+            stages[i] = decoratedR4j.get();
+        }
+        for (CompletionStage<Void> stage : stages) {
+            bh.consume(stage.toCompletableFuture().get());
+        }
     }
-    for (CompletionStage<Void> stage : stages) {
-      bh.consume(stage.toCompletableFuture().get());
-    }
-  }
 
-  @Benchmark
-  @Threads(CONTENTION_THREADS)
-  @OperationsPerInvocation(BATCH_SIZE)
-  public void measureContentionResilience4j(Blackhole bh) throws Exception {
-    CompletionStage<Void>[] stages = new CompletionStage[BATCH_SIZE];
-    for (int i = 0; i < BATCH_SIZE; i++) {
-      stages[i] = decoratedR4j.get();
+    @Benchmark
+    @Threads(CONTENTION_THREADS)
+    @OperationsPerInvocation(BATCH_SIZE)
+    public void measureContentionFailsafe(Blackhole bh) throws Exception {
+        CompletionStage<Void>[] stages = new CompletionStage[BATCH_SIZE];
+        for (int i = 0; i < BATCH_SIZE; i++) {
+            stages[i] = decoratedFailsafe.get();
+        }
+        for (CompletionStage<Void> stage : stages) {
+            bh.consume(stage.toCompletableFuture().get());
+        }
     }
-    for (CompletionStage<Void> stage : stages) {
-      bh.consume(stage.toCompletableFuture().get());
-    }
-  }
-
-  @Benchmark
-  @Threads(CONTENTION_THREADS)
-  @OperationsPerInvocation(BATCH_SIZE)
-  public void measureContentionFailsafe(Blackhole bh) throws Exception {
-    CompletionStage<Void>[] stages = new CompletionStage[BATCH_SIZE];
-    for (int i = 0; i < BATCH_SIZE; i++) {
-      stages[i] = decoratedFailsafe.get();
-    }
-    for (CompletionStage<Void> stage : stages) {
-      bh.consume(stage.toCompletableFuture().get());
-    }
-  }
 }

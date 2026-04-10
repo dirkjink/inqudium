@@ -31,19 +31,19 @@ import java.time.Instant;
 @FunctionalInterface
 public interface InqClock {
 
-  /**
-   * Returns a clock backed by {@link Instant#now()}.
-   *
-   * @return the system clock
-   */
-  static InqClock system() {
-    return Instant::now;
-  }
+    /**
+     * Returns a clock backed by {@link Instant#now()}.
+     *
+     * @return the system clock
+     */
+    static InqClock system() {
+        return Instant::now;
+    }
 
-  /**
-   * Returns the current instant.
-   *
-   * @return the current time as seen by this clock
-   */
-  Instant instant();
+    /**
+     * Returns the current instant.
+     *
+     * @return the current time as seen by this clock
+     */
+    Instant instant();
 }

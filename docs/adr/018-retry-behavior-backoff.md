@@ -6,7 +6,9 @@
 
 ## Context
 
-The Retry element re-executes a failed operation with configurable delays between attempts. ADR-005 defines it as a shared contract in core with pure backoff algorithms, and ADR-017 places it as the innermost element in the canonical pipeline order. But the behavioral contract, configuration parameters, and backoff algorithms are not specified.
+The Retry element re-executes a failed operation with configurable delays between attempts. ADR-005 defines it as a
+shared contract in core with pure backoff algorithms, and ADR-017 places it as the innermost element in the canonical
+pipeline order. But the behavioral contract, configuration parameters, and backoff algorithms are not specified.
 
 ### What must be specified
 
@@ -17,14 +19,20 @@ The Retry element re-executes a failed operation with configurable delays betwee
 
 ### The jitter problem
 
-When a downstream service recovers after an outage, all clients that were retrying simultaneously send their next retry at the same instant. This "retry storm" can re-overload the service immediately. Jitter — randomizing the wait duration — spreads retries over time and prevents thundering herd effects.
+When a downstream service recovers after an outage, all clients that were retrying simultaneously send their next retry
+at the same instant. This "retry storm" can re-overload the service immediately. Jitter — randomizing the wait
+duration — spreads retries over time and prevents thundering herd effects.
 
-The choice of jitter algorithm is not cosmetic. AWS's analysis ("Exponential Backoff And Jitter", 2015) demonstrated that different jitter strategies produce dramatically different load profiles:
+The choice of jitter algorithm is not cosmetic. AWS's analysis ("Exponential Backoff And Jitter", 2015) demonstrated
+that different jitter strategies produce dramatically different load profiles:
 
 - **No jitter** — All clients retry at exactly `2^attempt * base`. Thundering herd on every retry cycle.
-- **Full jitter** — `random(0, 2^attempt * base)`. Maximum spread, but some retries happen very quickly (near zero delay).
-- **Equal jitter** — `2^attempt * base / 2 + random(0, 2^attempt * base / 2)`. Guaranteed minimum delay of half the backoff, with jitter in the upper half.
-- **Decorrelated jitter** — `min(cap, random(base, previousDelay * 3))`. Each delay depends on the previous one, producing a more organic spread. Best overall performance in AWS's analysis.
+- **Full jitter** — `random(0, 2^attempt * base)`. Maximum spread, but some retries happen very quickly (near zero
+  delay).
+- **Equal jitter** — `2^attempt * base / 2 + random(0, 2^attempt * base / 2)`. Guaranteed minimum delay of half the
+  backoff, with jitter in the upper half.
+- **Decorrelated jitter** — `min(cap, random(base, previousDelay * 3))`. Each delay depends on the previous one,
+  producing a more organic spread. Best overall performance in AWS's analysis.
 
 ## Decision
 
@@ -52,20 +60,21 @@ public record RetryConfig(
 
 Default values:
 
-| Parameter | Default | Rationale |
-|---|---|---|
-| `maxAttempts` | 3 | First call + 2 retries. Covers transient failures without excessive load. |
-| `initialInterval` | 500ms | Short enough to feel responsive, long enough for a transient issue to resolve. |
-| `backoffStrategy` | `ExponentialBackoff.withEqualJitter()` | Exponential growth prevents hammering; equal jitter prevents thundering herd while guaranteeing a minimum delay. |
-| `maxInterval` | 30s | Prevents exponential growth from producing absurd delays (2^10 * 500ms = 8.5 minutes). |
-| `retryOn` | empty (= retry on all exceptions) | Unless restricted, any exception triggers a retry. |
-| `ignoreOn` | empty | No exceptions explicitly ignored (but see `retryOnInqExceptions`). |
-| `retryOnInqExceptions` | `false` | Retrying against an open Circuit Breaker or exhausted Rate Limiter is pointless (ADR-009, ADR-017). |
-| `retryOnPredicate` | `null` | No custom predicate. |
+| Parameter              | Default                                | Rationale                                                                                                        |
+|------------------------|----------------------------------------|------------------------------------------------------------------------------------------------------------------|
+| `maxAttempts`          | 3                                      | First call + 2 retries. Covers transient failures without excessive load.                                        |
+| `initialInterval`      | 500ms                                  | Short enough to feel responsive, long enough for a transient issue to resolve.                                   |
+| `backoffStrategy`      | `ExponentialBackoff.withEqualJitter()` | Exponential growth prevents hammering; equal jitter prevents thundering herd while guaranteeing a minimum delay. |
+| `maxInterval`          | 30s                                    | Prevents exponential growth from producing absurd delays (2^10 * 500ms = 8.5 minutes).                           |
+| `retryOn`              | empty (= retry on all exceptions)      | Unless restricted, any exception triggers a retry.                                                               |
+| `ignoreOn`             | empty                                  | No exceptions explicitly ignored (but see `retryOnInqExceptions`).                                               |
+| `retryOnInqExceptions` | `false`                                | Retrying against an open Circuit Breaker or exhausted Rate Limiter is pointless (ADR-009, ADR-017).              |
+| `retryOnPredicate`     | `null`                                 | No custom predicate.                                                                                             |
 
 ### RetryBehavior
 
-The behavioral contract determines whether a specific failure should be retried and what the next delay should be. It is a pure function — no threading, no sleeping.
+The behavioral contract determines whether a specific failure should be retried and what the next delay should be. It is
+a pure function — no threading, no sleeping.
 
 ```java
 public interface RetryBehavior {
@@ -192,6 +201,7 @@ public class ExponentialBackoff implements BackoffStrategy {
 ```
 
 Example with defaults (multiplier=2, initialInterval=500ms):
+
 - Attempt 1: 500ms
 - Attempt 2: 1000ms
 - Attempt 3: 2000ms
@@ -199,7 +209,8 @@ Example with defaults (multiplier=2, initialInterval=500ms):
 
 ### RandomizedBackoff (jitter decorator)
 
-`RandomizedBackoff` is a **decorator** that wraps any `BackoffStrategy` and adds jitter to its output. Three jitter algorithms are provided as factory methods:
+`RandomizedBackoff` is a **decorator** that wraps any `BackoffStrategy` and adds jitter to its output. Three jitter
+algorithms are provided as factory methods:
 
 ```java
 public class RandomizedBackoff implements BackoffStrategy {
@@ -228,7 +239,8 @@ public class RandomizedBackoff implements BackoffStrategy {
 delay = random(0, baseDelay)
 ```
 
-Maximum spread. Some retries fire almost immediately (near zero). Best for systems where any spread is better than no spread.
+Maximum spread. Some retries fire almost immediately (near zero). Best for systems where any spread is better than no
+spread.
 
 ```java
 public static RandomizedBackoff fullJitter(BackoffStrategy delegate) { ... }
@@ -240,7 +252,8 @@ public static RandomizedBackoff fullJitter(BackoffStrategy delegate) { ... }
 delay = baseDelay / 2 + random(0, baseDelay / 2)
 ```
 
-The delay is always at least half of the computed backoff. The upper half is randomized. This guarantees a minimum delay (preventing "lucky" near-zero retries) while still spreading retries.
+The delay is always at least half of the computed backoff. The upper half is randomized. This guarantees a minimum
+delay (preventing "lucky" near-zero retries) while still spreading retries.
 
 ```java
 public static RandomizedBackoff equalJitter(BackoffStrategy delegate) { ... }
@@ -252,13 +265,16 @@ public static RandomizedBackoff equalJitter(BackoffStrategy delegate) { ... }
 delay = min(maxInterval, random(initialInterval, previousDelay × 3))
 ```
 
-Each delay depends on the **previous delay**, not the attempt number. Produces a more organic, less predictable spread. Best overall performance in high-concurrency retry storms per AWS's analysis.
+Each delay depends on the **previous delay**, not the attempt number. Produces a more organic, less predictable spread.
+Best overall performance in high-concurrency retry storms per AWS's analysis.
 
 ```java
 public static RandomizedBackoff decorrelatedJitter(BackoffStrategy delegate) { ... }
 ```
 
-Note: Decorrelated jitter is **stateful** — it remembers the previous delay. This is the only `BackoffStrategy` implementation that is not purely functional. Instances must not be shared across concurrent retry sequences. Each Retry element instance creates its own `RandomizedBackoff` for each call.
+Note: Decorrelated jitter is **stateful** — it remembers the previous delay. This is the only `BackoffStrategy`
+implementation that is not purely functional. Instances must not be shared across concurrent retry sequences. Each Retry
+element instance creates its own `RandomizedBackoff` for each call.
 
 ### Convenience factory methods
 
@@ -275,6 +291,7 @@ BackoffStrategy.exponentialWithDecorrelatedJitter() // Exponential + decorrelate
 ## Consequences
 
 **Positive:**
+
 - Three jitter algorithms with documented trade-offs. The developer chooses based on their load profile.
 - Equal jitter as default balances spread and minimum delay — no near-zero retries, no thundering herd.
 - Decorator pattern for jitter means any backoff strategy can be jittered — including custom implementations.
@@ -283,9 +300,16 @@ BackoffStrategy.exponentialWithDecorrelatedJitter() // Exponential + decorrelate
 - `RetryBehavior` is pure — no threading, no sleeping. The paradigm module decides how to wait.
 
 **Negative:**
-- Decorrelated jitter is stateful (remembers previous delay). This breaks the "pure function" principle for this one strategy. Documented and mitigated by per-call instantiation.
-- Three jitter algorithms require explanation and documentation. Most developers will use the default (equal jitter) and never think about it — but the choice must be available for teams with specific requirements.
+
+- Decorrelated jitter is stateful (remembers previous delay). This breaks the "pure function" principle for this one
+  strategy. Documented and mitigated by per-call instantiation.
+- Three jitter algorithms require explanation and documentation. Most developers will use the default (equal jitter) and
+  never think about it — but the choice must be available for teams with specific requirements.
 
 **Neutral:**
-- The `retryOn` / `ignoreOn` mechanism uses exception class matching, not cause-chain traversal. This is intentional — cause-chain matching would interact unpredictably with `InqFailure.find()` (ADR-009). If the developer needs cause-chain matching, they use `retryOnPredicate`.
-- `maxAttempts` counts the total number of attempts including the initial call. `maxAttempts=3` means: initial call + 2 retries. This matches Resilience4J's semantics (ADR-006).
+
+- The `retryOn` / `ignoreOn` mechanism uses exception class matching, not cause-chain traversal. This is intentional —
+  cause-chain matching would interact unpredictably with `InqFailure.find()` (ADR-009). If the developer needs
+  cause-chain matching, they use `retryOnPredicate`.
+- `maxAttempts` counts the total number of attempts including the initial call. `maxAttempts=3` means: initial call + 2
+  retries. This matches Resilience4J's semantics (ADR-006).

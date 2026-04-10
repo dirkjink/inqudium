@@ -7,8 +7,8 @@ import java.time.Duration;
  */
 public record NoWaitBackoffStrategy() implements BackoffStrategy {
 
-  @Override
-  public Duration computeDelay(int attemptIndex) {
-    return Duration.ZERO;
-  }
+    @Override
+    public Duration computeDelay(int attemptIndex) {
+        return Duration.ZERO;
+    }
 }

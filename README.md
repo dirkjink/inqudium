@@ -19,9 +19,11 @@
 
 > **⚠️ There is no release yet. No artifacts, no working code, nothing to install or try.**
 >
-> This repository documents the **architecture and vision** for Inqudium. The project is being built in the open from day one. What you see here is a blueprint — not a product.
+> This repository documents the **architecture and vision** for Inqudium. The project is being built in the open from
+> day one. What you see here is a blueprint — not a product.
 >
-> If the approach resonates with you, star this repo to follow progress. Architecture feedback and design discussions are welcome right now — code contributions will follow once the foundation is in place.
+> If the approach resonates with you, star this repo to follow progress. Architecture feedback and design discussions
+> are welcome right now — code contributions will follow once the foundation is in place.
 
 ---
 
@@ -52,37 +54,41 @@ Configuration, algorithms, and events shared. Execution native. That's the plan.
 
 ### Planned elements
 
-| Symbol | Element           | Description                                                                 |
-|--------|-------------------|-----------------------------------------------------------------------------|
-| **Cb** | Circuit Breaker   | Stops cascading failures by short-circuiting calls to unhealthy services.   |
-| **Rt** | Retry             | Automatically retries failed operations with configurable backoff.          |
-| **Rl** | Rate Limiter      | Controls throughput to prevent overloading downstream systems.              |
-| **Bh** | Bulkhead          | Isolates failures by limiting concurrent access to a resource.              |
-| **Tl** | Time Limiter      | Guards against slow responses by enforcing execution time boundaries.       |
-| **Ts** | Traffic Shaper    | Turn a flood into a stream. Keep your services breathing.                   |
+| Symbol | Element         | Description                                                               |
+|--------|-----------------|---------------------------------------------------------------------------|
+| **Cb** | Circuit Breaker | Stops cascading failures by short-circuiting calls to unhealthy services. |
+| **Rt** | Retry           | Automatically retries failed operations with configurable backoff.        |
+| **Rl** | Rate Limiter    | Controls throughput to prevent overloading downstream systems.            |
+| **Bh** | Bulkhead        | Isolates failures by limiting concurrent access to a resource.            |
+| **Tl** | Time Limiter    | Guards against slow responses by enforcing execution time boundaries.     |
+| **Ts** | Traffic Shaper  | Turn a flood into a stream. Keep your services breathing.                 |
 
 ### Planned modules
 
-| Module                       | Artifact ID                      | Status       |
-|------------------------------|----------------------------------|--------------|
-| Core (SPI)                   | `inqudium-core`                  | in progress  |
-| Resilience      (imperative) | `inqudium-imperative`            | in progress  |
-| Kotlin Coroutines (native)   | `inqudium-kotlin`                | Planned      |
-| RxJava 3 (native)            | `inqudium-rxjava3`               | Planned      |
-| Spring Boot Starter          | `inqudium-spring-boot3`          | Planned      |
-| Micrometer                   | `inqudium-micrometer`            | Planned      |
-| Java Flight Recorder         | `inqudium-jfr`                   | Planned      |
-| Resilience4J Compatibility   | `inqudium-compat-resilience4j`   | Planned      |
+| Module                       | Artifact ID                    | Status      |
+|------------------------------|--------------------------------|-------------|
+| Core (SPI)                   | `inqudium-core`                | in progress |
+| Resilience      (imperative) | `inqudium-imperative`          | in progress |
+| Kotlin Coroutines (native)   | `inqudium-kotlin`              | Planned     |
+| RxJava 3 (native)            | `inqudium-rxjava3`             | Planned     |
+| Spring Boot Starter          | `inqudium-spring-boot3`        | Planned     |
+| Micrometer                   | `inqudium-micrometer`          | Planned     |
+| Java Flight Recorder         | `inqudium-jfr`                 | Planned     |
+| Resilience4J Compatibility   | `inqudium-compat-resilience4j` | Planned     |
 
 ## Design principles (planned)
 
-**Native per paradigm** — Every execution model will get its own implementation built on that model's primitives. No thread bridges, no blocking wrappers.
+**Native per paradigm** — Every execution model will get its own implementation built on that model's primitives. No
+thread bridges, no blocking wrappers.
 
-**Shared contracts, no duplication** — `inqudium-core` will define configs, pure algorithms, and events once. The *what* is shared, the *how* is native per paradigm.
+**Shared contracts, no duplication** — `inqudium-core` will define configs, pure algorithms, and events once. The *what*
+is shared, the *how* is native per paradigm.
 
-**Virtual-thread ready** — The imperative layer will use `ReentrantLock` (not `synchronized`) and `LockSupport.parkNanos` (not `Thread.sleep`) to avoid pinning virtual threads.
+**Virtual-thread ready** — The imperative layer will use `ReentrantLock` (not `synchronized`) and
+`LockSupport.parkNanos` (not `Thread.sleep`) to avoid pinning virtual threads.
 
-**Resilience4J drop-in compatible** — A planned compatibility module will let you swap the Maven dependency and keep your annotations, YAML, and Grafana dashboards.
+**Resilience4J drop-in compatible** — A planned compatibility module will let you swap the Maven dependency and keep
+your annotations, YAML, and Grafana dashboards.
 
 ## Get involved
 
@@ -92,11 +98,13 @@ Right now the most valuable contributions are **ideas, not code**:
 - **Use cases** — What resilience pain points do you hit in production that existing libraries don't solve well?
 - **Design discussions** — Open an issue or join an existing one. Every perspective shapes the outcome.
 
-Code contributions will open up once `inqudium-core` compiles and has a test harness to build against. We'll announce that milestone here.
+Code contributions will open up once `inqudium-core` compiles and has a test harness to build against. We'll announce
+that milestone here.
 
 ## Follow the progress
 
-Star this repository to get notified about releases. Major milestones will be documented in [CHANGELOG.md](CHANGELOG.md).
+Star this repository to get notified about releases. Major milestones will be documented
+in [CHANGELOG.md](CHANGELOG.md).
 
 ---
 

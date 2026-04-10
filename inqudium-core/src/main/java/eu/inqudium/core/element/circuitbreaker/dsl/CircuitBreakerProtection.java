@@ -4,20 +4,20 @@ import java.time.Duration;
 
 public interface CircuitBreakerProtection {
 
-  CircuitBreakerProtection trippingAtThreshold(int threshold);
+    CircuitBreakerProtection trippingAtThreshold(int threshold);
 
-  CircuitBreakerProtection waitingInOpenStateFor(Duration waitDuration);
+    CircuitBreakerProtection waitingInOpenStateFor(Duration waitDuration);
 
-  CircuitBreakerProtection permittingCallsInHalfOpen(int permittedCalls);
+    CircuitBreakerProtection permittingCallsInHalfOpen(int permittedCalls);
 
-  @SuppressWarnings("unchecked")
-  CircuitBreakerProtection failingOn(Class<? extends Throwable>... exceptions);
+    @SuppressWarnings("unchecked")
+    CircuitBreakerProtection failingOn(Class<? extends Throwable>... exceptions);
 
-  @SuppressWarnings("unchecked")
-  CircuitBreakerProtection ignoringOn(Class<? extends Throwable>... exceptions);
+    @SuppressWarnings("unchecked")
+    CircuitBreakerProtection ignoringOn(Class<? extends Throwable>... exceptions);
 
 
-  CircuitBreakerCountEvaluation evaluatingByCountingCalls();
+    CircuitBreakerCountEvaluation evaluatingByCountingCalls();
 
-  CircuitBreakerTimeEvaluation evaluatingByTimeWindow();
+    CircuitBreakerTimeEvaluation evaluatingByTimeWindow();
 }

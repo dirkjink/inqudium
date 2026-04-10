@@ -4,18 +4,18 @@ import java.time.Duration;
 
 public interface TimeLimiterProtection {
 
-  // Modifiers
-  TimeLimiterProtection timingOutAfter(Duration timeout);
+    // Modifiers
+    TimeLimiterProtection timingOutAfter(Duration timeout);
 
-  TimeLimiterProtection cancelingRunningTasks(boolean cancel);
+    TimeLimiterProtection cancelingRunningTasks(boolean cancel);
 
-  // Terminal Operations (Profiles)
-  TimeLimiterConfig applyStrictProfile();
+    // Terminal Operations (Profiles)
+    TimeLimiterConfig applyStrictProfile();
 
-  TimeLimiterConfig applyBalancedProfile();
+    TimeLimiterConfig applyBalancedProfile();
 
-  TimeLimiterConfig applyPermissiveProfile();
+    TimeLimiterConfig applyPermissiveProfile();
 
-  // Terminal Operation for custom configuration
-  TimeLimiterConfig apply();
+    // Terminal Operation for custom configuration
+    TimeLimiterConfig apply();
 }

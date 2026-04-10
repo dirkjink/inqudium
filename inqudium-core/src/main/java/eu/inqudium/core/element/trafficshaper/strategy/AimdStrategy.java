@@ -36,143 +36,143 @@ import java.time.Instant;
  * @param maxIntervalNanos   ceiling for the dynamic interval (min rate)
  */
 public record AimdStrategy(
-    long decrementNanos,
-    double increaseMultiplier,
-    long minIntervalNanos,
-    long maxIntervalNanos
+        long decrementNanos,
+        double increaseMultiplier,
+        long minIntervalNanos,
+        long maxIntervalNanos
 ) implements SchedulingStrategy<AimdState> {
 
-  public AimdStrategy {
-    if (decrementNanos < 1) {
-      throw new IllegalArgumentException("decrementNanos must be >= 1");
-    }
-    if (increaseMultiplier <= 1.0) {
-      throw new IllegalArgumentException("increaseMultiplier must be > 1, got " + increaseMultiplier);
-    }
-    if (minIntervalNanos < 1) {
-      throw new IllegalArgumentException("minIntervalNanos must be >= 1");
-    }
-    if (maxIntervalNanos < minIntervalNanos) {
-      throw new IllegalArgumentException("maxIntervalNanos must be >= minIntervalNanos");
-    }
-  }
-
-  /**
-   * Creates a strategy with sensible defaults:
-   * decrement 1ms per success, double on failure.
-   */
-  public static AimdStrategy withDefaults(Duration minInterval, Duration maxInterval) {
-    return new AimdStrategy(
-        Duration.ofMillis(1).toNanos(),
-        2.0,
-        minInterval.toNanos(),
-        maxInterval.toNanos());
-  }
-
-  @Override
-  public AimdState initial(TrafficShaperConfig<AimdState> config, Instant now) {
-    return AimdState.initial(config.interval().toNanos(), now);
-  }
-
-  @Override
-  public ThrottlePermission<AimdState> schedule(
-      AimdState state,
-      TrafficShaperConfig<AimdState> config,
-      Instant now) {
-
-    AimdState effective = reclaimSlot(state, now);
-    Duration currentInterval = effective.currentInterval();
-
-    Duration waitDuration = waitFor(effective, now);
-    boolean isImmediate = waitDuration.isZero();
-
-    if (!isImmediate && !config.isQueuingAllowed()
-        && config.throttleMode() == ThrottleMode.SHAPE_AND_REJECT_OVERFLOW) {
-      return ThrottlePermission.rejected(effective.withRequestRejected(), waitDuration);
-    }
-    if (!isImmediate && config.throttleMode() == ThrottleMode.SHAPE_AND_REJECT_OVERFLOW
-        && shouldReject(effective, config, waitDuration)) {
-      return ThrottlePermission.rejected(effective.withRequestRejected(), waitDuration);
+    public AimdStrategy {
+        if (decrementNanos < 1) {
+            throw new IllegalArgumentException("decrementNanos must be >= 1");
+        }
+        if (increaseMultiplier <= 1.0) {
+            throw new IllegalArgumentException("increaseMultiplier must be > 1, got " + increaseMultiplier);
+        }
+        if (minIntervalNanos < 1) {
+            throw new IllegalArgumentException("minIntervalNanos must be >= 1");
+        }
+        if (maxIntervalNanos < minIntervalNanos) {
+            throw new IllegalArgumentException("maxIntervalNanos must be >= minIntervalNanos");
+        }
     }
 
-    Instant assignedSlot = effective.nextFreeSlot();
-    Instant newNextFreeSlot = (isImmediate ? now : assignedSlot).plus(currentInterval);
-
-    if (isImmediate) {
-      return ThrottlePermission.immediate(
-          effective.withAdmittedImmediate(newNextFreeSlot), assignedSlot);
+    /**
+     * Creates a strategy with sensible defaults:
+     * decrement 1ms per success, double on failure.
+     */
+    public static AimdStrategy withDefaults(Duration minInterval, Duration maxInterval) {
+        return new AimdStrategy(
+                Duration.ofMillis(1).toNanos(),
+                2.0,
+                minInterval.toNanos(),
+                maxInterval.toNanos());
     }
-    return ThrottlePermission.delayed(
-        effective.withAdmittedDelayed(newNextFreeSlot), waitDuration, assignedSlot);
-  }
 
-  @Override
-  public AimdState recordExecution(AimdState state) {
-    return state.withRequestDequeued();
-  }
-
-  /**
-   * Additive increase: subtract a fixed amount from the interval.
-   * The rate increases linearly with each success.
-   */
-  @Override
-  public AimdState recordSuccess(AimdState state) {
-    long newInterval = Math.max(state.currentIntervalNanos() - decrementNanos, minIntervalNanos);
-    return state.withInterval(newInterval);
-  }
-
-  /**
-   * Multiplicative decrease: multiply the interval by the increase factor.
-   * The rate drops exponentially on failure, rapidly backing off.
-   */
-  @Override
-  public AimdState recordFailure(AimdState state) {
-    long newInterval = (long) (state.currentIntervalNanos() * increaseMultiplier);
-    // Guard against overflow
-    if (newInterval < 0 || newInterval > maxIntervalNanos) {
-      newInterval = maxIntervalNanos;
+    @Override
+    public AimdState initial(TrafficShaperConfig<AimdState> config, Instant now) {
+        return AimdState.initial(config.interval().toNanos(), now);
     }
-    return state.withInterval(newInterval);
-  }
 
-  @Override
-  public AimdState reset(
-      AimdState state,
-      TrafficShaperConfig<AimdState> config,
-      Instant now) {
-    return state.withNextEpoch(config.interval().toNanos(), now);
-  }
+    @Override
+    public ThrottlePermission<AimdState> schedule(
+            AimdState state,
+            TrafficShaperConfig<AimdState> config,
+            Instant now) {
 
-  @Override
-  public Duration estimateWait(
-      AimdState state,
-      TrafficShaperConfig<AimdState> config,
-      Instant now) {
-    return waitFor(reclaimSlot(state, now), now);
-  }
+        AimdState effective = reclaimSlot(state, now);
+        Duration currentInterval = effective.currentInterval();
 
-  @Override
-  public int queueDepth(AimdState state) {
-    return state.queueDepth();
-  }
+        Duration waitDuration = waitFor(effective, now);
+        boolean isImmediate = waitDuration.isZero();
 
-  @Override
-  public boolean isUnboundedQueueWarning(
-      AimdState state,
-      TrafficShaperConfig<AimdState> config,
-      Instant now) {
-    return checkUnboundedWarning(state, config, now);
-  }
+        if (!isImmediate && !config.isQueuingAllowed()
+                && config.throttleMode() == ThrottleMode.SHAPE_AND_REJECT_OVERFLOW) {
+            return ThrottlePermission.rejected(effective.withRequestRejected(), waitDuration);
+        }
+        if (!isImmediate && config.throttleMode() == ThrottleMode.SHAPE_AND_REJECT_OVERFLOW
+                && shouldReject(effective, config, waitDuration)) {
+            return ThrottlePermission.rejected(effective.withRequestRejected(), waitDuration);
+        }
 
-  private AimdState reclaimSlot(AimdState state, Instant now) {
-    if (state.nextFreeSlot().isBefore(now) && state.queueDepth() == 0) {
-      return state.withNextFreeSlot(now);
+        Instant assignedSlot = effective.nextFreeSlot();
+        Instant newNextFreeSlot = (isImmediate ? now : assignedSlot).plus(currentInterval);
+
+        if (isImmediate) {
+            return ThrottlePermission.immediate(
+                    effective.withAdmittedImmediate(newNextFreeSlot), assignedSlot);
+        }
+        return ThrottlePermission.delayed(
+                effective.withAdmittedDelayed(newNextFreeSlot), waitDuration, assignedSlot);
     }
-    return state;
-  }
 
-  private Duration waitFor(AimdState state, Instant now) {
-    Duration wait = Duration.between(now, state.nextFreeSlot());
-    return wait.isNegative() ? Duration.ZERO : wait;
-  }
+    @Override
+    public AimdState recordExecution(AimdState state) {
+        return state.withRequestDequeued();
+    }
+
+    /**
+     * Additive increase: subtract a fixed amount from the interval.
+     * The rate increases linearly with each success.
+     */
+    @Override
+    public AimdState recordSuccess(AimdState state) {
+        long newInterval = Math.max(state.currentIntervalNanos() - decrementNanos, minIntervalNanos);
+        return state.withInterval(newInterval);
+    }
+
+    /**
+     * Multiplicative decrease: multiply the interval by the increase factor.
+     * The rate drops exponentially on failure, rapidly backing off.
+     */
+    @Override
+    public AimdState recordFailure(AimdState state) {
+        long newInterval = (long) (state.currentIntervalNanos() * increaseMultiplier);
+        // Guard against overflow
+        if (newInterval < 0 || newInterval > maxIntervalNanos) {
+            newInterval = maxIntervalNanos;
+        }
+        return state.withInterval(newInterval);
+    }
+
+    @Override
+    public AimdState reset(
+            AimdState state,
+            TrafficShaperConfig<AimdState> config,
+            Instant now) {
+        return state.withNextEpoch(config.interval().toNanos(), now);
+    }
+
+    @Override
+    public Duration estimateWait(
+            AimdState state,
+            TrafficShaperConfig<AimdState> config,
+            Instant now) {
+        return waitFor(reclaimSlot(state, now), now);
+    }
+
+    @Override
+    public int queueDepth(AimdState state) {
+        return state.queueDepth();
+    }
+
+    @Override
+    public boolean isUnboundedQueueWarning(
+            AimdState state,
+            TrafficShaperConfig<AimdState> config,
+            Instant now) {
+        return checkUnboundedWarning(state, config, now);
+    }
+
+    private AimdState reclaimSlot(AimdState state, Instant now) {
+        if (state.nextFreeSlot().isBefore(now) && state.queueDepth() == 0) {
+            return state.withNextFreeSlot(now);
+        }
+        return state;
+    }
+
+    private Duration waitFor(AimdState state, Instant now) {
+        Duration wait = Duration.between(now, state.nextFreeSlot());
+        return wait.isNegative() ? Duration.ZERO : wait;
+    }
 }

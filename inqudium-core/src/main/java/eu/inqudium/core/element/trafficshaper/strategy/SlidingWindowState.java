@@ -25,134 +25,134 @@ import java.util.Objects;
  * @param epoch                  generation counter for reset invalidation
  */
 public record SlidingWindowState(
-    int[] buckets,
-    int windowSizeSeconds,
-    long lastUpdatedEpochSecond,
-    Instant nextFreeSlot,
-    int queueDepth,
-    long totalAdmitted,
-    long totalRejected,
-    long epoch
+        int[] buckets,
+        int windowSizeSeconds,
+        long lastUpdatedEpochSecond,
+        Instant nextFreeSlot,
+        int queueDepth,
+        long totalAdmitted,
+        long totalRejected,
+        long epoch
 ) implements SchedulingState {
 
-  // Defensive copy on construction
-  public SlidingWindowState {
-    buckets = Arrays.copyOf(buckets, buckets.length);
-  }
-
-  public static SlidingWindowState initial(int windowSizeSeconds, Instant now) {
-    return new SlidingWindowState(
-        new int[windowSizeSeconds], windowSizeSeconds,
-        now.getEpochSecond(), now, 0, 0, 0, 0L);
-  }
-
-  // Defensive copy on access
-  @Override
-  public int[] buckets() {
-    return Arrays.copyOf(buckets, buckets.length);
-  }
-
-  /**
-   * Returns the total request count across all active buckets.
-   */
-  public int totalInWindow() {
-    return Arrays.stream(buckets).sum();
-  }
-
-  public SlidingWindowState withIncrementedBucket(long epochSecond) {
-    int[] newBuckets = Arrays.copyOf(buckets, windowSizeSeconds);
-    int idx = bucketIndex(epochSecond);
-    newBuckets[idx]++;
-    long newLast = Math.max(lastUpdatedEpochSecond, epochSecond);
-    return new SlidingWindowState(
-        newBuckets, windowSizeSeconds, newLast, nextFreeSlot,
-        queueDepth, totalAdmitted + 1, totalRejected, epoch);
-  }
-
-  public SlidingWindowState withAdmittedDelayed(Instant newNextFreeSlot, long epochSecond) {
-    int[] newBuckets = Arrays.copyOf(buckets, windowSizeSeconds);
-    int idx = bucketIndex(epochSecond);
-    newBuckets[idx]++;
-    long newLast = Math.max(lastUpdatedEpochSecond, epochSecond);
-    return new SlidingWindowState(
-        newBuckets, windowSizeSeconds, newLast, newNextFreeSlot,
-        queueDepth + 1, totalAdmitted + 1, totalRejected, epoch);
-  }
-
-  public SlidingWindowState withRequestDequeued() {
-    return new SlidingWindowState(
-        buckets, windowSizeSeconds, lastUpdatedEpochSecond, nextFreeSlot,
-        Math.max(0, queueDepth - 1), totalAdmitted, totalRejected, epoch);
-  }
-
-  public SlidingWindowState withRequestRejected() {
-    return new SlidingWindowState(
-        buckets, windowSizeSeconds, lastUpdatedEpochSecond, nextFreeSlot,
-        queueDepth, totalAdmitted, totalRejected + 1, epoch);
-  }
-
-  public SlidingWindowState withNextEpoch(Instant now) {
-    return new SlidingWindowState(
-        new int[windowSizeSeconds], windowSizeSeconds,
-        now.getEpochSecond(), now, 0, totalAdmitted, totalRejected, epoch + 1);
-  }
-
-  /**
-   * Fast-forwards the buckets to clear expired entries.
-   */
-  public SlidingWindowState fastForward(long currentEpochSecond) {
-    if (currentEpochSecond <= lastUpdatedEpochSecond) return this;
-
-    long delta = currentEpochSecond - lastUpdatedEpochSecond;
-    if (delta >= windowSizeSeconds) {
-      return new SlidingWindowState(
-          new int[windowSizeSeconds], windowSizeSeconds,
-          currentEpochSecond, nextFreeSlot, queueDepth,
-          totalAdmitted, totalRejected, epoch);
+    // Defensive copy on construction
+    public SlidingWindowState {
+        buckets = Arrays.copyOf(buckets, buckets.length);
     }
 
-    int[] newBuckets = Arrays.copyOf(buckets, windowSizeSeconds);
-    for (long i = 1; i <= delta; i++) {
-      int idx = bucketIndex(lastUpdatedEpochSecond + i);
-      newBuckets[idx] = 0;
+    public static SlidingWindowState initial(int windowSizeSeconds, Instant now) {
+        return new SlidingWindowState(
+                new int[windowSizeSeconds], windowSizeSeconds,
+                now.getEpochSecond(), now, 0, 0, 0, 0L);
     }
-    return new SlidingWindowState(
-        newBuckets, windowSizeSeconds, currentEpochSecond, nextFreeSlot,
-        queueDepth, totalAdmitted, totalRejected, epoch);
-  }
 
-  private int bucketIndex(long epochSecond) {
-    int idx = (int) (epochSecond % windowSizeSeconds);
-    return idx < 0 ? idx + windowSizeSeconds : idx;
-  }
+    // Defensive copy on access
+    @Override
+    public int[] buckets() {
+        return Arrays.copyOf(buckets, buckets.length);
+    }
 
-  @Override
-  public Duration projectedTailWait(Instant now) {
-    if (!nextFreeSlot.isAfter(now)) return Duration.ZERO;
-    return Duration.between(now, nextFreeSlot);
-  }
+    /**
+     * Returns the total request count across all active buckets.
+     */
+    public int totalInWindow() {
+        return Arrays.stream(buckets).sum();
+    }
 
-  @Override
-  public boolean equals(Object o) {
-    if (this == o) return true;
-    if (!(o instanceof SlidingWindowState(
-        int[] buckets1, int sizeSeconds, long updatedEpochSecond, Instant freeSlot, int depth, long admitted,
-        long rejected, long epoch1
-    ))) return false;
-    return windowSizeSeconds == sizeSeconds
-        && lastUpdatedEpochSecond == updatedEpochSecond
-        && queueDepth == depth
-        && totalAdmitted == admitted
-        && totalRejected == rejected
-        && epoch == epoch1
-        && Objects.equals(nextFreeSlot, freeSlot)
-        && Arrays.equals(buckets, buckets1);
-  }
+    public SlidingWindowState withIncrementedBucket(long epochSecond) {
+        int[] newBuckets = Arrays.copyOf(buckets, windowSizeSeconds);
+        int idx = bucketIndex(epochSecond);
+        newBuckets[idx]++;
+        long newLast = Math.max(lastUpdatedEpochSecond, epochSecond);
+        return new SlidingWindowState(
+                newBuckets, windowSizeSeconds, newLast, nextFreeSlot,
+                queueDepth, totalAdmitted + 1, totalRejected, epoch);
+    }
 
-  @Override
-  public int hashCode() {
-    int result = Objects.hash(windowSizeSeconds, lastUpdatedEpochSecond,
-        nextFreeSlot, queueDepth, totalAdmitted, totalRejected, epoch);
-    return 31 * result + Arrays.hashCode(buckets);
-  }
+    public SlidingWindowState withAdmittedDelayed(Instant newNextFreeSlot, long epochSecond) {
+        int[] newBuckets = Arrays.copyOf(buckets, windowSizeSeconds);
+        int idx = bucketIndex(epochSecond);
+        newBuckets[idx]++;
+        long newLast = Math.max(lastUpdatedEpochSecond, epochSecond);
+        return new SlidingWindowState(
+                newBuckets, windowSizeSeconds, newLast, newNextFreeSlot,
+                queueDepth + 1, totalAdmitted + 1, totalRejected, epoch);
+    }
+
+    public SlidingWindowState withRequestDequeued() {
+        return new SlidingWindowState(
+                buckets, windowSizeSeconds, lastUpdatedEpochSecond, nextFreeSlot,
+                Math.max(0, queueDepth - 1), totalAdmitted, totalRejected, epoch);
+    }
+
+    public SlidingWindowState withRequestRejected() {
+        return new SlidingWindowState(
+                buckets, windowSizeSeconds, lastUpdatedEpochSecond, nextFreeSlot,
+                queueDepth, totalAdmitted, totalRejected + 1, epoch);
+    }
+
+    public SlidingWindowState withNextEpoch(Instant now) {
+        return new SlidingWindowState(
+                new int[windowSizeSeconds], windowSizeSeconds,
+                now.getEpochSecond(), now, 0, totalAdmitted, totalRejected, epoch + 1);
+    }
+
+    /**
+     * Fast-forwards the buckets to clear expired entries.
+     */
+    public SlidingWindowState fastForward(long currentEpochSecond) {
+        if (currentEpochSecond <= lastUpdatedEpochSecond) return this;
+
+        long delta = currentEpochSecond - lastUpdatedEpochSecond;
+        if (delta >= windowSizeSeconds) {
+            return new SlidingWindowState(
+                    new int[windowSizeSeconds], windowSizeSeconds,
+                    currentEpochSecond, nextFreeSlot, queueDepth,
+                    totalAdmitted, totalRejected, epoch);
+        }
+
+        int[] newBuckets = Arrays.copyOf(buckets, windowSizeSeconds);
+        for (long i = 1; i <= delta; i++) {
+            int idx = bucketIndex(lastUpdatedEpochSecond + i);
+            newBuckets[idx] = 0;
+        }
+        return new SlidingWindowState(
+                newBuckets, windowSizeSeconds, currentEpochSecond, nextFreeSlot,
+                queueDepth, totalAdmitted, totalRejected, epoch);
+    }
+
+    private int bucketIndex(long epochSecond) {
+        int idx = (int) (epochSecond % windowSizeSeconds);
+        return idx < 0 ? idx + windowSizeSeconds : idx;
+    }
+
+    @Override
+    public Duration projectedTailWait(Instant now) {
+        if (!nextFreeSlot.isAfter(now)) return Duration.ZERO;
+        return Duration.between(now, nextFreeSlot);
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (!(o instanceof SlidingWindowState(
+                int[] buckets1, int sizeSeconds, long updatedEpochSecond, Instant freeSlot, int depth, long admitted,
+                long rejected, long epoch1
+        ))) return false;
+        return windowSizeSeconds == sizeSeconds
+                && lastUpdatedEpochSecond == updatedEpochSecond
+                && queueDepth == depth
+                && totalAdmitted == admitted
+                && totalRejected == rejected
+                && epoch == epoch1
+                && Objects.equals(nextFreeSlot, freeSlot)
+                && Arrays.equals(buckets, buckets1);
+    }
+
+    @Override
+    public int hashCode() {
+        int result = Objects.hash(windowSizeSeconds, lastUpdatedEpochSecond,
+                nextFreeSlot, queueDepth, totalAdmitted, totalRejected, epoch);
+        return 31 * result + Arrays.hashCode(buckets);
+    }
 }

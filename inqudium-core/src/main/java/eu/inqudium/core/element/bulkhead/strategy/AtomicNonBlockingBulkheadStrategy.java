@@ -59,122 +59,122 @@ import java.util.concurrent.atomic.AtomicInteger;
  */
 public final class AtomicNonBlockingBulkheadStrategy implements NonBlockingBulkheadStrategy {
 
-  private final int maxConcurrent;
+    private final int maxConcurrent;
 
-  /**
-   * The number of permits currently held. Managed exclusively via CAS.
-   *
-   * <p>Acquire: increment if current < maxConcurrent (CAS loop).
-   * Release: decrement if current > 0 (CAS loop, over-release guard).
-   *
-   * <p>The value is always in [0, maxConcurrent] under correct usage. The
-   * decrement-if-positive guard in {@link #releaseInternal()} prevents it
-   * from going negative even under double-release bugs.
-   */
-  private final AtomicInteger activeCalls = new AtomicInteger(0);
+    /**
+     * The number of permits currently held. Managed exclusively via CAS.
+     *
+     * <p>Acquire: increment if current < maxConcurrent (CAS loop).
+     * Release: decrement if current > 0 (CAS loop, over-release guard).
+     *
+     * <p>The value is always in [0, maxConcurrent] under correct usage. The
+     * decrement-if-positive guard in {@link #releaseInternal()} prevents it
+     * from going negative even under double-release bugs.
+     */
+    private final AtomicInteger activeCalls = new AtomicInteger(0);
 
-  /**
-   * Creates a non-blocking strategy with a fixed concurrency limit.
-   *
-   * <p><b>Warning:</b> A value of 0 creates a permanently closed bulkhead where
-   * {@link #tryAcquire()} always returns {@code false}. This is a valid configuration
-   * for circuit-breaker-style "kill switch" scenarios, but is almost always a
-   * misconfiguration if set accidentally. Consider validating the limit at the
-   * call site before constructing this strategy.
-   *
-   * @param maxConcurrentCalls the maximum number of concurrent permits;
-   *                           0 creates a "closed" bulkhead that rejects everything
-   * @throws IllegalArgumentException if maxConcurrentCalls is negative
-   */
-  public AtomicNonBlockingBulkheadStrategy(int maxConcurrentCalls) {
-    if (maxConcurrentCalls < 0) {
-      throw new IllegalArgumentException(
-          "maxConcurrentCalls must be >= 0, got " + maxConcurrentCalls);
+    /**
+     * Creates a non-blocking strategy with a fixed concurrency limit.
+     *
+     * <p><b>Warning:</b> A value of 0 creates a permanently closed bulkhead where
+     * {@link #tryAcquire()} always returns {@code false}. This is a valid configuration
+     * for circuit-breaker-style "kill switch" scenarios, but is almost always a
+     * misconfiguration if set accidentally. Consider validating the limit at the
+     * call site before constructing this strategy.
+     *
+     * @param maxConcurrentCalls the maximum number of concurrent permits;
+     *                           0 creates a "closed" bulkhead that rejects everything
+     * @throws IllegalArgumentException if maxConcurrentCalls is negative
+     */
+    public AtomicNonBlockingBulkheadStrategy(int maxConcurrentCalls) {
+        if (maxConcurrentCalls < 0) {
+            throw new IllegalArgumentException(
+                    "maxConcurrentCalls must be >= 0, got " + maxConcurrentCalls);
+        }
+        if (maxConcurrentCalls == 0) {
+            System.getLogger(AtomicNonBlockingBulkheadStrategy.class.getName())
+                    .log(System.Logger.Level.WARNING,
+                            "AtomicNonBlockingBulkheadStrategy created with maxConcurrentCalls=0 — "
+                                    + "all tryAcquire() calls will be rejected. "
+                                    + "If this is unintentional, check your configuration.");
+        }
+        this.maxConcurrent = maxConcurrentCalls;
     }
-    if (maxConcurrentCalls == 0) {
-      System.getLogger(AtomicNonBlockingBulkheadStrategy.class.getName())
-          .log(System.Logger.Level.WARNING,
-              "AtomicNonBlockingBulkheadStrategy created with maxConcurrentCalls=0 — "
-                  + "all tryAcquire() calls will be rejected. "
-                  + "If this is unintentional, check your configuration.");
+
+    /**
+     * Attempts to acquire a permit without blocking.
+     *
+     * <p>Uses a CAS loop to atomically increment {@code activeCalls} only if it
+     * is below {@code maxConcurrent}. The loop is lock-free: each iteration either
+     * succeeds (permit granted), fails definitively (at capacity), or retries
+     * (another thread modified the counter concurrently — guaranteed progress).
+     *
+     * @return {@code null} if a permit was acquired, or a {@link RejectionContext} if at capacity
+     */
+    @Override
+    public RejectionContext tryAcquire() {
+        while (true) {
+            int current = activeCalls.get();
+            if (current >= maxConcurrent) {
+                return RejectionContext.capacityReached(maxConcurrent, current);
+            }
+            if (activeCalls.compareAndSet(current, current + 1)) {
+                return null; // permit acquired — no allocation
+            }
+            // CAS failed — another thread modified activeCalls concurrently.
+            // Retry: re-read and re-evaluate. This is the standard lock-free
+            // pattern; the loop terminates because every failing CAS means
+            // another thread made progress.
+        }
     }
-    this.maxConcurrent = maxConcurrentCalls;
-  }
 
-  /**
-   * Attempts to acquire a permit without blocking.
-   *
-   * <p>Uses a CAS loop to atomically increment {@code activeCalls} only if it
-   * is below {@code maxConcurrent}. The loop is lock-free: each iteration either
-   * succeeds (permit granted), fails definitively (at capacity), or retries
-   * (another thread modified the counter concurrently — guaranteed progress).
-   *
-   * @return {@code null} if a permit was acquired, or a {@link RejectionContext} if at capacity
-   */
-  @Override
-  public RejectionContext tryAcquire() {
-    while (true) {
-      int current = activeCalls.get();
-      if (current >= maxConcurrent) {
-        return RejectionContext.capacityReached(maxConcurrent, current);
-      }
-      if (activeCalls.compareAndSet(current, current + 1)) {
-        return null; // permit acquired — no allocation
-      }
-      // CAS failed — another thread modified activeCalls concurrently.
-      // Retry: re-read and re-evaluate. This is the standard lock-free
-      // pattern; the loop terminates because every failing CAS means
-      // another thread made progress.
+    /**
+     * Releases a previously acquired permit.
+     *
+     * <p>Uses the atomic decrement-if-positive pattern to prevent over-release:
+     * if {@code activeCalls} is already 0 (no permits held), the CAS produces
+     * a no-op instead of going negative.
+     */
+    @Override
+    public void release() {
+        releaseInternal();
     }
-  }
 
-  /**
-   * Releases a previously acquired permit.
-   *
-   * <p>Uses the atomic decrement-if-positive pattern to prevent over-release:
-   * if {@code activeCalls} is already 0 (no permits held), the CAS produces
-   * a no-op instead of going negative.
-   */
-  @Override
-  public void release() {
-    releaseInternal();
-  }
-
-  @Override
-  public void rollback() {
-    releaseInternal();
-  }
-
-  /**
-   * Atomically decrements if positive. This is the over-release guard:
-   * double-release or release-without-acquire silently becomes a no-op
-   * instead of corrupting the counter.
-   */
-  private void releaseInternal() {
-    while (true) {
-      int current = activeCalls.get();
-      if (current <= 0) {
-        return; // No permit held — over-release guard
-      }
-      if (activeCalls.compareAndSet(current, current - 1)) {
-        return;
-      }
-      // CAS failed — retry
+    @Override
+    public void rollback() {
+        releaseInternal();
     }
-  }
 
-  @Override
-  public int availablePermits() {
-    return Math.max(0, maxConcurrent - activeCalls.get());
-  }
+    /**
+     * Atomically decrements if positive. This is the over-release guard:
+     * double-release or release-without-acquire silently becomes a no-op
+     * instead of corrupting the counter.
+     */
+    private void releaseInternal() {
+        while (true) {
+            int current = activeCalls.get();
+            if (current <= 0) {
+                return; // No permit held — over-release guard
+            }
+            if (activeCalls.compareAndSet(current, current - 1)) {
+                return;
+            }
+            // CAS failed — retry
+        }
+    }
 
-  @Override
-  public int concurrentCalls() {
-    return activeCalls.get();
-  }
+    @Override
+    public int availablePermits() {
+        return Math.max(0, maxConcurrent - activeCalls.get());
+    }
 
-  @Override
-  public int maxConcurrentCalls() {
-    return maxConcurrent;
-  }
+    @Override
+    public int concurrentCalls() {
+        return activeCalls.get();
+    }
+
+    @Override
+    public int maxConcurrentCalls() {
+        return maxConcurrent;
+    }
 }

@@ -50,126 +50,126 @@ import java.util.function.LongFunction;
  * @param lastUpdateNanos   the timestamp (in nanoseconds) of the most recent update
  */
 public record LeakyBucketMetrics(
-    int bucketCapacity,
-    double leakRatePerSecond,
-    double currentLevel,
-    long lastUpdateNanos
+        int bucketCapacity,
+        double leakRatePerSecond,
+        double currentLevel,
+        long lastUpdateNanos
 ) implements FailureMetrics {
 
-  /**
-   * Creates an empty bucket with the given configuration.
-   *
-   * @param bucketCapacity    the capacity (threshold) of the bucket
-   * @param leakRatePerSecond how fast the bucket drains (units per second); must be non-negative
-   * @param nowNanos          the initial timestamp anchor
-   * @return a new instance with {@code currentLevel == 0.0}
-   * @throws IllegalArgumentException if {@code leakRatePerSecond} is negative
-   */
-  public static LeakyBucketMetrics initial(int bucketCapacity,
-                                           double leakRatePerSecond,
-                                           long nowNanos) {
-    if (leakRatePerSecond < 0) {
-      throw new IllegalArgumentException("leakRatePerSecond cannot be negative");
+    /**
+     * Creates an empty bucket with the given configuration.
+     *
+     * @param bucketCapacity    the capacity (threshold) of the bucket
+     * @param leakRatePerSecond how fast the bucket drains (units per second); must be non-negative
+     * @param nowNanos          the initial timestamp anchor
+     * @return a new instance with {@code currentLevel == 0.0}
+     * @throws IllegalArgumentException if {@code leakRatePerSecond} is negative
+     */
+    public static LeakyBucketMetrics initial(int bucketCapacity,
+                                             double leakRatePerSecond,
+                                             long nowNanos) {
+        if (leakRatePerSecond < 0) {
+            throw new IllegalArgumentException("leakRatePerSecond cannot be negative");
+        }
+        return new LeakyBucketMetrics(bucketCapacity, leakRatePerSecond, 0.0, nowNanos);
     }
-    return new LeakyBucketMetrics(bucketCapacity, leakRatePerSecond, 0.0, nowNanos);
-  }
 
-  /**
-   * Returns a factory function that produces a fresh instance of this metrics strategy.
-   *
-   * @return a {@link LongFunction} that accepts a nanosecond timestamp and produces a
-   * fresh {@link FailureMetrics} instance with identical configuration
-   */
-  @Override
-  public LongFunction<FailureMetrics> metricsFactory() {
-    return (long nowNanos) -> LeakyBucketMetrics.initial(
-        bucketCapacity,
-        leakRatePerSecond,
-        nowNanos
-    );
-  }
+    /**
+     * Returns a factory function that produces a fresh instance of this metrics strategy.
+     *
+     * @return a {@link LongFunction} that accepts a nanosecond timestamp and produces a
+     * fresh {@link FailureMetrics} instance with identical configuration
+     */
+    @Override
+    public LongFunction<FailureMetrics> metricsFactory() {
+        return (long nowNanos) -> LeakyBucketMetrics.initial(
+                bucketCapacity,
+                leakRatePerSecond,
+                nowNanos
+        );
+    }
 
-  /**
-   * Records a successful call. No water is added, but the bucket is leaked up to
-   * the current time so that the level reflects passive draining.
-   *
-   * @param nowNanos the current timestamp in nanoseconds
-   * @return a new instance with the level reduced by the amount leaked since the last update
-   */
-  @Override
-  public FailureMetrics recordSuccess(long nowNanos) {
-    return leak(nowNanos);
-  }
+    /**
+     * Records a successful call. No water is added, but the bucket is leaked up to
+     * the current time so that the level reflects passive draining.
+     *
+     * @param nowNanos the current timestamp in nanoseconds
+     * @return a new instance with the level reduced by the amount leaked since the last update
+     */
+    @Override
+    public FailureMetrics recordSuccess(long nowNanos) {
+        return leak(nowNanos);
+    }
 
-  /**
-   * Records a failed call. First leaks the bucket to the current time, then adds
-   * exactly 1.0 to the resulting level.
-   *
-   * @param nowNanos the current timestamp in nanoseconds
-   * @return a new instance with the level increased by 1.0 (after leaking)
-   */
-  @Override
-  public FailureMetrics recordFailure(long nowNanos) {
-    LeakyBucketMetrics leakedState = leak(nowNanos);
-    double newLevel = leakedState.currentLevel() + 1.0;
-    return new LeakyBucketMetrics(bucketCapacity, leakRatePerSecond, newLevel, nowNanos);
-  }
+    /**
+     * Records a failed call. First leaks the bucket to the current time, then adds
+     * exactly 1.0 to the resulting level.
+     *
+     * @param nowNanos the current timestamp in nanoseconds
+     * @return a new instance with the level increased by 1.0 (after leaking)
+     */
+    @Override
+    public FailureMetrics recordFailure(long nowNanos) {
+        LeakyBucketMetrics leakedState = leak(nowNanos);
+        double newLevel = leakedState.currentLevel() + 1.0;
+        return new LeakyBucketMetrics(bucketCapacity, leakRatePerSecond, newLevel, nowNanos);
+    }
 
-  /**
-   * Evaluates whether the bucket has overflowed at the given time.
-   * The bucket is leaked to {@code nowNanos} before the comparison.
-   *
-   * @param nowNanos the current timestamp in nanoseconds
-   * @return {@code true} if the leaked level >= bucket capacity
-   */
-  @Override
-  public boolean isThresholdReached(long nowNanos) {
-    LeakyBucketMetrics evaluatedState = leak(nowNanos);
-    return evaluatedState.currentLevel() >= bucketCapacity;
-  }
+    /**
+     * Evaluates whether the bucket has overflowed at the given time.
+     * The bucket is leaked to {@code nowNanos} before the comparison.
+     *
+     * @param nowNanos the current timestamp in nanoseconds
+     * @return {@code true} if the leaked level >= bucket capacity
+     */
+    @Override
+    public boolean isThresholdReached(long nowNanos) {
+        LeakyBucketMetrics evaluatedState = leak(nowNanos);
+        return evaluatedState.currentLevel() >= bucketCapacity;
+    }
 
-  /**
-   * Resets the bucket to empty (level 0.0) and re-anchors the timestamp.
-   *
-   * @param nowNanos the new timestamp anchor
-   */
-  @Override
-  public FailureMetrics reset(long nowNanos) {
-    return new LeakyBucketMetrics(bucketCapacity, leakRatePerSecond, 0.0, nowNanos);
-  }
+    /**
+     * Resets the bucket to empty (level 0.0) and re-anchors the timestamp.
+     *
+     * @param nowNanos the new timestamp anchor
+     */
+    @Override
+    public FailureMetrics reset(long nowNanos) {
+        return new LeakyBucketMetrics(bucketCapacity, leakRatePerSecond, 0.0, nowNanos);
+    }
 
-  /**
-   * Internal helper that computes the leaked state at the given timestamp.
-   *
-   * <p>Calculates the elapsed time since the last update, converts it to seconds,
-   * multiplies by the leak rate, and subtracts from the current level (floored at 0).
-   * If the given timestamp is not ahead of the last update, no leak is applied —
-   * this guards against negative deltas from clock anomalies.
-   *
-   * @param nowNanos the point in time to leak to
-   * @return a new instance reflecting the post-leak state
-   */
-  private LeakyBucketMetrics leak(long nowNanos) {
-    long deltaNanos = Math.max(0, nowNanos - lastUpdateNanos);
-    double deltaSeconds = deltaNanos / 1_000_000_000.0;
-    double leakAmount = deltaSeconds * leakRatePerSecond;
-    double newLevel = Math.max(0.0, currentLevel - leakAmount);
-    long newLastUpdateNanos = Math.max(nowNanos, lastUpdateNanos);
-    return new LeakyBucketMetrics(bucketCapacity, leakRatePerSecond, newLevel, newLastUpdateNanos);
-  }
+    /**
+     * Internal helper that computes the leaked state at the given timestamp.
+     *
+     * <p>Calculates the elapsed time since the last update, converts it to seconds,
+     * multiplies by the leak rate, and subtracts from the current level (floored at 0).
+     * If the given timestamp is not ahead of the last update, no leak is applied —
+     * this guards against negative deltas from clock anomalies.
+     *
+     * @param nowNanos the point in time to leak to
+     * @return a new instance reflecting the post-leak state
+     */
+    private LeakyBucketMetrics leak(long nowNanos) {
+        long deltaNanos = Math.max(0, nowNanos - lastUpdateNanos);
+        double deltaSeconds = deltaNanos / 1_000_000_000.0;
+        double leakAmount = deltaSeconds * leakRatePerSecond;
+        double newLevel = Math.max(0.0, currentLevel - leakAmount);
+        long newLastUpdateNanos = Math.max(nowNanos, lastUpdateNanos);
+        return new LeakyBucketMetrics(bucketCapacity, leakRatePerSecond, newLevel, newLastUpdateNanos);
+    }
 
-  /**
-   * Produces a diagnostic message showing the current bucket level, capacity, and leak rate.
-   * The level is computed after leaking to {@code nowNanos}.
-   *
-   * @param nowNanos the current timestamp in nanoseconds
-   */
-  @Override
-  public String getTripReason(long nowNanos) {
-    LeakyBucketMetrics evaluatedState = leak(nowNanos);
-    return String.format(
-        Locale.ROOT, "Leaky bucket overflow: " +
-            "Current failure level is %.2f (Capacity: %d, Leak Rate: %.1f/sec).",
-        evaluatedState.currentLevel(), bucketCapacity, leakRatePerSecond);
-  }
+    /**
+     * Produces a diagnostic message showing the current bucket level, capacity, and leak rate.
+     * The level is computed after leaking to {@code nowNanos}.
+     *
+     * @param nowNanos the current timestamp in nanoseconds
+     */
+    @Override
+    public String getTripReason(long nowNanos) {
+        LeakyBucketMetrics evaluatedState = leak(nowNanos);
+        return String.format(
+                Locale.ROOT, "Leaky bucket overflow: " +
+                        "Current failure level is %.2f (Capacity: %d, Leak Rate: %.1f/sec).",
+                evaluatedState.currentLevel(), bucketCapacity, leakRatePerSecond);
+    }
 }

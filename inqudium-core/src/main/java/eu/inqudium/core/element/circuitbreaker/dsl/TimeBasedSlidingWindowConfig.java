@@ -1,6 +1,6 @@
 package eu.inqudium.core.element.circuitbreaker.dsl;
 
 public record TimeBasedSlidingWindowConfig(
-    int windowSizeInSeconds
+        int windowSizeInSeconds
 ) implements FailureMetricsConfig {
 }

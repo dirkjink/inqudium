@@ -28,98 +28,98 @@ import eu.inqudium.core.element.InqElementType;
  */
 public abstract class InqException extends RuntimeException {
 
-  private final long chainId;
-  private final long callId;
-  private final String code;
-  private final String elementName;
-  private final InqElementType elementType;
-  private final boolean enableExceptionOptimization;
+    private final long chainId;
+    private final long callId;
+    private final String code;
+    private final String elementName;
+    private final InqElementType elementType;
+    private final boolean enableExceptionOptimization;
 
-  /**
-   * Creates a new exception with call identity, error code, element context, and a cause.
-   *
-   * @param callId                      the unique call identifier
-   * @param code                        the structured error code
-   * @param elementName                 the name of the element instance
-   * @param elementType                 the type of the element
-   * @param message                     the detail message (without code/callId prefix — prepended automatically)
-   * @param cause                       the underlying cause
-   * @param enableExceptionOptimization whether suppression is enabled or disabled, and whether the stack trace
-   *                                    should be writable.
-   */
-  protected InqException(long chainId,
-                         long callId,
-                         String code,
-                         String elementName,
-                         InqElementType elementType,
-                         String message,
-                         Throwable cause,
-                         boolean enableExceptionOptimization) {
-    super(formatMessage(chainId, callId, code, message), cause, enableExceptionOptimization, !enableExceptionOptimization);
-    this.chainId = chainId;
-    this.callId = callId;
-    this.code = code;
-    this.elementName = elementName;
-    this.elementType = elementType;
-    this.enableExceptionOptimization = enableExceptionOptimization;
-  }
+    /**
+     * Creates a new exception with call identity, error code, element context, and a cause.
+     *
+     * @param callId                      the unique call identifier
+     * @param code                        the structured error code
+     * @param elementName                 the name of the element instance
+     * @param elementType                 the type of the element
+     * @param message                     the detail message (without code/callId prefix — prepended automatically)
+     * @param cause                       the underlying cause
+     * @param enableExceptionOptimization whether suppression is enabled or disabled, and whether the stack trace
+     *                                    should be writable.
+     */
+    protected InqException(long chainId,
+                           long callId,
+                           String code,
+                           String elementName,
+                           InqElementType elementType,
+                           String message,
+                           Throwable cause,
+                           boolean enableExceptionOptimization) {
+        super(formatMessage(chainId, callId, code, message), cause, enableExceptionOptimization, !enableExceptionOptimization);
+        this.chainId = chainId;
+        this.callId = callId;
+        this.code = code;
+        this.elementName = elementName;
+        this.elementType = elementType;
+        this.enableExceptionOptimization = enableExceptionOptimization;
+    }
 
-  private static String formatMessage(long chainId, long callId, String code, String message) {
-    return "[" + chainId + "-" + callId + "] " + code + ": " + message;
-  }
+    private static String formatMessage(long chainId, long callId, String code, String message) {
+        return "[" + chainId + "-" + callId + "] " + code + ": " + message;
+    }
 
-  public static void rethrowIfFatal(Throwable t) {
-    if (t instanceof VirtualMachineError) throw (VirtualMachineError) t;
-    if (t instanceof ThreadDeath) throw (ThreadDeath) t;
-    if (t instanceof LinkageError) throw (LinkageError) t;
-  }
+    public static void rethrowIfFatal(Throwable t) {
+        if (t instanceof VirtualMachineError) throw (VirtualMachineError) t;
+        if (t instanceof ThreadDeath) throw (ThreadDeath) t;
+        if (t instanceof LinkageError) throw (LinkageError) t;
+    }
 
-  public boolean isEnableExceptionOptimization() {
-    return enableExceptionOptimization;
-  }
+    public boolean isEnableExceptionOptimization() {
+        return enableExceptionOptimization;
+    }
 
-  public long getChainId() {
-    return chainId;
-  }
+    public long getChainId() {
+        return chainId;
+    }
 
-  /**
-   * Returns the unique call identifier.
-   *
-   * @return the callId, or null
-   */
-  public long getCallId() {
-    return callId;
-  }
+    /**
+     * Returns the unique call identifier.
+     *
+     * @return the callId, or null
+     */
+    public long getCallId() {
+        return callId;
+    }
 
-  /**
-   * Returns the structured error code.
-   *
-   * <p>Codes follow the format {@code INQ-XX-NNN} where {@code XX} is the
-   * two-character element symbol and {@code NNN} is a three-digit number.
-   * Codes are stable across minor versions (ADR-021).
-   *
-   * @return the error code, e.g. "INQ-CB-001"
-   */
-  public String getCode() {
-    return code;
-  }
+    /**
+     * Returns the structured error code.
+     *
+     * <p>Codes follow the format {@code INQ-XX-NNN} where {@code XX} is the
+     * two-character element symbol and {@code NNN} is a three-digit number.
+     * Codes are stable across minor versions (ADR-021).
+     *
+     * @return the error code, e.g. "INQ-CB-001"
+     */
+    public String getCode() {
+        return code;
+    }
 
-  /**
-   * Returns the name of the element instance that threw this exception.
-   *
-   * @return the element name, e.g. "paymentService"
-   */
-  public String getElementName() {
-    return elementName;
-  }
+    /**
+     * Returns the name of the element instance that threw this exception.
+     *
+     * @return the element name, e.g. "paymentService"
+     */
+    public String getElementName() {
+        return elementName;
+    }
 
-  /**
-   * Returns the type of the element that threw this exception.
-   *
-   * @return the element type
-   */
-  public InqElementType getElementType() {
-    return elementType;
-  }
+    /**
+     * Returns the type of the element that threw this exception.
+     *
+     * @return the element type
+     */
+    public InqElementType getElementType() {
+        return elementType;
+    }
 
 }

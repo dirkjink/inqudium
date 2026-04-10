@@ -21,12 +21,12 @@ import eu.inqudium.core.config.ConfigExtension;
  * @see ConsecutiveFailuresConfigBuilder
  */
 public record ConsecutiveFailuresConfig(
-    int maxConsecutiveFailures,
-    int initialConsecutiveFailures
+        int maxConsecutiveFailures,
+        int initialConsecutiveFailures
 ) implements ConfigExtension<ConsecutiveFailuresConfig> {
 
-  @Override
-  public ConsecutiveFailuresConfig self() {
-    return this;
-  }
+    @Override
+    public ConsecutiveFailuresConfig self() {
+        return this;
+    }
 }

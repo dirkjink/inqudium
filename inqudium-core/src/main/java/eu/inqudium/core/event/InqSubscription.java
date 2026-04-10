@@ -21,10 +21,10 @@ package eu.inqudium.core.event;
 @FunctionalInterface
 public interface InqSubscription {
 
-  /**
-   * Cancels this subscription, removing the consumer from the publisher.
-   *
-   * <p>Idempotent — safe to call multiple times.
-   */
-  void cancel();
+    /**
+     * Cancels this subscription, removing the consumer from the publisher.
+     *
+     * <p>Idempotent — safe to call multiple times.
+     */
+    void cancel();
 }

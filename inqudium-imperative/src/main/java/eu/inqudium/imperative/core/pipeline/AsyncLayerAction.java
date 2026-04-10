@@ -8,13 +8,13 @@ import java.util.concurrent.CompletionStage;
  * Package-private singleton for the async pass-through.
  */
 enum AsyncPassThrough implements AsyncLayerAction<Object, Object> {
-  INSTANCE;
+    INSTANCE;
 
-  @Override
-  public CompletionStage<Object> executeAsync(long chainId, long callId, Object argument,
-                                              InternalAsyncExecutor<Object, Object> next) {
-    return next.executeAsync(chainId, callId, argument);
-  }
+    @Override
+    public CompletionStage<Object> executeAsync(long chainId, long callId, Object argument,
+                                                InternalAsyncExecutor<Object, Object> next) {
+        return next.executeAsync(chainId, callId, argument);
+    }
 }
 
 /**
@@ -65,26 +65,26 @@ enum AsyncPassThrough implements AsyncLayerAction<Object, Object> {
 @FunctionalInterface
 public interface AsyncLayerAction<A, R> {
 
-  /**
-   * Returns a pass-through action that simply forwards to the next step.
-   */
-  @SuppressWarnings("unchecked")
-  static <A, R> AsyncLayerAction<A, R> passThrough() {
-    return (AsyncLayerAction<A, R>) AsyncPassThrough.INSTANCE;
-  }
+    /**
+     * Returns a pass-through action that simply forwards to the next step.
+     */
+    @SuppressWarnings("unchecked")
+    static <A, R> AsyncLayerAction<A, R> passThrough() {
+        return (AsyncLayerAction<A, R>) AsyncPassThrough.INSTANCE;
+    }
 
-  /**
-   * Executes this layer's async logic.
-   *
-   * @param chainId  identifies the wrapper chain
-   * @param callId   identifies this particular invocation
-   * @param argument the argument flowing through the chain
-   * @param next     the next async step — call {@code next.execute(...)} to proceed
-   * @return the <strong>same</strong> {@link CompletionStage} instance that the downstream
-   * chain produced — guaranteed. Pipeline identity is preserved: callers may rely
-   * on {@code returnedStage == originalFuture}. The permit-release callback is
-   * attached via {@code whenComplete()} as a side-effect only.
-   */
-  CompletionStage<R> executeAsync(long chainId, long callId, A argument,
-                                  InternalAsyncExecutor<A, R> next);
+    /**
+     * Executes this layer's async logic.
+     *
+     * @param chainId  identifies the wrapper chain
+     * @param callId   identifies this particular invocation
+     * @param argument the argument flowing through the chain
+     * @param next     the next async step — call {@code next.execute(...)} to proceed
+     * @return the <strong>same</strong> {@link CompletionStage} instance that the downstream
+     * chain produced — guaranteed. Pipeline identity is preserved: callers may rely
+     * on {@code returnedStage == originalFuture}. The permit-release callback is
+     * attached via {@code whenComplete()} as a side-effect only.
+     */
+    CompletionStage<R> executeAsync(long chainId, long callId, A argument,
+                                    InternalAsyncExecutor<A, R> next);
 }

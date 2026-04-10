@@ -32,16 +32,16 @@ package eu.inqudium.core.pipeline;
 @FunctionalInterface
 public interface JoinPointExecutor<R> {
 
-  /**
-   * Executes the proxied operation and returns its result.
-   *
-   * <p>When used with Spring AOP, this typically delegates to
-   * {@code ProceedingJoinPoint.proceed()}. The broad {@code throws Throwable}
-   * signature ensures that no exception type is lost during transport.</p>
-   *
-   * @return the result of the proxied execution
-   * @throws Throwable any exception thrown by the underlying operation,
-   *                   including checked exceptions and errors
-   */
-  R proceed() throws Throwable;
+    /**
+     * Executes the proxied operation and returns its result.
+     *
+     * <p>When used with Spring AOP, this typically delegates to
+     * {@code ProceedingJoinPoint.proceed()}. The broad {@code throws Throwable}
+     * signature ensures that no exception type is lost during transport.</p>
+     *
+     * @return the result of the proxied execution
+     * @throws Throwable any exception thrown by the underlying operation,
+     *                   including checked exceptions and errors
+     */
+    R proceed() throws Throwable;
 }

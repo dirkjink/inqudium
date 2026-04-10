@@ -23,13 +23,13 @@ import java.time.Duration;
  * @see ContinuousTimeEwmaConfigBuilder
  */
 public record ContinuousTimeEwmaConfig(
-    double failureRatePercent,
-    Duration timeConstant,
-    int minimumNumberOfCalls
+        double failureRatePercent,
+        Duration timeConstant,
+        int minimumNumberOfCalls
 ) implements ConfigExtension<ContinuousTimeEwmaConfig> {
 
-  @Override
-  public ContinuousTimeEwmaConfig self() {
-    return this;
-  }
+    @Override
+    public ContinuousTimeEwmaConfig self() {
+        return this;
+    }
 }

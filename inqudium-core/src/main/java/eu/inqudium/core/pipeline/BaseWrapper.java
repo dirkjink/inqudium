@@ -29,118 +29,118 @@ package eu.inqudium.core.pipeline;
  * @param <S> the concrete self-type (recursive generic bound for {@link Wrapper#inner()})
  */
 public abstract class BaseWrapper<T, A, R, S extends BaseWrapper<T, A, R, S>>
-    extends AbstractBaseWrapper<T, S>
-    implements InternalExecutor<A, R> {
+        extends AbstractBaseWrapper<T, S>
+        implements InternalExecutor<A, R> {
 
-  /**
-   * Reference to the next step in the chain. This is either:
-   * <ul>
-   *   <li>The delegate wrapper's {@code execute()} method (if the delegate is a
-   *       wrapper — determined at construction time via {@link #isDelegateWrapper()})</li>
-   *   <li>The terminal core execution lambda (if the delegate is a plain functional
-   *       interface — the lambda that calls {@code delegate.run()}, etc.)</li>
-   * </ul>
-   *
-   * <p>Pre-resolved at construction time to avoid runtime {@code instanceof}
-   * checks on the hot path.</p>
-   */
-  private final InternalExecutor<A, R> nextStep;
+    /**
+     * Reference to the next step in the chain. This is either:
+     * <ul>
+     *   <li>The delegate wrapper's {@code execute()} method (if the delegate is a
+     *       wrapper — determined at construction time via {@link #isDelegateWrapper()})</li>
+     *   <li>The terminal core execution lambda (if the delegate is a plain functional
+     *       interface — the lambda that calls {@code delegate.run()}, etc.)</li>
+     * </ul>
+     *
+     * <p>Pre-resolved at construction time to avoid runtime {@code instanceof}
+     * checks on the hot path.</p>
+     */
+    private final InternalExecutor<A, R> nextStep;
 
-  /**
-   * The around-advice for this layer. Receives the chain ID, call ID, argument,
-   * and {@link #nextStep} reference, and decides how to proceed.
-   */
-  private final LayerAction<A, R> layerAction;
+    /**
+     * The around-advice for this layer. Receives the chain ID, call ID, argument,
+     * and {@link #nextStep} reference, and decides how to proceed.
+     */
+    private final LayerAction<A, R> layerAction;
 
-  /**
-   * Full constructor with explicit layer action.
-   *
-   * <p>Determines the next step at construction time: if the delegate is itself
-   * a {@code BaseWrapper} (i.e. part of the same chain), the delegate is cast
-   * to {@code InternalExecutor} and used as the next step. Otherwise, the
-   * provided {@code coreExecution} lambda is used — this is the terminal step
-   * that invokes the real delegate.</p>
-   *
-   * @param name          human-readable layer name
-   * @param delegate      the wrapped target
-   * @param coreExecution the terminal execution lambda (used only when the
-   *                      delegate is not a wrapper)
-   * @param layerAction   the around-advice for this layer
-   */
-  @SuppressWarnings("unchecked")
-  protected BaseWrapper(String name, T delegate,
-                        InternalExecutor<A, R> coreExecution,
-                        LayerAction<A, R> layerAction) {
-    super(name, delegate);
-    this.layerAction = layerAction;
+    /**
+     * Full constructor with explicit layer action.
+     *
+     * <p>Determines the next step at construction time: if the delegate is itself
+     * a {@code BaseWrapper} (i.e. part of the same chain), the delegate is cast
+     * to {@code InternalExecutor} and used as the next step. Otherwise, the
+     * provided {@code coreExecution} lambda is used — this is the terminal step
+     * that invokes the real delegate.</p>
+     *
+     * @param name          human-readable layer name
+     * @param delegate      the wrapped target
+     * @param coreExecution the terminal execution lambda (used only when the
+     *                      delegate is not a wrapper)
+     * @param layerAction   the around-advice for this layer
+     */
+    @SuppressWarnings("unchecked")
+    protected BaseWrapper(String name, T delegate,
+                          InternalExecutor<A, R> coreExecution,
+                          LayerAction<A, R> layerAction) {
+        super(name, delegate);
+        this.layerAction = layerAction;
 
-    // Pre-resolve the next step: if the delegate is a wrapper, chain into it
-    // directly; otherwise use the terminal core execution lambda.
-    // The unchecked cast is safe because wrapper chains are homogeneous —
-    // all layers share the same A and R type parameters.
-    this.nextStep = isDelegateWrapper() ? (InternalExecutor<A, R>) delegate : coreExecution;
-  }
+        // Pre-resolve the next step: if the delegate is a wrapper, chain into it
+        // directly; otherwise use the terminal core execution lambda.
+        // The unchecked cast is safe because wrapper chains are homogeneous —
+        // all layers share the same A and R type parameters.
+        this.nextStep = isDelegateWrapper() ? (InternalExecutor<A, R>) delegate : coreExecution;
+    }
 
-  /**
-   * Convenience constructor with a pass-through layer action.
-   *
-   * <p>Creates a structural wrapper layer that does not modify the execution
-   * flow. Useful for testing, hierarchy visualization, or as a placeholder
-   * in a chain that will be replaced later.</p>
-   *
-   * @param name          human-readable layer name
-   * @param delegate      the wrapped target
-   * @param coreExecution the terminal execution lambda
-   */
-  protected BaseWrapper(String name, T delegate, InternalExecutor<A, R> coreExecution) {
-    this(name, delegate, coreExecution, LayerAction.passThrough());
-  }
+    /**
+     * Convenience constructor with a pass-through layer action.
+     *
+     * <p>Creates a structural wrapper layer that does not modify the execution
+     * flow. Useful for testing, hierarchy visualization, or as a placeholder
+     * in a chain that will be replaced later.</p>
+     *
+     * @param name          human-readable layer name
+     * @param delegate      the wrapped target
+     * @param coreExecution the terminal execution lambda
+     */
+    protected BaseWrapper(String name, T delegate, InternalExecutor<A, R> coreExecution) {
+        this(name, delegate, coreExecution, LayerAction.passThrough());
+    }
 
-  /**
-   * Decorator-based constructor that derives the layer name from the decorator's
-   * element metadata (type + name, e.g. "BULKHEAD(pool-A)").
-   *
-   * @param decorator     the decorator providing both name metadata and around-advice
-   * @param delegate      the wrapped target
-   * @param coreExecution the terminal execution lambda
-   */
-  protected BaseWrapper(InqDecorator<A, R> decorator, T delegate,
-                        InternalExecutor<A, R> coreExecution) {
-    this(newLayerDesc(decorator), delegate, coreExecution, decorator);
-  }
+    /**
+     * Decorator-based constructor that derives the layer name from the decorator's
+     * element metadata (type + name, e.g. "BULKHEAD(pool-A)").
+     *
+     * @param decorator     the decorator providing both name metadata and around-advice
+     * @param delegate      the wrapped target
+     * @param coreExecution the terminal execution lambda
+     */
+    protected BaseWrapper(InqDecorator<A, R> decorator, T delegate,
+                          InternalExecutor<A, R> coreExecution) {
+        this(newLayerDesc(decorator), delegate, coreExecution, decorator);
+    }
 
-  /**
-   * Entry point for chain execution: generates a new call ID and starts
-   * traversal from this (outermost) layer.
-   *
-   * <p>This method is called by the concrete wrapper's public entry point
-   * (e.g. {@link RunnableWrapper#run()}, {@link SupplierWrapper#get()}).
-   * It is the only place where {@link #generateCallId()} is called,
-   * ensuring exactly one CAS operation per invocation.</p>
-   *
-   * @param argument the argument to pass through the chain ({@code null}
-   *                 for void-argument wrappers)
-   * @return the result produced by the chain
-   */
-  protected R initiateChain(A argument) {
-    return this.execute(chainId(), generateCallId(), argument);
-  }
+    /**
+     * Entry point for chain execution: generates a new call ID and starts
+     * traversal from this (outermost) layer.
+     *
+     * <p>This method is called by the concrete wrapper's public entry point
+     * (e.g. {@link RunnableWrapper#run()}, {@link SupplierWrapper#get()}).
+     * It is the only place where {@link #generateCallId()} is called,
+     * ensuring exactly one CAS operation per invocation.</p>
+     *
+     * @param argument the argument to pass through the chain ({@code null}
+     *                 for void-argument wrappers)
+     * @return the result produced by the chain
+     */
+    protected R initiateChain(A argument) {
+        return this.execute(chainId(), generateCallId(), argument);
+    }
 
-  /**
-   * Executes this layer's around-advice, passing the next step reference.
-   *
-   * <p>This method is both the {@link InternalExecutor} implementation
-   * (called by the outer layer's {@code LayerAction} via {@code next.execute(...)})
-   * and the internal dispatch mechanism. The {@code layerAction} receives
-   * {@link #nextStep} and decides when/whether to invoke it.</p>
-   *
-   * @param chainId  the chain identifier (passed through unchanged)
-   * @param callId   the call identifier (passed through unchanged)
-   * @param argument the argument flowing through the chain
-   * @return the result produced by this layer or propagated from inner layers
-   */
-  @Override
-  public R execute(long chainId, long callId, A argument) {
-    return layerAction.execute(chainId, callId, argument, nextStep);
-  }
+    /**
+     * Executes this layer's around-advice, passing the next step reference.
+     *
+     * <p>This method is both the {@link InternalExecutor} implementation
+     * (called by the outer layer's {@code LayerAction} via {@code next.execute(...)})
+     * and the internal dispatch mechanism. The {@code layerAction} receives
+     * {@link #nextStep} and decides when/whether to invoke it.</p>
+     *
+     * @param chainId  the chain identifier (passed through unchanged)
+     * @param callId   the call identifier (passed through unchanged)
+     * @param argument the argument flowing through the chain
+     * @return the result produced by this layer or propagated from inner layers
+     */
+    @Override
+    public R execute(long chainId, long callId, A argument) {
+        return layerAction.execute(chainId, callId, argument, nextStep);
+    }
 }

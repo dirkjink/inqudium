@@ -21,31 +21,31 @@ import java.util.Objects;
 public record LinearBackoffStrategy(Duration initialDelay, Duration increment,
                                     Duration maxDelay) implements BackoffStrategy {
 
-  public LinearBackoffStrategy {
-    Objects.requireNonNull(initialDelay, "initialDelay must not be null");
-    Objects.requireNonNull(increment, "increment must not be null");
-    Objects.requireNonNull(maxDelay, "maxDelay must not be null");
-    if (initialDelay.isNegative()) {
-      throw new IllegalArgumentException("initialDelay must not be negative");
-    }
-    if (increment.isNegative()) {
-      throw new IllegalArgumentException("increment must not be negative");
-    }
-    if (maxDelay.isNegative() || maxDelay.isZero()) {
-      throw new IllegalArgumentException("maxDelay must be positive");
-    }
-  }
-
-  @Override
-  public Duration computeDelay(int attemptIndex) {
-    // Use nanoseconds for sub-millisecond precision
-    long delayNanos = initialDelay.toNanos() + (long) attemptIndex * increment.toNanos();
-
-    // Guard against overflow: if the addition wrapped around or exceeds max
-    if (delayNanos < 0 || delayNanos > maxDelay.toNanos()) {
-      return maxDelay;
+    public LinearBackoffStrategy {
+        Objects.requireNonNull(initialDelay, "initialDelay must not be null");
+        Objects.requireNonNull(increment, "increment must not be null");
+        Objects.requireNonNull(maxDelay, "maxDelay must not be null");
+        if (initialDelay.isNegative()) {
+            throw new IllegalArgumentException("initialDelay must not be negative");
+        }
+        if (increment.isNegative()) {
+            throw new IllegalArgumentException("increment must not be negative");
+        }
+        if (maxDelay.isNegative() || maxDelay.isZero()) {
+            throw new IllegalArgumentException("maxDelay must be positive");
+        }
     }
 
-    return Duration.ofNanos(delayNanos);
-  }
+    @Override
+    public Duration computeDelay(int attemptIndex) {
+        // Use nanoseconds for sub-millisecond precision
+        long delayNanos = initialDelay.toNanos() + (long) attemptIndex * increment.toNanos();
+
+        // Guard against overflow: if the addition wrapped around or exceeds max
+        if (delayNanos < 0 || delayNanos > maxDelay.toNanos()) {
+            return maxDelay;
+        }
+
+        return Duration.ofNanos(delayNanos);
+    }
 }

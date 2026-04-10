@@ -22,20 +22,20 @@ import java.util.function.IntFunction;
  */
 public record CustomBackoffStrategy(IntFunction<Duration> delayFunction) implements BackoffStrategy {
 
-  public CustomBackoffStrategy {
-    Objects.requireNonNull(delayFunction, "delayFunction must not be null");
-  }
-
-  @Override
-  public Duration computeDelay(int attemptIndex) {
-    Duration delay = delayFunction.apply(attemptIndex);
-    Objects.requireNonNull(delay,
-        "delayFunction must not return null for attemptIndex " + attemptIndex);
-    if (delay.isNegative()) {
-      throw new IllegalArgumentException(
-          "delayFunction returned negative delay for attemptIndex %d: %s"
-              .formatted(attemptIndex, delay));
+    public CustomBackoffStrategy {
+        Objects.requireNonNull(delayFunction, "delayFunction must not be null");
     }
-    return delay;
-  }
+
+    @Override
+    public Duration computeDelay(int attemptIndex) {
+        Duration delay = delayFunction.apply(attemptIndex);
+        Objects.requireNonNull(delay,
+                "delayFunction must not return null for attemptIndex " + attemptIndex);
+        if (delay.isNegative()) {
+            throw new IllegalArgumentException(
+                    "delayFunction returned negative delay for attemptIndex %d: %s"
+                            .formatted(attemptIndex, delay));
+        }
+        return delay;
+    }
 }

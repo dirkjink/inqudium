@@ -31,94 +31,94 @@ import java.util.function.IntFunction;
  */
 public interface BackoffStrategy {
 
-  // ======================== Factory methods ========================
+    // ======================== Factory methods ========================
 
-  static BackoffStrategy fixedDelay(Duration delay) {
-    return new FixedBackoffStrategy(delay);
-  }
+    static BackoffStrategy fixedDelay(Duration delay) {
+        return new FixedBackoffStrategy(delay);
+    }
 
-  static BackoffStrategy linear(Duration initialDelay, Duration increment) {
-    return new LinearBackoffStrategy(initialDelay, increment, Duration.ofSeconds(30));
-  }
+    static BackoffStrategy linear(Duration initialDelay, Duration increment) {
+        return new LinearBackoffStrategy(initialDelay, increment, Duration.ofSeconds(30));
+    }
 
-  static BackoffStrategy linear(Duration initialDelay, Duration increment, Duration maxDelay) {
-    return new LinearBackoffStrategy(initialDelay, increment, maxDelay);
-  }
+    static BackoffStrategy linear(Duration initialDelay, Duration increment, Duration maxDelay) {
+        return new LinearBackoffStrategy(initialDelay, increment, maxDelay);
+    }
 
-  static BackoffStrategy fibonacci(Duration initialDelay) {
-    return new FibonacciBackoffStrategy(initialDelay, Duration.ofSeconds(30));
-  }
+    static BackoffStrategy fibonacci(Duration initialDelay) {
+        return new FibonacciBackoffStrategy(initialDelay, Duration.ofSeconds(30));
+    }
 
-  static BackoffStrategy fibonacci(Duration initialDelay, Duration maxDelay) {
-    return new FibonacciBackoffStrategy(initialDelay, maxDelay);
-  }
+    static BackoffStrategy fibonacci(Duration initialDelay, Duration maxDelay) {
+        return new FibonacciBackoffStrategy(initialDelay, maxDelay);
+    }
 
-  static BackoffStrategy exponential(Duration initialDelay) {
-    return new ExponentialBackoffStrategy(initialDelay, 2.0, Duration.ofSeconds(30));
-  }
+    static BackoffStrategy exponential(Duration initialDelay) {
+        return new ExponentialBackoffStrategy(initialDelay, 2.0, Duration.ofSeconds(30));
+    }
 
-  static BackoffStrategy exponential(Duration initialDelay, double multiplier, Duration maxDelay) {
-    return new ExponentialBackoffStrategy(initialDelay, multiplier, maxDelay);
-  }
+    static BackoffStrategy exponential(Duration initialDelay, double multiplier, Duration maxDelay) {
+        return new ExponentialBackoffStrategy(initialDelay, multiplier, maxDelay);
+    }
 
-  static BackoffStrategy exponentialWithJitter(Duration initialDelay) {
-    return new ExponentialWithJitterBackoffStrategy(initialDelay, 2.0, Duration.ofSeconds(30));
-  }
+    static BackoffStrategy exponentialWithJitter(Duration initialDelay) {
+        return new ExponentialWithJitterBackoffStrategy(initialDelay, 2.0, Duration.ofSeconds(30));
+    }
 
-  static BackoffStrategy exponentialWithJitter(Duration initialDelay, double multiplier, Duration maxDelay) {
-    return new ExponentialWithJitterBackoffStrategy(initialDelay, multiplier, maxDelay);
-  }
+    static BackoffStrategy exponentialWithJitter(Duration initialDelay, double multiplier, Duration maxDelay) {
+        return new ExponentialWithJitterBackoffStrategy(initialDelay, multiplier, maxDelay);
+    }
 
-  static BackoffStrategy decorrelatedJitter(Duration initialDelay) {
-    return new DecorrelatedJitterBackoffStrategy(initialDelay, Duration.ofSeconds(30));
-  }
+    static BackoffStrategy decorrelatedJitter(Duration initialDelay) {
+        return new DecorrelatedJitterBackoffStrategy(initialDelay, Duration.ofSeconds(30));
+    }
 
-  static BackoffStrategy decorrelatedJitter(Duration initialDelay, Duration maxDelay) {
-    return new DecorrelatedJitterBackoffStrategy(initialDelay, maxDelay);
-  }
+    static BackoffStrategy decorrelatedJitter(Duration initialDelay, Duration maxDelay) {
+        return new DecorrelatedJitterBackoffStrategy(initialDelay, maxDelay);
+    }
 
-  static BackoffStrategy noWait() {
-    return new NoWaitBackoffStrategy();
-  }
+    static BackoffStrategy noWait() {
+        return new NoWaitBackoffStrategy();
+    }
 
-  static BackoffStrategy custom(IntFunction<Duration> delayFunction) {
-    return new CustomBackoffStrategy(delayFunction);
-  }
+    static BackoffStrategy custom(IntFunction<Duration> delayFunction) {
+        return new CustomBackoffStrategy(delayFunction);
+    }
 
-  // ======================== Core interface ========================
+    // ======================== Core interface ========================
 
-  /**
-   * Computes the delay before the given retry attempt.
-   *
-   * <p>Stateless strategies should override this method. The default
-   * implementation of {@link #computeDelay(int, Duration)} delegates here,
-   * ignoring the previous delay.
-   *
-   * @param attemptIndex zero-based retry index (0 = first retry after initial failure)
-   * @return the duration to wait
-   */
-  Duration computeDelay(int attemptIndex);
+    /**
+     * Computes the delay before the given retry attempt.
+     *
+     * <p>Stateless strategies should override this method. The default
+     * implementation of {@link #computeDelay(int, Duration)} delegates here,
+     * ignoring the previous delay.
+     *
+     * @param attemptIndex zero-based retry index (0 = first retry after initial failure)
+     * @return the duration to wait
+     */
+    Duration computeDelay(int attemptIndex);
 
-  /**
-   * Computes the delay before the given retry attempt, with access to
-   * the previous delay for stateful strategies.
-   *
-   * <p>The default implementation ignores {@code previousDelay} and delegates
-   * to {@link #computeDelay(int)}. Stateful strategies (e.g.,
-   * {@link DecorrelatedJitterBackoffStrategy}) override this method.
-   *
-   * <p>The retry core always calls this two-argument form, passing the
-   * delay from the previous retry cycle (or {@link Duration#ZERO} for
-   * the first retry).
-   *
-   * @param attemptIndex  zero-based retry index
-   * @param previousDelay the delay used for the previous retry, or {@link Duration#ZERO}
-   * @return the duration to wait
-   */
-  default Duration computeDelay(int attemptIndex, Duration previousDelay) {
-    return computeDelay(attemptIndex);
-  }
+    /**
+     * Computes the delay before the given retry attempt, with access to
+     * the previous delay for stateful strategies.
+     *
+     * <p>The default implementation ignores {@code previousDelay} and delegates
+     * to {@link #computeDelay(int)}. Stateful strategies (e.g.,
+     * {@link DecorrelatedJitterBackoffStrategy}) override this method.
+     *
+     * <p>The retry core always calls this two-argument form, passing the
+     * delay from the previous retry cycle (or {@link Duration#ZERO} for
+     * the first retry).
+     *
+     * @param attemptIndex  zero-based retry index
+     * @param previousDelay the delay used for the previous retry, or {@link Duration#ZERO}
+     * @return the duration to wait
+     */
+    default Duration computeDelay(int attemptIndex, Duration previousDelay) {
+        return computeDelay(attemptIndex);
+    }
 
-  // ======================== Implementations ========================
+    // ======================== Implementations ========================
 
 }

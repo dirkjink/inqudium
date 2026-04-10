@@ -22,19 +22,19 @@ import java.time.Instant;
 @FunctionalInterface
 public interface InqNanoTimeSource {
 
-  /**
-   * Returns a clock backed by {@link Instant#now()}.
-   *
-   * @return the system clock
-   */
-  static InqNanoTimeSource system() {
-    return System::nanoTime;
-  }
+    /**
+     * Returns a clock backed by {@link Instant#now()}.
+     *
+     * @return the system clock
+     */
+    static InqNanoTimeSource system() {
+        return System::nanoTime;
+    }
 
-  /**
-   * Returns the current instant.
-   *
-   * @return the current time as seen by this clock
-   */
-  long now();
+    /**
+     * Returns the current instant.
+     *
+     * @return the current time as seen by this clock
+     */
+    long now();
 }

@@ -1,10 +1,12 @@
 # Architecture of Inqudium
 
-This document provides a high-level overview of Inqudium's internal architecture, linking to the relevant Architectural Decision Records (ADRs) for detailed rationale.
+This document provides a high-level overview of Inqudium's internal architecture, linking to the relevant Architectural
+Decision Records (ADRs) for detailed rationale.
 
 ## The big picture
 
-Inqudium is a multi-paradigm resilience library. It provides the same algorithms (CircuitBreaker, RateLimiter, Retry, Bulkhead, TimeLimiter) across four distinct execution models: Imperative, Kotlin Coroutines, Reactor, and RxJava 3.
+Inqudium is a multi-paradigm resilience library. It provides the same algorithms (CircuitBreaker, RateLimiter, Retry,
+Bulkhead, TimeLimiter) across four distinct execution models: Imperative, Kotlin Coroutines, Reactor, and RxJava 3.
 
 ```text
 ┌─────────────────────────────────────────────────────────┐
@@ -24,29 +26,35 @@ Inqudium is a multi-paradigm resilience library. It provides the same algorithms
 
 ## Module structure
 
-Inqudium is a Maven multi-module project with fine-grained imperative modules (one per element) and one module per reactive paradigm ([ADR-001](adr/001-modular-architecture.md)):
+Inqudium is a Maven multi-module project with fine-grained imperative modules (one per element) and one module per
+reactive paradigm ([ADR-001](adr/001-modular-architecture.md)):
 
-| Module | Purpose |
-|--------|---------|
-| `inqudium-core` | Contracts, configs, pure algorithms, events, SPI |
-| `inqudium-circuitbreaker` | Imperative CircuitBreaker (ReentrantLock-based) |
-| `inqudium-retry` | Imperative Retry |
-| `inqudium-ratelimiter` | Imperative RateLimiter |
-| `inqudium-bulkhead` | Imperative Bulkhead |
-| `inqudium-timelimiter` | Imperative TimeLimiter (CompletionStage-based) |
-| `inqudium-kotlin` | Coroutine implementations (Mutex-based) |
-| `inqudium-reactor` | Project Reactor implementations (Atomic operators) |
-| `inqudium-rxjava3` | RxJava 3 implementations (Atomic operators) |
-| `inqudium-[bridge]` | Integration modules (micrometer, jfr, slf4j) |
+| Module                    | Purpose                                            |
+|---------------------------|----------------------------------------------------|
+| `inqudium-core`           | Contracts, configs, pure algorithms, events, SPI   |
+| `inqudium-circuitbreaker` | Imperative CircuitBreaker (ReentrantLock-based)    |
+| `inqudium-retry`          | Imperative Retry                                   |
+| `inqudium-ratelimiter`    | Imperative RateLimiter                             |
+| `inqudium-bulkhead`       | Imperative Bulkhead                                |
+| `inqudium-timelimiter`    | Imperative TimeLimiter (CompletionStage-based)     |
+| `inqudium-kotlin`         | Coroutine implementations (Mutex-based)            |
+| `inqudium-reactor`        | Project Reactor implementations (Atomic operators) |
+| `inqudium-rxjava3`        | RxJava 3 implementations (Atomic operators)        |
+| `inqudium-[bridge]`       | Integration modules (micrometer, jfr, slf4j)       |
 
 ## Shared contracts vs native execution
 
-To guarantee identical behavior across paradigms without sharing blocking code, Inqudium splits responsibility ([ADR-005](adr/005-shared-contracts.md)):
+To guarantee identical behavior across paradigms without sharing blocking code, Inqudium splits
+responsibility ([ADR-005](adr/005-shared-contracts.md)):
 
-1. **`inqudium-core` (The what)** — Defines configuration, data models, and pure functions (e.g., sliding window calculation, backoff math, rate limit bucket state). No locks, no thread pools, no wait/sleep.
-2. **Paradigm modules (The how)** — Implement the functional decoration APIs ([ADR-002](adr/002-functional-api.md)) and handle synchronization.
+1. **`inqudium-core` (The what)** — Defines configuration, data models, and pure functions (e.g., sliding window
+   calculation, backoff math, rate limit bucket state). No locks, no thread pools, no wait/sleep.
+2. **Paradigm modules (The how)** — Implement the functional decoration APIs ([ADR-002](adr/002-functional-api.md)) and
+   handle synchronization.
 
-Example: The CircuitBreaker state machine lives in core. When a call fails, the Kotlin module calls `coreStateMachine.onError(...)`. The core computes the new state and returns "open". The Kotlin module then applies this state change using a coroutine `Mutex`.
+Example: The CircuitBreaker state machine lives in core. When a call fails, the Kotlin module calls
+`coreStateMachine.onError(...)`. The core computes the new state and returns "open". The Kotlin module then applies this
+state change using a coroutine `Mutex`.
 
 ## Registry pattern
 
@@ -59,6 +67,7 @@ var cb2 = registry.circuitBreaker("serviceB");
 ```
 
 Registries provide:
+
 1. Thread-safe instantiation
 2. Name-based lookup (returning the exact same instance)
 3. Shared configuration templates
@@ -68,7 +77,8 @@ Registries provide:
 
 ### Functional API
 
-Each element is a functional decorator that wraps an operation in a specific paradigm ([ADR-002](adr/002-functional-api.md)):
+Each element is a functional decorator that wraps an operation in a specific
+paradigm ([ADR-002](adr/002-functional-api.md)):
 
 - **Imperative**: `decorateSupplier(Supplier<T>)`
 - **Kotlin**: `decorateSuspendFunction(suspend () -> T)`
@@ -77,7 +87,8 @@ Each element is a functional decorator that wraps an operation in a specific par
 
 ### CircuitBreaker (ADR-016)
 
-Uses a sliding window to track outcomes. Computes failure rate and slow call rate. Transitions to `OPEN` when thresholds are exceeded.
+Uses a sliding window to track outcomes. Computes failure rate and slow call rate. Transitions to `OPEN` when thresholds
+are exceeded.
 
 - Pure immutable state updates (no lock contention during window math).
 - Two window types: Count-based (N calls) and Time-based (N seconds).
@@ -121,10 +132,10 @@ Re-executes failed calls.
 Inqudium uses a flat exception hierarchy extending `RuntimeException`.
 
 - `InqException` (base)
-  - `InqCallRejectedException` (CircuitBreaker open, RateLimiter/Bulkhead full)
-  - `InqTimeLimitExceededException`
-  - `InqRetryExhaustedException`
-  - `InqConfigurationException` (setup errors)
+    - `InqCallRejectedException` (CircuitBreaker open, RateLimiter/Bulkhead full)
+    - `InqTimeLimitExceededException`
+    - `InqRetryExhaustedException`
+    - `InqConfigurationException` (setup errors)
 
 Exceptions carry `elementName`, `elementType`, and often runtime state (e.g., failure rate) to aid debugging.
 
@@ -138,6 +149,7 @@ var result = InqPipeline.of(circuitBreaker, retry, timeLimiter)
 ```
 
 Pipelines provide static factory orderings for correct composition:
+
 - **TimeLimiter inside Retry**: Each attempt has a timeout.
 - **CircuitBreaker outside Retry**: Sees each retry attempt individually for fast failure detection.
 - **RateLimiter outside CircuitBreaker**: Rate limit is a global constraint, not per-attempt.
@@ -148,9 +160,12 @@ A Resilience4J-compatible order is available for migration.
 
 Two scopes ([ADR-003](adr/003-event-system.md)):
 
-**Per-element publishers** — Created at element construction time. Consumers subscribe to one element and receive only that element's events when diagnostic events are enabled. Thread-safe via `CopyOnWriteArrayList`.
+**Per-element publishers** — Created at element construction time. Consumers subscribe to one element and receive only
+that element's events when diagnostic events are enabled. Thread-safe via `CopyOnWriteArrayList`.
 
-**Global exporters** — Registered via `InqEventExporterRegistry` (programmatic or ServiceLoader). Receive all events from all elements when diagnostic events are enabled. Export to Kafka, JFR, CloudEvents, etc. Support `subscribedEventTypes()` filtering to avoid unnecessary serialization.
+**Global exporters** — Registered via `InqEventExporterRegistry` (programmatic or ServiceLoader). Receive all events
+from all elements when diagnostic events are enabled. Export to Kafka, JFR, CloudEvents, etc. Support
+`subscribedEventTypes()` filtering to avoid unnecessary serialization.
 
 Every generated event carries a `callId` for end-to-end correlation across all elements in a pipeline.
 
@@ -164,11 +179,15 @@ Framework-agnostic SPI ([ADR-011](adr/011-context-propagation.md)):
 
 ## Call identity propagation
 
-Pipelines generate a single `callId` and propagate it through all composed elements via the `InqCall` abstraction ([ADR-022](adr/022-call-identity-propagation.md)). This guarantees that all events emitted when diagnostic events are enabled during a pipeline execution share the same correlation ID.
+Pipelines generate a single `callId` and propagate it through all composed elements via the `InqCall`
+abstraction ([ADR-022](adr/022-call-identity-propagation.md)). This guarantees that all events emitted when diagnostic
+events are enabled during a pipeline execution share the same correlation ID.
 
 ## Breaking change management
 
-Behavioral changes are gated by `InqFlag` enum constants ([ADR-013](adr/013-breaking-change-management.md)). Three-layer resolution: defaults → ServiceLoader → programmatic. `InqCompatibilityEvent` provides an audit trail of active flags at element creation time.
+Behavioral changes are gated by `InqFlag` enum constants ([ADR-013](adr/013-breaking-change-management.md)). Three-layer
+resolution: defaults → ServiceLoader → programmatic. `InqCompatibilityEvent` provides an audit trail of active flags at
+element creation time.
 
 ## ServiceLoader conventions
 
@@ -178,8 +197,11 @@ Three SPIs use `ServiceLoader` ([ADR-014](adr/014-serviceloader-conventions.md))
 2. `InqContextPropagator` — context propagation bridges
 3. `InqCompatibilityOptions` — code-free flag configuration
 
-All follow the same conventions: lazy discovery on first access, Comparable ordering, error isolation (a failing provider is logged and skipped), singleton lifecycle, frozen after first access.
+All follow the same conventions: lazy discovery on first access, Comparable ordering, error isolation (a failing
+provider is logged and skipped), singleton lifecycle, frozen after first access.
 
 ## Virtual thread readiness
 
-No `synchronized` anywhere in the library ([ADR-008](adr/008-virtual-thread-readiness.md)). All locking uses `ReentrantLock`. All waiting uses `LockSupport.parkNanos`. This prevents carrier-thread pinning on Java 21+ virtual threads.
+No `synchronized` anywhere in the library ([ADR-008](adr/008-virtual-thread-readiness.md)). All locking uses
+`ReentrantLock`. All waiting uses `LockSupport.parkNanos`. This prevents carrier-thread pinning on Java 21+ virtual
+threads.

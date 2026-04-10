@@ -46,151 +46,151 @@ import java.util.function.LongFunction;
  * @param failureCount         the running count of failures currently in the window
  */
 public record SlidingWindowMetrics(
-    int maxFailuresInWindow,
-    int windowSize,
-    int minimumNumberOfCalls,
-    boolean[] window,
-    int headIndex,
-    int size,
-    int failureCount
+        int maxFailuresInWindow,
+        int windowSize,
+        int minimumNumberOfCalls,
+        boolean[] window,
+        int headIndex,
+        int size,
+        int failureCount
 ) implements FailureMetrics {
 
-  /**
-   * Creates an empty sliding window with the given configuration.
-   *
-   * @param maxFailuresInWindow  the number of failures in the window that triggers the circuit
-   * @param windowSize           how many recent outcomes to keep track of
-   * @param minimumNumberOfCalls the minimum sample size before evaluation is meaningful;
-   *                             must be between 1 and {@code windowSize} inclusive
-   * @return a fresh instance with an empty window
-   * @throws IllegalArgumentException if {@code windowSize <= 0} or
-   *                                  {@code minimumNumberOfCalls} is outside [1, windowSize]
-   */
-  public static SlidingWindowMetrics initial(int maxFailuresInWindow,
-                                             int windowSize,
-                                             int minimumNumberOfCalls) {
-    if (windowSize <= 0) {
-      throw new IllegalArgumentException("windowSize must be greater than 0");
+    /**
+     * Creates an empty sliding window with the given configuration.
+     *
+     * @param maxFailuresInWindow  the number of failures in the window that triggers the circuit
+     * @param windowSize           how many recent outcomes to keep track of
+     * @param minimumNumberOfCalls the minimum sample size before evaluation is meaningful;
+     *                             must be between 1 and {@code windowSize} inclusive
+     * @return a fresh instance with an empty window
+     * @throws IllegalArgumentException if {@code windowSize <= 0} or
+     *                                  {@code minimumNumberOfCalls} is outside [1, windowSize]
+     */
+    public static SlidingWindowMetrics initial(int maxFailuresInWindow,
+                                               int windowSize,
+                                               int minimumNumberOfCalls) {
+        if (windowSize <= 0) {
+            throw new IllegalArgumentException("windowSize must be greater than 0");
+        }
+        if (minimumNumberOfCalls <= 0 || minimumNumberOfCalls > windowSize) {
+            throw new IllegalArgumentException("minimumNumberOfCalls must be between 1 and windowSize");
+        }
+        return new SlidingWindowMetrics(
+                maxFailuresInWindow,
+                windowSize,
+                minimumNumberOfCalls,
+                new boolean[windowSize],
+                -1,  // headIndex starts at -1 indicating an empty buffer
+                0,
+                0);
     }
-    if (minimumNumberOfCalls <= 0 || minimumNumberOfCalls > windowSize) {
-      throw new IllegalArgumentException("minimumNumberOfCalls must be between 1 and windowSize");
+
+    /**
+     * Returns a factory function that produces a fresh instance of this metrics strategy.
+     *
+     * @return a {@link LongFunction} that accepts a nanosecond timestamp and produces a
+     * fresh {@link FailureMetrics} instance with identical configuration
+     */
+    @Override
+    public LongFunction<FailureMetrics> metricsFactory() {
+        return (long nowNanos) -> SlidingWindowMetrics.initial(
+                maxFailuresInWindow,
+                windowSize,
+                minimumNumberOfCalls
+        );
     }
-    return new SlidingWindowMetrics(
-        maxFailuresInWindow,
-        windowSize,
-        minimumNumberOfCalls,
-        new boolean[windowSize],
-        -1,  // headIndex starts at -1 indicating an empty buffer
-        0,
-        0);
-  }
 
-  /**
-   * Returns a factory function that produces a fresh instance of this metrics strategy.
-   *
-   * @return a {@link LongFunction} that accepts a nanosecond timestamp and produces a
-   * fresh {@link FailureMetrics} instance with identical configuration
-   */
-  @Override
-  public LongFunction<FailureMetrics> metricsFactory() {
-    return (long nowNanos) -> SlidingWindowMetrics.initial(
-        maxFailuresInWindow,
-        windowSize,
-        minimumNumberOfCalls
-    );
-  }
-
-  /**
-   * Records a successful call by pushing {@code false} into the circular buffer.
-   * If the evicted (oldest) entry was a failure, the failure count decreases by one.
-   *
-   * @param nowNanos ignored — this algorithm is count-based, not time-based
-   */
-  @Override
-  public FailureMetrics recordSuccess(long nowNanos) {
-    return recordOutcome(false);
-  }
-
-  /**
-   * Records a failed call by pushing {@code true} into the circular buffer.
-   * The failure count increases by one, minus one if the evicted entry was also a failure.
-   *
-   * @param nowNanos ignored — this algorithm is count-based, not time-based
-   */
-  @Override
-  public FailureMetrics recordFailure(long nowNanos) {
-    return recordOutcome(true);
-  }
-
-  /**
-   * Core recording logic shared by both success and failure paths.
-   *
-   * <p>Steps:
-   * <ol>
-   *   <li>Copy the existing window array (immutability).</li>
-   *   <li>Advance the head index, wrapping around at {@code windowSize}.</li>
-   *   <li>If the window is already full, read the value at the new head position
-   *       — that is the oldest entry being evicted.</li>
-   *   <li>Write the new outcome to the head position.</li>
-   *   <li>Adjust {@code failureCount}: add 1 if the new outcome is a failure,
-   *       subtract 1 if the evicted outcome was a failure.</li>
-   * </ol>
-   *
-   * @param isFailure whether the current call outcome is a failure
-   * @return a new instance reflecting the updated window state
-   */
-  private SlidingWindowMetrics recordOutcome(boolean isFailure) {
-    boolean[] newWindow = Arrays.copyOf(window, windowSize);
-    int newHeadIndex = (headIndex + 1) % windowSize;
-
-    // Only account for eviction when the buffer is already full
-    boolean oldOutcome = (size == windowSize) && newWindow[newHeadIndex];
-    newWindow[newHeadIndex] = isFailure;
-
-    int newSize = Math.min(windowSize, size + 1);
-    int newFailureCount = failureCount + (isFailure ? 1 : 0) - (oldOutcome ? 1 : 0);
-
-    return new SlidingWindowMetrics(
-        maxFailuresInWindow, windowSize, minimumNumberOfCalls,
-        newWindow, newHeadIndex, newSize, newFailureCount);
-  }
-
-  /**
-   * Returns {@code true} if the window contains at least {@code minimumNumberOfCalls}
-   * entries and the failure count meets or exceeds {@code maxFailuresInWindow}.
-   *
-   * @param nowNanos ignored — this algorithm is count-based, not time-based
-   */
-  @Override
-  public boolean isThresholdReached(long nowNanos) {
-    if (size < minimumNumberOfCalls) {
-      return false;
+    /**
+     * Records a successful call by pushing {@code false} into the circular buffer.
+     * If the evicted (oldest) entry was a failure, the failure count decreases by one.
+     *
+     * @param nowNanos ignored — this algorithm is count-based, not time-based
+     */
+    @Override
+    public FailureMetrics recordSuccess(long nowNanos) {
+        return recordOutcome(false);
     }
-    return failureCount >= maxFailuresInWindow;
-  }
 
-  /**
-   * Resets the window to empty, preserving the original configuration.
-   *
-   * @param nowNanos ignored — this algorithm is count-based, not time-based
-   */
-  @Override
-  public FailureMetrics reset(long nowNanos) {
-    return new SlidingWindowMetrics(
-        maxFailuresInWindow, windowSize, minimumNumberOfCalls,
-        new boolean[windowSize], -1, 0, 0);
-  }
+    /**
+     * Records a failed call by pushing {@code true} into the circular buffer.
+     * The failure count increases by one, minus one if the evicted entry was also a failure.
+     *
+     * @param nowNanos ignored — this algorithm is count-based, not time-based
+     */
+    @Override
+    public FailureMetrics recordFailure(long nowNanos) {
+        return recordOutcome(true);
+    }
 
-  /**
-   * Produces a diagnostic message showing the current failure count in the window.
-   *
-   * @param nowNanos ignored — this algorithm is count-based, not time-based
-   */
-  @Override
-  public String getTripReason(long nowNanos) {
-    return String.format(
-        Locale.ROOT, "Sliding window threshold reached: " +
-            "Found %d failures in the last %d calls (Threshold: %d).",
-        failureCount, size, maxFailuresInWindow);
-  }
+    /**
+     * Core recording logic shared by both success and failure paths.
+     *
+     * <p>Steps:
+     * <ol>
+     *   <li>Copy the existing window array (immutability).</li>
+     *   <li>Advance the head index, wrapping around at {@code windowSize}.</li>
+     *   <li>If the window is already full, read the value at the new head position
+     *       — that is the oldest entry being evicted.</li>
+     *   <li>Write the new outcome to the head position.</li>
+     *   <li>Adjust {@code failureCount}: add 1 if the new outcome is a failure,
+     *       subtract 1 if the evicted outcome was a failure.</li>
+     * </ol>
+     *
+     * @param isFailure whether the current call outcome is a failure
+     * @return a new instance reflecting the updated window state
+     */
+    private SlidingWindowMetrics recordOutcome(boolean isFailure) {
+        boolean[] newWindow = Arrays.copyOf(window, windowSize);
+        int newHeadIndex = (headIndex + 1) % windowSize;
+
+        // Only account for eviction when the buffer is already full
+        boolean oldOutcome = (size == windowSize) && newWindow[newHeadIndex];
+        newWindow[newHeadIndex] = isFailure;
+
+        int newSize = Math.min(windowSize, size + 1);
+        int newFailureCount = failureCount + (isFailure ? 1 : 0) - (oldOutcome ? 1 : 0);
+
+        return new SlidingWindowMetrics(
+                maxFailuresInWindow, windowSize, minimumNumberOfCalls,
+                newWindow, newHeadIndex, newSize, newFailureCount);
+    }
+
+    /**
+     * Returns {@code true} if the window contains at least {@code minimumNumberOfCalls}
+     * entries and the failure count meets or exceeds {@code maxFailuresInWindow}.
+     *
+     * @param nowNanos ignored — this algorithm is count-based, not time-based
+     */
+    @Override
+    public boolean isThresholdReached(long nowNanos) {
+        if (size < minimumNumberOfCalls) {
+            return false;
+        }
+        return failureCount >= maxFailuresInWindow;
+    }
+
+    /**
+     * Resets the window to empty, preserving the original configuration.
+     *
+     * @param nowNanos ignored — this algorithm is count-based, not time-based
+     */
+    @Override
+    public FailureMetrics reset(long nowNanos) {
+        return new SlidingWindowMetrics(
+                maxFailuresInWindow, windowSize, minimumNumberOfCalls,
+                new boolean[windowSize], -1, 0, 0);
+    }
+
+    /**
+     * Produces a diagnostic message showing the current failure count in the window.
+     *
+     * @param nowNanos ignored — this algorithm is count-based, not time-based
+     */
+    @Override
+    public String getTripReason(long nowNanos) {
+        return String.format(
+                Locale.ROOT, "Sliding window threshold reached: " +
+                        "Found %d failures in the last %d calls (Threshold: %d).",
+                failureCount, size, maxFailuresInWindow);
+    }
 }
