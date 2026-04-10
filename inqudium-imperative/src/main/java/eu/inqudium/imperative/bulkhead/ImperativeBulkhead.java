@@ -205,10 +205,11 @@ public final class ImperativeBulkhead<A, R> implements Bulkhead<A, R> {
      * @param callId   the call identifier
      * @param argument the argument flowing through the chain
      * @param next     the next async step in the chain
-     * @return the <strong>same</strong> {@link CompletionStage} instance that the downstream
-     * chain produced — guaranteed. Pipeline identity is preserved: callers may rely
-     * on {@code returnedStage == originalFuture}. The permit-release callback is
-     * attached via {@code whenComplete()} as a side-effect only.
+     * @return a {@link CompletionStage} that carries the downstream result and completes
+     * after the permit-release callback has run. Per ADR-023, this is the
+     * <strong>decorated copy</strong> produced by {@code whenComplete()}, not the
+     * original stage. Exception: if the downstream future is already completed on
+     * entry (fast path), no callback is registered and the original is returned.
      */
     @Override
     public CompletionStage<R> executeAsync(long chainId,
@@ -248,31 +249,31 @@ public final class ImperativeBulkhead<A, R> implements Bulkhead<A, R> {
             throw t;
         }
 
-        // ── End phase: attach permit-release, preserve pipeline identity ──
+        // ── End phase: attach permit-release via whenComplete ──
         //
-        // GUARANTEED PROPERTY: The CompletionStage returned to the caller is the exact same
-        // object that the downstream business operation produced. This is a contract — callers
-        // may rely on reference equality (stage == originalFuture) to detect wrapping, attach
-        // dependent actions, or pass the future to APIs that require identity preservation
-        // (e.g., reactive frameworks, response pipelines).
+        // ADR-023: Always return the decorated copy, never the original.
+        // The copy returned by whenComplete() is what the caller receives. This
+        // ensures that any exception thrown inside releaseAndReport surfaces
+        // explicitly on the caller's future rather than disappearing on a
+        // detached branch.
         //
-        // Fast path: if the future is already completed (common for sync-wrapped-as-async,
-        // caching, validation failures), invoke the release callback inline — no intermediate
-        // CompletionStage created, zero allocation.
+        // Fast path: if the future is already completed (common for sync-wrapped-
+        // as-async, caching, validation failures), invoke the release callback
+        // inline and return the original — no intermediate CompletionStage needed
+        // because no callback is registered, so no two-object split occurs.
         //
-        // Slow path: if the future is still pending (real async operation), attach the release
-        // callback via whenComplete(). The new stage returned by whenComplete() is intentionally
-        // discarded to preserve pipeline identity.
+        // Slow path: if the future is still pending (real async operation), attach
+        // the release callback via whenComplete() and return the copy.
         if (stage instanceof CompletableFuture<?> cf && cf.isDone()) {
             long rttNanos = nanoTimeSource.now() - startNanos;
             releaseAndReport(chainId, callId, rttNanos, completionError(cf));
+            return stage;
         } else {
-            stage.whenComplete((result, error) -> {
+            return stage.whenComplete((result, error) -> {
                 long rttNanos = nanoTimeSource.now() - startNanos;
                 releaseAndReport(chainId, callId, rttNanos, error);
             });
         }
-        return stage;
     }
 
     @Override

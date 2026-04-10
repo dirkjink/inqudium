@@ -75,15 +75,22 @@ public interface AsyncLayerAction<A, R> {
 
     /**
      * Executes this layer's async logic.
+     * <p>
+     * ADR-023: Always return the decorated copy, never the original.
+     * The copy returned by whenComplete() is what the caller receives. This
+     * ensures that any exception thrown inside releaseAndReport surfaces
+     * explicitly on the caller's future rather than disappearing on a
+     * detached branch.
      *
      * @param chainId  identifies the wrapper chain
      * @param callId   identifies this particular invocation
      * @param argument the argument flowing through the chain
      * @param next     the next async step — call {@code next.execute(...)} to proceed
-     * @return the <strong>same</strong> {@link CompletionStage} instance that the downstream
-     * chain produced — guaranteed. Pipeline identity is preserved: callers may rely
-     * on {@code returnedStage == originalFuture}. The permit-release callback is
-     * attached via {@code whenComplete()} as a side-effect only.
+     * @return a {@link CompletionStage} that carries the downstream result and completes
+     * after the permit-release callback has run. Per ADR-023, this is the
+     * <strong>decorated copy</strong> produced by {@code whenComplete()}, not the
+     * original stage. Exception: if the downstream future is already completed on
+     * entry (fast path), no callback is registered and the original is returned.
      */
     CompletionStage<R> executeAsync(long chainId, long callId, A argument,
                                     InternalAsyncExecutor<A, R> next);
