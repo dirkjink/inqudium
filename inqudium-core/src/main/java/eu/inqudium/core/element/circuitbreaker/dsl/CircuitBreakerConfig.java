@@ -17,4 +17,5 @@ public record CircuitBreakerConfig(
     List<Class<? extends Throwable>> toleratedExceptions,
     FailureMetricsConfig metricsConfig,
     InqConfig inqConfig
-) {}
+) {
+}

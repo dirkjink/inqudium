@@ -1,4 +1,5 @@
 package eu.inqudium.core.element.fallback.dsl;
+
 import java.util.function.Function;
 import java.util.function.Supplier;
 
@@ -13,5 +14,6 @@ public interface FallbackProtection<T> {
 
   // Die Weiche: Sobald EINE dieser Methoden gerufen wird, wechseln wir in Phase 2
   TerminalFallbackProtection<T> fallingBackTo(Function<Throwable, T> action);
+
   TerminalFallbackProtection<T> fallingBackTo(Supplier<T> action);
 }

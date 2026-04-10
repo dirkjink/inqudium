@@ -9,4 +9,5 @@ public record RetryConfig(
     int maxAttempts,
     Duration baseWaitDuration,
     double backoffMultiplier
-) {}
+) {
+}

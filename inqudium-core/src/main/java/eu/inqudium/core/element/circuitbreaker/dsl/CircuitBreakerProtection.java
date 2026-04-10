@@ -18,5 +18,6 @@ public interface CircuitBreakerProtection {
 
 
   CircuitBreakerCountEvaluation evaluatingByCountingCalls();
+
   CircuitBreakerTimeEvaluation evaluatingByTimeWindow();
 }

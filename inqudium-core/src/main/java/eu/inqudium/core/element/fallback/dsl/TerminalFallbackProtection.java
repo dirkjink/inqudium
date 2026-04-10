@@ -4,6 +4,8 @@ package eu.inqudium.core.element.fallback.dsl;
 public interface TerminalFallbackProtection<T> {
 
   FallbackConfig<T> applyUniversalProfile();
+
   FallbackConfig<T> applySafeProfile();
+
   FallbackConfig<T> apply();
 }

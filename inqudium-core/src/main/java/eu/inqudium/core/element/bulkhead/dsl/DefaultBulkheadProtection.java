@@ -2,7 +2,6 @@ package eu.inqudium.core.element.bulkhead.dsl;
 
 import eu.inqudium.core.config.InqConfig;
 import eu.inqudium.core.element.bulkhead.config.InqBulkheadConfigBuilder;
-import eu.inqudium.core.element.circuitbreaker.dsl.CircuitBreakerProtection;
 
 import java.time.Duration;
 
