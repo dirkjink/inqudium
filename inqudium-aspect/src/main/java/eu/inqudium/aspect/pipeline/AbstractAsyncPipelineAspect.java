@@ -55,18 +55,38 @@ public abstract class AbstractAsyncPipelineAspect {
             new ConcurrentHashMap<>();
 
     /**
+     * Lazily initialized, immutable snapshot of the provider list returned by
+     * {@link #asyncLayerProviders()}. Captured once on first access and reused
+     * for all subsequent pipeline resolutions.
+     */
+    private volatile List<AsyncAspectLayerProvider<Object>> cachedProviders;
+
+    /**
      * Returns the ordered list of async layer providers for this aspect.
      *
-     * <p>Called once per unique {@link Method} encountered — the result is used
-     * to build an {@link AsyncResolvedPipeline} that is then cached. Subsequent
-     * calls for the same method do not invoke this method again.</p>
+     * <p>Called <strong>exactly once</strong> during the lifetime of this aspect
+     * instance — the result is captured in an immutable snapshot and reused for
+     * all pipeline resolutions.</p>
      *
-     * <p>Implementations should return quickly and without side effects.
-     * Returning a pre-built, immutable list is strongly recommended.</p>
+     * <p>Implementations may return a new list on each call (the framework
+     * handles deduplication), but returning a pre-built, immutable list is
+     * recommended for clarity.</p>
      *
      * @return the async layer providers, never {@code null}
      */
     protected abstract List<AsyncAspectLayerProvider<Object>> asyncLayerProviders();
+
+    /**
+     * Returns the cached provider snapshot, initializing it on first access.
+     */
+    private List<AsyncAspectLayerProvider<Object>> providers() {
+        List<AsyncAspectLayerProvider<Object>> snapshot = cachedProviders;
+        if (snapshot == null) {
+            snapshot = List.copyOf(asyncLayerProviders());
+            cachedProviders = snapshot;
+        }
+        return snapshot;
+    }
 
     // ======================== Hot path: AsyncResolvedPipeline ========================
 
@@ -104,23 +124,21 @@ public abstract class AbstractAsyncPipelineAspect {
     /**
      * Resolves (or retrieves from cache) the async pipeline for the given method.
      *
-     * <p>{@link #asyncLayerProviders()} is called <strong>before</strong> entering
-     * {@link ConcurrentHashMap#computeIfAbsent}, so the subclass implementation
-     * never runs inside the map's bucket lock. On concurrent first-access for the
-     * same method, multiple threads may call {@code asyncLayerProviders()} redundantly,
-     * but {@code computeIfAbsent} guarantees that only one {@code AsyncResolvedPipeline}
-     * is created and cached.</p>
+     * <p>Uses the cached provider snapshot from {@link #providers()}, which is
+     * resolved once per aspect lifetime. The snapshot is then passed into
+     * {@link ConcurrentHashMap#computeIfAbsent} — no subclass code runs inside
+     * the map's bucket lock.</p>
      */
     private AsyncResolvedPipeline resolveAsyncPipeline(Method method) {
-        // Fast path: already cached — no locking, no asyncLayerProviders() call
+        // Fast path: already cached — no locking, no provider access
         AsyncResolvedPipeline pipeline = pipelineCache.get(method);
         if (pipeline != null) {
             return pipeline;
         }
 
-        // Slow path: resolve providers OUTSIDE computeIfAbsent to avoid
-        // calling potentially expensive subclass code inside the bucket lock
-        List<AsyncAspectLayerProvider<Object>> providers = asyncLayerProviders();
+        // Slow path: use the cached provider snapshot (resolved once per
+        // aspect lifetime), then atomically populate the pipeline cache
+        List<AsyncAspectLayerProvider<Object>> providers = providers();
 
         return pipelineCache.computeIfAbsent(
                 method, m -> AsyncResolvedPipeline.resolve(providers, m));
@@ -148,7 +166,7 @@ public abstract class AbstractAsyncPipelineAspect {
                 () -> (CompletionStage<Object>) coreExecutor.proceed();
 
         AsyncJoinPointWrapper<Object> chain = new AsyncAspectPipelineBuilder<Object>()
-                .addProviders(asyncLayerProviders())
+                .addProviders(providers())
                 .buildChain(typedExecutor);
 
         return chain.proceed();
@@ -167,7 +185,7 @@ public abstract class AbstractAsyncPipelineAspect {
     protected AsyncJoinPointWrapper<Object> buildAsyncPipeline(
             JoinPointExecutor<CompletionStage<Object>> coreExecutor) {
         return new AsyncAspectPipelineBuilder<Object>()
-                .addProviders(asyncLayerProviders())
+                .addProviders(providers())
                 .buildChain(coreExecutor);
     }
 
@@ -184,7 +202,7 @@ public abstract class AbstractAsyncPipelineAspect {
     protected AsyncJoinPointWrapper<Object> buildAsyncPipeline(
             JoinPointExecutor<CompletionStage<Object>> coreExecutor, Method method) {
         return new AsyncAspectPipelineBuilder<Object>()
-                .addProviders(asyncLayerProviders(), method)
+                .addProviders(providers(), method)
                 .buildChain(coreExecutor);
     }
 }

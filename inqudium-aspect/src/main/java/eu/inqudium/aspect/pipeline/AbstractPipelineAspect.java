@@ -22,11 +22,12 @@ import java.util.concurrent.ConcurrentHashMap;
  * terminal executor ({@code pjp::proceed}) is created per invocation.</p>
  *
  * <h3>Concurrency contract</h3>
- * <p>{@link #layerProviders()} is always called <strong>outside</strong> of
- * {@link ConcurrentHashMap#computeIfAbsent}, preventing bucket-level contention
- * or deadlocks even if the subclass implementation is expensive or synchronized.
- * The provider list is resolved first, then passed as a captured variable into
- * the atomic cache population.</p>
+ * <p>The provider list from {@link #layerProviders()} is captured once in an
+ * immutable snapshot on first access (benign-race lazy initialization). All
+ * pipeline resolutions use this snapshot — {@code layerProviders()} is never
+ * called inside {@link ConcurrentHashMap#computeIfAbsent}, preventing
+ * bucket-level contention or deadlocks regardless of the subclass
+ * implementation's complexity.</p>
  *
  * <h3>Introspection</h3>
  * <p>For diagnostic and testing purposes, the {@link #buildPipeline} methods still
@@ -53,14 +54,28 @@ public abstract class AbstractPipelineAspect {
             new ConcurrentHashMap<>();
 
     /**
+     * Lazily initialized, immutable snapshot of the provider list returned by
+     * {@link #layerProviders()}. Captured once on first access and reused for
+     * all subsequent pipeline resolutions.
+     *
+     * <p>The benign race on initial write is intentional: multiple threads may
+     * redundantly call {@code layerProviders()} and {@code List.copyOf()}, but
+     * the result is identical and immutable. After the first write, all threads
+     * read the cached snapshot without any synchronization overhead.</p>
+     */
+    private volatile List<AspectLayerProvider<Object>> cachedProviders;
+
+    /**
      * Returns the ordered list of layer providers for this aspect.
      *
-     * <p>Called once per unique {@link Method} encountered — the result is used
-     * to build a {@link ResolvedPipeline} that is then cached. Subsequent calls
-     * for the same method do not invoke this method again.</p>
+     * <p>Called <strong>exactly once</strong> during the lifetime of this aspect
+     * instance — the result is captured in an immutable snapshot and reused for
+     * all pipeline resolutions. The method is never called inside a lock or
+     * inside {@link ConcurrentHashMap#computeIfAbsent}.</p>
      *
-     * <p>Implementations should return quickly and without side effects.
-     * Returning a pre-built, immutable list is strongly recommended:</p>
+     * <p>Implementations may return a new list on each call (the framework
+     * handles deduplication), but returning a pre-built, immutable list is
+     * recommended for clarity:</p>
      * <pre>{@code
      * private final List<AspectLayerProvider<Object>> providers = List.of(
      *     new LoggingLayerProvider(),
@@ -76,6 +91,23 @@ public abstract class AbstractPipelineAspect {
      * @return the layer providers to assemble into the pipeline, never {@code null}
      */
     protected abstract List<AspectLayerProvider<Object>> layerProviders();
+
+    /**
+     * Returns the cached provider snapshot, initializing it on first access.
+     *
+     * <p>Uses a benign-race pattern: the volatile field is read first (fast path),
+     * and only populated via {@link #layerProviders()} + {@link List#copyOf} on
+     * the first access. Concurrent initial callers may redundantly compute the
+     * snapshot, but the result is always identical and immutable.</p>
+     */
+    private List<AspectLayerProvider<Object>> providers() {
+        List<AspectLayerProvider<Object>> snapshot = cachedProviders;
+        if (snapshot == null) {
+            snapshot = List.copyOf(layerProviders());
+            cachedProviders = snapshot;
+        }
+        return snapshot;
+    }
 
     // ======================== Hot path: ResolvedPipeline ========================
 
@@ -118,23 +150,21 @@ public abstract class AbstractPipelineAspect {
     /**
      * Resolves (or retrieves from cache) the pipeline for the given method.
      *
-     * <p>{@link #layerProviders()} is called <strong>before</strong> entering
-     * {@link ConcurrentHashMap#computeIfAbsent}, so the subclass implementation
-     * never runs inside the map's bucket lock. On concurrent first-access for the
-     * same method, multiple threads may call {@code layerProviders()} redundantly,
-     * but {@code computeIfAbsent} guarantees that only one {@code ResolvedPipeline}
-     * is created and cached.</p>
+     * <p>Uses the cached provider snapshot from {@link #providers()}, which is
+     * resolved once per aspect lifetime. The snapshot is then passed into
+     * {@link ConcurrentHashMap#computeIfAbsent} — no subclass code runs inside
+     * the map's bucket lock.</p>
      */
     private ResolvedPipeline resolvePipeline(Method method) {
-        // Fast path: already cached — no locking, no layerProviders() call
+        // Fast path: already cached — no locking, no provider access
         ResolvedPipeline pipeline = pipelineCache.get(method);
         if (pipeline != null) {
             return pipeline;
         }
 
-        // Slow path: resolve providers OUTSIDE computeIfAbsent to avoid
-        // calling potentially expensive subclass code inside the bucket lock
-        List<AspectLayerProvider<Object>> providers = layerProviders();
+        // Slow path: use the cached provider snapshot (resolved once per
+        // aspect lifetime), then atomically populate the pipeline cache
+        List<AspectLayerProvider<Object>> providers = providers();
 
         return pipelineCache.computeIfAbsent(
                 method, m -> ResolvedPipeline.resolve(providers, m));
@@ -156,7 +186,7 @@ public abstract class AbstractPipelineAspect {
      */
     protected Object executeThrough(JoinPointExecutor<Object> coreExecutor) throws Throwable {
         JoinPointWrapper<Object> chain = new AspectPipelineBuilder<Object>()
-                .addProviders(layerProviders())
+                .addProviders(providers())
                 .buildChain(coreExecutor);
 
         return chain.proceed();
@@ -176,7 +206,7 @@ public abstract class AbstractPipelineAspect {
      */
     protected JoinPointWrapper<Object> buildPipeline(JoinPointExecutor<Object> coreExecutor) {
         return new AspectPipelineBuilder<Object>()
-                .addProviders(layerProviders())
+                .addProviders(providers())
                 .buildChain(coreExecutor);
     }
 
@@ -195,7 +225,7 @@ public abstract class AbstractPipelineAspect {
     protected JoinPointWrapper<Object> buildPipeline(JoinPointExecutor<Object> coreExecutor,
                                                      Method method) {
         return new AspectPipelineBuilder<Object>()
-                .addProviders(layerProviders(), method)
+                .addProviders(providers(), method)
                 .buildChain(coreExecutor);
     }
 }
