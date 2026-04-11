@@ -89,20 +89,13 @@ public final class AsyncResolvedPipeline {
     public static AsyncResolvedPipeline resolve(
             List<? extends AsyncAspectLayerProvider<Object>> providers,
             Method method) {
-        List<AsyncLayerAction<Void, Object>> actions = providers.stream()
+        // Resolve applicable providers once — filter and sort in a single pass
+        List<? extends AsyncAspectLayerProvider<Object>> applicable = providers.stream()
                 .filter(p -> p.canHandle(method))
                 .sorted(Comparator.comparingInt(AsyncAspectLayerProvider::order))
-                .map(AsyncAspectLayerProvider::asyncLayerAction)
                 .toList();
 
-        List<String> names = providers.stream()
-                .filter(p -> p.canHandle(method))
-                .sorted(Comparator.comparingInt(AsyncAspectLayerProvider::order))
-                .map(AsyncAspectLayerProvider::layerName)
-                .toList();
-
-        return new AsyncResolvedPipeline(composeFactory(actions),
-                CHAIN_ID_COUNTER.incrementAndGet(), names);
+        return fromProviders(applicable);
     }
 
     /**
@@ -113,18 +106,30 @@ public final class AsyncResolvedPipeline {
      */
     public static AsyncResolvedPipeline resolve(
             List<? extends AsyncAspectLayerProvider<Object>> providers) {
-        List<AsyncLayerAction<Void, Object>> actions = providers.stream()
+        List<? extends AsyncAspectLayerProvider<Object>> sorted = providers.stream()
                 .sorted(Comparator.comparingInt(AsyncAspectLayerProvider::order))
+                .toList();
+
+        return fromProviders(sorted);
+    }
+
+    /**
+     * Builds an {@code AsyncResolvedPipeline} from an already filtered and sorted
+     * provider list. Extracts actions and names in separate passes over the
+     * same list — no redundant filtering or sorting.
+     */
+    private static AsyncResolvedPipeline fromProviders(
+            List<? extends AsyncAspectLayerProvider<Object>> providers) {
+        List<AsyncLayerAction<Void, Object>> actions = providers.stream()
                 .map(AsyncAspectLayerProvider::asyncLayerAction)
                 .toList();
 
         List<String> names = providers.stream()
-                .sorted(Comparator.comparingInt(AsyncAspectLayerProvider::order))
                 .map(AsyncAspectLayerProvider::layerName)
                 .toList();
 
-        return new AsyncResolvedPipeline(composeFactory(actions),
-                CHAIN_ID_COUNTER.incrementAndGet(), names);
+        return new AsyncResolvedPipeline(
+                composeFactory(actions), CHAIN_ID_COUNTER.incrementAndGet(), names);
     }
 
     /**

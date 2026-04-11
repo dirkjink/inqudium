@@ -110,39 +110,13 @@ public final class ResolvedPipeline {
      */
     public static ResolvedPipeline resolve(List<? extends AspectLayerProvider<Object>> providers,
                                            Method method) {
-        // Step 1: Filter and sort — done once
-        List<LayerAction<Void, Object>> actions = providers.stream()
+        // Resolve applicable providers once — filter and sort in a single pass
+        List<? extends AspectLayerProvider<Object>> applicable = providers.stream()
                 .filter(p -> p.canHandle(method))
                 .sorted(Comparator.comparingInt(AspectLayerProvider::order))
-                .map(AspectLayerProvider::layerAction)
                 .toList();
 
-        List<String> names = providers.stream()
-                .filter(p -> p.canHandle(method))
-                .sorted(Comparator.comparingInt(AspectLayerProvider::order))
-                .map(AspectLayerProvider::layerName)
-                .toList();
-
-        // Step 2: Compose chain factory inside-out — done once
-        // Start with identity (terminal passes through unchanged)
-        Function<InternalExecutor<Void, Object>,
-                InternalExecutor<Void, Object>> factory = Function.identity();
-
-        // Walk in reverse: innermost action wraps the terminal first
-        for (int i = actions.size() - 1; i >= 0; i--) {
-            LayerAction<Void, Object> action = actions.get(i);
-            Function<InternalExecutor<Void, Object>,
-                    InternalExecutor<Void, Object>> outer = factory;
-
-            // Each layer wraps the previous factory's result:
-            // newFactory(terminal) = action.execute(..., outerFactory(terminal))
-            factory = terminal -> {
-                InternalExecutor<Void, Object> next = outer.apply(terminal);
-                return (chainId, callId, arg) -> action.execute(chainId, callId, arg, next);
-            };
-        }
-
-        return new ResolvedPipeline(factory, CHAIN_ID_COUNTER.incrementAndGet(), names);
+        return fromProviders(applicable);
     }
 
     /**
@@ -152,18 +126,42 @@ public final class ResolvedPipeline {
      * @return a pre-composed, reusable pipeline
      */
     public static ResolvedPipeline resolve(List<? extends AspectLayerProvider<Object>> providers) {
-        // Use a synthetic "accept-all" method would be complex; instead delegate
-        // with a method that every default canHandle accepts
-        List<LayerAction<Void, Object>> actions = providers.stream()
+        List<? extends AspectLayerProvider<Object>> sorted = providers.stream()
                 .sorted(Comparator.comparingInt(AspectLayerProvider::order))
+                .toList();
+
+        return fromProviders(sorted);
+    }
+
+    /**
+     * Builds a {@code ResolvedPipeline} from an already filtered and sorted
+     * provider list. Extracts actions and names in separate passes over the
+     * same list — no redundant filtering or sorting.
+     */
+    private static ResolvedPipeline fromProviders(
+            List<? extends AspectLayerProvider<Object>> providers) {
+        List<LayerAction<Void, Object>> actions = providers.stream()
                 .map(AspectLayerProvider::layerAction)
                 .toList();
 
         List<String> names = providers.stream()
-                .sorted(Comparator.comparingInt(AspectLayerProvider::order))
                 .map(AspectLayerProvider::layerName)
                 .toList();
 
+        return new ResolvedPipeline(
+                composeFactory(actions), CHAIN_ID_COUNTER.incrementAndGet(), names);
+    }
+
+    /**
+     * Composes the chain factory inside-out from the sorted list of actions.
+     *
+     * <p>Walks the action list in reverse: the innermost action wraps the
+     * terminal first, each outer action wraps the result of the previous
+     * iteration.</p>
+     */
+    private static Function<InternalExecutor<Void, Object>,
+            InternalExecutor<Void, Object>> composeFactory(
+            List<LayerAction<Void, Object>> actions) {
         Function<InternalExecutor<Void, Object>,
                 InternalExecutor<Void, Object>> factory = Function.identity();
 
@@ -171,13 +169,13 @@ public final class ResolvedPipeline {
             LayerAction<Void, Object> action = actions.get(i);
             Function<InternalExecutor<Void, Object>,
                     InternalExecutor<Void, Object>> outer = factory;
+
             factory = terminal -> {
                 InternalExecutor<Void, Object> next = outer.apply(terminal);
                 return (chainId, callId, arg) -> action.execute(chainId, callId, arg, next);
             };
         }
-
-        return new ResolvedPipeline(factory, CHAIN_ID_COUNTER.incrementAndGet(), names);
+        return factory;
     }
 
     // ======================== Execution ========================
