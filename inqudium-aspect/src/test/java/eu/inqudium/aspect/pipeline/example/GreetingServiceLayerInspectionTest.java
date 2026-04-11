@@ -34,12 +34,7 @@ class GreetingServiceLayerInspectionTest {
     @BeforeEach
     void setUp() throws NoSuchMethodException {
         // Set up the aspect with the standard three-layer stack
-        List<AspectLayerProvider<Object>> providers = List.of(
-                new AuthorizationLayerProvider(new ArrayList<>(), true),
-                new LoggingLayerProvider(new ArrayList<>()),
-                new TimingLayerProvider(new ArrayList<>())
-        );
-        aspect = new PipelinedAspect(providers);
+        aspect = new PipelinedAspect();
         service = new GreetingService();
 
         // Resolve the Method references for the two service methods

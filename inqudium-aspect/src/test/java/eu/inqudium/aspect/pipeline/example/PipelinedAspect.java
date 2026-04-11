@@ -11,6 +11,7 @@ import org.aspectj.lang.annotation.Aspect;
 import org.aspectj.lang.reflect.MethodSignature;
 
 import java.lang.reflect.Method;
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -85,7 +86,13 @@ public class PipelinedAspect extends AbstractPipelineAspect {
      * }</pre>
      */
     public PipelinedAspect() {
-        this(List.of());
+        this(
+                List.of(
+                        new AuthorizationLayerProvider(new ArrayList<>(), true),
+                        new LoggingLayerProvider(new ArrayList<>()),
+                        new TimingLayerProvider(new ArrayList<>())
+                )
+        );
     }
 
     /**

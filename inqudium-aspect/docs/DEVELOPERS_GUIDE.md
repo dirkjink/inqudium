@@ -214,8 +214,7 @@ pjp::proceed  ──►  JoinPointWrapper chain  ──►  chain.proceed()
 
 ### Maven Dependency
 
-Add `inqudium-aspect` to your module's POM. The `aspectj-maven-plugin` handles
-compile-time weaving:
+Add `inqudium-aspect` to your **application** module's POM:
 
 ```xml
 <dependency>
@@ -225,8 +224,54 @@ compile-time weaving:
 </dependency>
 ```
 
-The module's own POM already declares `aspectjrt`, `aspectjweaver`, `inqudium-core`,
-and `inqudium-imperative` as transitive dependencies.
+The module declares `aspectjrt`, `aspectjweaver`, `inqudium-core`, and
+`inqudium-imperative` as transitive dependencies.
+
+**Compile-time weaving** must be configured in the **application module**
+(not in `inqudium-aspect` itself — it is a library). Add the
+`aspectj-maven-plugin` to your application's POM:
+
+```xml
+<plugin>
+    <groupId>dev.aspectj</groupId>
+    <artifactId>aspectj-maven-plugin</artifactId>
+    <version>1.14.1</version>
+    <configuration>
+        <complianceLevel>${maven.compiler.release}</complianceLevel>
+        <source>${maven.compiler.release}</source>
+        <target>${maven.compiler.release}</target>
+        <showWeaveInfo>true</showWeaveInfo>
+        <aspectLibraries>
+            <!-- Tell the weaver where to find the @Aspect classes -->
+            <aspectLibrary>
+                <groupId>eu.inqudium</groupId>
+                <artifactId>inqudium-aspect</artifactId>
+            </aspectLibrary>
+        </aspectLibraries>
+    </configuration>
+    <executions>
+        <execution>
+            <goals>
+                <goal>compile</goal>
+                <goal>test-compile</goal>
+            </goals>
+        </execution>
+    </executions>
+    <dependencies>
+        <dependency>
+            <groupId>org.aspectj</groupId>
+            <artifactId>aspectjtools</artifactId>
+            <version>1.9.22.1</version>
+        </dependency>
+    </dependencies>
+</plugin>
+```
+
+> **Why not in the library?** The library module provides the `@Aspect` classes
+> and the pipeline infrastructure. CTW is the application's responsibility —
+> it decides which classes get woven. This also means the library's own unit
+> tests run without weaving, testing the pipeline logic in isolation via
+> `aspect.execute()` with injected providers.
 
 ### A Minimal Aspect in Five Minutes
 
@@ -304,6 +349,25 @@ public class OrderService {
 
 That's it. Every call to `placeOrder()` now traverses the logging layer
 automatically.
+
+> **Important: AspectJ requires a no-arg constructor.** AspectJ instantiates
+> singleton aspects via `aspectOf()`, which calls the no-arg constructor. If
+> your aspect accepts providers via a constructor parameter (e.g. for testing),
+> you must also provide a no-arg constructor:
+> ```java
+> // Required by AspectJ's singleton instantiation
+> public ResilienceAspect() {
+>     this(List.of(new LoggingLayerProvider()));
+> }
+>
+> // Used by tests for injectable providers
+> public ResilienceAspect(List<AspectLayerProvider<Object>> providers) {
+>     this.providers = providers;
+> }
+> ```
+> The field-initializer pattern shown above (`providers = List.of(...)`) avoids
+> this issue entirely because Java runs field initializers during the default
+> constructor.
 
 ---
 
@@ -527,6 +591,16 @@ public class PipelinedAspect extends AbstractPipelineAspect {
 
     private final List<AspectLayerProvider<Object>> providers;
 
+    // AspectJ singleton — wires the production layer stack
+    public PipelinedAspect() {
+        this(List.of(
+            new AuthorizationLayerProvider(),
+            new LoggingLayerProvider(),
+            new TimingLayerProvider()
+        ));
+    }
+
+    // Test constructor — injectable providers with trace recording
     public PipelinedAspect(List<AspectLayerProvider<Object>> providers) {
         this.providers = providers;
     }
@@ -1036,6 +1110,17 @@ public class PipelinedAspect extends AbstractPipelineAspect {
 
     private final List<AspectLayerProvider<Object>> providers;
 
+    // AspectJ singleton — wires the production layer stack.
+    // PipelinedAspect.aspectOf() returns this instance for diagnostics.
+    public PipelinedAspect() {
+        this(List.of(
+            new AuthorizationLayerProvider(),
+            new LoggingLayerProvider(),
+            new TimingLayerProvider()
+        ));
+    }
+
+    // Test constructor — injectable providers with trace recording
     public PipelinedAspect(List<AspectLayerProvider<Object>> providers) {
         this.providers = providers;
     }
@@ -1399,3 +1484,40 @@ Accepting `List<AspectLayerProvider<Object>>` in the constructor makes the
 aspect testable without AspectJ weaving. Tests can inject providers with trace
 lists, mock authorization, or custom behavior — then call `execute()` directly
 with a lambda standing in for `pjp::proceed`.
+
+**No-arg constructor requirement:** AspectJ's singleton instantiation model
+(`aspectOf()`) requires a no-arg constructor. If your aspect only has a
+parameterized constructor, AspectJ throws `NoAspectBoundException` at
+runtime. The no-arg constructor should wire the **production** layer stack —
+this makes the singleton immediately usable for both execution and diagnostics:
+
+```java
+// AspectJ calls this via aspectOf() — wires the production layer stack.
+// PipelinedAspect.aspectOf().getResolvedPipeline(method) works out of the box.
+public MyAspect() {
+    this(List.of(new LoggingLayerProvider(), new TimingLayerProvider()));
+}
+
+// Tests call this with injectable trace-enabled providers
+public MyAspect(List<AspectLayerProvider<Object>> providers) {
+    this.providers = providers;
+}
+```
+
+Alternatively, use the field-initializer pattern to avoid the issue entirely:
+
+```java
+@Aspect
+public class MyAspect extends AbstractPipelineAspect {
+    // Field initializer runs during the implicit no-arg constructor
+    private final List<AspectLayerProvider<Object>> providers = List.of(
+        new LoggingLayerProvider(),
+        new TimingLayerProvider()
+    );
+
+    @Override
+    protected List<AspectLayerProvider<Object>> layerProviders() {
+        return providers;
+    }
+}
+```
