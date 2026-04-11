@@ -86,8 +86,7 @@ public abstract class InqTrafficshaperConfigBuilder
         InqElementCommonConfig common =
                 new InqElementCommonConfig(name,
                         InqElementType.BULKHEAD,
-                        eventPublisher,
-                        enableExceptionOptimization);
+                        eventPublisher);
 
         InqTrafficshaperConfig config = new InqTrafficshaperConfig(
                 this.generalConfig,

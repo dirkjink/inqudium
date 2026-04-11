@@ -86,8 +86,7 @@ public abstract class InqRatelimiterConfigBuilder
         InqElementCommonConfig common =
                 new InqElementCommonConfig(name,
                         InqElementType.BULKHEAD,
-                        eventPublisher,
-                        enableExceptionOptimization);
+                        eventPublisher);
 
         InqRatelimiterConfig config = new InqRatelimiterConfig(
                 this.generalConfig,

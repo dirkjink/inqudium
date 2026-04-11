@@ -27,11 +27,6 @@ public record InqTrafficshaperConfig(
     }
 
     @Override
-    public Boolean enableExceptionOptimization() {
-        return common.enableExceptionOptimization();
-    }
-
-    @Override
     public InqTrafficshaperConfig self() {
         return this;
     }

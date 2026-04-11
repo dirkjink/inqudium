@@ -10,9 +10,10 @@ public class InqImperativeCircuitBreakerConfigTest {
     @Test
     public void test() {
         InqConfig config = InqConfig.configure()
-                .general()
-                .with(circuitBreaker(), c -> c
+                .general(c -> c
                         .enableExceptionOptimization(true)
+                )
+                .with(circuitBreaker(), c -> c
                         .successThresholdInHalfOpen(5)
                         .permittedCallsInHalfOpen(10)
                         .name("circuitBreaker-1")

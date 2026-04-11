@@ -27,11 +27,6 @@ public record InqTimelimiterConfig(
     }
 
     @Override
-    public Boolean enableExceptionOptimization() {
-        return common.enableExceptionOptimization();
-    }
-
-    @Override
     public InqTimelimiterConfig self() {
         return this;
     }

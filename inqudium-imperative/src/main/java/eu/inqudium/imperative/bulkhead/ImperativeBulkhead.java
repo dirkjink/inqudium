@@ -79,7 +79,6 @@ public final class ImperativeBulkhead<A, R> implements Bulkhead<A, R> {
     private final Duration maxWaitDuration;
     private final InqNanoTimeSource nanoTimeSource;
     private final InqClock clock;
-    private final boolean enableExceptionOptimization;
 
     public ImperativeBulkhead(InqImperativeBulkheadConfig config, BlockingBulkheadStrategy strategy) {
         Objects.requireNonNull(config, "config must not be null");
@@ -93,7 +92,6 @@ public final class ImperativeBulkhead<A, R> implements Bulkhead<A, R> {
         this.nanoTimeSource = config.general().nanoTimesource();
         this.eventPublisher = InqEventPublisher.create(name, InqElementType.BULKHEAD);
         this.clock = config.general().clock();
-        this.enableExceptionOptimization = config.enableExceptionOptimization();
     }
 
     // ======================== Decorator (around-advice) ========================
@@ -157,12 +155,19 @@ public final class ImperativeBulkhead<A, R> implements Bulkhead<A, R> {
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             handleAcquireFailure(chainId, callId, startWait, null);
-            throw new InqBulkheadInterruptedException(chainId, callId, name, enableExceptionOptimization);
+            throw new InqBulkheadInterruptedException(chainId,
+                    callId,
+                    name,
+                    config.general().enableExceptionOptimization());
         }
 
         if (rejection != null) {
             handleAcquireFailure(chainId, callId, startWait, rejection);
-            throw new InqBulkheadFullException(chainId, callId, name, rejection, enableExceptionOptimization);
+            throw new InqBulkheadFullException(chainId,
+                    callId,
+                    name,
+                    rejection,
+                    config.general().enableExceptionOptimization());
         }
 
         // Diagnostic events (acquire) — no-op in standard mode
@@ -227,12 +232,19 @@ public final class ImperativeBulkhead<A, R> implements Bulkhead<A, R> {
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             handleAcquireFailure(chainId, callId, startWait, null);
-            throw new InqBulkheadInterruptedException(chainId, callId, name, enableExceptionOptimization);
+            throw new InqBulkheadInterruptedException(chainId,
+                    callId,
+                    name,
+                    config.general().enableExceptionOptimization());
         }
 
         if (rejection != null) {
             handleAcquireFailure(chainId, callId, startWait, rejection);
-            throw new InqBulkheadFullException(chainId, callId, name, rejection, enableExceptionOptimization);
+            throw new InqBulkheadFullException(chainId,
+                    callId,
+                    name,
+                    rejection,
+                    config.general().enableExceptionOptimization());
         }
 
         handleAcquireSuccess(chainId, callId, startWait);

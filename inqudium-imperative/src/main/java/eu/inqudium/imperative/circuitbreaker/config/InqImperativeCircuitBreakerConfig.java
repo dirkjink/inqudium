@@ -31,9 +31,4 @@ public record InqImperativeCircuitBreakerConfig(
     public InqEventPublisher eventPublisher() {
         return circuitBreaker.eventPublisher();
     }
-
-    @Override
-    public Boolean enableExceptionOptimization() {
-        return circuitBreaker.enableExceptionOptimization();
-    }
 }

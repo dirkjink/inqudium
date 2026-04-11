@@ -238,16 +238,6 @@ class InqImperativeCircuitBreakerConfigBuilderTest {
         }
 
         @Test
-        void enable_exception_optimization_set_to_false_is_propagated() {
-            // When
-            var config = buildWith(b -> b.name("exc-opt").balanced()
-                    .enableExceptionOptimization(false));
-
-            // Then
-            assertThat(config.circuitBreaker().enableExceptionOptimization()).isFalse();
-        }
-
-        @Test
         void custom_event_publisher_is_propagated() {
             // Given
             InqEventPublisher publisher = InqEventPublisher.create("pub", InqElementType.BULKHEAD);
@@ -351,16 +341,6 @@ class InqImperativeCircuitBreakerConfigBuilderTest {
         }
 
         @Test
-        void enable_exception_optimization_is_delegated_from_circuit_breaker_config() {
-            // Given
-            var config = buildWith(b -> b.name("opt-test"));
-
-            // When / Then
-            assertThat(config.enableExceptionOptimization())
-                    .isEqualTo(config.circuitBreaker().enableExceptionOptimization());
-        }
-
-        @Test
         void self_returns_the_same_instance() {
             // Given
             var config = buildWith(b -> b.name("self-test"));
@@ -395,13 +375,6 @@ class InqImperativeCircuitBreakerConfigBuilderTest {
                     .isInstanceOf(IllegalArgumentException.class)
                     .hasMessageContaining("must not be blank");
         }
-
-        @Test
-        void enable_exception_optimization_with_null_throws_null_pointer_exception() {
-            // Given / When / Then
-            assertThatThrownBy(() -> buildWith(b -> b.name("test").enableExceptionOptimization(null)))
-                    .isInstanceOf(NullPointerException.class);
-        }
     }
 
     @Nested
@@ -417,8 +390,7 @@ class InqImperativeCircuitBreakerConfigBuilderTest {
                     .waitDurationNanos(Duration.ofSeconds(10).toNanos())
                     .successThresholdInHalfOpen(4)
                     .permittedCallsInHalfOpen(6)
-                    .recordFailurePredicate(t -> true)
-                    .enableExceptionOptimization(true));
+                    .recordFailurePredicate(t -> true));
 
             // Then
             assertThat(config).isNotNull();

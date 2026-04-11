@@ -86,8 +86,7 @@ public abstract class InqRetryConfigBuilder
         InqElementCommonConfig common =
                 new InqElementCommonConfig(name,
                         InqElementType.BULKHEAD,
-                        eventPublisher,
-                        enableExceptionOptimization);
+                        eventPublisher);
 
         InqRetryConfig config = new InqRetryConfig(
                 this.generalConfig,

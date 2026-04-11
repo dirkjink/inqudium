@@ -99,14 +99,6 @@ public record InqCircuitBreakerConfig(
         return common.eventPublisher();
     }
 
-    /**
-     * Delegates to the common config's exception optimization flag.
-     */
-    @Override
-    public Boolean enableExceptionOptimization() {
-        return common.enableExceptionOptimization();
-    }
-
     @Override
     public InqCircuitBreakerConfig self() {
         return this;

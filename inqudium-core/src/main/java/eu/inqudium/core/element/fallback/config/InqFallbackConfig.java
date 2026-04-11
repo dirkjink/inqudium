@@ -27,11 +27,6 @@ public record InqFallbackConfig(
     }
 
     @Override
-    public Boolean enableExceptionOptimization() {
-        return common.enableExceptionOptimization();
-    }
-
-    @Override
     public InqFallbackConfig self() {
         return this;
     }

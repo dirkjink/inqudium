@@ -86,8 +86,7 @@ public abstract class InqTimelimiterConfigBuilder
         InqElementCommonConfig common =
                 new InqElementCommonConfig(name,
                         InqElementType.BULKHEAD,
-                        eventPublisher,
-                        enableExceptionOptimization);
+                        eventPublisher);
 
         InqTimelimiterConfig config = new InqTimelimiterConfig(
                 this.generalConfig,

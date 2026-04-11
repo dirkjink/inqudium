@@ -27,11 +27,6 @@ public record InqRatelimiterConfig(
     }
 
     @Override
-    public Boolean enableExceptionOptimization() {
-        return common.enableExceptionOptimization();
-    }
-
-    @Override
     public InqRatelimiterConfig self() {
         return this;
     }

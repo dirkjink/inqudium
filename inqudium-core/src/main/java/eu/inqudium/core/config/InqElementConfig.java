@@ -45,13 +45,4 @@ public interface InqElementConfig {
      * @return the event publisher; never {@code null} after inference
      */
     InqEventPublisher eventPublisher();
-
-    /**
-     * Whether exception handling optimization is enabled for this element.
-     * When {@code true}, the framework may skip filling in stack traces for
-     * internally generated exceptions to reduce overhead.
-     *
-     * @return {@code true} if optimization is enabled; may be {@code null} before inference
-     */
-    Boolean enableExceptionOptimization();
 }

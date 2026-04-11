@@ -51,6 +51,7 @@ class ImperativeCircuitBreakerSlidingWindowTest {
             timeSource,
             null,
             LoggerFactory.NO_OP_LOGGER_FACTORY,
+            true,
             Map.of()
     );
 
@@ -72,7 +73,9 @@ class ImperativeCircuitBreakerSlidingWindowTest {
 
         return new InqCircuitBreakerConfig(
                 generalConfig,
-                new InqElementCommonConfig("test-cb", InqElementType.CIRCUIT_BREAKER, null, null),
+                new InqElementCommonConfig("test-cb",
+                        InqElementType.CIRCUIT_BREAKER,
+                        null),
                 WAIT_DURATION.toNanos(),
                 successThreshold,
                 permittedInHalfOpen,
@@ -111,7 +114,7 @@ class ImperativeCircuitBreakerSlidingWindowTest {
 
         return new InqCircuitBreakerConfig(
                 generalConfig,
-                new InqElementCommonConfig(name, InqElementType.CIRCUIT_BREAKER, null, null),
+                new InqElementCommonConfig(name, InqElementType.CIRCUIT_BREAKER, null),
                 WAIT_DURATION.toNanos(),
                 successThreshold,
                 permittedInHalfOpen,

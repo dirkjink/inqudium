@@ -39,6 +39,7 @@ public record GeneralConfig(
         InqNanoTimeSource nanoTimesource,
         InqCompatibility compatibility,
         LoggerFactory loggerFactory,
+        boolean enableExceptionOptimization,
         Map<Class<?>, ConfigExtension<?>> extensions
 ) {
 
@@ -48,6 +49,7 @@ public record GeneralConfig(
                 System::nanoTime,
                 null,
                 LoggerFactory.NO_OP_LOGGER_FACTORY,
+                true,
                 Map.of()
         );
     }

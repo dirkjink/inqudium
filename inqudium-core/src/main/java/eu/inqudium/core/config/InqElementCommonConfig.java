@@ -41,8 +41,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 public record InqElementCommonConfig(
         String name,
         InqElementType elementType,
-        InqEventPublisher eventPublisher,
-        Boolean enableExceptionOptimization
+        InqEventPublisher eventPublisher
 ) implements InqElementConfig, ConfigExtension<InqElementCommonConfig> {
 
     /**
@@ -72,16 +71,9 @@ public record InqElementCommonConfig(
             eventPublisherInference = InqEventPublisher.create(nameInference, elementType);
         }
 
-        // Default exception optimization to enabled
-        Boolean enableExceptionOptimizationInference = enableExceptionOptimization;
-        if (enableExceptionOptimization == null) {
-            enableExceptionOptimizationInference = true;
-        }
-
         return new InqElementCommonConfig(nameInference,
                 elementType,
-                eventPublisherInference,
-                enableExceptionOptimizationInference);
+                eventPublisherInference);
     }
 
     @Override

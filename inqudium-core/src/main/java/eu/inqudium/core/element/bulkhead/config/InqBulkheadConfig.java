@@ -36,11 +36,6 @@ public record InqBulkheadConfig(
     }
 
     @Override
-    public Boolean enableExceptionOptimization() {
-        return common.enableExceptionOptimization();
-    }
-
-    @Override
     public InqBulkheadConfig self() {
         return this;
     }

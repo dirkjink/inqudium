@@ -27,11 +27,6 @@ public record InqRetryConfig(
     }
 
     @Override
-    public Boolean enableExceptionOptimization() {
-        return common.enableExceptionOptimization();
-    }
-
-    @Override
     public InqRetryConfig self() {
         return this;
     }

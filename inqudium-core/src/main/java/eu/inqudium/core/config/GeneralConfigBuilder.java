@@ -41,6 +41,20 @@ public class GeneralConfigBuilder {
     private InqNanoTimeSource nanoTimeSource = InqNanoTimeSource.system();
     private InqCompatibility compatibility = InqCompatibility.ofDefaults();
     private LoggerFactory loggerFactory = LoggerFactory.NO_OP_LOGGER_FACTORY;
+    private Boolean enableExceptionOptimization;
+
+
+    /**
+     * Enables or disables exception handling optimization.
+     *
+     * @param enableExceptionOptimization {@code true} to enable, {@code false} to disable
+     * @return this builder for chaining
+     * @throws NullPointerException if the argument is null
+     */
+    public GeneralConfigBuilder enableExceptionOptimization(Boolean enableExceptionOptimization) {
+        this.enableExceptionOptimization = enableExceptionOptimization;
+        return this;
+    }
 
     /**
      * Sets the wall-clock implementation. Used for human-readable timestamps in logging
@@ -107,11 +121,13 @@ public class GeneralConfigBuilder {
      */
     GeneralConfig build(Map<Class<?>, ConfigExtension<?>> extensions) {
         Objects.requireNonNull(extensions, "extensions map must not be null");
+        if (enableExceptionOptimization == null) enableExceptionOptimization = true;
         return new GeneralConfig(
                 clock,
                 nanoTimeSource,
                 compatibility,
                 loggerFactory,
+                enableExceptionOptimization,
                 extensions
         );
     }

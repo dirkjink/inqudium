@@ -80,7 +80,6 @@ public abstract class InqCircuitBreakerConfigBuilder
     private String name;
     private InqEventPublisher eventPublisher;
     private Long waitDurationNanos;
-    private Boolean enableExceptionOptimization;
     private Integer successThresholdInHalfOpen;
     private Integer permittedCallsInHalfOpen;
     private Duration waitDurationInOpenState;
@@ -324,19 +323,6 @@ public abstract class InqCircuitBreakerConfigBuilder
     }
 
     /**
-     * Enables or disables exception handling optimization for this circuit breaker.
-     *
-     * @param enableExceptionOptimization {@code true} to enable, {@code false} to disable
-     * @return this builder for chaining
-     * @throws NullPointerException if the argument is null
-     */
-    public B enableExceptionOptimization(Boolean enableExceptionOptimization) {
-        Objects.requireNonNull(enableExceptionOptimization, "enableExceptionOptimization must not be null");
-        this.enableExceptionOptimization = enableExceptionOptimization;
-        return self();
-    }
-
-    /**
      * Sets a custom event publisher for this circuit breaker. If not set, a default
      * publisher is derived from the element name and type during configuration inference.
      *
@@ -375,8 +361,7 @@ public abstract class InqCircuitBreakerConfigBuilder
         InqElementCommonConfig common =
                 new InqElementCommonConfig(name,
                         InqElementType.BULKHEAD,
-                        eventPublisher,
-                        enableExceptionOptimization);
+                        eventPublisher);
 
         InqCircuitBreakerConfig config = new InqCircuitBreakerConfig(
                 generalConfig,

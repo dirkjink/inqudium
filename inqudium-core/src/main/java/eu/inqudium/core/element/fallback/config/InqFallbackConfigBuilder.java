@@ -86,8 +86,7 @@ public abstract class InqFallbackConfigBuilder
         InqElementCommonConfig common =
                 new InqElementCommonConfig(name,
                         InqElementType.BULKHEAD,
-                        eventPublisher,
-                        enableExceptionOptimization);
+                        eventPublisher);
 
         InqFallbackConfig config = new InqFallbackConfig(
                 this.generalConfig,
