@@ -1,13 +1,13 @@
 package eu.inqudium.aspect.pipeline;
 
 import eu.inqudium.core.pipeline.JoinPointExecutor;
-import eu.inqudium.core.pipeline.Throws;
 import eu.inqudium.imperative.core.pipeline.AsyncLayerAction;
 import eu.inqudium.imperative.core.pipeline.InternalAsyncExecutor;
 
 import java.lang.reflect.Method;
 import java.util.Comparator;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.atomic.AtomicLong;
@@ -146,21 +146,39 @@ public final class AsyncResolvedPipeline {
     /**
      * Executes the pre-composed async pipeline with the given join point executor.
      *
-     * <p>The executor is expected to return a {@link CompletionStage} at runtime.
-     * Checked exceptions from the synchronous start phase are transported via
-     * {@link CompletionException} and unwrapped before re-throwing.</p>
+     * <p>This method <strong>never throws</strong>. All exceptions — whether from the
+     * synchronous start phase or the asynchronous completion phase — are delivered
+     * through the returned {@link CompletionStage}. This guarantees a uniform error
+     * channel for callers:</p>
+     *
+     * <ul>
+     *   <li><strong>Synchronous failures</strong> (e.g. a layer's start-phase throws
+     *       before creating a {@code CompletionStage}) are caught and wrapped in a
+     *       {@link java.util.concurrent.CompletableFuture#failedFuture failed future}.</li>
+     *   <li><strong>Asynchronous failures</strong> (e.g. the downstream
+     *       {@code CompletionStage} completes exceptionally) propagate naturally
+     *       through the returned stage.</li>
+     * </ul>
+     *
+     * <p>This eliminates a common pitfall for {@link AsyncAspectLayerProvider}
+     * implementors: a {@code throw new IllegalArgumentException()} in a layer's
+     * start phase is delivered through the same channel as a
+     * {@code CompletableFuture.failedFuture(new IllegalArgumentException())},
+     * so the caller can handle both uniformly via {@code .exceptionally()},
+     * {@code .handle()}, or {@code .whenComplete()}.</p>
      *
      * @param coreExecutor the join point execution (typically {@code pjp::proceed}),
-     *                     whose return value is cast to {@code CompletionStage<Object>}
-     * @return a {@link CompletionStage} carrying the result of the pipeline
-     * @throws Throwable any synchronous exception from the start phase
+     *                     whose return value must be a {@link CompletionStage}
+     * @return a {@link CompletionStage} carrying the result or the failure —
+     *         never {@code null}, never throws
      */
     @SuppressWarnings("unchecked")
-    public CompletionStage<Object> execute(JoinPointExecutor<Object> coreExecutor)
-            throws Throwable {
+    public CompletionStage<Object> execute(JoinPointExecutor<Object> coreExecutor) {
         long callId = callIdCounter.incrementAndGet();
 
-        // Terminal: invokes pjp::proceed and validates the return type
+        // Terminal: invokes pjp::proceed and validates the return type.
+        // Exceptions here end up in the synchronous start phase and are
+        // caught by the outer try-catch below.
         InternalAsyncExecutor<Void, Object> terminal = (cid, caid, arg) -> {
             Object result;
             try {
@@ -187,11 +205,13 @@ public final class AsyncResolvedPipeline {
         try {
             return chainFactory.apply(terminal).executeAsync(chainId, callId, null);
         } catch (CompletionException e) {
+            // Unwrap transported checked exceptions from the terminal
             Throwable cause = e.getCause();
-            if (cause == null) {
-                throw e;
-            }
-            throw Throws.rethrow(cause);
+            return CompletableFuture.failedFuture(cause != null ? cause : e);
+        } catch (Throwable e) {
+            // Any synchronous exception from a layer's start phase is
+            // converted to a failed future — uniform error channel
+            return CompletableFuture.failedFuture(e);
         }
     }
 

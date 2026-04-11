@@ -122,34 +122,40 @@ class AbstractAsyncPipelineAspectTest {
         }
 
         @Test
-        void propagates_synchronous_runtime_exception_from_the_core() {
+        void propagates_synchronous_runtime_exception_through_the_stage() {
             // Given
             AbstractAsyncPipelineAspect aspect = asyncAspectWith(List.of(
                     asyncProvider("LAYER", 10, AsyncLayerAction.passThrough())
             ));
 
-            // When / Then — core throws synchronously before creating a stage
-            assertThatThrownBy(() -> aspect.executeThroughAsync(() -> {
+            // When — core throws synchronously before creating a stage;
+            //        the exception is wrapped in a failed CompletionStage
+            CompletionStage<Object> stage = aspect.executeThroughAsync(() -> {
                 throw new IllegalStateException("sync failure");
-            }))
-                    .isInstanceOf(IllegalStateException.class)
-                    .hasMessage("sync failure");
+            });
+
+            // Then — uniform error channel: sync failure surfaces via the stage
+            assertThatThrownBy(() -> stage.toCompletableFuture().join())
+                    .hasCauseInstanceOf(IllegalStateException.class)
+                    .hasRootCauseMessage("sync failure");
         }
 
         @Test
-        void propagates_checked_exception_from_the_core_unwrapped() {
+        void propagates_checked_exception_from_the_core_through_the_stage() {
             // Given
             AbstractAsyncPipelineAspect aspect = asyncAspectWith(List.of(
                     asyncProvider("LAYER", 10, AsyncLayerAction.passThrough())
             ));
 
-            // When / Then
-            assertThatThrownBy(() -> aspect.executeThroughAsync(() -> {
+            // When — core throws a checked exception synchronously
+            CompletionStage<Object> stage = aspect.executeThroughAsync(() -> {
                 throw new Exception("checked failure");
-            }))
-                    .isInstanceOf(Exception.class)
-                    .hasMessage("checked failure")
-                    .isNotInstanceOf(RuntimeException.class);
+            });
+
+            // Then — checked exception also surfaces via the stage, not thrown directly
+            assertThatThrownBy(() -> stage.toCompletableFuture().join())
+                    .hasCauseInstanceOf(Exception.class)
+                    .hasRootCauseMessage("checked failure");
         }
 
         @Test

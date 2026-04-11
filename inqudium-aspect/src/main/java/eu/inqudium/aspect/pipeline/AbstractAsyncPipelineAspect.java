@@ -6,6 +6,7 @@ import eu.inqudium.imperative.core.pipeline.AsyncJoinPointWrapper;
 import java.lang.reflect.Method;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 
 /**
@@ -98,15 +99,18 @@ public abstract class AbstractAsyncPipelineAspect {
      * cached. On subsequent invocations, the cached pipeline is reused — only
      * the terminal executor is created per call.</p>
      *
+     * <p>All exceptions — including synchronous failures from a layer's start
+     * phase — are delivered through the returned {@link CompletionStage}, never
+     * thrown directly. This provides a uniform error channel for callers.</p>
+     *
      * @param coreExecutor the join point execution (typically {@code pjp::proceed}),
      *                     expected to return a {@link CompletionStage}
      * @param method       the target method, used as cache key and for
      *                     {@code canHandle} filtering on first resolution
-     * @return a {@link CompletionStage} carrying the result
-     * @throws Throwable any synchronous exception from the start phase
+     * @return a {@link CompletionStage} carrying the result or failure
      */
     protected CompletionStage<Object> executeThroughAsync(
-            JoinPointExecutor<Object> coreExecutor, Method method) throws Throwable {
+            JoinPointExecutor<Object> coreExecutor, Method method) {
         return resolveAsyncPipeline(method).execute(coreExecutor);
     }
 
@@ -153,33 +157,39 @@ public abstract class AbstractAsyncPipelineAspect {
      * no {@link Method} key is available. Each call builds a fresh chain.
      * Prefer {@link #executeThroughAsync(JoinPointExecutor, Method)} on hot paths.</p>
      *
+     * <p>Like the hot path, all exceptions are delivered through the returned
+     * {@link CompletionStage}, never thrown directly.</p>
+     *
      * @param coreExecutor the join point execution, expected to return a
      *                     {@link CompletionStage}
-     * @return a {@link CompletionStage} carrying the result
-     * @throws Throwable any synchronous exception from the start phase
+     * @return a {@link CompletionStage} carrying the result or failure
      */
     @SuppressWarnings("unchecked")
     protected CompletionStage<Object> executeThroughAsync(
-            JoinPointExecutor<Object> coreExecutor) throws Throwable {
+            JoinPointExecutor<Object> coreExecutor) {
 
-        JoinPointExecutor<CompletionStage<Object>> typedExecutor = () -> {
-            Object result = coreExecutor.proceed();
-            if (result instanceof CompletionStage<?> stage) {
-                return (CompletionStage<Object>) stage;
-            }
-            throw new IllegalStateException(
-                    "AsyncPipelineAspect expected the proxied method to return a "
-                            + "CompletionStage, but received: "
-                            + (result == null ? "null" : result.getClass().getName())
-                            + ". Ensure this aspect is only applied to methods returning "
-                            + "CompletionStage or CompletableFuture.");
-        };
+        try {
+            JoinPointExecutor<CompletionStage<Object>> typedExecutor = () -> {
+                Object result = coreExecutor.proceed();
+                if (result instanceof CompletionStage<?> stage) {
+                    return (CompletionStage<Object>) stage;
+                }
+                throw new IllegalStateException(
+                        "AsyncPipelineAspect expected the proxied method to return a "
+                                + "CompletionStage, but received: "
+                                + (result == null ? "null" : result.getClass().getName())
+                                + ". Ensure this aspect is only applied to methods returning "
+                                + "CompletionStage or CompletableFuture.");
+            };
 
-        AsyncJoinPointWrapper<Object> chain = new AsyncAspectPipelineBuilder<Object>()
-                .addProviders(providers())
-                .buildChain(typedExecutor);
+            AsyncJoinPointWrapper<Object> chain = new AsyncAspectPipelineBuilder<Object>()
+                    .addProviders(providers())
+                    .buildChain(typedExecutor);
 
-        return chain.proceed();
+            return chain.proceed();
+        } catch (Throwable e) {
+            return CompletableFuture.failedFuture(e);
+        }
     }
 
     // ======================== Introspection (cold path) ========================
