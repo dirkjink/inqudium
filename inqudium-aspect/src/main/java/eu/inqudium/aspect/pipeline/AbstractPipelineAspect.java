@@ -21,9 +21,12 @@ import java.util.concurrent.ConcurrentHashMap;
  * Subsequent calls for the same method reuse the pre-composed chain — only the
  * terminal executor ({@code pjp::proceed}) is created per invocation.</p>
  *
- * <p>This mirrors the optimization used by {@code SyncDispatchExtension} in the
- * proxy module: the chain structure is fixed at resolution time, and the per-call
- * cost is reduced to a single lambda creation plus the chain traversal itself.</p>
+ * <h3>Concurrency contract</h3>
+ * <p>{@link #layerProviders()} is always called <strong>outside</strong> of
+ * {@link ConcurrentHashMap#computeIfAbsent}, preventing bucket-level contention
+ * or deadlocks even if the subclass implementation is expensive or synchronized.
+ * The provider list is resolved first, then passed as a captured variable into
+ * the atomic cache population.</p>
  *
  * <h3>Introspection</h3>
  * <p>For diagnostic and testing purposes, the {@link #buildPipeline} methods still
@@ -42,8 +45,7 @@ public abstract class AbstractPipelineAspect {
     /**
      * Cache of pre-composed pipelines, keyed by the target {@link Method}.
      *
-     * <p>Populated lazily on first access per method via
-     * {@link ConcurrentHashMap#computeIfAbsent}. The cached
+     * <p>Populated lazily on first access per method. The cached
      * {@link ResolvedPipeline} is immutable and thread-safe, so no further
      * synchronization is needed after initial resolution.</p>
      */
@@ -53,9 +55,23 @@ public abstract class AbstractPipelineAspect {
     /**
      * Returns the ordered list of layer providers for this aspect.
      *
-     * <p>Providers are sorted by {@link AspectLayerProvider#order()} during
-     * chain assembly. Implementations may return a cached, immutable list
-     * if the layer configuration is static.</p>
+     * <p>Called once per unique {@link Method} encountered — the result is used
+     * to build a {@link ResolvedPipeline} that is then cached. Subsequent calls
+     * for the same method do not invoke this method again.</p>
+     *
+     * <p>Implementations should return quickly and without side effects.
+     * Returning a pre-built, immutable list is strongly recommended:</p>
+     * <pre>{@code
+     * private final List<AspectLayerProvider<Object>> providers = List.of(
+     *     new LoggingLayerProvider(),
+     *     new TimingLayerProvider()
+     * );
+     *
+     * @Override
+     * protected List<AspectLayerProvider<Object>> layerProviders() {
+     *     return providers;
+     * }
+     * }</pre>
      *
      * @return the layer providers to assemble into the pipeline, never {@code null}
      */
@@ -80,10 +96,7 @@ public abstract class AbstractPipelineAspect {
      */
     protected Object executeThrough(JoinPointExecutor<Object> coreExecutor,
                                     Method method) throws Throwable {
-        ResolvedPipeline pipeline = pipelineCache.computeIfAbsent(
-                method, m -> ResolvedPipeline.resolve(layerProviders(), m));
-
-        return pipeline.execute(coreExecutor);
+        return resolvePipeline(method).execute(coreExecutor);
     }
 
     /**
@@ -99,8 +112,32 @@ public abstract class AbstractPipelineAspect {
      * @return the pre-composed pipeline for the method
      */
     protected ResolvedPipeline resolvedPipeline(Method method) {
+        return resolvePipeline(method);
+    }
+
+    /**
+     * Resolves (or retrieves from cache) the pipeline for the given method.
+     *
+     * <p>{@link #layerProviders()} is called <strong>before</strong> entering
+     * {@link ConcurrentHashMap#computeIfAbsent}, so the subclass implementation
+     * never runs inside the map's bucket lock. On concurrent first-access for the
+     * same method, multiple threads may call {@code layerProviders()} redundantly,
+     * but {@code computeIfAbsent} guarantees that only one {@code ResolvedPipeline}
+     * is created and cached.</p>
+     */
+    private ResolvedPipeline resolvePipeline(Method method) {
+        // Fast path: already cached — no locking, no layerProviders() call
+        ResolvedPipeline pipeline = pipelineCache.get(method);
+        if (pipeline != null) {
+            return pipeline;
+        }
+
+        // Slow path: resolve providers OUTSIDE computeIfAbsent to avoid
+        // calling potentially expensive subclass code inside the bucket lock
+        List<AspectLayerProvider<Object>> providers = layerProviders();
+
         return pipelineCache.computeIfAbsent(
-                method, m -> ResolvedPipeline.resolve(layerProviders(), m));
+                method, m -> ResolvedPipeline.resolve(providers, m));
     }
 
     // ======================== Non-cached convenience methods ========================

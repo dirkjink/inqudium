@@ -120,20 +120,6 @@ public final class ResolvedPipeline {
     }
 
     /**
-     * Resolves a pipeline from all providers (no method filtering).
-     *
-     * @param providers the providers to compose
-     * @return a pre-composed, reusable pipeline
-     */
-    public static ResolvedPipeline resolve(List<? extends AspectLayerProvider<Object>> providers) {
-        List<? extends AspectLayerProvider<Object>> sorted = providers.stream()
-                .sorted(Comparator.comparingInt(AspectLayerProvider::order))
-                .toList();
-
-        return fromProviders(sorted);
-    }
-
-    /**
      * Builds a {@code ResolvedPipeline} from an already filtered and sorted
      * provider list. Extracts actions and names in separate passes over the
      * same list — no redundant filtering or sorting.

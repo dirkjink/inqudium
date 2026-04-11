@@ -57,6 +57,13 @@ public abstract class AbstractAsyncPipelineAspect {
     /**
      * Returns the ordered list of async layer providers for this aspect.
      *
+     * <p>Called once per unique {@link Method} encountered — the result is used
+     * to build an {@link AsyncResolvedPipeline} that is then cached. Subsequent
+     * calls for the same method do not invoke this method again.</p>
+     *
+     * <p>Implementations should return quickly and without side effects.
+     * Returning a pre-built, immutable list is strongly recommended.</p>
+     *
      * @return the async layer providers, never {@code null}
      */
     protected abstract List<AsyncAspectLayerProvider<Object>> asyncLayerProviders();
@@ -80,10 +87,7 @@ public abstract class AbstractAsyncPipelineAspect {
      */
     protected CompletionStage<Object> executeThroughAsync(
             JoinPointExecutor<Object> coreExecutor, Method method) throws Throwable {
-        AsyncResolvedPipeline pipeline = pipelineCache.computeIfAbsent(
-                method, m -> AsyncResolvedPipeline.resolve(asyncLayerProviders(), m));
-
-        return pipeline.execute(coreExecutor);
+        return resolveAsyncPipeline(method).execute(coreExecutor);
     }
 
     /**
@@ -94,8 +98,32 @@ public abstract class AbstractAsyncPipelineAspect {
      * @return the pre-composed, cached async pipeline
      */
     protected AsyncResolvedPipeline resolvedAsyncPipeline(Method method) {
+        return resolveAsyncPipeline(method);
+    }
+
+    /**
+     * Resolves (or retrieves from cache) the async pipeline for the given method.
+     *
+     * <p>{@link #asyncLayerProviders()} is called <strong>before</strong> entering
+     * {@link ConcurrentHashMap#computeIfAbsent}, so the subclass implementation
+     * never runs inside the map's bucket lock. On concurrent first-access for the
+     * same method, multiple threads may call {@code asyncLayerProviders()} redundantly,
+     * but {@code computeIfAbsent} guarantees that only one {@code AsyncResolvedPipeline}
+     * is created and cached.</p>
+     */
+    private AsyncResolvedPipeline resolveAsyncPipeline(Method method) {
+        // Fast path: already cached — no locking, no asyncLayerProviders() call
+        AsyncResolvedPipeline pipeline = pipelineCache.get(method);
+        if (pipeline != null) {
+            return pipeline;
+        }
+
+        // Slow path: resolve providers OUTSIDE computeIfAbsent to avoid
+        // calling potentially expensive subclass code inside the bucket lock
+        List<AsyncAspectLayerProvider<Object>> providers = asyncLayerProviders();
+
         return pipelineCache.computeIfAbsent(
-                method, m -> AsyncResolvedPipeline.resolve(asyncLayerProviders(), m));
+                method, m -> AsyncResolvedPipeline.resolve(providers, m));
     }
 
     // ======================== Non-cached convenience methods ========================

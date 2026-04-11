@@ -99,21 +99,6 @@ public final class AsyncResolvedPipeline {
     }
 
     /**
-     * Resolves an async pipeline from all providers (no method filtering).
-     *
-     * @param providers the async providers to compose
-     * @return a pre-composed, reusable async pipeline
-     */
-    public static AsyncResolvedPipeline resolve(
-            List<? extends AsyncAspectLayerProvider<Object>> providers) {
-        List<? extends AsyncAspectLayerProvider<Object>> sorted = providers.stream()
-                .sorted(Comparator.comparingInt(AsyncAspectLayerProvider::order))
-                .toList();
-
-        return fromProviders(sorted);
-    }
-
-    /**
      * Builds an {@code AsyncResolvedPipeline} from an already filtered and sorted
      * provider list. Extracts actions and names in separate passes over the
      * same list — no redundant filtering or sorting.
