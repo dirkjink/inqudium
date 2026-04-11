@@ -3,6 +3,7 @@ package eu.inqudium.aspect.pipeline;
 import eu.inqudium.core.pipeline.InternalExecutor;
 import eu.inqudium.core.pipeline.JoinPointExecutor;
 import eu.inqudium.core.pipeline.LayerAction;
+import eu.inqudium.core.pipeline.Throws;
 
 import java.lang.reflect.Method;
 import java.util.Comparator;
@@ -198,7 +199,16 @@ public final class ResolvedPipeline {
             // Apply the pre-composed chain factory and execute
             return chainFactory.apply(terminal).execute(chainId, callId, null);
         } catch (CompletionException e) {
-            throw e.getCause();
+            // Unwrap the transported checked exception.
+            // Guard against null cause — if absent, rethrow the CompletionException
+            // itself rather than producing a confusing NullPointerException.
+            Throwable cause = e.getCause();
+            if (cause == null) {
+                throw e;
+            }
+            // Use sneaky-throw to rethrow the original checked exception without
+            // wrapping it in RuntimeException or UndeclaredThrowableException.
+            throw Throws.rethrow(cause);
         }
     }
 

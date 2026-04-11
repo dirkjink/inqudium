@@ -1,6 +1,7 @@
 package eu.inqudium.aspect.pipeline;
 
 import eu.inqudium.core.pipeline.JoinPointExecutor;
+import eu.inqudium.core.pipeline.Throws;
 import eu.inqudium.imperative.core.pipeline.AsyncLayerAction;
 import eu.inqudium.imperative.core.pipeline.InternalAsyncExecutor;
 
@@ -159,21 +160,38 @@ public final class AsyncResolvedPipeline {
             throws Throwable {
         long callId = callIdCounter.incrementAndGet();
 
-        // Terminal: invokes pjp::proceed and casts to CompletionStage
+        // Terminal: invokes pjp::proceed and validates the return type
         InternalAsyncExecutor<Void, Object> terminal = (cid, caid, arg) -> {
+            Object result;
             try {
-                return (CompletionStage<Object>) coreExecutor.proceed();
+                result = coreExecutor.proceed();
             } catch (RuntimeException | Error e) {
                 throw e;
             } catch (Throwable t) {
                 throw new CompletionException(t);
             }
+
+            if (result instanceof CompletionStage<?> stage) {
+                return (CompletionStage<Object>) stage;
+            }
+
+            throw new IllegalStateException(
+                    "AsyncResolvedPipeline expected the proxied method to return a "
+                            + "CompletionStage, but received: "
+                            + (result == null ? "null" : result.getClass().getName())
+                            + ". Ensure this aspect is only applied to methods returning "
+                            + "CompletionStage or CompletableFuture. Use canHandle(Method) "
+                            + "to restrict the async pipeline to compatible methods.");
         };
 
         try {
             return chainFactory.apply(terminal).executeAsync(chainId, callId, null);
         } catch (CompletionException e) {
-            throw e.getCause();
+            Throwable cause = e.getCause();
+            if (cause == null) {
+                throw e;
+            }
+            throw Throws.rethrow(cause);
         }
     }
 

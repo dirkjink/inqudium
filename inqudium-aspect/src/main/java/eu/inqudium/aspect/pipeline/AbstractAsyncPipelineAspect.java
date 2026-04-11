@@ -162,8 +162,18 @@ public abstract class AbstractAsyncPipelineAspect {
     protected CompletionStage<Object> executeThroughAsync(
             JoinPointExecutor<Object> coreExecutor) throws Throwable {
 
-        JoinPointExecutor<CompletionStage<Object>> typedExecutor =
-                () -> (CompletionStage<Object>) coreExecutor.proceed();
+        JoinPointExecutor<CompletionStage<Object>> typedExecutor = () -> {
+            Object result = coreExecutor.proceed();
+            if (result instanceof CompletionStage<?> stage) {
+                return (CompletionStage<Object>) stage;
+            }
+            throw new IllegalStateException(
+                    "AsyncPipelineAspect expected the proxied method to return a "
+                            + "CompletionStage, but received: "
+                            + (result == null ? "null" : result.getClass().getName())
+                            + ". Ensure this aspect is only applied to methods returning "
+                            + "CompletionStage or CompletableFuture.");
+        };
 
         AsyncJoinPointWrapper<Object> chain = new AsyncAspectPipelineBuilder<Object>()
                 .addProviders(providers())
