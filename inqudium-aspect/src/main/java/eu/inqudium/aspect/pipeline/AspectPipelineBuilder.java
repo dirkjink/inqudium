@@ -4,6 +4,7 @@ import eu.inqudium.core.pipeline.JoinPointExecutor;
 import eu.inqudium.core.pipeline.JoinPointWrapper;
 import eu.inqudium.core.pipeline.LayerAction;
 
+import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -110,7 +111,38 @@ public class AspectPipelineBuilder<R> {
     }
 
     /**
-     * Returns an unmodifiable view of the currently registered layers.
+     * Adds multiple layer providers filtered by {@link AspectLayerProvider#canHandle(Method)}
+     * and sorted by their {@link AspectLayerProvider#order()}.
+     *
+     * <p>Only providers whose {@code canHandle(method)} returns {@code true} are
+     * included in the pipeline. This enables method-specific layer composition —
+     * for example, a retry layer that only applies to idempotent methods, or a
+     * caching layer that only applies to read operations.</p>
+     *
+     * @param providers the candidate layer providers
+     * @param method    the target method used to filter providers via {@code canHandle}
+     * @return this builder for fluent chaining
+     * @throws IllegalArgumentException if providers or method is null
+     */
+    public AspectPipelineBuilder<R> addProviders(List<? extends AspectLayerProvider<R>> providers,
+                                                  Method method) {
+        if (providers == null) {
+            throw new IllegalArgumentException("Providers list must not be null");
+        }
+        if (method == null) {
+            throw new IllegalArgumentException("Method must not be null");
+        }
+        List<? extends AspectLayerProvider<R>> filtered = providers.stream()
+                .filter(p -> p.canHandle(method))
+                .sorted(Comparator.comparingInt(AspectLayerProvider::order))
+                .toList();
+        for (AspectLayerProvider<R> provider : filtered) {
+            addProvider(provider);
+        }
+        return this;
+    }
+
+    /**
      *
      * <p>Useful for testing and diagnostics — allows verification of
      * the layer order before building the chain.</p>

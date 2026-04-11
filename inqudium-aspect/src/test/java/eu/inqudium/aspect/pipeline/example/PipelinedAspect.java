@@ -7,7 +7,9 @@ import eu.inqudium.core.pipeline.JoinPointWrapper;
 import org.aspectj.lang.ProceedingJoinPoint;
 import org.aspectj.lang.annotation.Around;
 import org.aspectj.lang.annotation.Aspect;
+import org.aspectj.lang.reflect.MethodSignature;
 
+import java.lang.reflect.Method;
 import java.util.List;
 
 /**
@@ -88,20 +90,18 @@ public class PipelinedAspect extends AbstractPipelineAspect {
      */
     @Around("@annotation(eu.inqudium.aspect.pipeline.example.Pipelined)")
     public Object around(ProceedingJoinPoint pjp) throws Throwable {
-        return execute(pjp::proceed);
+        Method method = ((MethodSignature) pjp.getSignature()).getMethod();
+        return execute(pjp::proceed, method);
     }
 
     /**
      * Public entry point for executing a {@link JoinPointExecutor} through
-     * the full pipeline.
+     * the full pipeline, including all providers regardless of method.
      *
      * <p>Delegates to the {@code protected} {@link #executeThrough(JoinPointExecutor)}
-     * from the base class. This method exists so that code outside the
-     * {@code pipeline} package — such as tests or manual invocations — can
-     * trigger the pipeline without going through AspectJ weaving.</p>
+     * from the base class. Useful when no {@link Method} context is available.</p>
      *
-     * @param coreExecutor the core execution point (e.g. {@code pjp::proceed}
-     *                     or a lambda wrapping a service method)
+     * @param coreExecutor the core execution point
      * @return the result of the pipeline execution
      * @throws Throwable any exception from the method or the pipeline layers
      */
@@ -110,17 +110,49 @@ public class PipelinedAspect extends AbstractPipelineAspect {
     }
 
     /**
-     * Exposes the pipeline structure for a given core executor without
-     * executing it.
+     * Public entry point for executing a {@link JoinPointExecutor} through
+     * the pipeline, filtered by the target method.
      *
-     * <p>Useful for diagnostic and testing purposes — the returned
-     * {@link JoinPointWrapper} can be introspected via the
-     * {@link eu.inqudium.core.pipeline.Wrapper} interface.</p>
+     * <p>Only providers whose {@link AspectLayerProvider#canHandle(Method)} returns
+     * {@code true} for the given method are included in the chain.</p>
+     *
+     * @param coreExecutor the core execution point (e.g. {@code pjp::proceed}
+     *                     or a lambda wrapping a service method)
+     * @param method       the target method, used to filter providers
+     * @return the result of the pipeline execution
+     * @throws Throwable any exception from the method or the pipeline layers
+     */
+    public Object execute(JoinPointExecutor<Object> coreExecutor, Method method)
+            throws Throwable {
+        return executeThrough(coreExecutor, method);
+    }
+
+    /**
+     * Exposes the pipeline structure for a given core executor without
+     * executing it, including all providers regardless of method.
      *
      * @param coreExecutor the core execution point
      * @return the outermost wrapper of the assembled chain
      */
     public JoinPointWrapper<Object> inspectPipeline(JoinPointExecutor<Object> coreExecutor) {
         return buildPipeline(coreExecutor);
+    }
+
+    /**
+     * Exposes the pipeline structure filtered by the target method, without
+     * executing it.
+     *
+     * <p>Useful for diagnostic and testing purposes — the returned
+     * {@link JoinPointWrapper} can be introspected via the
+     * {@link eu.inqudium.core.pipeline.Wrapper} interface to verify which
+     * layers are active for a specific method.</p>
+     *
+     * @param coreExecutor the core execution point
+     * @param method       the target method, used to filter providers
+     * @return the outermost wrapper of the assembled chain
+     */
+    public JoinPointWrapper<Object> inspectPipeline(JoinPointExecutor<Object> coreExecutor,
+                                                    Method method) {
+        return buildPipeline(coreExecutor, method);
     }
 }

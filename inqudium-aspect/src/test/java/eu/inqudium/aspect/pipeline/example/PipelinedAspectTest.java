@@ -8,6 +8,8 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
+import java.lang.reflect.Method;
+
 import java.util.ArrayList;
 import java.util.List;
 
@@ -340,6 +342,146 @@ class PipelinedAspectTest {
             // And — the chain is executable
             Object result = inspected.proceed();
             assertThat(result).isEqualTo("Hello, World!");
+        }
+    }
+
+    // =========================================================================
+    // canHandle filtering
+    // =========================================================================
+
+    @Nested
+    @DisplayName("canHandle-based method filtering")
+    class CanHandleFiltering {
+
+        private Method greetMethod;
+        private Method farewellMethod;
+
+        @BeforeEach
+        void resolveMethods() throws NoSuchMethodException {
+            greetMethod = GreetingService.class.getMethod("greet", String.class);
+            farewellMethod = GreetingService.class.getMethod("farewell", String.class);
+        }
+
+        @Test
+        void pipelined_method_includes_all_three_layers() {
+            // Given
+            aspect = aspectWithAuthorization(true);
+
+            // When — greet() is annotated with @Pipelined, so TimingLayerProvider accepts it
+            JoinPointWrapper<Object> chain = aspect.inspectPipeline(() -> "dummy", greetMethod);
+
+            // Then
+            List<String> layerNames = new ArrayList<>();
+            Wrapper<?> current = chain;
+            while (current != null) {
+                layerNames.add(current.layerDescription());
+                current = current.inner();
+            }
+            assertThat(layerNames).containsExactly("AUTHORIZATION", "LOGGING", "TIMING");
+        }
+
+        @Test
+        void non_pipelined_method_excludes_timing_layer() {
+            // Given
+            aspect = aspectWithAuthorization(true);
+
+            // When — farewell() is NOT annotated with @Pipelined,
+            //        so TimingLayerProvider.canHandle returns false
+            JoinPointWrapper<Object> chain = aspect.inspectPipeline(() -> "dummy", farewellMethod);
+
+            // Then — only AUTHORIZATION and LOGGING remain
+            List<String> layerNames = new ArrayList<>();
+            Wrapper<?> current = chain;
+            while (current != null) {
+                layerNames.add(current.layerDescription());
+                current = current.inner();
+            }
+            assertThat(layerNames).containsExactly("AUTHORIZATION", "LOGGING");
+        }
+
+        @Test
+        void hierarchy_string_differs_between_pipelined_and_non_pipelined_methods() {
+            // Given
+            aspect = aspectWithAuthorization(true);
+
+            // When
+            String greetHierarchy = aspect.inspectPipeline(() -> "g", greetMethod)
+                    .toStringHierarchy();
+            String farewellHierarchy = aspect.inspectPipeline(() -> "f", farewellMethod)
+                    .toStringHierarchy();
+
+            // Then
+            assertThat(greetHierarchy).contains("TIMING");
+            assertThat(farewellHierarchy).doesNotContain("TIMING");
+        }
+
+        @Test
+        void non_pipelined_method_executes_with_only_two_layers() throws Throwable {
+            // Given
+            aspect = aspectWithAuthorization(true);
+            GreetingService service = new GreetingService();
+
+            // When
+            Object result = aspect.execute(
+                    () -> service.farewell("World"), farewellMethod);
+
+            // Then
+            assertThat(result).isEqualTo("Goodbye, World!");
+            // Auth and logging traces are present
+            assertThat(trace).contains("auth:check", "auth:granted");
+            assertThat(trace).anyMatch(s -> s.startsWith("log:enter[chain="));
+            // Timing traces are absent
+            assertThat(trace).noneMatch(s -> s.startsWith("timer:"));
+        }
+
+        @Test
+        void pipelined_method_executes_with_all_three_layers() throws Throwable {
+            // Given
+            aspect = aspectWithAuthorization(true);
+            GreetingService service = new GreetingService();
+
+            // When
+            Object result = aspect.execute(
+                    () -> service.greet("World"), greetMethod);
+
+            // Then
+            assertThat(result).isEqualTo("Hello, World!");
+            assertThat(trace).anyMatch(s -> s.startsWith("timer:start"));
+            assertThat(trace).anyMatch(s -> s.startsWith("timer:stop["));
+        }
+
+        @Test
+        void chain_depth_is_two_for_non_pipelined_method() {
+            // Given
+            aspect = aspectWithAuthorization(true);
+
+            // When
+            JoinPointWrapper<Object> chain = aspect.inspectPipeline(
+                    () -> "dummy", farewellMethod);
+            int depth = 0;
+            Wrapper<?> current = chain;
+            while (current != null) {
+                depth++;
+                current = current.inner();
+            }
+
+            // Then
+            assertThat(depth).isEqualTo(2);
+        }
+
+        @Test
+        void both_methods_get_independent_chain_ids() {
+            // Given
+            aspect = aspectWithAuthorization(true);
+
+            // When
+            JoinPointWrapper<Object> greetChain = aspect.inspectPipeline(
+                    () -> "g", greetMethod);
+            JoinPointWrapper<Object> farewellChain = aspect.inspectPipeline(
+                    () -> "f", farewellMethod);
+
+            // Then
+            assertThat(greetChain.chainId()).isNotEqualTo(farewellChain.chainId());
         }
     }
 }

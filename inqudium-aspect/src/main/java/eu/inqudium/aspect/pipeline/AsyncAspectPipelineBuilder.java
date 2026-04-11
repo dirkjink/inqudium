@@ -4,6 +4,7 @@ import eu.inqudium.core.pipeline.JoinPointExecutor;
 import eu.inqudium.imperative.core.pipeline.AsyncJoinPointWrapper;
 import eu.inqudium.imperative.core.pipeline.AsyncLayerAction;
 
+import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -88,6 +89,36 @@ public class AsyncAspectPipelineBuilder<R> {
         List<? extends AsyncAspectLayerProvider<R>> sorted = new ArrayList<>(providers);
         sorted.sort(Comparator.comparingInt(AsyncAspectLayerProvider::order));
         for (AsyncAspectLayerProvider<R> provider : sorted) {
+            addProvider(provider);
+        }
+        return this;
+    }
+
+    /**
+     * Adds multiple async layer providers filtered by
+     * {@link AsyncAspectLayerProvider#canHandle(Method)} and sorted by order.
+     *
+     * <p>Only providers whose {@code canHandle(method)} returns {@code true} are
+     * included in the async pipeline.</p>
+     *
+     * @param providers the candidate async layer providers
+     * @param method    the target method used to filter providers via {@code canHandle}
+     * @return this builder for fluent chaining
+     * @throws IllegalArgumentException if providers or method is null
+     */
+    public AsyncAspectPipelineBuilder<R> addProviders(
+            List<? extends AsyncAspectLayerProvider<R>> providers, Method method) {
+        if (providers == null) {
+            throw new IllegalArgumentException("Providers list must not be null");
+        }
+        if (method == null) {
+            throw new IllegalArgumentException("Method must not be null");
+        }
+        List<? extends AsyncAspectLayerProvider<R>> filtered = providers.stream()
+                .filter(p -> p.canHandle(method))
+                .sorted(Comparator.comparingInt(AsyncAspectLayerProvider::order))
+                .toList();
+        for (AsyncAspectLayerProvider<R> provider : filtered) {
             addProvider(provider);
         }
         return this;

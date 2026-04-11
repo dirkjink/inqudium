@@ -2,6 +2,8 @@ package eu.inqudium.aspect.pipeline;
 
 import eu.inqudium.imperative.core.pipeline.AsyncLayerAction;
 
+import java.lang.reflect.Method;
+
 /**
  * Defines a single asynchronous cross-cutting layer that can be contributed
  * to an aspect's async wrapper pipeline.
@@ -71,4 +73,22 @@ public interface AsyncAspectLayerProvider<R> {
      * @return the layer's async around-advice, never {@code null}
      */
     AsyncLayerAction<Void, R> asyncLayerAction();
+
+    /**
+     * Returns {@code true} if this async layer should be included in the pipeline
+     * for the given method.
+     *
+     * <p>Implementations typically check the method's return type, annotations,
+     * or declaring interface to decide. For example, a layer might only apply
+     * to methods returning {@link java.util.concurrent.CompletionStage}.</p>
+     *
+     * <p>The default implementation returns {@code true}, meaning the layer
+     * applies to all methods.</p>
+     *
+     * @param method the service method being invoked
+     * @return {@code true} if this layer should handle the method
+     */
+    default boolean canHandle(Method method) {
+        return true;
+    }
 }

@@ -3,6 +3,7 @@ package eu.inqudium.aspect.pipeline.example;
 import eu.inqudium.aspect.pipeline.AspectLayerProvider;
 import eu.inqudium.core.pipeline.LayerAction;
 
+import java.lang.reflect.Method;
 import java.util.List;
 
 /**
@@ -12,6 +13,10 @@ import java.util.List;
  * <p>Innermost layer (order 30): wraps directly around the actual method
  * execution. The measured duration excludes authorization and logging
  * overhead.</p>
+ *
+ * <p>Only applies to methods annotated with {@link Pipelined}. Methods
+ * without the annotation are not timed — this demonstrates how
+ * {@link #canHandle(Method)} filters layers per method.</p>
  */
 public class TimingLayerProvider implements AspectLayerProvider<Object> {
 
@@ -32,6 +37,14 @@ public class TimingLayerProvider implements AspectLayerProvider<Object> {
     @Override
     public int order() {
         return 30;
+    }
+
+    /**
+     * Only applies to methods annotated with {@link Pipelined}.
+     */
+    @Override
+    public boolean canHandle(Method method) {
+        return method.isAnnotationPresent(Pipelined.class);
     }
 
     @Override

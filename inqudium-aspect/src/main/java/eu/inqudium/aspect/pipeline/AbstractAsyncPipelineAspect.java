@@ -3,6 +3,7 @@ package eu.inqudium.aspect.pipeline;
 import eu.inqudium.core.pipeline.JoinPointExecutor;
 import eu.inqudium.imperative.core.pipeline.AsyncJoinPointWrapper;
 
+import java.lang.reflect.Method;
 import java.util.List;
 import java.util.concurrent.CompletionStage;
 
@@ -107,6 +108,48 @@ public abstract class AbstractAsyncPipelineAspect {
             JoinPointExecutor<CompletionStage<Object>> coreExecutor) {
         return new AsyncAspectPipelineBuilder<Object>()
                 .addProviders(asyncLayerProviders())
+                .buildChain(coreExecutor);
+    }
+
+    /**
+     * Builds an async wrapper chain filtered by the target method and executes
+     * the given join point through it.
+     *
+     * <p>Only providers whose {@link AsyncAspectLayerProvider#canHandle(Method)}
+     * returns {@code true} for the given method are included.</p>
+     *
+     * @param coreExecutor the join point execution, expected to return a
+     *                     {@link CompletionStage}
+     * @param method       the target method, used to filter providers via {@code canHandle}
+     * @return a {@link CompletionStage} carrying the result of the pipeline execution
+     * @throws Throwable any synchronous exception from the delegate or layer actions
+     */
+    @SuppressWarnings("unchecked")
+    protected CompletionStage<Object> executeThroughAsync(
+            JoinPointExecutor<Object> coreExecutor, Method method) throws Throwable {
+
+        JoinPointExecutor<CompletionStage<Object>> typedExecutor =
+                () -> (CompletionStage<Object>) coreExecutor.proceed();
+
+        AsyncJoinPointWrapper<Object> chain = new AsyncAspectPipelineBuilder<Object>()
+                .addProviders(asyncLayerProviders(), method)
+                .buildChain(typedExecutor);
+
+        return chain.proceed();
+    }
+
+    /**
+     * Builds the async wrapper chain filtered by the target method, without
+     * executing it.
+     *
+     * @param coreExecutor the async join point execution
+     * @param method       the target method, used to filter providers via {@code canHandle}
+     * @return the outermost wrapper of the assembled async chain
+     */
+    protected AsyncJoinPointWrapper<Object> buildAsyncPipeline(
+            JoinPointExecutor<CompletionStage<Object>> coreExecutor, Method method) {
+        return new AsyncAspectPipelineBuilder<Object>()
+                .addProviders(asyncLayerProviders(), method)
                 .buildChain(coreExecutor);
     }
 }

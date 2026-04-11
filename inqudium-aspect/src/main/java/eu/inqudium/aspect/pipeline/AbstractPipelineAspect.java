@@ -3,6 +3,7 @@ package eu.inqudium.aspect.pipeline;
 import eu.inqudium.core.pipeline.JoinPointExecutor;
 import eu.inqudium.core.pipeline.JoinPointWrapper;
 
+import java.lang.reflect.Method;
 import java.util.List;
 
 /**
@@ -98,6 +99,50 @@ public abstract class AbstractPipelineAspect {
     protected JoinPointWrapper<Object> buildPipeline(JoinPointExecutor<Object> coreExecutor) {
         return new AspectPipelineBuilder<Object>()
                 .addProviders(layerProviders())
+                .buildChain(coreExecutor);
+    }
+
+    /**
+     * Builds a wrapper chain filtered by the target method and executes the
+     * given join point through it.
+     *
+     * <p>Only providers whose {@link AspectLayerProvider#canHandle(Method)} returns
+     * {@code true} for the given method are included in the pipeline. This enables
+     * method-specific layer composition.</p>
+     *
+     * <pre>{@code
+     * @Around("...")
+     * public Object around(ProceedingJoinPoint pjp) throws Throwable {
+     *     Method method = ((MethodSignature) pjp.getSignature()).getMethod();
+     *     return executeThrough(pjp::proceed, method);
+     * }
+     * }</pre>
+     *
+     * @param coreExecutor the join point execution (typically {@code pjp::proceed})
+     * @param method       the target method, used to filter providers via {@code canHandle}
+     * @return the result of the pipeline execution
+     * @throws Throwable any exception from the delegate or from layer actions
+     */
+    protected Object executeThrough(JoinPointExecutor<Object> coreExecutor,
+                                    Method method) throws Throwable {
+        JoinPointWrapper<Object> chain = new AspectPipelineBuilder<Object>()
+                .addProviders(layerProviders(), method)
+                .buildChain(coreExecutor);
+
+        return chain.proceed();
+    }
+
+    /**
+     * Builds the wrapper chain filtered by the target method, without executing it.
+     *
+     * @param coreExecutor the join point execution
+     * @param method       the target method, used to filter providers via {@code canHandle}
+     * @return the outermost wrapper of the assembled chain
+     */
+    protected JoinPointWrapper<Object> buildPipeline(JoinPointExecutor<Object> coreExecutor,
+                                                     Method method) {
+        return new AspectPipelineBuilder<Object>()
+                .addProviders(layerProviders(), method)
                 .buildChain(coreExecutor);
     }
 }

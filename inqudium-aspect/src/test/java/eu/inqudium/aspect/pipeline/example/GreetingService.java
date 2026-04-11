@@ -23,4 +23,20 @@ public class GreetingService {
     public String greet(String name) {
         return "Hello, " + name + "!";
     }
+
+    /**
+     * Returns a farewell message.
+     *
+     * <p>This method is <strong>not</strong> annotated with {@link Pipelined}.
+     * When the aspect pipeline filters providers via
+     * {@link eu.inqudium.aspect.pipeline.AspectLayerProvider#canHandle(java.lang.reflect.Method)},
+     * layers that require the annotation (e.g. {@link TimingLayerProvider})
+     * will be excluded from the chain for this method.</p>
+     *
+     * @param name the name to bid farewell
+     * @return a farewell string
+     */
+    public String farewell(String name) {
+        return "Goodbye, " + name + "!";
+    }
 }

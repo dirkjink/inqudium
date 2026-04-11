@@ -2,6 +2,8 @@ package eu.inqudium.aspect.pipeline;
 
 import eu.inqudium.core.pipeline.LayerAction;
 
+import java.lang.reflect.Method;
+
 /**
  * Defines a single cross-cutting layer that can be contributed to an aspect's
  * wrapper pipeline.
@@ -70,4 +72,24 @@ public interface AspectLayerProvider<R> {
      * @return the layer's around-advice, never {@code null}
      */
     LayerAction<Void, R> layerAction();
+
+    /**
+     * Returns {@code true} if this layer should be included in the pipeline
+     * for the given method.
+     *
+     * <p>Implementations typically check the method's return type, annotations,
+     * or declaring interface to decide. For example, an async-only layer might
+     * return {@code false} for methods that do not return a
+     * {@link java.util.concurrent.CompletionStage}.</p>
+     *
+     * <p>The default implementation returns {@code true}, meaning the layer
+     * applies to all methods. Override this to restrict a layer to specific
+     * method signatures or annotations.</p>
+     *
+     * @param method the service method being invoked
+     * @return {@code true} if this layer should handle the method
+     */
+    default boolean canHandle(Method method) {
+        return true;
+    }
 }
