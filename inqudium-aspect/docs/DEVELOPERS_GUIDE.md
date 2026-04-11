@@ -21,15 +21,22 @@
    - [Extending AbstractPipelineAspect](#extending-abstractpipelineaspect)
    - [The @Around Advice and Method Extraction](#the-around-advice-and-method-extraction)
    - [Exposing the Pipeline for Testing](#exposing-the-pipeline-for-testing)
-9. [Chain Introspection via the Wrapper Interface](#chain-introspection-via-the-wrapper-interface)
-10. [Asynchronous Pipelines](#asynchronous-pipelines)
+9. [Pipeline Caching with ResolvedPipeline](#pipeline-caching-with-resolvedpipeline)
+   - [How It Works](#how-it-works)
+   - [Parallel to SyncDispatchExtension](#parallel-to-syncdispatchextension)
+   - [Per-Call Cost Comparison](#per-call-cost-comparison)
+   - [Diagnostics on the Cached Pipeline](#diagnostics-on-the-cached-pipeline)
+10. [Chain Introspection via the Wrapper Interface](#chain-introspection-via-the-wrapper-interface)
+11. [Asynchronous Pipelines](#asynchronous-pipelines)
     - [AsyncAspectLayerProvider](#asyncaspectlayerprovider)
     - [AbstractAsyncPipelineAspect](#abstractasyncpipelineastpect)
     - [Two-Phase Execution Semantics](#two-phase-execution-semantics)
-11. [Complete Walkthrough: A Three-Layer Pipeline](#complete-walkthrough-a-three-layer-pipeline)
-12. [Testing Strategies](#testing-strategies)
-13. [Exception Handling](#exception-handling)
-14. [Design Decisions and Trade-offs](#design-decisions-and-trade-offs)
+12. [Complete Walkthrough: A Three-Layer Pipeline](#complete-walkthrough-a-three-layer-pipeline)
+13. [Testing Strategies](#testing-strategies)
+14. [Exception Handling](#exception-handling)
+15. [Design Decisions and Trade-offs](#design-decisions-and-trade-offs)
+    - [Why Cache Per Method, Not Build Per Invocation?](#why-cache-per-method-not-build-per-invocation)
+    - [Hot Path vs. Cold Path](#hot-path-vs-cold-path)
 
 ---
 
@@ -39,54 +46,70 @@ The `inqudium-aspect` module bridges AspectJ's compile-time (or load-time) weavi
 with the inqudium wrapper pipeline from `inqudium-core`. Instead of scattering
 cross-cutting logic across hand-written interceptors, you declare reusable **layer
 providers** — each encapsulating a single concern — and the module assembles them
-into an immutable `JoinPointWrapper` chain at every advice invocation.
+into a pre-composed pipeline that is resolved once per method and cached for all
+subsequent invocations.
 
-The result: composable, ordered, introspectable cross-cutting behavior that plugs
-directly into the same infrastructure used by the rest of the inqudium framework.
+The pipeline caching follows the same pattern as `SyncDispatchExtension` in the
+proxy module: the layer chain is composed into a single
+`Function<InternalExecutor, InternalExecutor>` at resolution time, and each
+invocation only creates a terminal lambda for `pjp::proceed` before traversing
+the pre-built chain.
+
+The result: composable, ordered, introspectable cross-cutting behavior with
+near-zero per-invocation overhead — no filtering, no sorting, no wrapper-object
+allocation on the hot path.
 
 ---
 
 ## Architecture Overview
 
 ```
-┌─────────────────────────────────────────────────────────────────────┐
-│  AspectJ Runtime                                                    │
-│                                                                     │
-│  @Around advice fires ──► ProceedingJoinPoint (pjp)                 │
-│                              │                                      │
-│                              │  pjp::proceed (= JoinPointExecutor)  │
-│                              ▼                                      │
-│  ┌──────────────────────────────────────────────────────────────┐   │
-│  │  inqudium-aspect                                             │   │
-│  │                                                              │   │
-│  │  AbstractPipelineAspect                                      │   │
-│  │    ├── layerProviders()  → List<AspectLayerProvider>         │   │
-│  │    └── executeThrough(executor, method)                      │   │
-│  │          │                                                   │   │
-│  │          ▼                                                   │   │
-│  │  AspectPipelineBuilder                                       │   │
-│  │    ├── filter by canHandle(method)                           │   │
-│  │    ├── sort by order()                                       │   │
-│  │    └── buildChain(coreExecutor)                              │   │
-│  │          │                                                   │   │
-│  │          ▼                                                   │   │
-│  │  ┌───────────────────────────────────────────────────────┐   │   │
-│  │  │  inqudium-core                                        │   │   │
-│  │  │                                                       │   │   │
-│  │  │  JoinPointWrapper chain (immutable, thread-safe)      │   │   │
-│  │  │    AUTHORIZATION ──► LOGGING ──► TIMING ──► core      │   │   │
-│  │  │                                                       │   │   │
-│  │  │  Wrapper interface: inner(), chainId(), callId(),     │   │   │
-│  │  │                     layerDescription(), hierarchy     │   │   │
-│  │  └───────────────────────────────────────────────────────┘   │   │
-│  └──────────────────────────────────────────────────────────────┘   │
-└─────────────────────────────────────────────────────────────────────┘
+┌───────────────────────────────────────────────────────────────────────┐
+│  AspectJ Runtime                                                      │
+│                                                                       │
+│  @Around advice fires ──► ProceedingJoinPoint (pjp)                   │
+│                              │                                        │
+│                              │  pjp::proceed (= JoinPointExecutor)    │
+│                              ▼                                        │
+│  ┌───────────────────────────────────────────────────────────────┐    │
+│  │  inqudium-aspect                                              │    │
+│  │                                                               │    │
+│  │  AbstractPipelineAspect                                       │    │
+│  │    ├── layerProviders()  → List<AspectLayerProvider>          │    │
+│  │    └── executeThrough(executor, method)                       │    │
+│  │          │                                                    │    │
+│  │          ▼                                                    │    │
+│  │  ConcurrentHashMap<Method, ResolvedPipeline>                  │    │
+│  │    │                                                          │    │
+│  │    ├── cache miss (first call for this Method):               │    │
+│  │    │     filter by canHandle(method)                          │    │
+│  │    │     sort by order()                                      │    │
+│  │    │     compose chainFactory (Function<Terminal, Chain>)     │    │
+│  │    │     store ResolvedPipeline in cache                      │    │
+│  │    │                                                          │    │
+│  │    └── cache hit (every subsequent call):                     │    │
+│  │          ResolvedPipeline.execute(pjp::proceed)               │    │
+│  │            │                                                  │    │
+│  │            ├── create terminal lambda (1 allocation)          │    │
+│  │            ├── chainFactory.apply(terminal)                   │    │
+│  │            └── chain.execute(chainId, callId, null)           │    │
+│  │                                                               │    │
+│  │  Pre-composed chain (no wrapper objects):                     │    │
+│  │    AUTH.execute → LOG.execute → TIMING.execute → terminal     │    │
+│  └───────────────────────────────────────────────────────────────┘    │
+└───────────────────────────────────────────────────────────────────────┘
 ```
 
-**Data flow**: AspectJ intercepts a method call → the `@Around` advice extracts the
-`Method` and passes `pjp::proceed` to the pipeline → the builder filters and sorts
-providers, constructs a `JoinPointWrapper` chain inside-out → `chain.proceed()`
-traverses all layers and eventually calls the real method.
+**Data flow (first call)**: AspectJ intercepts a method call → the `@Around` advice
+extracts the `Method` and passes `pjp::proceed` to `executeThrough` → the
+`ResolvedPipeline` is resolved (providers filtered, sorted, chain factory composed)
+and cached → the terminal executor is created and passed through the pre-composed
+chain.
+
+**Data flow (subsequent calls)**: The cached `ResolvedPipeline` is retrieved from the
+`ConcurrentHashMap` → only the terminal executor is created → the pre-composed chain
+factory applies the terminal and traverses all layers. No filtering, sorting, or
+object allocation beyond the terminal lambda.
 
 ---
 
@@ -99,8 +122,9 @@ inqudium-aspect/
     ├── main/java/eu/inqudium/aspect/pipeline/
     │   ├── AspectLayerProvider.java           # Layer definition (sync)
     │   ├── AsyncAspectLayerProvider.java      # Layer definition (async)
-    │   ├── AspectPipelineBuilder.java         # Chain assembly (sync)
+    │   ├── AspectPipelineBuilder.java         # Chain assembly (sync, cold path)
     │   ├── AsyncAspectPipelineBuilder.java    # Chain assembly (async)
+    │   ├── ResolvedPipeline.java              # Pre-composed chain (sync, hot path)
     │   ├── AbstractPipelineAspect.java        # Base class for sync aspects
     │   ├── AbstractAsyncPipelineAspect.java   # Base class for async aspects
     │   ├── package-info.java
@@ -515,14 +539,16 @@ public class PipelinedAspect extends AbstractPipelineAspect {
 }
 ```
 
-The base class provides two execution paths:
+The base class provides two execution paths — a cached hot path and a cold
+path for introspection:
 
-| Method                                   | Description                        |
-|------------------------------------------|------------------------------------|
-| `executeThrough(executor)`               | Builds chain from all providers    |
-| `executeThrough(executor, method)`       | Filters providers via `canHandle`  |
-| `buildPipeline(executor)`                | Build without executing (diagnostics) |
-| `buildPipeline(executor, method)`        | Build with filtering, no execution |
+| Method                                   | Path   | Description                                    |
+|------------------------------------------|--------|------------------------------------------------|
+| `executeThrough(executor, method)`       | Hot    | Uses cached `ResolvedPipeline` per method      |
+| `executeThrough(executor)`               | Cold   | Builds fresh chain from all providers          |
+| `resolvedPipeline(method)`               | Hot    | Returns cached pipeline for diagnostics        |
+| `buildPipeline(executor)`                | Cold   | Full `JoinPointWrapper` chain (introspection)  |
+| `buildPipeline(executor, method)`        | Cold   | Filtered `JoinPointWrapper` chain              |
 
 ### The @Around Advice and Method Extraction
 
@@ -544,32 +570,144 @@ public Object around(ProceedingJoinPoint pjp) throws Throwable {
 }
 ```
 
-A fresh `JoinPointWrapper` chain is built for **every** advice invocation. This
-ensures per-invocation isolation (each call gets its own call ID) while the
-immutable layer definitions from the providers are safely shared.
+When `executeThrough(executor, method)` is called, the `ResolvedPipeline` for
+that method is retrieved from a `ConcurrentHashMap` (or resolved and cached on
+first access). Only the terminal executor (`pjp::proceed`) is created per call —
+the chain structure itself is pre-composed and reused.
 
 ### Exposing the Pipeline for Testing
 
-Since `executeThrough` and `buildPipeline` are `protected`, a concrete aspect
-should expose public delegation methods for testability:
+Since `executeThrough`, `buildPipeline`, and `resolvedPipeline` are `protected`,
+a concrete aspect should expose public delegation methods for testability:
 
 ```java
-// Execute with method filtering
+// Execute with method filtering (hot path — uses cached ResolvedPipeline)
 public Object execute(JoinPointExecutor<Object> coreExecutor, Method method)
         throws Throwable {
     return executeThrough(coreExecutor, method);
 }
 
-// Inspect without executing — for assertions on chain structure
+// Inspect without executing — full Wrapper introspection (cold path)
 public JoinPointWrapper<Object> inspectPipeline(
         JoinPointExecutor<Object> coreExecutor, Method method) {
     return buildPipeline(coreExecutor, method);
+}
+
+// Access the cached, pre-composed pipeline for diagnostics
+public ResolvedPipeline getResolvedPipeline(Method method) {
+    return resolvedPipeline(method);
 }
 ```
 
 ---
 
+## Pipeline Caching with ResolvedPipeline
+
+### How It Works
+
+`ResolvedPipeline` is the centerpiece of the hot-path optimization. It
+pre-composes the entire layer chain into a single reusable function at
+resolution time, then caches it per `Method` in the `AbstractPipelineAspect`.
+
+```java
+// Resolution (once per Method — on first call):
+ResolvedPipeline pipeline = ResolvedPipeline.resolve(providers, method);
+//   1. Filter providers by canHandle(method)
+//   2. Sort by order()
+//   3. Extract LayerActions
+//   4. Compose into: Function<InternalExecutor, InternalExecutor>
+
+// Execution (every subsequent call — hot path):
+Object result = pipeline.execute(pjp::proceed);
+//   1. Create terminal lambda (captures pjp::proceed)
+//   2. chainFactory.apply(terminal) — applies pre-composed chain
+//   3. chain.execute(chainId, callId, null) — traverses all layers
+```
+
+The `chainFactory` is a nested function that contains all `LayerAction`s.
+For a three-layer pipeline `[AUTH(10), LOG(20), TIMING(30)]`, the factory
+produces:
+
+```
+chainFactory.apply(terminal)  =
+    (cid, callId, arg) -> AUTH.execute(cid, callId, arg,
+        (cid2, callId2, arg2) -> LOG.execute(cid2, callId2, arg2,
+            (cid3, callId3, arg3) -> TIMING.execute(cid3, callId3, arg3,
+                terminal)))
+```
+
+No `JoinPointWrapper` objects, no `AbstractBaseWrapper` chains, no
+`AtomicLong` in wrapper constructors — just nested lambda calls.
+
+### Parallel to SyncDispatchExtension
+
+The design directly mirrors the proxy module's `SyncDispatchExtension`:
+
+| Proxy module                                  | Aspect module                                  |
+|-----------------------------------------------|-------------------------------------------------|
+| `SyncDispatchExtension.nextStepFactory`       | `ResolvedPipeline.chainFactory`                |
+| `Function<InternalExecutor, InternalExecutor>`| `Function<InternalExecutor, InternalExecutor>` |
+| Composed once in `linkInner()`                | Composed once in `resolve()`                   |
+| `buildTerminal(method, args, target)` per call| Terminal lambda with `pjp::proceed` per call   |
+| `executeChain(chainId, callId, terminal)`     | `chainFactory.apply(terminal).execute(...)`    |
+| `MethodHandleCache` — shared across stack     | `ConcurrentHashMap<Method, ResolvedPipeline>`  |
+| One cache per proxy stack                     | One cache per aspect instance                  |
+
+Both approaches share the same insight: the layer chain structure is
+**deterministic** for a given method signature and does not need to be
+rebuilt on every call. Only the terminal (what to invoke at the end) changes.
+
+### Per-Call Cost Comparison
+
+| Step                          | Without caching         | With ResolvedPipeline  |
+|-------------------------------|-------------------------|------------------------|
+| Filter providers              | Every call              | Once per Method        |
+| Sort providers                | Every call              | Once per Method        |
+| Extract LayerActions          | Every call              | Once per Method        |
+| Compose chain                 | N wrapper objects       | 0 objects (pre-composed)|
+| Terminal executor             | 1 lambda                | 1 lambda               |
+| Chain/call IDs                | AtomicLong in wrappers  | AtomicLong in pipeline |
+| HashMap lookup                | —                       | 1 `get()` (fast path)  |
+
+### Diagnostics on the Cached Pipeline
+
+The cached `ResolvedPipeline` provides its own diagnostic methods, independent
+of the `Wrapper` interface:
+
+```java
+// Access the cached pipeline
+ResolvedPipeline pipeline = aspect.getResolvedPipeline(method);
+
+// Layer information
+pipeline.layerNames();       // ["AUTHORIZATION", "LOGGING", "TIMING"]
+pipeline.depth();            // 3
+
+// ID tracking
+pipeline.chainId();          // globally unique, from CHAIN_ID_COUNTER
+pipeline.currentCallId();    // increments with each execute()
+
+// Hierarchy visualization
+System.out.println(pipeline.toStringHierarchy());
+// Output:
+// Chain-ID: 42 (current call-ID: 7)
+// AUTHORIZATION
+//   └── LOGGING
+//     └── TIMING
+```
+
+For full `Wrapper` introspection (`inner()`, type-safe chain traversal), use
+`buildPipeline()` on the cold path — this constructs a `JoinPointWrapper` chain
+that implements the complete `Wrapper<S>` interface.
+
+---
+
 ## Chain Introspection via the Wrapper Interface
+
+> **Note:** The `Wrapper` interface provides full chain traversal via `inner()`
+> and is available on the **cold path** (`buildPipeline()`). For lightweight
+> diagnostics on the **hot path**, use `ResolvedPipeline.layerNames()`,
+> `.depth()`, and `.toStringHierarchy()` — see
+> [Diagnostics on the Cached Pipeline](#diagnostics-on-the-cached-pipeline).
 
 Every `JoinPointWrapper` implements the `Wrapper<S>` interface, which provides
 rich introspection capabilities:
@@ -897,16 +1035,22 @@ public class PipelinedAspect extends AbstractPipelineAspect {
         return executeThrough(executor, method);
     }
 
+    // Cold path — full Wrapper introspection
     public JoinPointWrapper<Object> inspectPipeline(
             JoinPointExecutor<Object> executor, Method method) {
         return buildPipeline(executor, method);
+    }
+
+    // Hot path — access the cached, pre-composed pipeline
+    public ResolvedPipeline getResolvedPipeline(Method method) {
+        return resolvedPipeline(method);
     }
 }
 ```
 
 ### Step 5 — Call Flow Visualization
 
-When `greetingService.greet("World")` is called:
+**First call** to `greetingService.greet("World")` — pipeline is resolved and cached:
 
 ```
   caller: greet("World")
@@ -917,15 +1061,22 @@ When `greetingService.greet("World")` is called:
     │  execute(pjp::proceed, method)
     │
     ▼
-  AspectPipelineBuilder
-    │  filter providers by canHandle(greet-Method) → all 3 pass
-    │  sort by order: AUTH(10) → LOG(20) → TIMING(30)
-    │  build inside-out: TIMING wraps core, LOG wraps TIMING, AUTH wraps LOG
+  AbstractPipelineAspect.executeThrough(executor, method)
+    │  ConcurrentHashMap: cache miss for greet-Method
     │
     ▼
-  JoinPointWrapper chain:  AUTH → LOG → TIMING → pjp::proceed
+  ResolvedPipeline.resolve(providers, method)        ← happens ONCE
+    │  filter providers by canHandle(greet-Method) → all 3 pass
+    │  sort by order: AUTH(10) → LOG(20) → TIMING(30)
+    │  compose chainFactory inside-out:
+    │    terminal → AUTH( LOG( TIMING( terminal ) ) )
+    │  store in cache
     │
-    │  chain.proceed()
+    ▼
+  ResolvedPipeline.execute(pjp::proceed)
+    │  create terminal lambda (captures pjp::proceed)
+    │  chainFactory.apply(terminal)
+    │  chain.execute(chainId, callId, null)
     │
     ▼
   AUTHORIZATION layer
@@ -937,7 +1088,7 @@ When `greetingService.greet("World")` is called:
   TIMING layer
     │  start timer → next.execute(...)
     ▼
-  pjp::proceed → GreetingService.greet("World") → "Hello, World!"
+  terminal → pjp::proceed → GreetingService.greet("World") → "Hello, World!"
     │
     │  (return value propagates back up)
     │
@@ -949,18 +1100,43 @@ When `greetingService.greet("World")` is called:
   caller receives "Hello, World!"
 ```
 
-When `greetingService.farewell("World")` is called through the same aspect:
+**Subsequent calls** to `greetingService.greet(...)` — pipeline is reused:
 
 ```
-  AspectPipelineBuilder
+  caller: greet("Alice")
+    │
+    ▼
+  AspectJ @Around advice
+    │  execute(pjp::proceed, method)
+    │
+    ▼
+  AbstractPipelineAspect.executeThrough(executor, method)
+    │  ConcurrentHashMap: cache HIT for greet-Method
+    │  (no filtering, no sorting, no chain composition)
+    │
+    ▼
+  ResolvedPipeline.execute(pjp::proceed)
+    │  create terminal lambda                ← only per-call allocation
+    │  chainFactory.apply(terminal)          ← reuse pre-composed chain
+    │  chain.execute(chainId, callId, null)
+    │
+    ▼
+  AUTH → LOG → TIMING → terminal → greet("Alice") → "Hello, Alice!"
+```
+
+**`farewell("World")`** — first call resolves a different cached pipeline:
+
+```
+  ResolvedPipeline.resolve(providers, farewell-Method)
     │  filter by canHandle(farewell-Method):
     │    AUTH.canHandle → true  (default)
     │    LOG.canHandle  → true  (default)
     │    TIMING.canHandle → false  (no @Pipelined annotation)
     │
-    │  Only 2 layers: AUTH(10) → LOG(20)
+    │  compose chainFactory: terminal → AUTH( LOG( terminal ) )
+    │  store in cache (separate entry from greet)
     │
-  Chain: AUTH → LOG → pjp::proceed
+  Subsequent farewell() calls reuse this 2-layer pipeline.
 ```
 
 ---
@@ -1060,20 +1236,26 @@ void current_call_id_increments_after_each_execution() throws Throwable {
 ### Checked Exception Transport
 
 `JoinPointExecutor.proceed()` declares `throws Throwable`, but the pipeline
-chain uses `InternalExecutor` which does not declare checked exceptions. The
-`JoinPointWrapper` solves this with a transport mechanism:
+chain uses `InternalExecutor` which does not declare checked exceptions. Both
+`JoinPointWrapper` (cold path) and `ResolvedPipeline` (hot path) solve this
+with the same transport mechanism:
 
-1. The core execution lambda catches checked exceptions from the delegate and
+1. The terminal executor catches checked exceptions from the delegate and
    wraps them in `CompletionException`.
-2. `JoinPointWrapper.proceed()` catches `CompletionException` and re-throws
-   the original cause.
+2. The entry point (`proceed()` or `execute()`) catches `CompletionException`
+   and re-throws the original cause.
 
 ```java
-// Inside JoinPointWrapper:
-@Override
-public R proceed() throws Throwable {
+// Inside ResolvedPipeline (hot path):
+public Object execute(JoinPointExecutor<Object> coreExecutor) throws Throwable {
+    InternalExecutor<Void, Object> terminal = (cid, caid, arg) -> {
+        try {
+            return coreExecutor.proceed();
+        } catch (RuntimeException | Error e) { throw e; }
+        catch (Throwable t) { throw new CompletionException(t); }
+    };
     try {
-        return initiateChain(null);
+        return chainFactory.apply(terminal).execute(chainId, callId, null);
     } catch (CompletionException e) {
         throw e.getCause();  // unwrap and re-throw original
     }
@@ -1111,19 +1293,40 @@ exception filtering chain, similar to nested try-catch blocks.
 
 ## Design Decisions and Trade-offs
 
-### Why a Fresh Chain Per Invocation?
+### Why Cache Per Method, Not Build Per Invocation?
 
-A new `JoinPointWrapper` chain is built for every `@Around` advice invocation.
-This costs a few object allocations per call, but guarantees:
+The original `AspectPipelineBuilder` approach built a full `JoinPointWrapper`
+chain on every `@Around` advice invocation — filtering, sorting, allocating N
+wrapper objects. This was wasteful: the layer structure is **deterministic per
+Method**. Only the terminal executor (`pjp::proceed`) changes between calls.
 
-- **Isolation**: Each invocation gets its own call ID. No shared mutable state
-  between concurrent calls.
-- **Correctness**: The `canHandle` filter is evaluated against the actual
-  method being called, not a cached approximation.
-- **Simplicity**: No cache invalidation logic, no lifecycle management.
+`ResolvedPipeline` applies the same insight as `SyncDispatchExtension` in the
+proxy module: pre-compose the chain structure once, then reuse it. The cache
+key is `Method` because `canHandle(Method)` can produce different layer sets
+for different methods (e.g. `greet()` gets 3 layers, `farewell()` gets 2).
 
-For hot paths where allocation pressure matters, the `layerProviders()` list
-itself can be pre-computed and cached — only the chain assembly is per-call.
+The per-call cost is reduced to:
+- One `ConcurrentHashMap.get()` (fast path, no locking after initial population)
+- One terminal lambda creation (captures `pjp::proceed`)
+- One `AtomicLong.incrementAndGet()` for the call ID
+- The chain traversal itself (nested lambda calls, no object allocation)
+
+The `buildPipeline()` methods remain available for cold-path introspection
+when full `Wrapper` interface support (`inner()`, type-safe traversal) is needed.
+
+### Hot Path vs. Cold Path
+
+The aspect base class now has a clear separation:
+
+| Path | Method | Purpose | Allocations per call |
+|------|--------|---------|---------------------|
+| **Hot** | `executeThrough(executor, method)` | Production execution | 1 lambda |
+| **Cold** | `buildPipeline(executor, method)` | Testing / introspection | N wrapper objects |
+
+The hot path uses `ResolvedPipeline` (no wrapper objects, pre-composed chain
+factory). The cold path uses `AspectPipelineBuilder` + `JoinPointWrapper` (full
+`Wrapper` interface with `inner()`, `chainId()`, `toStringHierarchy()`). Both
+paths produce identical execution behavior — only the overhead differs.
 
 ### Why default canHandle Returns true?
 
@@ -1142,14 +1345,31 @@ common (sync) case without benefiting it.
 
 ### Why inside-out Chain Construction?
 
-The builder iterates layers in reverse order during `buildChain()`. The last
-layer wraps the core executor, the second-to-last wraps that, and so on. This
-produces a chain where the first registered (lowest-order) layer is outermost.
+Both `AspectPipelineBuilder.buildChain()` and `ResolvedPipeline.resolve()`
+iterate layers in reverse order. The last layer wraps the core executor (or
+terminal), the second-to-last wraps that, and so on. This produces a chain
+where the first registered (lowest-order) layer is outermost.
 
-This approach means:
-- Layer wiring is determined at construction time, not at execution time.
-- No runtime `instanceof` checks on the hot path.
-- The `nextStep` reference is pre-resolved in the constructor.
+For `ResolvedPipeline`, this means the `chainFactory` is built as:
+
+```java
+// Start with identity (terminal passes through)
+Function<InternalExecutor, InternalExecutor> factory = Function.identity();
+
+// Walk in reverse — innermost layer wraps terminal first
+for (int i = actions.size() - 1; i >= 0; i--) {
+    LayerAction action = actions.get(i);
+    Function<InternalExecutor, InternalExecutor> outer = factory;
+    factory = terminal -> {
+        InternalExecutor next = outer.apply(terminal);
+        return (cid, callId, arg) -> action.execute(cid, callId, arg, next);
+    };
+}
+```
+
+At execution time, `chainFactory.apply(terminal)` resolves the entire chain
+in one pass — no runtime `instanceof` checks, no pre-resolved `nextStep`
+fields, just nested lambda invocations.
 
 ### Why Is the Aspect Constructor Injectable?
 
