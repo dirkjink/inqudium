@@ -2,6 +2,7 @@ package eu.inqudium.aspect.pipeline.example;
 
 import eu.inqudium.aspect.pipeline.AbstractPipelineAspect;
 import eu.inqudium.aspect.pipeline.AspectLayerProvider;
+import eu.inqudium.aspect.pipeline.ResolvedPipeline;
 import eu.inqudium.core.pipeline.JoinPointExecutor;
 import eu.inqudium.core.pipeline.JoinPointWrapper;
 import org.aspectj.lang.ProceedingJoinPoint;
@@ -154,5 +155,19 @@ public class PipelinedAspect extends AbstractPipelineAspect {
     public JoinPointWrapper<Object> inspectPipeline(JoinPointExecutor<Object> coreExecutor,
                                                     Method method) {
         return buildPipeline(coreExecutor, method);
+    }
+
+    /**
+     * Returns the cached {@link ResolvedPipeline} for the given method.
+     *
+     * <p>The pipeline is resolved on first access and reused on subsequent calls.
+     * Useful for verifying cached pipeline structure in tests and for
+     * diagnostics.</p>
+     *
+     * @param method the target method
+     * @return the pre-composed, cached pipeline
+     */
+    public ResolvedPipeline getResolvedPipeline(Method method) {
+        return resolvedPipeline(method);
     }
 }

@@ -36,6 +36,7 @@
             <groupId>eu.inqudium</groupId>
             <artifactId>inqudium-imperative</artifactId>
             <version>${project.version}</version>
+            <optional>true</optional>
         </dependency>
 
         <!-- ========================= -->
