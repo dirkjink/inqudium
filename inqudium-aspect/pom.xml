@@ -30,6 +30,15 @@
         </dependency>
 
         <!-- ========================= -->
+        <!--  Imperative module (async)-->
+        <!-- ========================= -->
+        <dependency>
+            <groupId>eu.inqudium</groupId>
+            <artifactId>inqudium-imperative</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+
+        <!-- ========================= -->
         <!--  AspectJ                  -->
         <!-- ========================= -->
         <dependency>
