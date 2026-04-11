@@ -5,6 +5,7 @@ import eu.inqudium.imperative.core.pipeline.AsyncJoinPointWrapper;
 
 import java.lang.reflect.Method;
 import java.util.List;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CompletionStage;
 
 /**
@@ -13,77 +14,108 @@ import java.util.concurrent.CompletionStage;
  *
  * <p>The async counterpart to {@link AbstractPipelineAspect}. Subclasses provide
  * the list of {@link AsyncAspectLayerProvider}s; this class assembles and executes
- * the {@link AsyncJoinPointWrapper} chain.</p>
+ * the pipeline.</p>
  *
- * <h3>Usage</h3>
- * <pre>{@code
- * @Aspect
- * public class AsyncResilienceAspect extends AbstractAsyncPipelineAspect {
+ * <h3>Pipeline caching</h3>
+ * <p>When a {@link Method} is provided, the async pipeline structure (provider
+ * filtering, sorting, and {@link eu.inqudium.imperative.core.pipeline.AsyncLayerAction}
+ * chain composition) is resolved <strong>once</strong> per method and cached in a
+ * {@link ConcurrentHashMap}. Subsequent calls for the same method reuse the
+ * pre-composed chain — only the terminal executor ({@code pjp::proceed}) is
+ * created per invocation.</p>
  *
- *     private final List<AsyncAspectLayerProvider<Object>> providers = List.of(
- *         new AsyncBulkheadLayerProvider(),
- *         new AsyncTimingLayerProvider()
- *     );
+ * <p>This mirrors the optimization in {@link AbstractPipelineAspect} and follows
+ * the same pattern as {@code SyncDispatchExtension} in the proxy module.</p>
  *
- *     @Override
- *     protected List<AsyncAspectLayerProvider<Object>> asyncLayerProviders() {
- *         return providers;
- *     }
- *
- *     @Around("@annotation(AsyncResilient)")
- *     public Object around(ProceedingJoinPoint pjp) throws Throwable {
- *         return executeThroughAsync(pjp::proceed);
- *     }
- * }
- * }</pre>
+ * <h3>Two-phase execution</h3>
+ * <p>Each async layer has a synchronous start phase (before
+ * {@code next.executeAsync()}) and an asynchronous end phase (attached via
+ * {@code whenComplete()}, {@code thenApply()}, etc.). The pre-composed chain
+ * preserves this two-phase semantics.</p>
  *
  * <h3>Exception transport</h3>
- * <p>Checked exceptions from the proxied method's synchronous phase are transported
- * via {@link java.util.concurrent.CompletionException} and unwrapped by
- * {@link AsyncJoinPointWrapper#proceed()}. Exceptions during the async completion
- * phase surface through the returned {@link CompletionStage}.</p>
+ * <p>Checked exceptions from the synchronous start phase are transported via
+ * {@link java.util.concurrent.CompletionException} and unwrapped by
+ * {@link AsyncResolvedPipeline#execute(JoinPointExecutor)}. Exceptions during
+ * the async completion phase surface through the returned
+ * {@link CompletionStage}.</p>
+ *
+ * <h3>Introspection</h3>
+ * <p>For diagnostic and testing purposes, the {@link #buildAsyncPipeline} methods
+ * still construct a full {@link AsyncJoinPointWrapper} chain with
+ * {@link eu.inqudium.core.pipeline.Wrapper} introspection support. These are not
+ * used on the hot path.</p>
  */
 public abstract class AbstractAsyncPipelineAspect {
 
     /**
+     * Cache of pre-composed async pipelines, keyed by the target {@link Method}.
+     */
+    private final ConcurrentHashMap<Method, AsyncResolvedPipeline> pipelineCache =
+            new ConcurrentHashMap<>();
+
+    /**
      * Returns the ordered list of async layer providers for this aspect.
-     *
-     * <p>Providers are sorted by {@link AsyncAspectLayerProvider#order()} during
-     * chain assembly. Implementations may return a cached, immutable list
-     * if the layer configuration is static.</p>
      *
      * @return the async layer providers, never {@code null}
      */
     protected abstract List<AsyncAspectLayerProvider<Object>> asyncLayerProviders();
 
+    // ======================== Hot path: AsyncResolvedPipeline ========================
+
     /**
-     * Builds an async wrapper chain from the configured layer providers and
-     * executes the given join point through it.
+     * Executes the given join point through a cached, pre-composed async pipeline
+     * filtered by the target method.
      *
-     * <p>Intended to be called from an {@code @Around} advice method where the
-     * proxied method returns a {@link CompletionStage}:</p>
-     * <pre>{@code
-     * @Around("...")
-     * public Object around(ProceedingJoinPoint pjp) throws Throwable {
-     *     return executeThroughAsync(pjp::proceed);
-     * }
-     * }</pre>
+     * <p>On first invocation for a given method, the pipeline is resolved and
+     * cached. On subsequent invocations, the cached pipeline is reused — only
+     * the terminal executor is created per call.</p>
      *
      * @param coreExecutor the join point execution (typically {@code pjp::proceed}),
      *                     expected to return a {@link CompletionStage}
-     * @return a {@link CompletionStage} carrying the result of the pipeline execution
-     * @throws Throwable any synchronous exception from the delegate or from layer
-     *                   actions during the start phase, with checked exceptions
-     *                   unwrapped from their {@link java.util.concurrent.CompletionException}
-     *                   transport
+     * @param method       the target method, used as cache key and for
+     *                     {@code canHandle} filtering on first resolution
+     * @return a {@link CompletionStage} carrying the result
+     * @throws Throwable any synchronous exception from the start phase
+     */
+    protected CompletionStage<Object> executeThroughAsync(
+            JoinPointExecutor<Object> coreExecutor, Method method) throws Throwable {
+        AsyncResolvedPipeline pipeline = pipelineCache.computeIfAbsent(
+                method, m -> AsyncResolvedPipeline.resolve(asyncLayerProviders(), m));
+
+        return pipeline.execute(coreExecutor);
+    }
+
+    /**
+     * Returns the cached {@link AsyncResolvedPipeline} for the given method,
+     * resolving it on first access.
+     *
+     * @param method the target method
+     * @return the pre-composed, cached async pipeline
+     */
+    protected AsyncResolvedPipeline resolvedAsyncPipeline(Method method) {
+        return pipelineCache.computeIfAbsent(
+                method, m -> AsyncResolvedPipeline.resolve(asyncLayerProviders(), m));
+    }
+
+    // ======================== Non-cached convenience methods ========================
+
+    /**
+     * Builds an async wrapper chain from all providers and executes it.
+     *
+     * <p>This method does <strong>not</strong> use the pipeline cache because
+     * no {@link Method} key is available. Each call builds a fresh chain.
+     * Prefer {@link #executeThroughAsync(JoinPointExecutor, Method)} on hot paths.</p>
+     *
+     * @param coreExecutor the join point execution, expected to return a
+     *                     {@link CompletionStage}
+     * @return a {@link CompletionStage} carrying the result
+     * @throws Throwable any synchronous exception from the start phase
      */
     @SuppressWarnings("unchecked")
     protected CompletionStage<Object> executeThroughAsync(
             JoinPointExecutor<Object> coreExecutor) throws Throwable {
 
-        // The core executor returns a CompletionStage at runtime (the proxied
-        // method's return value), but its compile-time type is Object.
-        // We bridge this by wrapping the executor in a typed lambda.
         JoinPointExecutor<CompletionStage<Object>> typedExecutor =
                 () -> (CompletionStage<Object>) coreExecutor.proceed();
 
@@ -94,12 +126,12 @@ public abstract class AbstractAsyncPipelineAspect {
         return chain.proceed();
     }
 
+    // ======================== Introspection (cold path) ========================
+
     /**
-     * Builds the async wrapper chain without executing it.
+     * Builds a full {@link AsyncJoinPointWrapper} chain without executing it.
      *
-     * <p>Useful for diagnostics — the returned wrapper exposes
-     * {@link eu.inqudium.core.pipeline.Wrapper#toStringHierarchy()} for
-     * visualizing the assembled async pipeline structure.</p>
+     * <p>Intended for diagnostics and testing — not for hot-path execution.</p>
      *
      * @param coreExecutor the async join point execution
      * @return the outermost wrapper of the assembled async chain
@@ -112,38 +144,13 @@ public abstract class AbstractAsyncPipelineAspect {
     }
 
     /**
-     * Builds an async wrapper chain filtered by the target method and executes
-     * the given join point through it.
+     * Builds a full {@link AsyncJoinPointWrapper} chain filtered by the target
+     * method, without executing it.
      *
-     * <p>Only providers whose {@link AsyncAspectLayerProvider#canHandle(Method)}
-     * returns {@code true} for the given method are included.</p>
-     *
-     * @param coreExecutor the join point execution, expected to return a
-     *                     {@link CompletionStage}
-     * @param method       the target method, used to filter providers via {@code canHandle}
-     * @return a {@link CompletionStage} carrying the result of the pipeline execution
-     * @throws Throwable any synchronous exception from the delegate or layer actions
-     */
-    @SuppressWarnings("unchecked")
-    protected CompletionStage<Object> executeThroughAsync(
-            JoinPointExecutor<Object> coreExecutor, Method method) throws Throwable {
-
-        JoinPointExecutor<CompletionStage<Object>> typedExecutor =
-                () -> (CompletionStage<Object>) coreExecutor.proceed();
-
-        AsyncJoinPointWrapper<Object> chain = new AsyncAspectPipelineBuilder<Object>()
-                .addProviders(asyncLayerProviders(), method)
-                .buildChain(typedExecutor);
-
-        return chain.proceed();
-    }
-
-    /**
-     * Builds the async wrapper chain filtered by the target method, without
-     * executing it.
+     * <p>Intended for diagnostics and testing — not for hot-path execution.</p>
      *
      * @param coreExecutor the async join point execution
-     * @param method       the target method, used to filter providers via {@code canHandle}
+     * @param method       the target method, used to filter providers
      * @return the outermost wrapper of the assembled async chain
      */
     protected AsyncJoinPointWrapper<Object> buildAsyncPipeline(

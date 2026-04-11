@@ -64,14 +64,14 @@ allocation on the hot path.
 ## Architecture Overview
 
 ```
-┌───────────────────────────────────────────────────────────────────────┐
-│  AspectJ Runtime                                                      │
-│                                                                       │
-│  @Around advice fires ──► ProceedingJoinPoint (pjp)                   │
-│                              │                                        │
-│                              │  pjp::proceed (= JoinPointExecutor)    │
-│                              ▼                                        │
-│  ┌───────────────────────────────────────────────────────────────┐    │
+┌──────────────────────────────────────────────────────────────────────┐
+│  AspectJ Runtime                                                     │
+│                                                                      │
+│  @Around advice fires ──► ProceedingJoinPoint (pjp)                 │
+│                              │                                       │
+│                              │  pjp::proceed (= JoinPointExecutor)  │
+│                              ▼                                       │
+│  ┌──────────────────────────────────────────────────────────────┐    │
 │  │  inqudium-aspect                                              │    │
 │  │                                                               │    │
 │  │  AbstractPipelineAspect                                       │    │
@@ -96,8 +96,8 @@ allocation on the hot path.
 │  │                                                               │    │
 │  │  Pre-composed chain (no wrapper objects):                     │    │
 │  │    AUTH.execute → LOG.execute → TIMING.execute → terminal     │    │
-│  └───────────────────────────────────────────────────────────────┘    │
-└───────────────────────────────────────────────────────────────────────┘
+│  └──────────────────────────────────────────────────────────────┘    │
+└──────────────────────────────────────────────────────────────────────┘
 ```
 
 **Data flow (first call)**: AspectJ intercepts a method call → the `@Around` advice
@@ -125,6 +125,7 @@ inqudium-aspect/
     │   ├── AspectPipelineBuilder.java         # Chain assembly (sync, cold path)
     │   ├── AsyncAspectPipelineBuilder.java    # Chain assembly (async)
     │   ├── ResolvedPipeline.java              # Pre-composed chain (sync, hot path)
+    │   ├── AsyncResolvedPipeline.java         # Pre-composed chain (async, hot path)
     │   ├── AbstractPipelineAspect.java        # Base class for sync aspects
     │   ├── AbstractAsyncPipelineAspect.java   # Base class for async aspects
     │   ├── package-info.java
@@ -657,6 +658,11 @@ Both approaches share the same insight: the layer chain structure is
 **deterministic** for a given method signature and does not need to be
 rebuilt on every call. Only the terminal (what to invoke at the end) changes.
 
+The async pipeline follows the identical pattern: `AsyncResolvedPipeline`
+pre-composes `AsyncLayerAction` chains into a
+`Function<InternalAsyncExecutor, InternalAsyncExecutor>`, cached per method
+in `AbstractAsyncPipelineAspect`.
+
 ### Per-Call Cost Comparison
 
 | Step                          | Without caching         | With ResolvedPipeline  |
@@ -816,6 +822,12 @@ CompletionStage<R> executeAsync(long chainId, long callId, A argument,
 
 ### AbstractAsyncPipelineAspect
 
+Uses the same caching strategy as the synchronous counterpart: an
+`AsyncResolvedPipeline` is resolved once per `Method` and cached in a
+`ConcurrentHashMap`. The `AsyncLayerAction` chain is pre-composed into a
+`Function<InternalAsyncExecutor, InternalAsyncExecutor>` — only the terminal
+executor is created per call.
+
 ```java
 @Aspect
 public class AsyncResilienceAspect extends AbstractAsyncPipelineAspect {
@@ -833,10 +845,20 @@ public class AsyncResilienceAspect extends AbstractAsyncPipelineAspect {
     @Around("@annotation(AsyncResilient)")
     public Object around(ProceedingJoinPoint pjp) throws Throwable {
         Method method = ((MethodSignature) pjp.getSignature()).getMethod();
-        return executeThroughAsync(pjp::proceed, method);
+        return executeThroughAsync(pjp::proceed, method);  // cached hot path
     }
 }
 ```
+
+The base class provides the same hot/cold path split as the sync version:
+
+| Method                                            | Path   | Description                                      |
+|---------------------------------------------------|--------|--------------------------------------------------|
+| `executeThroughAsync(executor, method)`            | Hot    | Uses cached `AsyncResolvedPipeline` per method   |
+| `executeThroughAsync(executor)`                    | Cold   | Builds fresh `AsyncJoinPointWrapper` chain       |
+| `resolvedAsyncPipeline(method)`                    | Hot    | Returns cached pipeline for diagnostics          |
+| `buildAsyncPipeline(executor)`                     | Cold   | Full `Wrapper` introspection chain               |
+| `buildAsyncPipeline(executor, method)`             | Cold   | Filtered `Wrapper` introspection chain           |
 
 ### Two-Phase Execution Semantics
 
