@@ -61,11 +61,40 @@ public class PipelinedAspect extends AbstractPipelineAspect {
     private final List<AspectLayerProvider<Object>> providers;
 
     /**
+     * No-arg constructor required by AspectJ's singleton instantiation model.
+     *
+     * <p>AspectJ creates a single instance of each {@code @Aspect} class via
+     * {@code aspectOf()}, which requires a no-argument constructor. This
+     * default instance uses an empty provider list — the woven advice acts
+     * as a pass-through until providers are configured.</p>
+     *
+     * <p>In production, use a DI framework (e.g. Spring) to configure the
+     * aspect instance with the desired providers, or override this class
+     * with a concrete subclass that supplies providers in the no-arg
+     * constructor:</p>
+     * <pre>{@code
+     * @Aspect
+     * public class MyAspect extends PipelinedAspect {
+     *     public MyAspect() {
+     *         super(List.of(
+     *             new LoggingLayerProvider(),
+     *             new TimingLayerProvider()
+     *         ));
+     *     }
+     * }
+     * }</pre>
+     */
+    public PipelinedAspect() {
+        this(List.of());
+    }
+
+    /**
      * Creates the aspect with injectable layer providers.
      *
      * <p>Accepting providers via the constructor makes the aspect testable:
      * tests can supply providers with trace lists, mocked authorization,
-     * or custom behavior.</p>
+     * or custom behavior — then call {@link #execute} directly without
+     * going through AspectJ weaving.</p>
      *
      * @param providers the ordered layer providers for the pipeline
      */
