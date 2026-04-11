@@ -11,7 +11,8 @@ import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import static org.assertj.core.api.Assertions.*;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 @DisplayName("AbstractPipelineAspect")
 class AbstractPipelineAspectTest {
@@ -46,7 +47,7 @@ class AbstractPipelineAspectTest {
     }
 
     @Nested
-    @DisplayName("executeThrough")
+    @DisplayName("execute")
     class ExecuteThrough {
 
         @Test
@@ -55,7 +56,7 @@ class AbstractPipelineAspectTest {
             AbstractPipelineAspect aspect = aspectWith(Collections.emptyList());
 
             // When
-            Object result = aspect.executeThrough(() -> "hello");
+            Object result = aspect.execute(() -> "hello");
 
             // Then
             assertThat(result).isEqualTo("hello");
@@ -71,7 +72,7 @@ class AbstractPipelineAspectTest {
             ));
 
             // When
-            Object result = aspect.executeThrough(() -> {
+            Object result = aspect.execute(() -> {
                 trace.add("core");
                 return "done";
             });
@@ -98,7 +99,7 @@ class AbstractPipelineAspectTest {
             ));
 
             // When
-            aspect.executeThrough(() -> {
+            aspect.execute(() -> {
                 trace.add("core");
                 return null;
             });
@@ -123,7 +124,7 @@ class AbstractPipelineAspectTest {
             ));
 
             // When / Then
-            assertThatThrownBy(() -> aspect.executeThrough(() -> {
+            assertThatThrownBy(() -> aspect.execute(() -> {
                 throw new java.io.IOException("disk full");
             }))
                     .isInstanceOf(java.io.IOException.class)
@@ -138,7 +139,7 @@ class AbstractPipelineAspectTest {
             ));
 
             // When / Then
-            assertThatThrownBy(() -> aspect.executeThrough(() -> {
+            assertThatThrownBy(() -> aspect.execute(() -> {
                 throw new IllegalArgumentException("bad input");
             }))
                     .isInstanceOf(IllegalArgumentException.class)
@@ -160,8 +161,8 @@ class AbstractPipelineAspectTest {
             AbstractPipelineAspect aspect = aspectWith(List.of(countingProvider));
 
             // When
-            aspect.executeThrough(() -> "first");
-            aspect.executeThrough(() -> "second");
+            aspect.execute(() -> "first");
+            aspect.execute(() -> "second");
 
             // Then — layerAction() was called twice, once per chain build
             assertThat(buildCount).hasValue(2);
@@ -175,7 +176,7 @@ class AbstractPipelineAspectTest {
             ));
 
             // When
-            Object result = aspect.executeThrough(() -> null);
+            Object result = aspect.execute(() -> null);
 
             // Then
             assertThat(result).isNull();
@@ -183,7 +184,7 @@ class AbstractPipelineAspectTest {
     }
 
     @Nested
-    @DisplayName("buildPipeline")
+    @DisplayName("inspectPipeline")
     class BuildPipeline {
 
         @Test
@@ -195,7 +196,7 @@ class AbstractPipelineAspectTest {
             ));
 
             // When
-            JoinPointWrapper<Object> pipeline = aspect.buildPipeline(() -> {
+            JoinPointWrapper<Object> pipeline = aspect.inspectPipeline(() -> {
                 coreCallCount.incrementAndGet();
                 return "result";
             });
@@ -216,7 +217,7 @@ class AbstractPipelineAspectTest {
             ));
 
             // When
-            JoinPointWrapper<Object> pipeline = aspect.buildPipeline(() -> null);
+            JoinPointWrapper<Object> pipeline = aspect.inspectPipeline(() -> null);
             String hierarchy = pipeline.toStringHierarchy();
 
             // Then
@@ -232,7 +233,7 @@ class AbstractPipelineAspectTest {
             AbstractPipelineAspect aspect = aspectWith(List.of(
                     provider("LAYER", 10, LayerAction.passThrough())
             ));
-            JoinPointWrapper<Object> pipeline = aspect.buildPipeline(() -> "deferred");
+            JoinPointWrapper<Object> pipeline = aspect.inspectPipeline(() -> "deferred");
 
             // When
             Object result = pipeline.proceed();
@@ -295,7 +296,7 @@ class AbstractPipelineAspectTest {
             AbstractPipelineAspect aspect = aspectWith(List.of(logging, timing, retry));
 
             // When — core fails twice, succeeds on third attempt
-            Object result = aspect.executeThrough(() -> {
+            Object result = aspect.execute(() -> {
                 int attempt = attempts.incrementAndGet();
                 if (attempt < 3) {
                     throw new RuntimeException("transient-" + attempt);
@@ -327,7 +328,7 @@ class AbstractPipelineAspectTest {
             AbstractPipelineAspect aspect = aspectWith(List.of(cache));
 
             // When
-            Object result = aspect.executeThrough(() -> {
+            Object result = aspect.execute(() -> {
                 coreCallCount.incrementAndGet();
                 return "from-db";
             });

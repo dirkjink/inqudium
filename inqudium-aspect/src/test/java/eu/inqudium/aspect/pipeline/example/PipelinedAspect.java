@@ -2,21 +2,36 @@ package eu.inqudium.aspect.pipeline.example;
 
 import eu.inqudium.aspect.pipeline.AbstractPipelineAspect;
 import eu.inqudium.aspect.pipeline.AspectLayerProvider;
-import eu.inqudium.aspect.pipeline.ResolvedPipeline;
-import eu.inqudium.core.pipeline.JoinPointExecutor;
-import eu.inqudium.core.pipeline.JoinPointWrapper;
 import org.aspectj.lang.ProceedingJoinPoint;
 import org.aspectj.lang.annotation.Around;
 import org.aspectj.lang.annotation.Aspect;
-import org.aspectj.lang.reflect.MethodSignature;
 
-import java.lang.reflect.Method;
-import java.util.ArrayList;
 import java.util.List;
 
 /**
  * Concrete aspect that weaves a three-layer pipeline around every method
  * annotated with {@link Pipelined}.
+ *
+ * <p>This aspect is intentionally minimal — all pipeline infrastructure
+ * (caching, execution, introspection) lives in {@link AbstractPipelineAspect}.
+ * The concrete aspect only defines:</p>
+ * <ul>
+ *   <li>The production layer stack (no-arg constructor)</li>
+ *   <li>The pointcut ({@code @Around} advice)</li>
+ * </ul>
+ *
+ * <h3>AspectJ-generated methods</h3>
+ * <p>The AspectJ compiler ({@code ajc}) automatically generates
+ * {@code aspectOf()} and {@code hasAspect()} methods during compile-time
+ * weaving. These methods are <strong>not</strong> declared in the source —
+ * {@code ajc} creates them in the bytecode. To use them:</p>
+ * <pre>{@code
+ * // Only available after CTW or LTW has been applied:
+ * PipelinedAspect singleton = PipelinedAspect.aspectOf();
+ * ResolvedPipeline pipeline = singleton.getResolvedPipeline(method);
+ * }</pre>
+ * <p>In unit tests without weaving, use {@code new PipelinedAspect()} instead —
+ * the no-arg constructor wires the same production providers as the singleton.</p>
  *
  * <h3>Pipeline structure (outermost → innermost)</h3>
  * <ol>
@@ -25,185 +40,50 @@ import java.util.List;
  *   <li><strong>LOGGING</strong> (order 20) — records entry, exit, and
  *       exception events with chain/call IDs.</li>
  *   <li><strong>TIMING</strong> (order 30) — measures the execution
- *       duration of the core method.</li>
+ *       duration of the core method (only for {@code @Pipelined} methods).</li>
  * </ol>
  *
- * <h3>How AspectJ weaving works</h3>
- * <p>At compile-time (or load-time with the weaver agent), AspectJ identifies
- * all methods annotated with {@code @Pipelined}. For each such method, the
- * compiler replaces the direct call with an invocation that first enters
- * the {@link #around(ProceedingJoinPoint)} advice. The advice receives a
- * {@link ProceedingJoinPoint} — a handle to the original method. Calling
- * {@code pjp.proceed()} invokes the real method.</p>
- *
- * <p>This aspect passes {@code pjp::proceed} as a {@link JoinPointExecutor}
- * to {@link #executeThrough(JoinPointExecutor)}, which builds a
- * {@link JoinPointWrapper} chain and executes the method through all three
- * layers.</p>
- *
- * <h3>Example call flow for {@code greetingService.greet("World")}</h3>
+ * <h3>Example call flow</h3>
  * <pre>
- *   caller
- *     → AspectJ advice (around)
- *       → AUTHORIZATION layer  (check access)
- *         → LOGGING layer      (log entry)
- *           → TIMING layer     (start timer)
- *             → greet("World") (actual method)
- *           ← TIMING layer     (stop timer)
- *         ← LOGGING layer      (log exit)
- *       ← AUTHORIZATION layer
- *     ← AspectJ advice
- *   ← caller receives "Hello, World!"
+ *   caller → greet("World")
+ *     → [AspectJ woven advice] → executeAround(pjp)
+ *       → AUTHORIZATION → LOGGING → TIMING → pjp.proceed()
+ *     ← "Hello, World!"
  * </pre>
  */
 @Aspect
 public class PipelinedAspect extends AbstractPipelineAspect {
 
-    private final List<AspectLayerProvider<Object>> providers;
+    // ======================== Constructors ========================
 
     /**
-     * No-arg constructor required by AspectJ's singleton instantiation model.
-     *
-     * <p>AspectJ creates a single instance of each {@code @Aspect} class via
-     * {@code aspectOf()}, which requires a no-argument constructor. This
-     * default instance uses an empty provider list — the woven advice acts
-     * as a pass-through until providers are configured.</p>
-     *
-     * <p>In production, use a DI framework (e.g. Spring) to configure the
-     * aspect instance with the desired providers, or override this class
-     * with a concrete subclass that supplies providers in the no-arg
-     * constructor:</p>
-     * <pre>{@code
-     * @Aspect
-     * public class MyAspect extends PipelinedAspect {
-     *     public MyAspect() {
-     *         super(List.of(
-     *             new LoggingLayerProvider(),
-     *             new TimingLayerProvider()
-     *         ));
-     *     }
-     * }
-     * }</pre>
+     * Production constructor — used by AspectJ's singleton instantiation.
+     * Wires the standard three-layer stack.
      */
     public PipelinedAspect() {
-        this(
-                List.of(
-                        new AuthorizationLayerProvider(new ArrayList<>(), true),
-                        new LoggingLayerProvider(new ArrayList<>()),
-                        new TimingLayerProvider(new ArrayList<>())
-                )
-        );
+        super(List.of(
+                new AuthorizationLayerProvider(),
+                new LoggingLayerProvider(),
+                new TimingLayerProvider()
+        ));
     }
 
     /**
-     * Creates the aspect with injectable layer providers.
+     * Test constructor — injectable providers for controlled testing.
      *
-     * <p>Accepting providers via the constructor makes the aspect testable:
-     * tests can supply providers with trace lists, mocked authorization,
-     * or custom behavior — then call {@link #execute} directly without
-     * going through AspectJ weaving.</p>
-     *
-     * @param providers the ordered layer providers for the pipeline
+     * @param providers the layer providers (e.g. with trace lists)
      */
     public PipelinedAspect(List<AspectLayerProvider<Object>> providers) {
-        this.providers = providers;
+        super(providers);
     }
 
-    @Override
-    protected List<AspectLayerProvider<Object>> layerProviders() {
-        return providers;
-    }
+    // ======================== Pointcut ========================
 
     /**
      * Around-advice that intercepts all {@code @Pipelined} methods.
-     *
-     * <p>AspectJ calls this method instead of the original. The original
-     * method is accessible via {@code pjp.proceed()}, which is passed
-     * as a method reference ({@code pjp::proceed}) to the pipeline.</p>
-     *
-     * @param pjp the proceeding join point — handle to the intercepted method
-     * @return the result of the pipeline execution
-     * @throws Throwable any exception from the method or the pipeline layers
      */
     @Around("@annotation(eu.inqudium.aspect.pipeline.example.Pipelined)")
     public Object around(ProceedingJoinPoint pjp) throws Throwable {
-        Method method = ((MethodSignature) pjp.getSignature()).getMethod();
-        return execute(pjp::proceed, method);
-    }
-
-    /**
-     * Public entry point for executing a {@link JoinPointExecutor} through
-     * the full pipeline, including all providers regardless of method.
-     *
-     * <p>Delegates to the {@code protected} {@link #executeThrough(JoinPointExecutor)}
-     * from the base class. Useful when no {@link Method} context is available.</p>
-     *
-     * @param coreExecutor the core execution point
-     * @return the result of the pipeline execution
-     * @throws Throwable any exception from the method or the pipeline layers
-     */
-    public Object execute(JoinPointExecutor<Object> coreExecutor) throws Throwable {
-        return executeThrough(coreExecutor);
-    }
-
-    /**
-     * Public entry point for executing a {@link JoinPointExecutor} through
-     * the pipeline, filtered by the target method.
-     *
-     * <p>Only providers whose {@link AspectLayerProvider#canHandle(Method)} returns
-     * {@code true} for the given method are included in the chain.</p>
-     *
-     * @param coreExecutor the core execution point (e.g. {@code pjp::proceed}
-     *                     or a lambda wrapping a service method)
-     * @param method       the target method, used to filter providers
-     * @return the result of the pipeline execution
-     * @throws Throwable any exception from the method or the pipeline layers
-     */
-    public Object execute(JoinPointExecutor<Object> coreExecutor, Method method)
-            throws Throwable {
-        return executeThrough(coreExecutor, method);
-    }
-
-    /**
-     * Exposes the pipeline structure for a given core executor without
-     * executing it, including all providers regardless of method.
-     *
-     * @param coreExecutor the core execution point
-     * @return the outermost wrapper of the assembled chain
-     */
-    public JoinPointWrapper<Object> inspectPipeline(JoinPointExecutor<Object> coreExecutor) {
-        return buildPipeline(coreExecutor);
-    }
-
-    /**
-     * Exposes the pipeline structure filtered by the target method, without
-     * executing it.
-     *
-     * <p>Useful for diagnostic and testing purposes — the returned
-     * {@link JoinPointWrapper} can be introspected via the
-     * {@link eu.inqudium.core.pipeline.Wrapper} interface to verify which
-     * layers are active for a specific method.</p>
-     *
-     * @param coreExecutor the core execution point
-     * @param method       the target method, used to filter providers
-     * @return the outermost wrapper of the assembled chain
-     */
-    public JoinPointWrapper<Object> inspectPipeline(JoinPointExecutor<Object> coreExecutor,
-                                                    Method method) {
-        return buildPipeline(coreExecutor, method);
-    }
-
-    /**
-     * Returns the cached {@link ResolvedPipeline} for the given method.
-     *
-     * <p>The pipeline is resolved on first access and reused on subsequent calls.
-     * Useful for verifying cached pipeline structure in tests and for
-     * diagnostics.</p>
-     *
-     * @param method the target method
-     * @return the pre-composed, cached pipeline
-     */
-    public ResolvedPipeline getResolvedPipeline(Method method) {
-        return resolvedPipeline(method);
+        return executeAround(pjp);
     }
 }

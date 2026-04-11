@@ -16,6 +16,10 @@ public class LoggingLayerProvider implements AspectLayerProvider<Object> {
 
     private final List<String> trace;
 
+    public LoggingLayerProvider() {
+        this(null);
+    }
+
     /**
      * @param trace shared trace list for observing execution order
      */

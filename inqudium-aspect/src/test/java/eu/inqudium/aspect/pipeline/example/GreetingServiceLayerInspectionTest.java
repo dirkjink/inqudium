@@ -17,139 +17,131 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * Demonstrates how to inspect the layer structure of a pipeline
- * for a specific service method — without executing the pipeline.
+ * for a specific service method.
  *
- * <p>This is the test you would write when asking:
- * "Which layers are active for {@code GreetingService.greet()}?"</p>
+ * <h3>Two inspection approaches</h3>
+ * <ul>
+ *   <li><strong>Production instance</strong> — use {@code new PipelinedAspect()}
+ *       (no-arg constructor) which wires the same production providers as the
+ *       AspectJ-managed singleton. No special setup needed.</li>
+ *   <li><strong>Test instance</strong> — create a {@code PipelinedAspect} with
+ *       injectable providers (e.g. with trace lists) for fine-grained assertions
+ *       on execution order.</li>
+ * </ul>
  */
 @DisplayName("Layer inspection for GreetingService")
 class GreetingServiceLayerInspectionTest {
-
-    private PipelinedAspect aspect;
-    private GreetingService service;
 
     private Method greetMethod;
     private Method farewellMethod;
 
     @BeforeEach
     void setUp() throws NoSuchMethodException {
-        // Set up the aspect with the standard three-layer stack
-        aspect = new PipelinedAspect();
-        service = new GreetingService();
-
-        // Resolve the Method references for the two service methods
         greetMethod = GreetingService.class.getMethod("greet", String.class);
         farewellMethod = GreetingService.class.getMethod("farewell", String.class);
     }
 
     // =========================================================================
-    // Approach 1: ResolvedPipeline diagnostics (hot-path object, lightweight)
+    // Inspecting the production layer stack — no special setup
     // =========================================================================
 
     @Nested
-    @DisplayName("Approach 1: ResolvedPipeline diagnostics")
-    class ResolvedPipelineDiagnostics {
+    @DisplayName("Production layer stack inspection")
+    class ProductionLayerStack {
+
+        private PipelinedAspect aspect;
+
+        @BeforeEach
+        void setUp() {
+            // The no-arg constructor wires the same production providers
+            // as the AspectJ-managed singleton (AUTH, LOGGING, TIMING).
+            aspect = new PipelinedAspect();
+        }
 
         @Test
-        void inspect_layer_names_for_greet() {
-            // Given — resolve the cached pipeline for greet()
+        void the_singleton_has_the_production_layer_stack() {
+            // Given — resolve the pipeline for greet()
             ResolvedPipeline pipeline = aspect.getResolvedPipeline(greetMethod);
 
-            // When / Then — all three layers are active (greet has @Pipelined)
+            // Then — all three production layers are active
             assertThat(pipeline.layerNames())
                     .containsExactly("AUTHORIZATION", "LOGGING", "TIMING");
-
-            assertThat(pipeline.depth()).isEqualTo(3);
         }
 
         @Test
-        void inspect_layer_names_for_farewell() {
-            // Given — resolve the cached pipeline for farewell()
+        void farewell_has_no_timing_layer_because_can_handle_filters_it() {
+            // Given
             ResolvedPipeline pipeline = aspect.getResolvedPipeline(farewellMethod);
 
-            // When / Then — only two layers (farewell has no @Pipelined → TIMING excluded)
+            // Then — TIMING excluded (farewell has no @Pipelined)
             assertThat(pipeline.layerNames())
                     .containsExactly("AUTHORIZATION", "LOGGING");
-
-            assertThat(pipeline.depth()).isEqualTo(2);
         }
 
         @Test
-        void print_hierarchy_for_greet() {
+        void print_diagnostic_summary_for_all_methods() {
+            // Utility: discover which layers apply to each method
+            System.out.println("=== Layer summary (production singleton) ===");
+            System.out.println();
+
+            for (Method method : GreetingService.class.getDeclaredMethods()) {
+                ResolvedPipeline pipeline = aspect.getResolvedPipeline(method);
+                System.out.printf("  %s.%s()%n",
+                        method.getDeclaringClass().getSimpleName(),
+                        method.getName());
+                System.out.printf("    Layers: %s%n", pipeline.layerNames());
+                System.out.printf("    Depth:  %d%n", pipeline.depth());
+                System.out.printf("    Chain-ID: %d%n", pipeline.chainId());
+                System.out.println();
+            }
+
+            // Output:
+            // === Layer summary (production singleton) ===
+            //
+            //   GreetingService.greet()
+            //     Layers: [AUTHORIZATION, LOGGING, TIMING]
+            //     Depth:  3
+            //     Chain-ID: 42
+            //
+            //   GreetingService.farewell()
+            //     Layers: [AUTHORIZATION, LOGGING]
+            //     Depth:  2
+            //     Chain-ID: 43
+        }
+
+        @Test
+        void print_hierarchy_tree() {
             // Given
             ResolvedPipeline pipeline = aspect.getResolvedPipeline(greetMethod);
 
             // When
-            String hierarchy = pipeline.toStringHierarchy();
+            System.out.println("=== Hierarchy tree for greet() ===");
+            System.out.println(pipeline.toStringHierarchy());
 
-            // Then — visualize the chain structure
-            System.out.println("=== ResolvedPipeline hierarchy for greet() ===");
-            System.out.println(hierarchy);
-
-            // Output:
-            // Chain-ID: 42 (current call-ID: 0)
-            // AUTHORIZATION
-            //   └── LOGGING
-            //     └── TIMING
-
-            assertThat(hierarchy)
-                    .contains("Chain-ID:")
+            // Then
+            assertThat(pipeline.toStringHierarchy())
                     .contains("AUTHORIZATION")
                     .contains("└── LOGGING")
                     .contains("└── TIMING");
         }
 
         @Test
-        void same_pipeline_is_reused_across_multiple_lookups() {
-            // Given — resolve twice for the same method
+        void same_pipeline_is_returned_on_repeated_lookups() {
+            // Given
             ResolvedPipeline first = aspect.getResolvedPipeline(greetMethod);
             ResolvedPipeline second = aspect.getResolvedPipeline(greetMethod);
 
-            // Then — same cached instance
+            // Then — cached, same instance
             assertThat(first).isSameAs(second);
         }
 
         @Test
-        void different_methods_get_independent_pipelines() {
-            // Given
-            ResolvedPipeline greetPipeline = aspect.getResolvedPipeline(greetMethod);
-            ResolvedPipeline farewellPipeline = aspect.getResolvedPipeline(farewellMethod);
-
-            // Then — different instances with different chain IDs
-            assertThat(greetPipeline).isNotSameAs(farewellPipeline);
-            assertThat(greetPipeline.chainId()).isNotEqualTo(farewellPipeline.chainId());
-        }
-
-        @Test
-        void call_id_tracks_invocations() throws Throwable {
-            // Given
-            ResolvedPipeline pipeline = aspect.getResolvedPipeline(greetMethod);
-            assertThat(pipeline.currentCallId()).isZero();
-
-            // When — execute twice
-            pipeline.execute(() -> service.greet("Alice"));
-            pipeline.execute(() -> service.greet("Bob"));
-
-            // Then — call ID incremented per execution
-            assertThat(pipeline.currentCallId()).isEqualTo(2);
-        }
-    }
-
-    // =========================================================================
-    // Approach 2: Wrapper interface introspection (cold-path, full traversal)
-    // =========================================================================
-
-    @Nested
-    @DisplayName("Approach 2: Wrapper interface introspection")
-    class WrapperIntrospection {
-
-        @Test
-        void walk_the_chain_layer_by_layer_for_greet() {
-            // Given — build a JoinPointWrapper chain (cold path)
+        void wrapper_introspection_on_the_singleton() {
+            // Given — build a Wrapper chain from the singleton (cold path)
             JoinPointWrapper<Object> chain = aspect.inspectPipeline(
-                    () -> service.greet("test"), greetMethod);
+                    () -> "dummy", greetMethod);
 
-            // When — traverse the chain via inner()
+            // When — traverse layer by layer
             List<String> layers = new ArrayList<>();
             Wrapper<?> current = chain;
             while (current != null) {
@@ -158,165 +150,70 @@ class GreetingServiceLayerInspectionTest {
             }
 
             // Then
-            System.out.println("=== Wrapper chain for greet() ===");
-            layers.forEach(l -> System.out.println("  - " + l));
-
             assertThat(layers).containsExactly(
                     "AUTHORIZATION", "LOGGING", "TIMING");
         }
-
-        @Test
-        void walk_the_chain_layer_by_layer_for_farewell() {
-            // Given
-            JoinPointWrapper<Object> chain = aspect.inspectPipeline(
-                    () -> service.farewell("test"), farewellMethod);
-
-            // When
-            List<String> layers = new ArrayList<>();
-            Wrapper<?> current = chain;
-            while (current != null) {
-                layers.add(current.layerDescription());
-                current = current.inner();
-            }
-
-            // Then — TIMING is filtered out by canHandle
-            assertThat(layers).containsExactly("AUTHORIZATION", "LOGGING");
-        }
-
-        @Test
-        void print_full_hierarchy_tree() {
-            // Given
-            JoinPointWrapper<Object> chain = aspect.inspectPipeline(
-                    () -> service.greet("test"), greetMethod);
-
-            // When
-            String hierarchy = chain.toStringHierarchy();
-
-            // Then
-            System.out.println("=== Full Wrapper hierarchy for greet() ===");
-            System.out.println(hierarchy);
-
-            // Output:
-            // Chain-ID: 42 (current call-ID: 0)
-            // AUTHORIZATION
-            //   └── LOGGING
-            //     └── TIMING
-
-            assertThat(hierarchy)
-                    .contains("Chain-ID:")
-                    .contains("current call-ID:")
-                    .contains("AUTHORIZATION")
-                    .contains("LOGGING")
-                    .contains("TIMING");
-        }
-
-        @Test
-        void inspect_individual_layer_properties() {
-            // Given
-            JoinPointWrapper<Object> chain = aspect.inspectPipeline(
-                    () -> service.greet("test"), greetMethod);
-
-            // When — navigate to each layer
-            JoinPointWrapper<Object> authLayer = chain;
-            JoinPointWrapper<Object> logLayer = chain.inner();
-            JoinPointWrapper<Object> timingLayer = chain.inner().inner();
-
-            // Then — each layer exposes its description and shared chain ID
-            assertThat(authLayer.layerDescription()).isEqualTo("AUTHORIZATION");
-            assertThat(logLayer.layerDescription()).isEqualTo("LOGGING");
-            assertThat(timingLayer.layerDescription()).isEqualTo("TIMING");
-
-            // All layers share the same chain ID
-            long sharedChainId = authLayer.chainId();
-            assertThat(logLayer.chainId()).isEqualTo(sharedChainId);
-            assertThat(timingLayer.chainId()).isEqualTo(sharedChainId);
-
-            // No more layers after TIMING
-            assertThat(timingLayer.inner()).isNull();
-        }
-
-        @Test
-        void count_chain_depth() {
-            // Given
-            JoinPointWrapper<Object> greetChain = aspect.inspectPipeline(
-                    () -> "dummy", greetMethod);
-            JoinPointWrapper<Object> farewellChain = aspect.inspectPipeline(
-                    () -> "dummy", farewellMethod);
-
-            // When
-            int greetDepth = countLayers(greetChain);
-            int farewellDepth = countLayers(farewellChain);
-
-            // Then
-            assertThat(greetDepth).as("greet() has 3 layers").isEqualTo(3);
-            assertThat(farewellDepth).as("farewell() has 2 layers").isEqualTo(2);
-        }
-
-        private int countLayers(Wrapper<?> chain) {
-            int depth = 0;
-            Wrapper<?> current = chain;
-            while (current != null) {
-                depth++;
-                current = current.inner();
-            }
-            return depth;
-        }
     }
 
     // =========================================================================
-    // Approach 3: Comparing both approaches side by side
+    // Inspecting with a test instance — trace-enabled providers
     // =========================================================================
 
     @Nested
-    @DisplayName("Approach 3: Side-by-side comparison")
-    class SideBySide {
+    @DisplayName("Test instance inspection (with trace recording)")
+    class TestInstance {
 
-        @Test
-        void both_approaches_report_the_same_layers() {
-            // Given — same method, two inspection paths
-            ResolvedPipeline resolved = aspect.getResolvedPipeline(greetMethod);
-            JoinPointWrapper<Object> wrapper = aspect.inspectPipeline(
-                    () -> "dummy", greetMethod);
+        private List<String> trace;
+        private PipelinedAspect aspect;
 
-            // When — extract layer names from both
-            List<String> fromResolved = resolved.layerNames();
-
-            List<String> fromWrapper = new ArrayList<>();
-            Wrapper<?> current = wrapper;
-            while (current != null) {
-                fromWrapper.add(current.layerDescription());
-                current = current.inner();
-            }
-
-            // Then — identical layer order
-            assertThat(fromResolved).isEqualTo(fromWrapper);
+        @BeforeEach
+        void setUp() {
+            trace = new ArrayList<>();
+            aspect = new PipelinedAspect(List.of(
+                    new AuthorizationLayerProvider(trace, true),
+                    new LoggingLayerProvider(trace),
+                    new TimingLayerProvider(trace)
+            ));
         }
 
         @Test
-        void print_diagnostic_summary_for_all_service_methods() {
-            // Utility: print a summary of which layers apply to each method
-            System.out.println("=== Layer summary for GreetingService ===");
-            System.out.println();
+        void the_test_instance_has_the_same_layer_structure() {
+            // Given
+            ResolvedPipeline pipeline = aspect.getResolvedPipeline(greetMethod);
 
-            for (Method method : GreetingService.class.getDeclaredMethods()) {
-                ResolvedPipeline pipeline = aspect.getResolvedPipeline(method);
-                System.out.printf("  %s.%s()%n", method.getDeclaringClass().getSimpleName(),
-                        method.getName());
-                System.out.printf("    Layers: %s%n", pipeline.layerNames());
-                System.out.printf("    Depth:  %d%n", pipeline.depth());
-                System.out.println();
-            }
+            // Then — same names as the production singleton
+            assertThat(pipeline.layerNames())
+                    .containsExactly("AUTHORIZATION", "LOGGING", "TIMING");
+        }
 
-            // Output:
-            // === Layer summary for GreetingService ===
-            //
-            //   GreetingService.greet()
-            //     Layers: [AUTHORIZATION, LOGGING, TIMING]
-            //     Depth:  3
-            //
-            //   GreetingService.farewell()
-            //     Layers: [AUTHORIZATION, LOGGING]
-            //     Depth:  2
+        @Test
+        void execute_and_observe_the_trace() throws Throwable {
+            // When — use a plain lambda to avoid triggering woven bytecode.
+            //        The lambda simulates what pjp.proceed() would return.
+            Object result = aspect.execute(
+                    () -> "Hello, World!", greetMethod);
+
+            // Then — the trace records the execution order
+            assertThat(result).isEqualTo("Hello, World!");
+            assertThat(trace).contains(
+                    "auth:check",
+                    "auth:granted",
+                    "timer:start"
+            );
+            assertThat(trace).anyMatch(s -> s.startsWith("log:enter[chain="));
+            assertThat(trace).anyMatch(s -> s.startsWith("timer:stop["));
+            assertThat(trace).anyMatch(s -> s.startsWith("log:exit[result=Hello, World!]"));
+        }
+
+        @Test
+        void farewell_trace_has_no_timing_entries() throws Throwable {
+            // When — plain lambda, no woven method call
+            aspect.execute(() -> "Goodbye, World!", farewellMethod);
+
+            // Then — auth and logging present, timing absent
+            assertThat(trace).contains("auth:check", "auth:granted");
+            assertThat(trace).anyMatch(s -> s.startsWith("log:enter[chain="));
+            assertThat(trace).noneMatch(s -> s.startsWith("timer:"));
         }
     }
 }

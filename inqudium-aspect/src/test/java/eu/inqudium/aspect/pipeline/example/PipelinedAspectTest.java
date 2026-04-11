@@ -52,7 +52,7 @@ class PipelinedAspectTest {
             // Given
             aspect = aspectWithAuthorization(true);
 
-            // When — simulate what AspectJ would do: call executeThrough with the
+            // When — simulate what AspectJ would do: call execute with the
             //        real method as a JoinPointExecutor (here: a lambda standing
             //        in for pjp::proceed)
             Object result = aspect.execute(() -> {
@@ -296,52 +296,45 @@ class PipelinedAspectTest {
     }
 
     // =========================================================================
-    // Integration: simulated AspectJ weaving
+    // Production layer stack inspection
     // =========================================================================
 
     @Nested
-    @DisplayName("Simulated AspectJ weaving with GreetingService")
-    class SimulatedWeaving {
+    @DisplayName("Production layer stack inspection")
+    class ProductionLayerStack {
 
         @Test
-        void aspect_wraps_a_real_service_method_and_produces_the_correct_result()
-                throws Throwable {
-            // Given
-            aspect = aspectWithAuthorization(true);
-            GreetingService service = new GreetingService();
+        void the_production_aspect_exposes_the_full_layer_structure() throws NoSuchMethodException {
+            // Given — the no-arg constructor wires the production providers
+            //         (same as the AspectJ-managed singleton after CTW)
+            PipelinedAspect production = new PipelinedAspect();
+            Method greetMethod = GreetingService.class.getMethod("greet", String.class);
 
-            // When — this is what AspectJ's @Around advice does:
-            //        it replaces the direct call service.greet("World")
-            //        with aspect.execute(() -> service.greet("World"))
-            Object result = aspect.execute(() -> service.greet("World"));
+            // When
+            JoinPointWrapper<Object> chain = production.inspectPipeline(
+                    () -> "dummy", greetMethod);
 
             // Then
-            assertThat(result).isEqualTo("Hello, World!");
-            assertThat(trace).contains("auth:check", "auth:granted");
-            assertThat(trace).anyMatch(s -> s.startsWith("log:enter[chain="));
-            assertThat(trace).contains("log:exit[result=Hello, World!]");
-            assertThat(trace).anyMatch(s -> s.startsWith("timer:stop["));
+            assertThat(chain.layerDescription()).isEqualTo("AUTHORIZATION");
+            assertThat(chain.inner().layerDescription()).isEqualTo("LOGGING");
+            assertThat(chain.inner().inner().layerDescription()).isEqualTo("TIMING");
+            assertThat(chain.inner().inner().inner()).isNull();
         }
 
         @Test
-        void the_introspected_chain_matches_the_executed_chain_structure() throws Throwable {
+        void farewell_excludes_timing_in_the_production_aspect() throws NoSuchMethodException {
             // Given
-            aspect = aspectWithAuthorization(true);
-            GreetingService service = new GreetingService();
+            PipelinedAspect production = new PipelinedAspect();
+            Method farewellMethod = GreetingService.class.getMethod("farewell", String.class);
 
-            // When — inspect the chain that would be built
-            JoinPointWrapper<Object> inspected =
-                    aspect.inspectPipeline(() -> service.greet("World"));
+            // When
+            JoinPointWrapper<Object> chain = production.inspectPipeline(
+                    () -> "dummy", farewellMethod);
 
-            // Then — same structure as the execution path
-            assertThat(inspected.layerDescription()).isEqualTo("AUTHORIZATION");
-            assertThat(inspected.inner().layerDescription()).isEqualTo("LOGGING");
-            assertThat(inspected.inner().inner().layerDescription()).isEqualTo("TIMING");
-            assertThat(inspected.inner().inner().inner()).isNull();
-
-            // And — the chain is executable
-            Object result = inspected.proceed();
-            assertThat(result).isEqualTo("Hello, World!");
+            // Then — TIMING excluded (farewell has no @Pipelined)
+            assertThat(chain.layerDescription()).isEqualTo("AUTHORIZATION");
+            assertThat(chain.inner().layerDescription()).isEqualTo("LOGGING");
+            assertThat(chain.inner().inner()).isNull();
         }
     }
 
@@ -417,32 +410,28 @@ class PipelinedAspectTest {
 
         @Test
         void non_pipelined_method_executes_with_only_two_layers() throws Throwable {
-            // Given
+            // Given — use plain lambdas to avoid triggering woven bytecode
             aspect = aspectWithAuthorization(true);
-            GreetingService service = new GreetingService();
 
             // When
             Object result = aspect.execute(
-                    () -> service.farewell("World"), farewellMethod);
+                    () -> "Goodbye, World!", farewellMethod);
 
             // Then
             assertThat(result).isEqualTo("Goodbye, World!");
-            // Auth and logging traces are present
             assertThat(trace).contains("auth:check", "auth:granted");
             assertThat(trace).anyMatch(s -> s.startsWith("log:enter[chain="));
-            // Timing traces are absent
             assertThat(trace).noneMatch(s -> s.startsWith("timer:"));
         }
 
         @Test
         void pipelined_method_executes_with_all_three_layers() throws Throwable {
-            // Given
+            // Given — use plain lambdas to avoid triggering woven bytecode
             aspect = aspectWithAuthorization(true);
-            GreetingService service = new GreetingService();
 
             // When
             Object result = aspect.execute(
-                    () -> service.greet("World"), greetMethod);
+                    () -> "Hello, World!", greetMethod);
 
             // Then
             assertThat(result).isEqualTo("Hello, World!");

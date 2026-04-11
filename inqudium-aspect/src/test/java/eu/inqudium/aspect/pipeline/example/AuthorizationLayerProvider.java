@@ -17,6 +17,10 @@ public class AuthorizationLayerProvider implements AspectLayerProvider<Object> {
     private final List<String> trace;
     private final boolean authorized;
 
+    public AuthorizationLayerProvider() {
+        this(null, false);
+    }
+
     /**
      * @param trace      shared trace list for observing execution order
      * @param authorized whether to allow or deny access
