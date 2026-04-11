@@ -3,6 +3,7 @@ package eu.inqudium.aspect.pipeline;
 import eu.inqudium.imperative.core.pipeline.AsyncLayerAction;
 
 import java.lang.reflect.Method;
+import java.util.concurrent.CompletionStage;
 
 /**
  * Defines a single asynchronous cross-cutting layer that can be contributed
@@ -89,6 +90,6 @@ public interface AsyncAspectLayerProvider<R> {
      * @return {@code true} if this layer should handle the method
      */
     default boolean canHandle(Method method) {
-        return true;
+        return CompletionStage.class.isAssignableFrom(method.getReturnType());
     }
 }
