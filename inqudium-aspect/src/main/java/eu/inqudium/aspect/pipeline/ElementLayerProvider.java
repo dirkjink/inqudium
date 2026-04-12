@@ -1,6 +1,7 @@
 package eu.inqudium.aspect.pipeline;
 
 import eu.inqudium.core.element.InqElement;
+import eu.inqudium.core.element.InqElementType;
 import eu.inqudium.core.pipeline.InqDecorator;
 import eu.inqudium.core.pipeline.LayerAction;
 
@@ -35,13 +36,17 @@ import java.util.concurrent.CompletionStage;
  * <pre>{@code
  * ImperativeBulkhead<Void, Object> bulkhead = new ImperativeBulkhead<>(cfg, strategy);
  * ImperativeRetry<Void, Object>    retry    = new ImperativeRetry<>(retryCfg);
+ * ImperativeTimeout<Void, Object>  timeout  = new ImperativeTimeout<>(toCfg);
  *
+ * // Standard ordering — derived from InqElementType.defaultPipelineOrder():
+ * // BULKHEAD(100) → RETRY(400) → TIMEOUT(500)
  * @Aspect
  * public class ResilienceAspect extends AbstractPipelineAspect {
  *     public ResilienceAspect() {
  *         super(List.of(
- *             new ElementLayerProvider(bulkhead, 10),
- *             new ElementLayerProvider(retry, 20)
+ *             new ElementLayerProvider(bulkhead),
+ *             new ElementLayerProvider(retry),
+ *             new ElementLayerProvider(timeout)
  *         ));
  *     }
  *
@@ -50,6 +55,14 @@ import java.util.concurrent.CompletionStage;
  *         return executeAround(pjp);
  *     }
  * }
+ *
+ * // Custom ordering — timeout outside retry to bound total wall-clock time:
+ * // BULKHEAD(100) → TIMEOUT(350) → RETRY(400)
+ * super(List.of(
+ *     new ElementLayerProvider(bulkhead),
+ *     new ElementLayerProvider(timeout, 350),
+ *     new ElementLayerProvider(retry)
+ * ));
  * }</pre>
  *
  * @since 0.8.0
@@ -70,7 +83,9 @@ public final class ElementLayerProvider implements AspectLayerProvider<Object> {
      * element provides both identity (name, type) and sync around-advice.</p>
      *
      * @param element the resilience element to adapt
-     * @param order   the pipeline priority (lower = outermost wrapper)
+     * @param order   the pipeline priority (lower = outermost wrapper);
+     *                overrides the element type's
+     *                {@link InqElementType#defaultPipelineOrder() default}
      * @param <E>     intersection of {@link InqElement} and
      *                {@link InqDecorator InqDecorator&lt;Void, Object&gt;}
      * @throws NullPointerException if element is null
@@ -83,6 +98,23 @@ public final class ElementLayerProvider implements AspectLayerProvider<Object> {
         this.order = order;
         this.layerName = element.getElementType().name()
                 + "(" + element.getName() + ")";
+    }
+
+    /**
+     * Creates a sync layer provider using the element type's
+     * {@link InqElementType#defaultPipelineOrder() default order}.
+     *
+     * <p>This is the preferred constructor for the standard resilience
+     * ordering. Use the two-arg constructor to override the position — for
+     * example, to place a timeout outside retry.</p>
+     *
+     * @param element the resilience element to adapt
+     * @param <E>     intersection of {@link InqElement} and
+     *                {@link InqDecorator InqDecorator&lt;Void, Object&gt;}
+     * @throws NullPointerException if element is null
+     */
+    public <E extends InqElement & InqDecorator<Void, Object>> ElementLayerProvider(E element) {
+        this(element, element.getElementType().defaultPipelineOrder());
     }
 
     @Override

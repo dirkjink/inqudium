@@ -1,6 +1,7 @@
 package eu.inqudium.aspect.pipeline;
 
 import eu.inqudium.core.element.InqElement;
+import eu.inqudium.core.element.InqElementType;
 import eu.inqudium.imperative.core.pipeline.AsyncLayerAction;
 import eu.inqudium.imperative.core.pipeline.InqAsyncDecorator;
 
@@ -33,15 +34,22 @@ import java.util.Objects;
  * ImperativeBulkhead<Void, Object> bulkhead = new ImperativeBulkhead<>(cfg, strategy);
  * ImperativeRetry<Void, Object>    retry    = new ImperativeRetry<>(retryCfg);
  *
+ * // Standard ordering — derived from InqElementType.defaultPipelineOrder()
  * @Aspect
  * public class AsyncResilienceAspect extends AbstractAsyncPipelineAspect {
  *     public AsyncResilienceAspect() {
  *         super(List.of(
- *             new AsyncElementLayerProvider(bulkhead, 10),
- *             new AsyncElementLayerProvider(retry, 20)
+ *             new AsyncElementLayerProvider(bulkhead),
+ *             new AsyncElementLayerProvider(retry)
  *         ));
  *     }
  * }
+ *
+ * // Custom ordering — explicit override
+ * super(List.of(
+ *     new AsyncElementLayerProvider(bulkhead),
+ *     new AsyncElementLayerProvider(retry, 150)
+ * ));
  * }</pre>
  *
  * @since 0.8.0
@@ -62,7 +70,9 @@ public final class AsyncElementLayerProvider implements AsyncAspectLayerProvider
      * element provides both identity (name, type) and async around-advice.</p>
      *
      * @param element the resilience element to adapt
-     * @param order   the pipeline priority (lower = outermost wrapper)
+     * @param order   the pipeline priority (lower = outermost wrapper);
+     *                overrides the element type's
+     *                {@link InqElementType#defaultPipelineOrder() default}
      * @param <E>     intersection of {@link InqElement} and
      *                {@link InqAsyncDecorator InqAsyncDecorator&lt;Void, Object&gt;}
      * @throws NullPointerException if element is null
@@ -75,6 +85,23 @@ public final class AsyncElementLayerProvider implements AsyncAspectLayerProvider
         this.order = order;
         this.layerName = element.getElementType().name()
                 + "(" + element.getName() + ")";
+    }
+
+    /**
+     * Creates an async layer provider using the element type's
+     * {@link InqElementType#defaultPipelineOrder() default order}.
+     *
+     * <p>This is the preferred constructor for the standard resilience
+     * ordering. Use the two-arg constructor to override the position.</p>
+     *
+     * @param element the resilience element to adapt
+     * @param <E>     intersection of {@link InqElement} and
+     *                {@link InqAsyncDecorator InqAsyncDecorator&lt;Void, Object&gt;}
+     * @throws NullPointerException if element is null
+     */
+    public <E extends InqElement & InqAsyncDecorator<Void, Object>> AsyncElementLayerProvider(
+            E element) {
+        this(element, element.getElementType().defaultPipelineOrder());
     }
 
     @Override
