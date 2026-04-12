@@ -41,6 +41,42 @@ import java.util.concurrent.CompletionException;
  *       by the other methods.</li>
  * </ul>
  *
+ * <h3>Sneaky-throw risk at system boundaries</h3>
+ * <p><strong>Warning:</strong> The sneaky-throw mechanism allows checked exceptions
+ * to propagate through call sites that do not declare them. Within the pipeline this
+ * is intentional — it preserves the proxied method's original exception contract.
+ * However, if a sneaky-thrown checked exception escapes beyond the pipeline's caller
+ * into infrastructure code that does not expect it, unexpected behavior can occur:</p>
+ * <ul>
+ *   <li><strong>HTTP frameworks</strong> (Spring MVC, JAX-RS): exception handlers
+ *       that filter by {@code RuntimeException} or specific checked types may miss
+ *       an undeclared {@code IOException} or {@code SQLException}, causing a raw 500
+ *       response or an unhandled-exception log entry.</li>
+ *   <li><strong>Thread pools</strong> ({@code ExecutorService}, ForkJoinPool): the
+ *       default {@link Thread.UncaughtExceptionHandler} will fire for any uncaught
+ *       throwable, but monitoring that filters by type may not recognize a checked
+ *       exception escaping from a {@code Runnable}.</li>
+ *   <li><strong>Reactive pipelines</strong> (Project Reactor, RxJava): operators
+ *       like {@code onErrorResume(IOException.class, ...)} will match, but generic
+ *       {@code catch (Exception e)} blocks may behave differently if the actual
+ *       type is a checked exception that was not part of the method signature.</li>
+ * </ul>
+ * <p>To mitigate these risks:</p>
+ * <ol>
+ *   <li>Ensure that callers of pipeline-advised methods handle {@code Throwable}
+ *       (not just {@code Exception}) if the proxied method declares checked
+ *       exceptions.</li>
+ *   <li>Register a catch-all exception handler at system boundaries (e.g.
+ *       {@code @ExceptionHandler(Throwable.class)} in Spring MVC) to prevent
+ *       sneaky-thrown checked exceptions from reaching framework internals
+ *       unhandled.</li>
+ *   <li>Use {@link #wrapChecked(Throwable)} and
+ *       {@link #unwrapAndRethrow(CompletionException)} as a matched pair — the
+ *       wrapping/unwrapping boundary should be as narrow as possible, ideally
+ *       confined to a single method like
+ *       {@link eu.inqudium.aspect.pipeline.ResolvedPipeline#execute}.</li>
+ * </ol>
+ *
  * @since 0.5.0
  */
 public final class Throws {
@@ -60,6 +96,14 @@ public final class Throws {
      * {@code throw (E) t} fires first via the sneaky-throw mechanism. The
      * outer {@code throw} serves only as a compiler hint that control flow
      * terminates here.</p>
+     *
+     * <p><strong>Caution:</strong> A checked exception rethrown via this method
+     * will not appear in the calling method's {@code throws} clause. It can
+     * propagate to callers that have no {@code catch} block for it. This is
+     * intentional within the pipeline (to preserve the proxied method's exception
+     * contract), but can cause unexpected behavior if the exception escapes to
+     * framework code that does not handle arbitrary checked exceptions.
+     * See the class-level Javadoc for mitigation strategies.</p>
      *
      * @param t   the throwable to rethrow (must not be {@code null})
      * @param <E> the inferred exception type (erased at runtime)
@@ -93,14 +137,18 @@ public final class Throws {
      * };
      * }</pre>
      *
-     * @param t the throwable to wrap or rethrow
+     * @param t the throwable to wrap or rethrow (must not be {@code null})
      * @return never — always throws
+     * @throws NullPointerException if {@code t} is {@code null}
      * @throws RuntimeException if {@code t} is a {@link RuntimeException} (rethrown as-is)
      * @throws Error            if {@code t} is an {@link Error} (rethrown as-is)
      * @throws CompletionException wrapping {@code t} if it is a checked exception
      * @since 0.7.0
      */
     public static RuntimeException wrapChecked(Throwable t) {
+        if (t == null) {
+            throw new NullPointerException("Cannot wrap null throwable");
+        }
         if (t instanceof RuntimeException re) {
             throw re;
         }

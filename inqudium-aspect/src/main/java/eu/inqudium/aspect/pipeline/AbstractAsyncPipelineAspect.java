@@ -181,13 +181,16 @@ public abstract class AbstractAsyncPipelineAspect {
         try {
             JoinPointExecutor<CompletionStage<Object>> typedExecutor = () -> {
                 Object result = coreExecutor.proceed();
+                if (result == null) {
+                    return CompletableFuture.completedFuture(null);
+                }
                 if (result instanceof CompletionStage<?> stage) {
                     return (CompletionStage<Object>) stage;
                 }
                 throw new IllegalStateException(
                         "AsyncPipelineAspect expected the proxied method to return a "
                                 + "CompletionStage, but received: "
-                                + (result == null ? "null" : result.getClass().getName())
+                                + result.getClass().getName()
                                 + ". Ensure this aspect is only applied to methods returning "
                                 + "CompletionStage or CompletableFuture.");
             };

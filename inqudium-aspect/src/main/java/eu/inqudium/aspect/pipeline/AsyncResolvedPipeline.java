@@ -163,6 +163,12 @@ public final class AsyncResolvedPipeline {
                 throw Throws.wrapChecked(t);
             }
 
+            if (result == null) {
+                // Technically valid — a method may return null instead of an
+                // empty future. Translate to a safely completed stage.
+                return CompletableFuture.completedFuture(null);
+            }
+
             if (result instanceof CompletionStage<?> stage) {
                 return (CompletionStage<Object>) stage;
             }
@@ -170,7 +176,7 @@ public final class AsyncResolvedPipeline {
             throw new IllegalStateException(
                     "AsyncResolvedPipeline expected the proxied method to return a "
                             + "CompletionStage, but received: "
-                            + (result == null ? "null" : result.getClass().getName())
+                            + result.getClass().getName()
                             + ". Ensure this aspect is only applied to methods returning "
                             + "CompletionStage or CompletableFuture. Use canHandle(Method) "
                             + "to restrict the async pipeline to compatible methods.");
@@ -184,12 +190,7 @@ public final class AsyncResolvedPipeline {
             // Guard against null cause — if absent, deliver the
             // CompletionException itself rather than producing a confusing NPE.
             Throwable cause = e.getCause();
-            if (cause == null) {
-                return CompletableFuture.failedFuture(e);
-            }
-            // Preserve the wrapping stacktrace for diagnostics
-            cause.addSuppressed(e);
-            return CompletableFuture.failedFuture(cause);
+            return CompletableFuture.failedFuture(cause != null ? cause : e);
         } catch (Throwable e) {
             // Any synchronous exception from a layer's start phase is
             // converted to a failed future — uniform error channel
@@ -204,7 +205,13 @@ public final class AsyncResolvedPipeline {
         return diagnostics.chainId();
     }
 
-    /** Returns the current (most recently generated) call ID. */
+    /**
+     * Returns the most recently generated call ID across all threads.
+     *
+     * <p><strong>Informational only.</strong> In concurrent environments this
+     * value does not correspond to any specific thread's call — see
+     * {@link PipelineDiagnostics#currentCallId()} for details.</p>
+     */
     public long currentCallId() {
         return diagnostics.currentCallId();
     }

@@ -63,9 +63,22 @@ final class PipelineDiagnostics {
     }
 
     /**
-     * Returns the current (most recently generated) call ID.
+     * Returns the most recently generated call ID across all threads.
      *
-     * @return the latest call ID, or 0 if never executed
+     * <p><strong>Informational only.</strong> This value reflects the global
+     * invocation counter for this pipeline instance. In a concurrent environment
+     * it does <em>not</em> correspond to the calling thread's own call ID —
+     * other threads may have incremented the counter between the caller's
+     * {@code execute()} and this read. Use this method only for approximate
+     * monitoring (e.g. "how many total calls has this pipeline seen?") or
+     * in single-threaded test scenarios where the value is deterministic.</p>
+     *
+     * <p>The per-invocation call ID is passed through the chain as a parameter
+     * ({@code callId} in {@code LayerAction.execute}) and is always accurate
+     * within that invocation's scope.</p>
+     *
+     * @return the latest call ID (globally, across all threads), or 0 if
+     *         never executed
      */
     long currentCallId() {
         return callIdCounter.get();
@@ -100,6 +113,10 @@ final class PipelineDiagnostics {
      *   └── LOGGING
      *     └── TIMING
      * </pre>
+     *
+     * <p>The {@code current call-ID} in the output reflects the global
+     * invocation count at the time of this call — see
+     * {@link #currentCallId()} for concurrency caveats.</p>
      *
      * @return a formatted hierarchy string
      */

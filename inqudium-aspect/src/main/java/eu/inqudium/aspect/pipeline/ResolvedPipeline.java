@@ -170,7 +170,13 @@ public final class ResolvedPipeline {
         return diagnostics.chainId();
     }
 
-    /** Returns the current (most recently generated) call ID. */
+    /**
+     * Returns the most recently generated call ID across all threads.
+     *
+     * <p><strong>Informational only.</strong> In concurrent environments this
+     * value does not correspond to any specific thread's call — see
+     * {@link PipelineDiagnostics#currentCallId()} for details.</p>
+     */
     public long currentCallId() {
         return diagnostics.currentCallId();
     }
