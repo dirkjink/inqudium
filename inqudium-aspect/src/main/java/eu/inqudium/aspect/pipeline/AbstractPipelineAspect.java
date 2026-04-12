@@ -158,7 +158,13 @@ public abstract class AbstractPipelineAspect {
      * @throws Throwable any exception from the delegate or from layer actions
      */
     protected Object executeAround(ProceedingJoinPoint pjp) throws Throwable {
-        Method method = ((MethodSignature) pjp.getSignature()).getMethod();
+        if (!(pjp.getSignature() instanceof MethodSignature methodSignature)) {
+            throw new IllegalStateException(
+                    getClass().getSimpleName() + " received a non-method join point "
+                            + "(signature type: " + pjp.getSignature().getClass().getName()
+                            + "). Ensure the @Around pointcut only matches method executions.");
+        }
+        Method method = methodSignature.getMethod();
         return resolvePipeline(method).execute(pjp::proceed);
     }
 
@@ -181,13 +187,15 @@ public abstract class AbstractPipelineAspect {
      * Executes the given executor through a fresh pipeline built from all
      * providers (no method filtering, no caching).
      *
-     * <p>Prefer {@link #execute(JoinPointExecutor, Method)} on hot paths.</p>
+     * <p><strong>Not suitable for hot paths</strong> — builds a fresh pipeline on
+     * every call. Prefer {@link #execute(JoinPointExecutor, Method)} for
+     * production use.</p>
      *
      * @param coreExecutor the join point execution
      * @return the result of the pipeline execution
      * @throws Throwable any exception from the delegate or from layer actions
      */
-    public Object execute(JoinPointExecutor<Object> coreExecutor) throws Throwable {
+    protected Object execute(JoinPointExecutor<Object> coreExecutor) throws Throwable {
         return new AspectPipelineBuilder<Object>()
                 .addProviders(providers())
                 .buildChain(coreExecutor)

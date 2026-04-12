@@ -86,6 +86,12 @@ public class AsyncAspectPipelineBuilder<R> {
         if (providers == null) {
             throw new IllegalArgumentException("Providers list must not be null");
         }
+        for (int i = 0; i < providers.size(); i++) {
+            if (providers.get(i) == null) {
+                throw new IllegalArgumentException(
+                        "Provider at index " + i + " must not be null");
+            }
+        }
         List<? extends AsyncAspectLayerProvider<R>> sorted = new ArrayList<>(providers);
         sorted.sort(Comparator.comparingInt(AsyncAspectLayerProvider::order));
         for (AsyncAspectLayerProvider<R> provider : sorted) {
@@ -113,6 +119,12 @@ public class AsyncAspectPipelineBuilder<R> {
         }
         if (method == null) {
             throw new IllegalArgumentException("Method must not be null");
+        }
+        for (int i = 0; i < providers.size(); i++) {
+            if (providers.get(i) == null) {
+                throw new IllegalArgumentException(
+                        "Provider at index " + i + " must not be null");
+            }
         }
         List<? extends AsyncAspectLayerProvider<R>> filtered = providers.stream()
                 .filter(p -> p.canHandle(method))

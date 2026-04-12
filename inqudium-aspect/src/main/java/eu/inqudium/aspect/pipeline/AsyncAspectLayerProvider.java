@@ -80,14 +80,17 @@ public interface AsyncAspectLayerProvider<R> {
      * for the given method.
      *
      * <p>Implementations typically check the method's return type, annotations,
-     * or declaring interface to decide. For example, a layer might only apply
-     * to methods returning {@link java.util.concurrent.CompletionStage}.</p>
+     * or declaring interface to decide.</p>
      *
-     * <p>The default implementation returns {@code true}, meaning the layer
-     * applies to all methods.</p>
+     * <p><strong>Important difference from {@link AspectLayerProvider#canHandle}:</strong>
+     * the default implementation here checks whether the method returns a
+     * {@link java.util.concurrent.CompletionStage}, because async layers are
+     * inherently incompatible with synchronous return types. Override this
+     * method to further restrict (or relax) the filtering.</p>
      *
      * @param method the service method being invoked
-     * @return {@code true} if this layer should handle the method
+     * @return {@code true} if this layer should handle the method; the default
+     *         returns {@code true} only for methods returning {@link CompletionStage}
      */
     default boolean canHandle(Method method) {
         return CompletionStage.class.isAssignableFrom(method.getReturnType());

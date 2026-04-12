@@ -45,6 +45,13 @@ import static eu.inqudium.core.pipeline.ChainIdGenerator.CHAIN_ID_COUNTER;
 public final class AsyncResolvedPipeline {
 
     /**
+     * Sentinel instance for methods with no applicable async layers.
+     * Avoids allocating a chain ID for empty pipelines.
+     */
+    private static final AsyncResolvedPipeline EMPTY = new AsyncResolvedPipeline(
+            Function.identity(), 0L, List.of());
+
+    /**
      * The pre-composed async chain factory. Takes a terminal async executor
      * and returns the fully composed chain that traverses all layers before
      * reaching the terminal.
@@ -106,6 +113,10 @@ public final class AsyncResolvedPipeline {
      */
     private static AsyncResolvedPipeline fromProviders(
             List<? extends AsyncAspectLayerProvider<Object>> providers) {
+        if (providers.isEmpty()) {
+            return EMPTY;
+        }
+
         List<AsyncLayerAction<Void, Object>> actions = providers.stream()
                 .map(AsyncAspectLayerProvider::asyncLayerAction)
                 .toList();
@@ -205,9 +216,16 @@ public final class AsyncResolvedPipeline {
         try {
             return chainFactory.apply(terminal).executeAsync(chainId, callId, null);
         } catch (CompletionException e) {
-            // Unwrap transported checked exceptions from the terminal
+            // Unwrap transported checked exceptions from the terminal.
+            // Guard against null cause — if absent, deliver the
+            // CompletionException itself rather than producing a confusing NPE.
             Throwable cause = e.getCause();
-            return CompletableFuture.failedFuture(cause != null ? cause : e);
+            if (cause == null) {
+                return CompletableFuture.failedFuture(e);
+            }
+            // Preserve the wrapping stacktrace for diagnostics
+            cause.addSuppressed(e);
+            return CompletableFuture.failedFuture(cause);
         } catch (Throwable e) {
             // Any synchronous exception from a layer's start phase is
             // converted to a failed future — uniform error channel
@@ -249,7 +267,7 @@ public final class AsyncResolvedPipeline {
 
         for (int i = 0; i < layerNames.size(); i++) {
             if (i > 0) {
-                sb.repeat("  ", i - 1).append("  └── ");
+                sb.append("  ".repeat(i - 1)).append("  └── ");
             }
             sb.append(layerNames.get(i)).append("\n");
         }

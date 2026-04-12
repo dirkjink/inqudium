@@ -2,6 +2,7 @@ package eu.inqudium.aspect.pipeline.example;
 
 import eu.inqudium.aspect.pipeline.AbstractPipelineAspect;
 import eu.inqudium.aspect.pipeline.AspectLayerProvider;
+import eu.inqudium.core.pipeline.JoinPointExecutor;
 import org.aspectj.lang.ProceedingJoinPoint;
 import org.aspectj.lang.annotation.Around;
 import org.aspectj.lang.annotation.Aspect;
@@ -77,7 +78,11 @@ public class PipelinedAspect extends AbstractPipelineAspect {
         super(providers);
     }
 
-    // ======================== Pointcut ========================
+    @Override
+    public Object execute(JoinPointExecutor<Object> coreExecutor) throws Throwable {
+        return super.execute(coreExecutor);
+    }
+// ======================== Pointcut ========================
 
     /**
      * Around-advice that intercepts all {@code @Pipelined} methods.

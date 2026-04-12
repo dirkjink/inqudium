@@ -78,13 +78,23 @@ public abstract class AbstractAsyncPipelineAspect {
     protected abstract List<AsyncAspectLayerProvider<Object>> asyncLayerProviders();
 
     /**
-     * Returns the cached provider snapshot, initializing it on first access.
+     * Returns the cached provider snapshot, initializing it on first access
+     * via double-checked locking.
+     *
+     * <p>Guarantees that {@link #asyncLayerProviders()} is called exactly once,
+     * even under concurrent access — matching the contract documented on that
+     * method.</p>
      */
     private List<AsyncAspectLayerProvider<Object>> providers() {
         List<AsyncAspectLayerProvider<Object>> snapshot = cachedProviders;
         if (snapshot == null) {
-            snapshot = List.copyOf(asyncLayerProviders());
-            cachedProviders = snapshot;
+            synchronized (this) {
+                snapshot = cachedProviders;
+                if (snapshot == null) {
+                    snapshot = List.copyOf(asyncLayerProviders());
+                    cachedProviders = snapshot;
+                }
+            }
         }
         return snapshot;
     }

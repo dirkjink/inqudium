@@ -102,6 +102,12 @@ public class AspectPipelineBuilder<R> {
         if (providers == null) {
             throw new IllegalArgumentException("Providers list must not be null");
         }
+        for (int i = 0; i < providers.size(); i++) {
+            if (providers.get(i) == null) {
+                throw new IllegalArgumentException(
+                        "Provider at index " + i + " must not be null");
+            }
+        }
         List<? extends AspectLayerProvider<R>> sorted = new ArrayList<>(providers);
         sorted.sort(Comparator.comparingInt(AspectLayerProvider::order));
         for (AspectLayerProvider<R> provider : sorted) {
@@ -131,6 +137,12 @@ public class AspectPipelineBuilder<R> {
         }
         if (method == null) {
             throw new IllegalArgumentException("Method must not be null");
+        }
+        for (int i = 0; i < providers.size(); i++) {
+            if (providers.get(i) == null) {
+                throw new IllegalArgumentException(
+                        "Provider at index " + i + " must not be null");
+            }
         }
         List<? extends AspectLayerProvider<R>> filtered = providers.stream()
                 .filter(p -> p.canHandle(method))

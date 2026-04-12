@@ -54,6 +54,13 @@ import static eu.inqudium.core.pipeline.ChainIdGenerator.CHAIN_ID_COUNTER;
 public final class ResolvedPipeline {
 
     /**
+     * Sentinel instance for methods with no applicable layers.
+     * Avoids allocating a chain ID for empty pipelines.
+     */
+    private static final ResolvedPipeline EMPTY = new ResolvedPipeline(
+            Function.identity(), 0L, List.of());
+
+    /**
      * The pre-composed chain factory. Takes a terminal executor (the actual
      * method invocation) and returns the fully composed chain that traverses
      * all layers before reaching the terminal.
@@ -127,6 +134,10 @@ public final class ResolvedPipeline {
      */
     private static ResolvedPipeline fromProviders(
             List<? extends AspectLayerProvider<Object>> providers) {
+        if (providers.isEmpty()) {
+            return EMPTY;
+        }
+
         List<LayerAction<Void, Object>> actions = providers.stream()
                 .map(AspectLayerProvider::layerAction)
                 .toList();
@@ -264,7 +275,7 @@ public final class ResolvedPipeline {
 
         for (int i = 0; i < layerNames.size(); i++) {
             if (i > 0) {
-                sb.repeat("  ", i - 1).append("  └── ");
+                sb.append("  ".repeat(i - 1)).append("  └── ");
             }
             sb.append(layerNames.get(i)).append("\n");
         }
