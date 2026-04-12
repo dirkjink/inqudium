@@ -104,6 +104,28 @@ public final class AsyncElementLayerProvider implements AsyncAspectLayerProvider
         this(element, element.getElementType().defaultPipelineOrder());
     }
 
+    /**
+     * Creates an async layer provider using the order defined by the given
+     * {@link PipelineOrdering} profile.
+     *
+     * <pre>{@code
+     * PipelineOrdering r4j = PipelineOrdering.resilience4j();
+     * new AsyncElementLayerProvider(bulkhead, r4j)
+     * new AsyncElementLayerProvider(retry, r4j)
+     * }</pre>
+     *
+     * @param element  the resilience element to adapt
+     * @param ordering the ordering profile to derive the priority from
+     * @param <E>      intersection of {@link InqElement} and
+     *                 {@link InqAsyncDecorator InqAsyncDecorator&lt;Void, Object&gt;}
+     * @throws NullPointerException if element or ordering is null
+     */
+    public <E extends InqElement & InqAsyncDecorator<Void, Object>> AsyncElementLayerProvider(
+            E element, PipelineOrdering ordering) {
+        this(element, Objects.requireNonNull(ordering, "Ordering must not be null")
+                .orderFor(element.getElementType()));
+    }
+
     @Override
     public String layerName() {
         return layerName;

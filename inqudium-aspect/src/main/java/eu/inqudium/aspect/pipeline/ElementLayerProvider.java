@@ -39,25 +39,24 @@ import java.util.concurrent.CompletionStage;
  * ImperativeTimeout<Void, Object>  timeout  = new ImperativeTimeout<>(toCfg);
  *
  * // Standard ordering — derived from InqElementType.defaultPipelineOrder():
- * // BULKHEAD(100) → RETRY(400) → TIMEOUT(500)
- * @Aspect
- * public class ResilienceAspect extends AbstractPipelineAspect {
- *     public ResilienceAspect() {
- *         super(List.of(
- *             new ElementLayerProvider(bulkhead),
- *             new ElementLayerProvider(retry),
- *             new ElementLayerProvider(timeout)
- *         ));
- *     }
+ * // BULKHEAD(100) → RETRY(400) → TIME_LIMITER(500)
+ * super(List.of(
+ *     new ElementLayerProvider(bulkhead),
+ *     new ElementLayerProvider(retry),
+ *     new ElementLayerProvider(timeout)
+ * ));
  *
- *     @Around("@annotation(Resilient)")
- *     public Object around(ProceedingJoinPoint pjp) throws Throwable {
- *         return executeAround(pjp);
- *     }
- * }
+ * // Resilience4j ordering — via PipelineOrdering profile:
+ * // RETRY(100) → TIME_LIMITER(400) → BULKHEAD(500)
+ * PipelineOrdering r4j = PipelineOrdering.resilience4j();
+ * super(List.of(
+ *     new ElementLayerProvider(bulkhead, r4j),
+ *     new ElementLayerProvider(retry, r4j),
+ *     new ElementLayerProvider(timeout, r4j)
+ * ));
  *
- * // Custom ordering — timeout outside retry to bound total wall-clock time:
- * // BULKHEAD(100) → TIMEOUT(350) → RETRY(400)
+ * // Single element override — timeout outside retry:
+ * // BULKHEAD(100) → TIME_LIMITER(350) → RETRY(400)
  * super(List.of(
  *     new ElementLayerProvider(bulkhead),
  *     new ElementLayerProvider(timeout, 350),
@@ -115,6 +114,28 @@ public final class ElementLayerProvider implements AspectLayerProvider<Object> {
      */
     public <E extends InqElement & InqDecorator<Void, Object>> ElementLayerProvider(E element) {
         this(element, element.getElementType().defaultPipelineOrder());
+    }
+
+    /**
+     * Creates a sync layer provider using the order defined by the given
+     * {@link PipelineOrdering} profile.
+     *
+     * <pre>{@code
+     * PipelineOrdering r4j = PipelineOrdering.resilience4j();
+     * new ElementLayerProvider(bulkhead, r4j)
+     * new ElementLayerProvider(retry, r4j)
+     * }</pre>
+     *
+     * @param element  the resilience element to adapt
+     * @param ordering the ordering profile to derive the priority from
+     * @param <E>      intersection of {@link InqElement} and
+     *                 {@link InqDecorator InqDecorator&lt;Void, Object&gt;}
+     * @throws NullPointerException if element or ordering is null
+     */
+    public <E extends InqElement & InqDecorator<Void, Object>> ElementLayerProvider(
+            E element, PipelineOrdering ordering) {
+        this(element, Objects.requireNonNull(ordering, "Ordering must not be null")
+                .orderFor(element.getElementType()));
     }
 
     @Override
