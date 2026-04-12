@@ -2,7 +2,7 @@
 
 **Status:** Accepted  
 **Date:** 2026-03-23  
-**Last updated:** 2026-03-23  
+**Last updated:** 2026-04-12  
 **Deciders:** Core team
 
 ## Context
@@ -69,13 +69,19 @@ limit is the first filter after cache, preventing excessive load from even reach
 applies to the actual call, not to the retry sequence. In Inqudium, Bulkhead sits outside CircuitBreaker — concurrency
 is bounded at the pipeline level, not just the call level.
 
-| Element        | Resilience4J position | Inqudium position      | Rationale for deviation                                                                |
-|----------------|-----------------------|------------------------|----------------------------------------------------------------------------------------|
-| Retry          | Outermost             | Innermost              | R4J: retries the whole pipeline. Inq: retries only the call, breaker sees each attempt |
-| CircuitBreaker | Inside Retry          | Outside Retry          | Inq: faster failure detection, each attempt counted individually                       |
-| RateLimiter    | Inside CircuitBreaker | Outside CircuitBreaker | Inq: rate limit is a global constraint, should gate before breaker                     |
-| TimeLimiter    | Inside RateLimiter    | Outside Retry          | Inq: bounds total caller wait time including retries (ADR-010)                         |
-| Bulkhead       | Innermost             | Outside CircuitBreaker | Inq: concurrency bounded at pipeline level, not just call level                        |
+**TrafficShaper position:** Resilience4J does not include a traffic shaper. Inqudium places TrafficShaper between
+TimeLimiter and RateLimiter. Inside TimeLimiter so that shaping delays are covered by the caller's time budget — a
+slow-drip shaper cannot cause unbounded waiting. Outside RateLimiter so that bursts are smoothed into a steady flow
+before rate tokens are consumed.
+
+| Element        | Resilience4J position | Inqudium position          | Rationale for deviation                                                                |
+|----------------|-----------------------|----------------------------|----------------------------------------------------------------------------------------|
+| Retry          | Outermost             | Innermost                  | R4J: retries the whole pipeline. Inq: retries only the call, breaker sees each attempt |
+| CircuitBreaker | Inside Retry          | Outside Retry              | Inq: faster failure detection, each attempt counted individually                       |
+| RateLimiter    | Inside CircuitBreaker | Outside CircuitBreaker     | Inq: rate limit is a global constraint, should gate before breaker                     |
+| TimeLimiter    | Inside RateLimiter    | Outside Retry              | Inq: bounds total caller wait time including retries (ADR-010)                         |
+| Bulkhead       | Innermost             | Outside CircuitBreaker     | Inq: concurrency bounded at pipeline level, not just call level                        |
+| TrafficShaper  | Not available         | Between TimeLimiter and RL | Inq: smooth bursts before rate limiting, within caller's time budget                   |
 
 ## Decision
 
@@ -121,35 +127,40 @@ The Pipeline API provides named orderings as factory methods. Each encoding repr
 #### `PipelineOrder.INQUDIUM` — the Inqudium canonical order (default)
 
 ```
-Call → Cache → TimeLimiter → RateLimiter → Bulkhead → CircuitBreaker → Retry → [call]
-       ①        ②             ③             ④           ⑤                ⑥
+Call → Cache → TimeLimiter → TrafficShaper → RateLimiter → Bulkhead → CircuitBreaker → Retry → [call]
+       ①        ②             ③               ④             ⑤           ⑥                ⑦
 ```
 
 **① Cache** — If a cached result exists, return immediately. No other element is invoked.
 
-**② TimeLimiter** — Bounds total caller wait time including retries. If 3 retries each take 3s, the TimeLimiter at 8s
-cuts the total short (ADR-010).
+**② TimeLimiter** — Bounds total caller wait time including shaping delays and retries. If 3 retries each take 3s, the
+TimeLimiter at 8s cuts the total short (ADR-010). Also covers any delay introduced by the TrafficShaper.
 
-**③ Rate Limiter** — Controls the rate at which calls enter the pipeline. Outside Retry: retries don't consume
+**③ TrafficShaper** — Smooths bursts into a steady flow before rate tokens are consumed. Inside TimeLimiter so that
+shaping delays are covered by the caller's time budget — a slow-drip shaper cannot cause unbounded waiting. Outside
+RateLimiter so that the smoothed flow consumes tokens at a predictable rate.
+
+**④ Rate Limiter** — Controls the rate at which calls enter the pipeline. Outside Retry: retries don't consume
 additional permits. Outside CircuitBreaker: rate limit gates before the breaker's sliding window.
 
-**④ Bulkhead** — Limits concurrent calls at the pipeline level. Even calls the breaker passes through are bounded.
+**⑤ Bulkhead** — Limits concurrent calls at the pipeline level. Even calls the breaker passes through are bounded.
 
-**⑤ Circuit Breaker** — Records each individual attempt in the sliding window. Opens fast because it sees every retry
+**⑥ Circuit Breaker** — Records each individual attempt in the sliding window. Opens fast because it sees every retry
 attempt as a separate call.
 
-**⑥ Retry** — Innermost. Retries the actual call. The breaker counts each attempt. The TimeLimiter bounds the total
+**⑦ Retry** — Innermost. Retries the actual call. The breaker counts each attempt. The TimeLimiter bounds the total
 time. The RateLimiter doesn't penalize retries.
 
 #### `PipelineOrder.RESILIENCE4J` — Resilience4J compatible order
 
 ```
-Call → Retry → CircuitBreaker → RateLimiter → TimeLimiter → Bulkhead → [call]
+Call → Retry → CircuitBreaker → TrafficShaper → RateLimiter → TimeLimiter → Bulkhead → [call]
 ```
 
 For projects migrating from Resilience4J (ADR-006) that want behavioral parity with their existing configuration. The
 Retry is outermost: it retries the entire pipeline including the CircuitBreaker check. The TimeLimiter bounds each
-individual attempt, not the total time.
+individual attempt, not the total time. TrafficShaper is placed before RateLimiter in both profiles — smoothing bursts
+before tokens are consumed is independent of the overall ordering strategy.
 
 #### `PipelineOrder.custom(...)` — fully custom order
 
@@ -157,6 +168,7 @@ individual attempt, not the total time.
 var order = PipelineOrder.custom(
     InqElementType.RETRY,
     InqElementType.CIRCUIT_BREAKER,
+    InqElementType.TRAFFIC_SHAPER,
     InqElementType.RATE_LIMITER,
     InqElementType.TIME_LIMITER,
     InqElementType.BULKHEAD
@@ -175,6 +187,7 @@ var resilient = InqPipeline
     .shield(circuitBreaker)
     .shield(retry)
     .shield(rateLimiter)
+    .shield(trafficShaper)
     .decorate();
 
 // Resilience4J compatible order
@@ -184,6 +197,7 @@ var resilient = InqPipeline
     .shield(circuitBreaker)
     .shield(retry)
     .shield(rateLimiter)
+    .shield(trafficShaper)
     .decorate();
 
 // Custom order
@@ -192,10 +206,12 @@ var resilient = InqPipeline
     .order(PipelineOrder.custom(
         InqElementType.CIRCUIT_BREAKER,
         InqElementType.RETRY,
+        InqElementType.TRAFFIC_SHAPER,
         InqElementType.RATE_LIMITER))
     .shield(circuitBreaker)
     .shield(retry)
     .shield(rateLimiter)
+    .shield(trafficShaper)
     .decorate();
 ```
 
@@ -225,6 +241,14 @@ Each retry attempt gets a fresh timeout, but total caller wait time is unbounded
 (up to timeout × maxAttempts = 3s × 3 = 9s). This matches Resilience4J behavior.
 ```
 
+**TrafficShaper outside TimeLimiter (in custom order):**
+
+```
+[Inqudium] Pipeline warning: TrafficShaper 'paymentTs' is outside TimeLimiter 'paymentTl'.
+Shaping delays are not covered by the caller's time budget. A slow-drip shaper could 
+cause unbounded caller wait time. Consider moving TrafficShaper inside TimeLimiter.
+```
+
 Note: the R4J-compatible order triggers the same warnings as a custom order would. The warnings are informational, not
 errors — the developer chose this order intentionally when selecting `PipelineOrder.RESILIENCE4J`.
 
@@ -251,6 +275,7 @@ references:
 @InqCircuitBreaker("paymentCb")
 @InqRetry("paymentRetry")
 @InqTimeLimiter("paymentTl")
+@InqTrafficShaper("paymentTs")
 public PaymentResult processPayment(PaymentRequest request) { ... }
 ```
 
@@ -301,6 +326,12 @@ public @interface InqBulkhead {
 @Target(ElementType.METHOD)
 @Retention(RetentionPolicy.RUNTIME)
 public @interface InqTimeLimiter {
+    String value();
+}
+
+@Target(ElementType.METHOD)
+@Retention(RetentionPolicy.RUNTIME)
+public @interface InqTrafficShaper {
     String value();
 }
 
@@ -453,6 +484,10 @@ The user guide includes a decision matrix for each element pair:
 | Retry          | CircuitBreaker | Breaker counts retry sequences, opens slow            | R4J default — retries the whole sequence as a unit     |
 | TimeLimiter    | Retry          | Total time bounded across all attempts                | Inqudium default — guaranteed max wait                 |
 | Retry          | TimeLimiter    | Each attempt bounded, total time = timeout × attempts | R4J default — each attempt gets its own budget         |
+| TimeLimiter    | TrafficShaper  | Shaping delays covered by caller's time budget        | Inqudium default — shaper cannot cause unbounded wait  |
+| TrafficShaper  | TimeLimiter    | Shaping delays not time-bounded                       | Only if shaping should be allowed unlimited time       |
+| TrafficShaper  | RateLimiter    | Bursts smoothed before tokens consumed                | Both profiles — steady flow into rate limiter          |
+| RateLimiter    | TrafficShaper  | Tokens consumed before shaping                        | Rarely useful — defeats the purpose of shaping         |
 | RateLimiter    | Retry          | Retries don't consume rate limit permits              | Inqudium default — retries shouldn't penalize the rate |
 | Retry          | RateLimiter    | Each retry consumes a permit                          | When retries should be rate-limited                    |
 | Bulkhead       | CircuitBreaker | Concurrency bounded even when breaker is closed       | Inqudium default — consistent concurrency control      |
@@ -488,7 +523,7 @@ choosing.
 
 **Neutral:**
 
-- Not all six elements are used in every pipeline. A pipeline with only CircuitBreaker + Retry is perfectly valid and
+- Not all seven elements are used in every pipeline. A pipeline with only CircuitBreaker + Retry is perfectly valid and
   common. The predefined orders determine the relative position of whichever elements are present.
 - The predefined orderings can be extended in future versions (e.g. `PipelineOrder.HIGH_THROUGHPUT` with a
   bulkhead-first strategy) without breaking existing configurations.

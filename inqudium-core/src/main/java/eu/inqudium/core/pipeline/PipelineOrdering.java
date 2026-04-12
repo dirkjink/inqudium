@@ -1,4 +1,4 @@
-package eu.inqudium.aspect.pipeline;
+package eu.inqudium.core.pipeline;
 
 import eu.inqudium.core.element.InqElementType;
 
@@ -28,11 +28,11 @@ import java.util.Objects;
  *
  * // Custom ordering via lambda
  * PipelineOrdering custom = type -> switch (type) {
- *     case BULKHEAD        -> 500;
- *     case CIRCUIT_BREAKER -> 400;
+ *     case BULKHEAD        -> 100;
+ *     case CIRCUIT_BREAKER -> 200;
  *     case RATE_LIMITER    -> 300;
- *     case RETRY           -> 200;
- *     case TIME_LIMITER    -> 100;
+ *     case RETRY           -> 400;
+ *     case TIME_LIMITER    -> 500;
  *     default              -> type.defaultPipelineOrder();
  * };
  * }</pre>
@@ -58,17 +58,19 @@ public interface PipelineOrdering {
     // ======================== Built-in profiles ========================
 
     /**
-     * Returns the standard inqudium ordering, delegating to
+     * Returns the standard inqudium ordering (ADR-017), delegating to
      * {@link InqElementType#defaultPipelineOrder()}.
      *
      * <pre>
-     *   CACHE (50) → BULKHEAD (100) → CIRCUIT_BREAKER (200)
-     *     → RATE_LIMITER (300) → RETRY (400) → TIME_LIMITER (500)
+     *   CACHE (100) → TIME_LIMITER (200) → TRAFFIC_SHAPER (300)
+     *     → RATE_LIMITER (400) → BULKHEAD (500) → CIRCUIT_BREAKER (600)
+     *     → RETRY (700)
      * </pre>
      *
-     * <p>Rationale: the bulkhead rejects early before expensive work;
-     * the circuit-breaker fails fast before retries consume budget;
-     * each retry attempt is individually time-limited.</p>
+     * <p>Rationale: the time-limiter bounds total caller wait time including
+     * shaping delays and retries; the traffic-shaper smooths bursts before
+     * rate tokens are consumed; the circuit-breaker sees each retry attempt
+     * individually.</p>
      *
      * @return the standard ordering
      */
@@ -78,16 +80,19 @@ public interface PipelineOrdering {
 
     /**
      * Returns an ordering compatible with Resilience4j's default decorator
-     * sequence.
+     * sequence (ADR-017).
      *
      * <pre>
-     *   RETRY (100) → CIRCUIT_BREAKER (200) → RATE_LIMITER (300)
-     *     → TIME_LIMITER (400) → BULKHEAD (500) → CACHE (600)
+     *   CACHE (100) → RETRY (200) → CIRCUIT_BREAKER (300)
+     *     → TRAFFIC_SHAPER (400) → RATE_LIMITER (500)
+     *     → TIME_LIMITER (600) → BULKHEAD (700)
      * </pre>
      *
      * <p>In this model, retry is outermost (each retry sees a fresh
      * circuit-breaker/rate-limiter/bulkhead attempt), and the bulkhead
-     * is innermost (concurrency is limited per-attempt, not per-retry-cycle).</p>
+     * is innermost (concurrency is limited per-attempt, not per-retry-cycle).
+     * The time-limiter bounds each individual attempt, not total time.
+     * Traffic-shaper sits before rate-limiter in both profiles.</p>
      *
      * @return the Resilience4j-compatible ordering
      */
@@ -126,12 +131,13 @@ public interface PipelineOrdering {
 
         static {
             EnumMap<InqElementType, Integer> r4j = new EnumMap<>(InqElementType.class);
-            r4j.put(InqElementType.RETRY,           100);
-            r4j.put(InqElementType.CIRCUIT_BREAKER,  200);
-            r4j.put(InqElementType.RATE_LIMITER,     300);
-            r4j.put(InqElementType.TIME_LIMITER,     400);
-            r4j.put(InqElementType.BULKHEAD,         500);
-            r4j.put(InqElementType.CACHE,            600);
+            r4j.put(InqElementType.CACHE,            100);
+            r4j.put(InqElementType.RETRY,            200);
+            r4j.put(InqElementType.CIRCUIT_BREAKER,  300);
+            r4j.put(InqElementType.TRAFFIC_SHAPER,   400);
+            r4j.put(InqElementType.RATE_LIMITER,     500);
+            r4j.put(InqElementType.TIME_LIMITER,     600);
+            r4j.put(InqElementType.BULKHEAD,         700);
             RESILIENCE4J = of(r4j);
         }
     }

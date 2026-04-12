@@ -106,7 +106,7 @@ public final class AsyncElementLayerProvider implements AsyncAspectLayerProvider
 
     /**
      * Creates an async layer provider using the order defined by the given
-     * {@link PipelineOrdering} profile.
+     * {@link eu.inqudium.core.pipeline.PipelineOrdering} profile.
      *
      * <pre>{@code
      * PipelineOrdering r4j = PipelineOrdering.resilience4j();
@@ -121,7 +121,7 @@ public final class AsyncElementLayerProvider implements AsyncAspectLayerProvider
      * @throws NullPointerException if element or ordering is null
      */
     public <E extends InqElement & InqAsyncDecorator<Void, Object>> AsyncElementLayerProvider(
-            E element, PipelineOrdering ordering) {
+            E element, eu.inqudium.core.pipeline.PipelineOrdering ordering) {
         this(element, Objects.requireNonNull(ordering, "Ordering must not be null")
                 .orderFor(element.getElementType()));
     }

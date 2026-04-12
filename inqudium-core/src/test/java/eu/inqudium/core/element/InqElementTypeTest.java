@@ -3,6 +3,14 @@ package eu.inqudium.core.element;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.ValueSource;
+
+import java.util.Arrays;
+import java.util.Comparator;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -10,136 +18,451 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 @DisplayName("InqElementType")
 class InqElementTypeTest {
 
+    // ======================== Enum constants ========================
+
     @Nested
-    @DisplayName("Enum values")
-    class EnumValues {
+    @DisplayName("Enum constants")
+    class EnumConstants {
 
         @Test
-        void should_contain_exactly_seven_element_types() {
+        void all_expected_element_types_are_defined() {
             // Given
-            var values = InqElementType.values();
+            var expectedNames = List.of(
+                    "CIRCUIT_BREAKER", "RETRY", "RATE_LIMITER", "BULKHEAD",
+                    "TIME_LIMITER", "TRAFFIC_SHAPER", "CACHE", "NO_ELEMENT"
+            );
+
+            // When
+            var actualNames = Arrays.stream(InqElementType.values())
+                    .map(Enum::name)
+                    .toList();
 
             // Then
-            assertThat(values).hasSize(7);
+            assertThat(actualNames).containsExactlyInAnyOrderElementsOf(expectedNames);
         }
 
         @Test
-        void should_contain_all_resilience_element_types_and_no_element() {
-            // Given
+        void exactly_eight_element_types_exist() {
+            // Given / When
             var values = InqElementType.values();
 
             // Then
-            assertThat(values).containsExactly(
-                    InqElementType.CIRCUIT_BREAKER,
-                    InqElementType.RETRY,
-                    InqElementType.RATE_LIMITER,
-                    InqElementType.BULKHEAD,
-                    InqElementType.TIME_LIMITER,
-                    InqElementType.CACHE,
-                    InqElementType.NO_ELEMENT
-            );
+            assertThat(values).hasSize(8);
         }
     }
 
-    @Nested
-    @DisplayName("Element symbols")
-    class ElementSymbols {
+    // ======================== Symbol ========================
 
-        @Test
-        void should_return_two_character_symbol_for_each_element() {
+    @Nested
+    @DisplayName("symbol()")
+    class Symbol {
+
+        @ParameterizedTest(name = "{0} → \"{1}\"")
+        @CsvSource({
+                "CIRCUIT_BREAKER, CB",
+                "RETRY,           RT",
+                "RATE_LIMITER,    RL",
+                "BULKHEAD,        BH",
+                "TIME_LIMITER,    TL",
+                "TRAFFIC_SHAPER,  TS",
+                "CACHE,           CA",
+                "NO_ELEMENT,      XX"
+        })
+        void each_element_type_returns_its_expected_symbol(InqElementType type, String expectedSymbol) {
+            // Given — element type from parameter
+
+            // When
+            var symbol = type.symbol();
+
             // Then
-            assertThat(InqElementType.CIRCUIT_BREAKER.symbol()).isEqualTo("CB");
-            assertThat(InqElementType.RETRY.symbol()).isEqualTo("RT");
-            assertThat(InqElementType.RATE_LIMITER.symbol()).isEqualTo("RL");
-            assertThat(InqElementType.BULKHEAD.symbol()).isEqualTo("BH");
-            assertThat(InqElementType.TIME_LIMITER.symbol()).isEqualTo("TL");
-            assertThat(InqElementType.CACHE.symbol()).isEqualTo("CA");
-            assertThat(InqElementType.NO_ELEMENT.symbol()).isEqualTo("XX");
+            assertThat(symbol).isEqualTo(expectedSymbol);
+        }
+
+        @ParameterizedTest
+        @EnumSource(InqElementType.class)
+        void every_symbol_is_exactly_two_characters(InqElementType type) {
+            // Given — element type from parameter
+
+            // When
+            var symbol = type.symbol();
+
+            // Then
+            assertThat(symbol)
+                    .hasSize(2)
+                    .matches("[A-Z]{2}");
         }
 
         @Test
-        void should_have_exactly_two_characters_per_symbol() {
+        void all_symbols_are_unique() {
+            // Given
+            var allSymbols = Arrays.stream(InqElementType.values())
+                    .map(InqElementType::symbol)
+                    .toList();
+
+            // When / Then
+            assertThat(allSymbols).doesNotHaveDuplicates();
+        }
+    }
+
+    // ======================== Error code ========================
+
+    @Nested
+    @DisplayName("errorCode()")
+    class ErrorCode {
+
+        @ParameterizedTest(name = "{0}.errorCode({1}) → \"{2}\"")
+        @CsvSource({
+                "CIRCUIT_BREAKER, 1,   INQ-CB-001",
+                "CIRCUIT_BREAKER, 0,   INQ-CB-000",
+                "RETRY,           42,  INQ-RT-042",
+                "RATE_LIMITER,    100, INQ-RL-100",
+                "BULKHEAD,        999, INQ-BH-999",
+                "TIME_LIMITER,    7,   INQ-TL-007",
+                "TRAFFIC_SHAPER,  50,  INQ-TS-050",
+                "CACHE,           1,   INQ-CA-001",
+                "NO_ELEMENT,      0,   INQ-XX-000"
+        })
+        void generates_correctly_formatted_error_code(InqElementType type, int number, String expected) {
+            // Given — element type and number from parameters
+
+            // When
+            var errorCode = type.errorCode(number);
+
             // Then
-            for (var type : InqElementType.values()) {
-                assertThat(type.symbol()).hasSize(2);
+            assertThat(errorCode).isEqualTo(expected);
+        }
+
+        @Test
+        void error_code_zero_pads_single_digit_numbers() {
+            // Given
+            var type = InqElementType.CIRCUIT_BREAKER;
+
+            // When
+            var errorCode = type.errorCode(5);
+
+            // Then
+            assertThat(errorCode).isEqualTo("INQ-CB-005");
+        }
+
+        @Test
+        void error_code_zero_pads_two_digit_numbers() {
+            // Given
+            var type = InqElementType.RETRY;
+
+            // When
+            var errorCode = type.errorCode(42);
+
+            // Then
+            assertThat(errorCode).isEqualTo("INQ-RT-042");
+        }
+
+        @Test
+        void error_code_does_not_pad_three_digit_numbers() {
+            // Given
+            var type = InqElementType.BULKHEAD;
+
+            // When
+            var errorCode = type.errorCode(123);
+
+            // Then
+            assertThat(errorCode).isEqualTo("INQ-BH-123");
+        }
+
+        @ParameterizedTest
+        @EnumSource(InqElementType.class)
+        void error_code_follows_inq_prefix_format_for_all_types(InqElementType type) {
+            // Given
+            int number = 1;
+
+            // When
+            var errorCode = type.errorCode(number);
+
+            // Then — format: INQ-XX-NNN where XX is the symbol
+            assertThat(errorCode)
+                    .startsWith("INQ-" + type.symbol() + "-")
+                    .hasSize(10); // "INQ-" (4) + symbol (2) + "-" (1) + number (3)
+        }
+
+        @Nested
+        @DisplayName("Boundary values")
+        class BoundaryValues {
+
+            @Test
+            void accepts_zero_as_lower_bound() {
+                // Given
+                var type = InqElementType.CIRCUIT_BREAKER;
+
+                // When
+                var errorCode = type.errorCode(0);
+
+                // Then
+                assertThat(errorCode).isEqualTo("INQ-CB-000");
+            }
+
+            @Test
+            void accepts_999_as_upper_bound() {
+                // Given
+                var type = InqElementType.CIRCUIT_BREAKER;
+
+                // When
+                var errorCode = type.errorCode(999);
+
+                // Then
+                assertThat(errorCode).isEqualTo("INQ-CB-999");
+            }
+        }
+
+        @Nested
+        @DisplayName("Invalid input")
+        class InvalidInput {
+
+            @Test
+            void rejects_negative_number() {
+                // Given
+                var type = InqElementType.RETRY;
+
+                // When / Then
+                assertThatThrownBy(() -> type.errorCode(-1))
+                        .isInstanceOf(IllegalArgumentException.class)
+                        .hasMessageContaining("-1");
+            }
+
+            @Test
+            void rejects_number_above_999() {
+                // Given
+                var type = InqElementType.RETRY;
+
+                // When / Then
+                assertThatThrownBy(() -> type.errorCode(1000))
+                        .isInstanceOf(IllegalArgumentException.class)
+                        .hasMessageContaining("1000");
+            }
+
+            @ParameterizedTest(name = "rejects {0}")
+            @ValueSource(ints = {-100, -1, 1000, 1001, Integer.MAX_VALUE, Integer.MIN_VALUE})
+            void rejects_all_out_of_range_numbers(int invalidNumber) {
+                // Given
+                var type = InqElementType.CIRCUIT_BREAKER;
+
+                // When / Then
+                assertThatThrownBy(() -> type.errorCode(invalidNumber))
+                        .isInstanceOf(IllegalArgumentException.class);
             }
         }
     }
 
-    @Nested
-    @DisplayName("Error code generation")
-    class ErrorCodeGeneration {
-
-        @Test
-        void should_generate_error_code_with_zero_padded_number() {
-            // When / Then
-            assertThat(InqElementType.CIRCUIT_BREAKER.errorCode(1)).isEqualTo("INQ-CB-001");
-            assertThat(InqElementType.RETRY.errorCode(1)).isEqualTo("INQ-RT-001");
-            assertThat(InqElementType.RATE_LIMITER.errorCode(1)).isEqualTo("INQ-RL-001");
-            assertThat(InqElementType.BULKHEAD.errorCode(1)).isEqualTo("INQ-BH-001");
-            assertThat(InqElementType.TIME_LIMITER.errorCode(1)).isEqualTo("INQ-TL-001");
-            assertThat(InqElementType.CACHE.errorCode(1)).isEqualTo("INQ-CA-001");
-            assertThat(InqElementType.NO_ELEMENT.errorCode(0)).isEqualTo("INQ-XX-000");
-        }
-
-        @Test
-        void should_generate_code_000_for_wrapped_checked_exceptions() {
-            // When / Then
-            assertThat(InqElementType.CIRCUIT_BREAKER.errorCode(0)).isEqualTo("INQ-CB-000");
-            assertThat(InqElementType.RETRY.errorCode(0)).isEqualTo("INQ-RT-000");
-        }
-
-        @Test
-        void should_pad_single_digit_numbers_with_two_zeros() {
-            assertThat(InqElementType.CIRCUIT_BREAKER.errorCode(5)).isEqualTo("INQ-CB-005");
-        }
-
-        @Test
-        void should_pad_two_digit_numbers_with_one_zero() {
-            assertThat(InqElementType.CIRCUIT_BREAKER.errorCode(42)).isEqualTo("INQ-CB-042");
-        }
-
-        @Test
-        void should_not_pad_three_digit_numbers() {
-            assertThat(InqElementType.CIRCUIT_BREAKER.errorCode(999)).isEqualTo("INQ-CB-999");
-        }
-
-        @Test
-        void should_reject_negative_numbers() {
-            assertThatThrownBy(() -> InqElementType.CIRCUIT_BREAKER.errorCode(-1))
-                    .isInstanceOf(IllegalArgumentException.class);
-        }
-
-        @Test
-        void should_reject_numbers_above_999() {
-            assertThatThrownBy(() -> InqElementType.CIRCUIT_BREAKER.errorCode(1000))
-                    .isInstanceOf(IllegalArgumentException.class);
-        }
-    }
+    // ======================== Pipeline ordering ========================
 
     @Nested
-    @DisplayName("String representation")
-    class StringRepresentation {
+    @DisplayName("defaultPipelineOrder()")
+    class DefaultPipelineOrder {
 
-        @Test
-        void should_produce_uppercase_names_matching_enum_constants() {
-            // When / Then
-            assertThat(InqElementType.CIRCUIT_BREAKER.name()).isEqualTo("CIRCUIT_BREAKER");
-            assertThat(InqElementType.RETRY.name()).isEqualTo("RETRY");
-            assertThat(InqElementType.RATE_LIMITER.name()).isEqualTo("RATE_LIMITER");
-            assertThat(InqElementType.BULKHEAD.name()).isEqualTo("BULKHEAD");
-            assertThat(InqElementType.TIME_LIMITER.name()).isEqualTo("TIME_LIMITER");
-            assertThat(InqElementType.CACHE.name()).isEqualTo("CACHE");
-            assertThat(InqElementType.NO_ELEMENT.name()).isEqualTo("NO_ELEMENT");
-        }
+        @ParameterizedTest(name = "{0} → {1}")
+        @CsvSource({
+                "CACHE,            100",
+                "TIME_LIMITER,     200",
+                "TRAFFIC_SHAPER,   300",
+                "RATE_LIMITER,     400",
+                "BULKHEAD,         500",
+                "CIRCUIT_BREAKER,  600",
+                "RETRY,            700",
+                "NO_ELEMENT,       0"
+        })
+        void each_type_returns_its_expected_pipeline_order(InqElementType type, int expectedOrder) {
+            // Given — type from parameter
 
-        @Test
-        void should_resolve_from_name_string() {
             // When
-            var resolved = InqElementType.valueOf("CIRCUIT_BREAKER");
+            var order = type.defaultPipelineOrder();
 
             // Then
-            assertThat(resolved).isEqualTo(InqElementType.CIRCUIT_BREAKER);
+            assertThat(order).isEqualTo(expectedOrder);
+        }
+
+        @Nested
+        @DisplayName("Spacing invariants")
+        class SpacingInvariants {
+
+            @Test
+            void all_pipeline_element_orders_are_spaced_by_100() {
+                // Given — only elements intended for pipeline composition (excluding NO_ELEMENT)
+                var pipelineTypes = Arrays.stream(InqElementType.values())
+                        .filter(t -> t != InqElementType.NO_ELEMENT)
+                        .sorted(Comparator.comparingInt(InqElementType::defaultPipelineOrder))
+                        .toList();
+
+                // When
+                for (int i = 1; i < pipelineTypes.size(); i++) {
+                    int previous = pipelineTypes.get(i - 1).defaultPipelineOrder();
+                    int current = pipelineTypes.get(i).defaultPipelineOrder();
+
+                    // Then — each step is exactly 100
+                    assertThat(current - previous)
+                            .as("gap between %s(%d) and %s(%d)",
+                                    pipelineTypes.get(i - 1), previous,
+                                    pipelineTypes.get(i), current)
+                            .isEqualTo(100);
+                }
+            }
+
+            @Test
+            void all_pipeline_orders_are_unique() {
+                // Given
+                var orders = Arrays.stream(InqElementType.values())
+                        .map(InqElementType::defaultPipelineOrder)
+                        .toList();
+
+                // When / Then
+                assertThat(orders).doesNotHaveDuplicates();
+            }
+
+            @Test
+            void all_pipeline_orders_are_non_negative() {
+                // Given / When / Then
+                Arrays.stream(InqElementType.values()).forEach(type ->
+                        assertThat(type.defaultPipelineOrder())
+                                .as("%s.defaultPipelineOrder()", type)
+                                .isGreaterThanOrEqualTo(0));
+            }
+        }
+
+        @Nested
+        @DisplayName("ADR-017 canonical ordering")
+        class CanonicalOrdering {
+
+            @Test
+            void cache_is_the_outermost_pipeline_element() {
+                // Given
+                var cache = InqElementType.CACHE;
+
+                // When
+                int cacheOrder = cache.defaultPipelineOrder();
+
+                // Then — lowest order among all pipeline elements (excluding NO_ELEMENT)
+                Arrays.stream(InqElementType.values())
+                        .filter(t -> t != InqElementType.NO_ELEMENT)
+                        .forEach(t -> assertThat(cacheOrder)
+                                .as("CACHE should be outermost, but %s has lower order", t)
+                                .isLessThanOrEqualTo(t.defaultPipelineOrder()));
+            }
+
+            @Test
+            void retry_is_the_innermost_pipeline_element() {
+                // Given
+                var retry = InqElementType.RETRY;
+
+                // When
+                int retryOrder = retry.defaultPipelineOrder();
+
+                // Then — highest order among all pipeline elements
+                Arrays.stream(InqElementType.values())
+                        .forEach(t -> assertThat(retryOrder)
+                                .as("RETRY should be innermost, but %s has higher order", t)
+                                .isGreaterThanOrEqualTo(t.defaultPipelineOrder()));
+            }
+
+            @Test
+            void time_limiter_wraps_retry_to_bound_total_caller_wait_time() {
+                // Given — ADR-010: TimeLimiter outside Retry bounds total time
+
+                // When / Then
+                assertThat(InqElementType.TIME_LIMITER.defaultPipelineOrder())
+                        .isLessThan(InqElementType.RETRY.defaultPipelineOrder());
+            }
+
+            @Test
+            void circuit_breaker_wraps_retry_to_see_each_attempt_individually() {
+                // Given — ADR-017: CB outside Retry for fastest failure detection
+
+                // When / Then
+                assertThat(InqElementType.CIRCUIT_BREAKER.defaultPipelineOrder())
+                        .isLessThan(InqElementType.RETRY.defaultPipelineOrder());
+            }
+
+            @Test
+            void bulkhead_wraps_circuit_breaker_for_pipeline_level_concurrency() {
+                // Given — ADR-017: concurrency bounded at pipeline level
+
+                // When / Then
+                assertThat(InqElementType.BULKHEAD.defaultPipelineOrder())
+                        .isLessThan(InqElementType.CIRCUIT_BREAKER.defaultPipelineOrder());
+            }
+
+            @Test
+            void rate_limiter_wraps_bulkhead_to_gate_before_breaker() {
+                // Given — ADR-017: rate limit is a global constraint
+
+                // When / Then
+                assertThat(InqElementType.RATE_LIMITER.defaultPipelineOrder())
+                        .isLessThan(InqElementType.BULKHEAD.defaultPipelineOrder());
+            }
+
+            @Test
+            void traffic_shaper_sits_between_time_limiter_and_rate_limiter() {
+                // Given — shaping delays covered by time budget, bursts smoothed before rate tokens
+
+                // When
+                int shaperOrder = InqElementType.TRAFFIC_SHAPER.defaultPipelineOrder();
+
+                // Then
+                assertThat(shaperOrder)
+                        .isGreaterThan(InqElementType.TIME_LIMITER.defaultPipelineOrder())
+                        .isLessThan(InqElementType.RATE_LIMITER.defaultPipelineOrder());
+            }
+
+            @Test
+            void time_limiter_wraps_traffic_shaper_to_cover_shaping_delays() {
+                // Given — ADR-017: shaper cannot cause unbounded wait
+
+                // When / Then
+                assertThat(InqElementType.TIME_LIMITER.defaultPipelineOrder())
+                        .isLessThan(InqElementType.TRAFFIC_SHAPER.defaultPipelineOrder());
+            }
+
+            @Test
+            void full_canonical_order_matches_adr_017() {
+                // Given — ADR-017 canonical order (outermost → innermost)
+                var expectedOrder = List.of(
+                        InqElementType.CACHE,
+                        InqElementType.TIME_LIMITER,
+                        InqElementType.TRAFFIC_SHAPER,
+                        InqElementType.RATE_LIMITER,
+                        InqElementType.BULKHEAD,
+                        InqElementType.CIRCUIT_BREAKER,
+                        InqElementType.RETRY
+                );
+
+                // When — sort all pipeline types by their default order
+                var actualOrder = Arrays.stream(InqElementType.values())
+                        .filter(t -> t != InqElementType.NO_ELEMENT)
+                        .sorted(Comparator.comparingInt(InqElementType::defaultPipelineOrder))
+                        .toList();
+
+                // Then
+                assertThat(actualOrder).containsExactlyElementsOf(expectedOrder);
+            }
+        }
+
+        @Nested
+        @DisplayName("NO_ELEMENT sentinel")
+        class NoElementSentinel {
+
+            @Test
+            void no_element_has_order_zero() {
+                // Given / When / Then
+                assertThat(InqElementType.NO_ELEMENT.defaultPipelineOrder()).isZero();
+            }
+
+            @Test
+            void no_element_has_lowest_order_of_all_types() {
+                // Given
+                int noElementOrder = InqElementType.NO_ELEMENT.defaultPipelineOrder();
+
+                // When / Then
+                Arrays.stream(InqElementType.values()).forEach(type ->
+                        assertThat(noElementOrder)
+                                .as("NO_ELEMENT should have lowest order, but %s is lower", type)
+                                .isLessThanOrEqualTo(type.defaultPipelineOrder()));
+            }
         }
     }
 }
