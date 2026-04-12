@@ -40,6 +40,24 @@ public class AsyncAspectPipelineBuilder<R> {
     private final List<NamedAsyncLayer<R>> layers = new ArrayList<>();
 
     /**
+     * Validates that the list and all its elements are non-null.
+     *
+     * @param list the list to validate
+     * @throws IllegalArgumentException if the list or any element is null
+     */
+    private static void requireNonNullElements(List<?> list) {
+        if (list == null) {
+            throw new IllegalArgumentException("Providers list must not be null");
+        }
+        for (int i = 0; i < list.size(); i++) {
+            if (list.get(i) == null) {
+                throw new IllegalArgumentException(
+                        "Provider at index " + i + " must not be null");
+            }
+        }
+    }
+
+    /**
      * Adds a single async layer with an explicit name and action.
      *
      * @param name   human-readable layer name for diagnostics
@@ -122,6 +140,8 @@ public class AsyncAspectPipelineBuilder<R> {
         return Collections.unmodifiableList(layers);
     }
 
+    // ======================== Internal ========================
+
     /**
      * Builds an {@link AsyncJoinPointWrapper} chain from the registered layers.
      *
@@ -160,26 +180,6 @@ public class AsyncAspectPipelineBuilder<R> {
             current = new AsyncJoinPointWrapper<>(layer.name(), delegate, layer.action());
         }
         return current;
-    }
-
-    // ======================== Internal ========================
-
-    /**
-     * Validates that the list and all its elements are non-null.
-     *
-     * @param list the list to validate
-     * @throws IllegalArgumentException if the list or any element is null
-     */
-    private static void requireNonNullElements(List<?> list) {
-        if (list == null) {
-            throw new IllegalArgumentException("Providers list must not be null");
-        }
-        for (int i = 0; i < list.size(); i++) {
-            if (list.get(i) == null) {
-                throw new IllegalArgumentException(
-                        "Provider at index " + i + " must not be null");
-            }
-        }
     }
 
     /**

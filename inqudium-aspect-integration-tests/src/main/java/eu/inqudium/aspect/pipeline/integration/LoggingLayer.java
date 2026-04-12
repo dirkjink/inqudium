@@ -44,15 +44,15 @@ public class LoggingLayer implements AspectLayerProvider<Object> {
     public LayerAction<Void, Object> layerAction() {
         return (chainId, callId, arg, next) -> {
             if (enableConsolePrint)
-            System.out.printf("[chain=%d, call=%d] entering%n", chainId, callId);
+                System.out.printf("[chain=%d, call=%d] entering%n", chainId, callId);
             try {
                 Object result = next.execute(chainId, callId, arg);
                 if (enableConsolePrint)
-                System.out.printf("[chain=%d, call=%d] result=%s%n", chainId, callId, result);
+                    System.out.printf("[chain=%d, call=%d] result=%s%n", chainId, callId, result);
                 return result;
             } catch (Exception e) {
                 if (enableConsolePrint)
-                System.out.printf("[chain=%d, call=%d] error=%s%n", chainId, callId, e.getMessage());
+                    System.out.printf("[chain=%d, call=%d] error=%s%n", chainId, callId, e.getMessage());
                 throw e;
             }
         };

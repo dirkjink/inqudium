@@ -1,6 +1,5 @@
 package eu.inqudium.aspect.pipeline.example;
 
-import eu.inqudium.aspect.pipeline.AspectLayerProvider;
 import eu.inqudium.aspect.pipeline.ResolvedPipeline;
 import eu.inqudium.core.pipeline.JoinPointWrapper;
 import eu.inqudium.core.pipeline.Wrapper;

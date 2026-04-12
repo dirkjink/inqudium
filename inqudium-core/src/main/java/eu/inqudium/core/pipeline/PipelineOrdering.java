@@ -46,18 +46,6 @@ import java.util.Objects;
 public interface PipelineOrdering {
 
     /**
-     * Returns the pipeline order for the given element type.
-     *
-     * <p>Lower values produce outermost layers (higher precedence).</p>
-     *
-     * @param type the element type
-     * @return the pipeline priority
-     */
-    int orderFor(InqElementType type);
-
-    // ======================== Built-in profiles ========================
-
-    /**
      * Returns the standard inqudium ordering (ADR-017), delegating to
      * {@link InqElementType#defaultPipelineOrder()}.
      *
@@ -77,6 +65,8 @@ public interface PipelineOrdering {
     static PipelineOrdering standard() {
         return InqElementType::defaultPipelineOrder;
     }
+
+    // ======================== Built-in profiles ========================
 
     /**
      * Returns an ordering compatible with Resilience4j's default decorator
@@ -100,8 +90,6 @@ public interface PipelineOrdering {
         return Profiles.RESILIENCE4J;
     }
 
-    // ======================== Custom profiles ========================
-
     /**
      * Creates a custom ordering from an explicit type-to-order mapping.
      *
@@ -118,6 +106,18 @@ public interface PipelineOrdering {
         return type -> snapshot.getOrDefault(type, type.defaultPipelineOrder());
     }
 
+    // ======================== Custom profiles ========================
+
+    /**
+     * Returns the pipeline order for the given element type.
+     *
+     * <p>Lower values produce outermost layers (higher precedence).</p>
+     *
+     * @param type the element type
+     * @return the pipeline priority
+     */
+    int orderFor(InqElementType type);
+
     // ======================== Internal ========================
 
     /**
@@ -125,20 +125,21 @@ public interface PipelineOrdering {
      * on every call.
      */
     final class Profiles {
-        private Profiles() {}
-
         static final PipelineOrdering RESILIENCE4J;
 
         static {
             EnumMap<InqElementType, Integer> r4j = new EnumMap<>(InqElementType.class);
-            r4j.put(InqElementType.CACHE,            100);
-            r4j.put(InqElementType.RETRY,            200);
-            r4j.put(InqElementType.CIRCUIT_BREAKER,  300);
-            r4j.put(InqElementType.TRAFFIC_SHAPER,   400);
-            r4j.put(InqElementType.RATE_LIMITER,     500);
-            r4j.put(InqElementType.TIME_LIMITER,     600);
-            r4j.put(InqElementType.BULKHEAD,         700);
+            r4j.put(InqElementType.CACHE, 100);
+            r4j.put(InqElementType.RETRY, 200);
+            r4j.put(InqElementType.CIRCUIT_BREAKER, 300);
+            r4j.put(InqElementType.TRAFFIC_SHAPER, 400);
+            r4j.put(InqElementType.RATE_LIMITER, 500);
+            r4j.put(InqElementType.TIME_LIMITER, 600);
+            r4j.put(InqElementType.BULKHEAD, 700);
             RESILIENCE4J = of(r4j);
+        }
+
+        private Profiles() {
         }
     }
 }

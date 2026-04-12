@@ -16,12 +16,15 @@ package eu.inqudium.aspect.pipeline.integration.perlayer;
  */
 public class PaymentService {
 
-    @Authorized @Logged @Timed
+    @Authorized
+    @Logged
+    @Timed
     public String charge(String account, int amount) {
         return "Charged " + amount + " from " + account;
     }
 
-    @Authorized @Logged
+    @Authorized
+    @Logged
     public String refund(String account, int amount) {
         return "Refunded " + amount + " to " + account;
     }
@@ -31,7 +34,8 @@ public class PaymentService {
         return "Transaction " + transactionId + ": completed";
     }
 
-    @Authorized @Timed
+    @Authorized
+    @Timed
     public String validate(String account) {
         return "Account " + account + " is valid";
     }

@@ -1,6 +1,5 @@
 package eu.inqudium.aspect.pipeline;
 
-import eu.inqudium.core.pipeline.InternalExecutor;
 import eu.inqudium.core.pipeline.JoinPointExecutor;
 import eu.inqudium.core.pipeline.JoinPointWrapper;
 import eu.inqudium.core.pipeline.LayerAction;
@@ -13,19 +12,15 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicReference;
 
-import static org.assertj.core.api.Assertions.*;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 @DisplayName("AspectPipelineBuilder")
 class AspectPipelineBuilderTest {
 
     private AspectPipelineBuilder<Object> builder;
-
-    @BeforeEach
-    void setUp() {
-        builder = new AspectPipelineBuilder<>();
-    }
 
     // -------------------------------------------------------------------------
     // Helper: creates a layer action that records its invocation in the given list
@@ -44,14 +39,30 @@ class AspectPipelineBuilderTest {
     // -------------------------------------------------------------------------
     private static AspectLayerProvider<Object> provider(String name, int order, LayerAction<Void, Object> action) {
         return new AspectLayerProvider<>() {
-            @Override public String layerName() { return name; }
-            @Override public int order() { return order; }
-            @Override public LayerAction<Void, Object> layerAction() { return action; }
+            @Override
+            public String layerName() {
+                return name;
+            }
+
+            @Override
+            public int order() {
+                return order;
+            }
+
+            @Override
+            public LayerAction<Void, Object> layerAction() {
+                return action;
+            }
         };
     }
 
     private static AspectLayerProvider<Object> provider(String name, int order, List<String> trace) {
         return provider(name, order, recordingAction(name, trace));
+    }
+
+    @BeforeEach
+    void setUp() {
+        builder = new AspectPipelineBuilder<>();
     }
 
     @Nested

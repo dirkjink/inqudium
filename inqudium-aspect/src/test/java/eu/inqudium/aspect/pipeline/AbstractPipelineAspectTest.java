@@ -31,9 +31,20 @@ class AbstractPipelineAspectTest {
 
     private static AspectLayerProvider<Object> provider(String name, int order, LayerAction<Void, Object> action) {
         return new AspectLayerProvider<>() {
-            @Override public String layerName() { return name; }
-            @Override public int order() { return order; }
-            @Override public LayerAction<Void, Object> layerAction() { return action; }
+            @Override
+            public String layerName() {
+                return name;
+            }
+
+            @Override
+            public int order() {
+                return order;
+            }
+
+            @Override
+            public LayerAction<Void, Object> layerAction() {
+                return action;
+            }
         };
     }
 
@@ -151,9 +162,18 @@ class AbstractPipelineAspectTest {
             // Given
             AtomicInteger buildCount = new AtomicInteger();
             AspectLayerProvider<Object> countingProvider = new AspectLayerProvider<>() {
-                @Override public String layerName() { return "COUNTER"; }
-                @Override public int order() { return 10; }
-                @Override public LayerAction<Void, Object> layerAction() {
+                @Override
+                public String layerName() {
+                    return "COUNTER";
+                }
+
+                @Override
+                public int order() {
+                    return 10;
+                }
+
+                @Override
+                public LayerAction<Void, Object> layerAction() {
                     buildCount.incrementAndGet();
                     return LayerAction.passThrough();
                 }

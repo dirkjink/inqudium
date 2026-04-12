@@ -32,7 +32,9 @@ public class BenchmarkService {
 
     // ======================== Baseline ========================
 
-    /** No annotations — not intercepted. Performance floor. */
+    /**
+     * No annotations — not intercepted. Performance floor.
+     */
     public String baseline() {
         consumeCPU.accept(50);
         return "baseline";
@@ -40,7 +42,9 @@ public class BenchmarkService {
 
     // ======================== Single-annotation pattern ========================
 
-    /** @Resilient → ResilienceAspect: AUTH → LOG → TIMING (3 layers). */
+    /**
+     * @Resilient → ResilienceAspect: AUTH → LOG → TIMING (3 layers).
+     */
     @Resilient
     public String resilient3Layers() {
         consumeCPU.accept(50);
@@ -49,7 +53,9 @@ public class BenchmarkService {
 
     // ======================== Per-layer annotation pattern ========================
 
-    /** @Authorized @Logged @Timed → PerLayerAspect: AUTH → LOG → TIME (3 layers). */
+    /**
+     * @Authorized @Logged @Timed → PerLayerAspect: AUTH → LOG → TIME (3 layers).
+     */
     @Authorized
     @Logged
     @Timed
@@ -58,14 +64,19 @@ public class BenchmarkService {
         return "perLayer-3";
     }
 
-    /** @Authorized @Logged → PerLayerAspect: AUTH → LOG (2 layers). */
-    @Authorized @Logged
+    /**
+     * @Authorized @Logged → PerLayerAspect: AUTH → LOG (2 layers).
+     */
+    @Authorized
+    @Logged
     public String perLayer2() {
         consumeCPU.accept(50);
         return "perLayer-2";
     }
 
-    /** @Logged → PerLayerAspect: LOG (1 layer). */
+    /**
+     * @Logged → PerLayerAspect: LOG (1 layer).
+     */
     @Logged
     public String perLayer1() {
         consumeCPU.accept(50);

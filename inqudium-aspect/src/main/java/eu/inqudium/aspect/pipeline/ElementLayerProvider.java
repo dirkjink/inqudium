@@ -64,8 +64,8 @@ import java.util.concurrent.CompletionStage;
  * ));
  * }</pre>
  *
- * @since 0.8.0
  * @see AsyncElementLayerProvider
+ * @since 0.8.0
  */
 public final class ElementLayerProvider implements AspectLayerProvider<Object> {
 
@@ -167,7 +167,7 @@ public final class ElementLayerProvider implements AspectLayerProvider<Object> {
      *
      * @param method the service method being invoked
      * @return {@code true} if the method does <em>not</em> return a
-     *         {@link CompletionStage}
+     * {@link CompletionStage}
      */
     @Override
     public boolean canHandle(Method method) {

@@ -110,7 +110,7 @@ public abstract class AbstractPipelineAspect {
      *
      * @return the layer providers, never {@code null}
      * @throws UnsupportedOperationException if the no-arg constructor is used
-     *         without overriding this method
+     *                                       without overriding this method
      */
     protected List<AspectLayerProvider<Object>> layerProviders() {
         throw new UnsupportedOperationException(

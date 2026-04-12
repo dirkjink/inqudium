@@ -90,7 +90,7 @@ public interface AsyncAspectLayerProvider<R> {
      *
      * @param method the service method being invoked
      * @return {@code true} if this layer should handle the method; the default
-     *         returns {@code true} only for methods returning {@link CompletionStage}
+     * returns {@code true} only for methods returning {@link CompletionStage}
      */
     default boolean canHandle(Method method) {
         return CompletionStage.class.isAssignableFrom(method.getReturnType());

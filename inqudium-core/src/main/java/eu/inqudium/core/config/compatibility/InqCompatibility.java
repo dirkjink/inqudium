@@ -2,7 +2,11 @@ package eu.inqudium.core.config.compatibility;
 
 import eu.inqudium.core.exception.InqException;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.EnumMap;
+import java.util.Map;
+import java.util.ServiceLoader;
 
 /**
  * Resolved compatibility flag state for an element configuration.

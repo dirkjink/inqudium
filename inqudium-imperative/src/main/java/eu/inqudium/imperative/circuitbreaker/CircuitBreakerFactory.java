@@ -1,8 +1,26 @@
 package eu.inqudium.imperative.circuitbreaker;
 
 import eu.inqudium.core.config.InqConfig;
-import eu.inqudium.core.element.circuitbreaker.config.*;
-import eu.inqudium.core.element.circuitbreaker.metrics.*;
+import eu.inqudium.core.element.circuitbreaker.config.ConsecutiveFailuresConfig;
+import eu.inqudium.core.element.circuitbreaker.config.ContinuousTimeEwmaConfig;
+import eu.inqudium.core.element.circuitbreaker.config.GradualDecayConfig;
+import eu.inqudium.core.element.circuitbreaker.config.InqCircuitBreakerConfig;
+import eu.inqudium.core.element.circuitbreaker.config.LeakyBucketConfig;
+import eu.inqudium.core.element.circuitbreaker.config.RequestBasedEwmaConfig;
+import eu.inqudium.core.element.circuitbreaker.config.SlidingWindowConfig;
+import eu.inqudium.core.element.circuitbreaker.config.SlidingWindowConfigBuilder;
+import eu.inqudium.core.element.circuitbreaker.config.TimeBasedErrorRateConfig;
+import eu.inqudium.core.element.circuitbreaker.config.TimeBasedSlidingWindowConfig;
+import eu.inqudium.core.element.circuitbreaker.metrics.CompositeFailureMetrics;
+import eu.inqudium.core.element.circuitbreaker.metrics.ConsecutiveFailuresMetrics;
+import eu.inqudium.core.element.circuitbreaker.metrics.ContinuousTimeEwmaMetrics;
+import eu.inqudium.core.element.circuitbreaker.metrics.FailureMetrics;
+import eu.inqudium.core.element.circuitbreaker.metrics.GradualDecayMetrics;
+import eu.inqudium.core.element.circuitbreaker.metrics.LeakyBucketMetrics;
+import eu.inqudium.core.element.circuitbreaker.metrics.RequestBasedEwmaMetrics;
+import eu.inqudium.core.element.circuitbreaker.metrics.SlidingWindowMetrics;
+import eu.inqudium.core.element.circuitbreaker.metrics.TimeBasedErrorRateMetrics;
+import eu.inqudium.core.element.circuitbreaker.metrics.TimeBasedSlidingWindowMetrics;
 import eu.inqudium.core.element.config.FailurePredicateConfig;
 import eu.inqudium.imperative.circuitbreaker.config.InqImperativeCircuitBreakerConfig;
 

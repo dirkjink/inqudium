@@ -88,7 +88,7 @@ final class PipelineDiagnostics {
      * within that invocation's scope.</p>
      *
      * @return the latest call ID (globally, across all threads), or 0 if
-     *         never executed
+     * never executed
      */
     long currentCallId() {
         return empty ? 0L : callIdCounter.get();

@@ -1,6 +1,12 @@
 package eu.inqudium.imperative.fallback;
 
-import eu.inqudium.core.element.fallback.*;
+import eu.inqudium.core.element.fallback.FallbackConfig;
+import eu.inqudium.core.element.fallback.FallbackCore;
+import eu.inqudium.core.element.fallback.FallbackEvent;
+import eu.inqudium.core.element.fallback.FallbackException;
+import eu.inqudium.core.element.fallback.FallbackExceptionHandler;
+import eu.inqudium.core.element.fallback.FallbackResultHandler;
+import eu.inqudium.core.element.fallback.FallbackSnapshot;
 import eu.inqudium.core.exception.InqException;
 
 import java.time.Clock;

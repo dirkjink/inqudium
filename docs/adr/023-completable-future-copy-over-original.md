@@ -14,7 +14,8 @@ also async variants of Circuit Breaker, Retry, and Bulkhead — must decorate a 
 counting, metric emission).
 
 Every one of these registration methods returns a **new** `CompletableFuture` instance — a copy — while leaving the
-original instance unchanged. This creates an ambiguity at the API boundary: should the element return the original future
+original instance unchanged. This creates an ambiguity at the API boundary: should the element return the original
+future
 (on which the callbacks were registered) or the copy (which was produced by the registration)?
 
 This decision affects correctness, composability, and failure isolation across the entire library. Getting it wrong
@@ -38,7 +39,8 @@ These two objects differ in critical ways depending on the registration method a
 transformed value. If the original completes with `5` and the callback doubles it, the original yields `5` and the copy
 yields `10`. The transformation exists *only* on the copy.
 
-**Observation methods (`whenComplete`):** Under normal conditions both objects carry the same value — `whenComplete` does
+**Observation methods (`whenComplete`):** Under normal conditions both objects carry the same value — `whenComplete`
+does
 not transform. However, if the callback itself throws an exception, the copy becomes exceptionally completed while the
 original remains successful. The original is immune to bugs in the observation code; the copy is not.
 
@@ -162,7 +164,8 @@ CompletableFuture<String> result = timeLimiter.decorateFuture(() -> asyncService
   returns its copy, transformations stack naturally. If any element returned the original, it would bypass all upstream
   decorations, breaking the pipeline contract.
 - **Timeout enforcement is clean.** A Time Limiter can call `copy.completeExceptionally(new TimeoutException())` on its
-  copy without affecting the original. The upstream producer continues undisturbed. If the library returned the original,
+  copy without affecting the original. The upstream producer continues undisturbed. If the library returned the
+  original,
   the Time Limiter would have to force-complete the original, permanently corrupting it and racing with the producer.
 - **Caller manipulation is contained.** The one-way dependency means a caller who calls `complete()` or `cancel()` on
   the copy cannot corrupt the original or the library's internal state. The copy acts as a buffer. If the library
@@ -186,7 +189,8 @@ CompletableFuture<String> result = timeLimiter.decorateFuture(() -> asyncService
 
 **Neutral:**
 
-- The original future still exists and its callbacks still fire. Internal observation callbacks (metrics, event emission)
+- The original future still exists and its callbacks still fire. Internal observation callbacks (metrics, event
+  emission)
   can be registered as branches on the original or as chain links — the decision is left to each element's
   implementation, as long as the *returned* future is always the end of the chain.
 
@@ -197,5 +201,6 @@ exhibit the two-object problem. A `Mono` is an assembly-time description of a pi
 `onErrorResume`, or `doOnNext` return a new `Mono` that wraps the previous one, but no execution happens until a
 subscriber subscribes. There is no mutable shared state, no one-shot completion, and no branching ambiguity. Each
 subscription triggers a fresh execution through the entire operator chain. The "original vs. copy" distinction that
-drives this ADR does not exist in the reactive model, and the Reactor-based element implementations do not need to follow
+drives this ADR does not exist in the reactive model, and the Reactor-based element implementations do not need to
+follow
 this rule.

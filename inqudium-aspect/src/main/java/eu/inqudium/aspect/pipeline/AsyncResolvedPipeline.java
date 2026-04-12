@@ -84,7 +84,7 @@ public final class AsyncResolvedPipeline {
      * @param method    the target method for {@code canHandle} filtering
      * @return a pre-composed, reusable async pipeline
      * @throws IllegalArgumentException if providers or method is null
-     * @throws IllegalStateException if the method does not return a CompletionStage
+     * @throws IllegalStateException    if the method does not return a CompletionStage
      */
     public static AsyncResolvedPipeline resolve(
             List<? extends AsyncAspectLayerProvider<Object>> providers,
@@ -161,7 +161,7 @@ public final class AsyncResolvedPipeline {
      * @param coreExecutor the join point execution (typically {@code pjp::proceed}),
      *                     whose return value must be a {@link CompletionStage}
      * @return a {@link CompletionStage} carrying the result or the failure —
-     *         never {@code null}, never throws
+     * never {@code null}, never throws
      */
     public CompletionStage<Object> execute(JoinPointExecutor<Object> coreExecutor) {
         long callId = diagnostics.nextCallId();
@@ -214,7 +214,9 @@ public final class AsyncResolvedPipeline {
 
     // ======================== Diagnostics ========================
 
-    /** Returns the chain ID assigned to this resolved pipeline. */
+    /**
+     * Returns the chain ID assigned to this resolved pipeline.
+     */
     public long chainId() {
         return diagnostics.chainId();
     }
@@ -230,12 +232,16 @@ public final class AsyncResolvedPipeline {
         return diagnostics.currentCallId();
     }
 
-    /** Returns the layer names in order (outermost first). */
+    /**
+     * Returns the layer names in order (outermost first).
+     */
     public List<String> layerNames() {
         return diagnostics.layerNames();
     }
 
-    /** Returns the number of layers in this pipeline. */
+    /**
+     * Returns the number of layers in this pipeline.
+     */
     public int depth() {
         return diagnostics.depth();
     }

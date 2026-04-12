@@ -47,6 +47,24 @@ public class AspectPipelineBuilder<R> {
     private final List<NamedLayer<R>> layers = new ArrayList<>();
 
     /**
+     * Validates that the list and all its elements are non-null.
+     *
+     * @param list the list to validate
+     * @throws IllegalArgumentException if the list or any element is null
+     */
+    private static void requireNonNullElements(List<?> list) {
+        if (list == null) {
+            throw new IllegalArgumentException("Providers list must not be null");
+        }
+        for (int i = 0; i < list.size(); i++) {
+            if (list.get(i) == null) {
+                throw new IllegalArgumentException(
+                        "Provider at index " + i + " must not be null");
+            }
+        }
+    }
+
+    /**
      * Adds a single layer with an explicit name and action.
      *
      * <p>Layers are applied in insertion order: the first added layer becomes
@@ -118,7 +136,7 @@ public class AspectPipelineBuilder<R> {
      * @throws IllegalArgumentException if providers or method is null
      */
     public AspectPipelineBuilder<R> addProviders(List<? extends AspectLayerProvider<R>> providers,
-                                                  Method method) {
+                                                 Method method) {
         requireNonNullElements(providers);
         if (method == null) {
             throw new IllegalArgumentException("Method must not be null");
@@ -142,6 +160,8 @@ public class AspectPipelineBuilder<R> {
     public List<NamedLayer<R>> layers() {
         return Collections.unmodifiableList(layers);
     }
+
+    // ======================== Internal ========================
 
     /**
      * Builds a {@link JoinPointWrapper} chain from the registered layers.
@@ -180,26 +200,6 @@ public class AspectPipelineBuilder<R> {
             current = new JoinPointWrapper<>(layer.name(), delegate, layer.action());
         }
         return current;
-    }
-
-    // ======================== Internal ========================
-
-    /**
-     * Validates that the list and all its elements are non-null.
-     *
-     * @param list the list to validate
-     * @throws IllegalArgumentException if the list or any element is null
-     */
-    private static void requireNonNullElements(List<?> list) {
-        if (list == null) {
-            throw new IllegalArgumentException("Providers list must not be null");
-        }
-        for (int i = 0; i < list.size(); i++) {
-            if (list.get(i) == null) {
-                throw new IllegalArgumentException(
-                        "Provider at index " + i + " must not be null");
-            }
-        }
     }
 
     /**

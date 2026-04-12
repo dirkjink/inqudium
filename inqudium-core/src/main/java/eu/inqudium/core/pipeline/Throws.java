@@ -140,9 +140,9 @@ public final class Throws {
      * @param t the throwable to wrap or rethrow (must not be {@code null})
      * @return never — always throws
      * @throws NullPointerException if {@code t} is {@code null}
-     * @throws RuntimeException if {@code t} is a {@link RuntimeException} (rethrown as-is)
-     * @throws Error            if {@code t} is an {@link Error} (rethrown as-is)
-     * @throws CompletionException wrapping {@code t} if it is a checked exception
+     * @throws RuntimeException     if {@code t} is a {@link RuntimeException} (rethrown as-is)
+     * @throws Error                if {@code t} is an {@link Error} (rethrown as-is)
+     * @throws CompletionException  wrapping {@code t} if it is a checked exception
      * @since 0.7.0
      */
     public static RuntimeException wrapChecked(Throwable t) {

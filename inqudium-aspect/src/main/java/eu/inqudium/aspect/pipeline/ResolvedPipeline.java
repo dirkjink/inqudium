@@ -195,7 +195,9 @@ public final class ResolvedPipeline {
 
     // ======================== Diagnostics ========================
 
-    /** Returns the chain ID assigned to this resolved pipeline. */
+    /**
+     * Returns the chain ID assigned to this resolved pipeline.
+     */
     public long chainId() {
         return diagnostics.chainId();
     }
@@ -211,12 +213,16 @@ public final class ResolvedPipeline {
         return diagnostics.currentCallId();
     }
 
-    /** Returns the layer names in order (outermost first). */
+    /**
+     * Returns the layer names in order (outermost first).
+     */
     public List<String> layerNames() {
         return diagnostics.layerNames();
     }
 
-    /** Returns the number of layers in this pipeline. */
+    /**
+     * Returns the number of layers in this pipeline.
+     */
     public int depth() {
         return diagnostics.depth();
     }

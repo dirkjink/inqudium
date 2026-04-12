@@ -1,7 +1,11 @@
 package eu.inqudium.imperative.circuitbreaker;
 
 import eu.inqudium.core.element.InqElementType;
-import eu.inqudium.core.element.circuitbreaker.*;
+import eu.inqudium.core.element.circuitbreaker.CircuitBreakerCore;
+import eu.inqudium.core.element.circuitbreaker.CircuitBreakerException;
+import eu.inqudium.core.element.circuitbreaker.CircuitState;
+import eu.inqudium.core.element.circuitbreaker.PermissionResult;
+import eu.inqudium.core.element.circuitbreaker.StateTransition;
 import eu.inqudium.core.element.circuitbreaker.config.InqCircuitBreakerConfig;
 import eu.inqudium.core.element.circuitbreaker.metrics.FailureMetrics;
 import eu.inqudium.core.event.InqEventPublisher;
@@ -69,7 +73,9 @@ public class ImperativeCircuitBreaker<A, R> implements CircuitBreaker<A, R> {
      */
     private final AtomicReference<CircuitBreakerSnapshot> snapshotRef;
 
-    /** Monotonic nano-precision time source, injectable for deterministic testing. */
+    /**
+     * Monotonic nano-precision time source, injectable for deterministic testing.
+     */
     private final InqNanoTimeSource timeSource;
 
     /**
@@ -79,12 +85,16 @@ public class ImperativeCircuitBreaker<A, R> implements CircuitBreaker<A, R> {
      */
     private final List<Consumer<StateTransition>> transitionListeners;
 
-    /** Publisher for diagnostic events (ADR-003 observability). */
+    /**
+     * Publisher for diagnostic events (ADR-003 observability).
+     */
     private final InqEventPublisher eventPublisher;
 
     // ── Extracted config values (final fields for hot-path performance) ──
 
-    /** Human-readable name, used in exceptions, events, and log messages. */
+    /**
+     * Human-readable name, used in exceptions, events, and log messages.
+     */
     private final String name;
 
     /**
@@ -339,7 +349,7 @@ public class ImperativeCircuitBreaker<A, R> implements CircuitBreaker<A, R> {
      * @param <T>      the result type
      * @return the callable's result
      * @throws Exception               whatever the callable throws
-     * @throws CircuitBreakerException  if the circuit is OPEN
+     * @throws CircuitBreakerException if the circuit is OPEN
      */
     public <T> T execute(Callable<T> callable) throws Exception {
         acquirePermissionOrThrow();
@@ -746,7 +756,9 @@ public class ImperativeCircuitBreaker<A, R> implements CircuitBreaker<A, R> {
 
     // ======================== Introspection ========================
 
-    /** Returns the current state of the circuit breaker (CLOSED, OPEN, or HALF_OPEN). */
+    /**
+     * Returns the current state of the circuit breaker (CLOSED, OPEN, or HALF_OPEN).
+     */
     public CircuitState getState() {
         return snapshotRef.get().state();
     }

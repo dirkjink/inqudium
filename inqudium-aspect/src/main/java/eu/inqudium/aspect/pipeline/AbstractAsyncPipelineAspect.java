@@ -5,9 +5,9 @@ import eu.inqudium.imperative.core.pipeline.AsyncJoinPointWrapper;
 
 import java.lang.reflect.Method;
 import java.util.List;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Abstract base class for AspectJ aspects that execute method calls through
@@ -110,7 +110,7 @@ public abstract class AbstractAsyncPipelineAspect {
      *
      * @return the async layer providers, never {@code null}
      * @throws UnsupportedOperationException if the no-arg constructor is used
-     *         without overriding this method
+     *                                       without overriding this method
      */
     protected List<AsyncAspectLayerProvider<Object>> asyncLayerProviders() {
         throw new UnsupportedOperationException(

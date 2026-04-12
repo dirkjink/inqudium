@@ -52,8 +52,8 @@ import java.util.Objects;
  * ));
  * }</pre>
  *
- * @since 0.8.0
  * @see ElementLayerProvider
+ * @since 0.8.0
  */
 public final class AsyncElementLayerProvider implements AsyncAspectLayerProvider<Object> {
 

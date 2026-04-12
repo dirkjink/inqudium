@@ -116,7 +116,9 @@ public enum InqElementType {
 
     private final String symbol;
 
-    /** Higher precedence for smaller numbers — lowest value becomes outermost layer. */
+    /**
+     * Higher precedence for smaller numbers — lowest value becomes outermost layer.
+     */
     private final int defaultPipelineOrder;
 
     InqElementType(String symbol, int defaultPipelineOrder) {

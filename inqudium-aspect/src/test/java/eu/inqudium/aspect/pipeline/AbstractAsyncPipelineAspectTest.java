@@ -13,7 +13,8 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import static org.assertj.core.api.Assertions.*;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 @DisplayName("AbstractAsyncPipelineAspect")
 class AbstractAsyncPipelineAspectTest {
@@ -35,9 +36,20 @@ class AbstractAsyncPipelineAspectTest {
     private static AsyncAspectLayerProvider<Object> asyncProvider(
             String name, int order, AsyncLayerAction<Void, Object> action) {
         return new AsyncAspectLayerProvider<>() {
-            @Override public String layerName() { return name; }
-            @Override public int order() { return order; }
-            @Override public AsyncLayerAction<Void, Object> asyncLayerAction() { return action; }
+            @Override
+            public String layerName() {
+                return name;
+            }
+
+            @Override
+            public int order() {
+                return order;
+            }
+
+            @Override
+            public AsyncLayerAction<Void, Object> asyncLayerAction() {
+                return action;
+            }
         };
     }
 
@@ -181,9 +193,18 @@ class AbstractAsyncPipelineAspectTest {
             // Given
             AtomicInteger buildCount = new AtomicInteger();
             AsyncAspectLayerProvider<Object> countingProvider = new AsyncAspectLayerProvider<>() {
-                @Override public String layerName() { return "COUNTER"; }
-                @Override public int order() { return 10; }
-                @Override public AsyncLayerAction<Void, Object> asyncLayerAction() {
+                @Override
+                public String layerName() {
+                    return "COUNTER";
+                }
+
+                @Override
+                public int order() {
+                    return 10;
+                }
+
+                @Override
+                public AsyncLayerAction<Void, Object> asyncLayerAction() {
                     buildCount.incrementAndGet();
                     return AsyncLayerAction.passThrough();
                 }
@@ -192,10 +213,10 @@ class AbstractAsyncPipelineAspectTest {
 
             // When
             aspect.executeThroughAsync(
-                    () -> CompletableFuture.completedFuture("first"))
+                            () -> CompletableFuture.completedFuture("first"))
                     .toCompletableFuture().join();
             aspect.executeThroughAsync(
-                    () -> CompletableFuture.completedFuture("second"))
+                            () -> CompletableFuture.completedFuture("second"))
                     .toCompletableFuture().join();
 
             // Then
@@ -253,7 +274,7 @@ class AbstractAsyncPipelineAspectTest {
 
             // When
             String hierarchy = aspect.buildAsyncPipeline(
-                    () -> CompletableFuture.completedFuture(null))
+                            () -> CompletableFuture.completedFuture(null))
                     .toStringHierarchy();
 
             // Then

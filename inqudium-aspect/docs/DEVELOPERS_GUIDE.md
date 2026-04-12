@@ -6,27 +6,27 @@
 2. [Architecture Overview](#architecture-overview)
 3. [Module Structure](#module-structure)
 4. [Core Concepts](#core-concepts)
-   - [The Wrapper Pipeline](#the-wrapper-pipeline)
-   - [How AspectJ Weaving Bridges into the Pipeline](#how-aspectj-weaving-bridges-into-the-pipeline)
+    - [The Wrapper Pipeline](#the-wrapper-pipeline)
+    - [How AspectJ Weaving Bridges into the Pipeline](#how-aspectj-weaving-bridges-into-the-pipeline)
 5. [Getting Started](#getting-started)
-   - [Maven Dependency](#maven-dependency)
-   - [A Minimal Aspect in Five Minutes](#a-minimal-aspect-in-five-minutes)
+    - [Maven Dependency](#maven-dependency)
+    - [A Minimal Aspect in Five Minutes](#a-minimal-aspect-in-five-minutes)
 6. [Implementing Layer Providers](#implementing-layer-providers)
-   - [Anatomy of an AspectLayerProvider](#anatomy-of-an-aspectlayerprovider)
-   - [Layer Ordering](#layer-ordering)
-   - [The LayerAction Contract](#the-layeraction-contract)
-   - [Common Layer Patterns](#common-layer-patterns)
+    - [Anatomy of an AspectLayerProvider](#anatomy-of-an-aspectlayerprovider)
+    - [Layer Ordering](#layer-ordering)
+    - [The LayerAction Contract](#the-layeraction-contract)
+    - [Common Layer Patterns](#common-layer-patterns)
 7. [Method-Specific Filtering with canHandle](#method-specific-filtering-with-canhandle)
 8. [Building the Aspect](#building-the-aspect)
-   - [Extending AbstractPipelineAspect](#extending-abstractpipelineaspect)
-   - [The @Around Advice and Method Extraction](#the-around-advice-and-method-extraction)
-   - [Exposing the Pipeline for Testing](#exposing-the-pipeline-for-testing)
-   - [Accessing the Aspect Singleton at Runtime](#accessing-the-aspect-singleton-at-runtime)
+    - [Extending AbstractPipelineAspect](#extending-abstractpipelineaspect)
+    - [The @Around Advice and Method Extraction](#the-around-advice-and-method-extraction)
+    - [Exposing the Pipeline for Testing](#exposing-the-pipeline-for-testing)
+    - [Accessing the Aspect Singleton at Runtime](#accessing-the-aspect-singleton-at-runtime)
 9. [Pipeline Caching with ResolvedPipeline](#pipeline-caching-with-resolvedpipeline)
-   - [How It Works](#how-it-works)
-   - [Parallel to SyncDispatchExtension](#parallel-to-syncdispatchextension)
-   - [Per-Call Cost Comparison](#per-call-cost-comparison)
-   - [Diagnostics on the Cached Pipeline](#diagnostics-on-the-cached-pipeline)
+    - [How It Works](#how-it-works)
+    - [Parallel to SyncDispatchExtension](#parallel-to-syncdispatchextension)
+    - [Per-Call Cost Comparison](#per-call-cost-comparison)
+    - [Diagnostics on the Cached Pipeline](#diagnostics-on-the-cached-pipeline)
 10. [Chain Introspection via the Wrapper Interface](#chain-introspection-via-the-wrapper-interface)
 11. [Asynchronous Pipelines](#asynchronous-pipelines)
     - [AsyncAspectLayerProvider](#asyncaspectlayerprovider)
@@ -148,12 +148,12 @@ inqudium-aspect/
 
 **Dependencies**:
 
-| Module               | Purpose                                                  |
-|----------------------|----------------------------------------------------------|
-| `inqudium-core`      | `JoinPointWrapper`, `LayerAction`, `Wrapper`, chain IDs  |
-| `inqudium-imperative`| `AsyncLayerAction`, `AsyncJoinPointWrapper` (async only) |
-| `aspectjrt`          | AspectJ runtime annotations (`@Aspect`, `@Around`)       |
-| `aspectjweaver`      | Compile-time or load-time weaving support                |
+| Module                | Purpose                                                  |
+|-----------------------|----------------------------------------------------------|
+| `inqudium-core`       | `JoinPointWrapper`, `LayerAction`, `Wrapper`, chain IDs  |
+| `inqudium-imperative` | `AsyncLayerAction`, `AsyncJoinPointWrapper` (async only) |
+| `aspectjrt`           | AspectJ runtime annotations (`@Aspect`, `@Around`)       |
+| `aspectjweaver`       | Compile-time or load-time weaving support                |
 
 ---
 
@@ -387,12 +387,12 @@ public interface AspectLayerProvider<R> {
 }
 ```
 
-| Method         | Purpose                                                           |
-|----------------|-------------------------------------------------------------------|
-| `layerName()`  | Human-readable label shown in `toStringHierarchy()` and logs.     |
-| `order()`      | Determines position in the chain. Lower values wrap outer.        |
-| `layerAction()`| Returns the `LayerAction` — the actual around-advice logic.       |
-| `canHandle()`  | Decides at build-time if this layer applies to the target method. |
+| Method          | Purpose                                                           |
+|-----------------|-------------------------------------------------------------------|
+| `layerName()`   | Human-readable label shown in `toStringHierarchy()` and logs.     |
+| `order()`       | Determines position in the chain. Lower values wrap outer.        |
+| `layerAction()` | Returns the `LayerAction` — the actual around-advice logic.       |
+| `canHandle()`   | Decides at build-time if this layer applies to the target method. |
 
 ### Layer Ordering
 
@@ -401,14 +401,14 @@ values retain their registration order from the input list.
 
 Recommended order ranges:
 
-| Range     | Purpose                             | Examples                 |
-|-----------|-------------------------------------|--------------------------|
-| 0–9       | Infrastructure / context propagation| MDC, trace context       |
-| 10–19     | Security / authorization             | Auth, rate limiting      |
-| 20–29     | Observability                        | Logging, metrics         |
-| 30–39     | Resilience                           | Circuit breaker, bulkhead|
-| 40–49     | Retry / timeout                      | Retry, deadline          |
-| 50–59     | Caching                              | Cache lookup/store       |
+| Range | Purpose                              | Examples                  |
+|-------|--------------------------------------|---------------------------|
+| 0–9   | Infrastructure / context propagation | MDC, trace context        |
+| 10–19 | Security / authorization             | Auth, rate limiting       |
+| 20–29 | Observability                        | Logging, metrics          |
+| 30–39 | Resilience                           | Circuit breaker, bulkhead |
+| 40–49 | Retry / timeout                      | Retry, deadline           |
+| 50–59 | Caching                              | Cache lookup/store        |
 
 ### The LayerAction Contract
 
@@ -421,15 +421,15 @@ R execute(long chainId, long callId, A argument, InternalExecutor<A, R> next);
 
 The `next` parameter is the next step in the chain. You can:
 
-| Action               | How                                              |
-|----------------------|--------------------------------------------------|
-| **Proceed normally** | `return next.execute(chainId, callId, arg);`     |
-| **Short-circuit**    | Return a value without calling `next`             |
-| **Retry**            | Call `next.execute(...)` multiple times           |
-| **Transform result** | Call `next`, then modify the returned value       |
-| **Handle exceptions**| Wrap the `next` call in try/catch                 |
-| **Pre-process**      | Execute logic before calling `next`               |
-| **Post-process**     | Execute logic after `next` returns                |
+| Action                | How                                          |
+|-----------------------|----------------------------------------------|
+| **Proceed normally**  | `return next.execute(chainId, callId, arg);` |
+| **Short-circuit**     | Return a value without calling `next`        |
+| **Retry**             | Call `next.execute(...)` multiple times      |
+| **Transform result**  | Call `next`, then modify the returned value  |
+| **Handle exceptions** | Wrap the `next` call in try/catch            |
+| **Pre-process**       | Execute logic before calling `next`          |
+| **Post-process**      | Execute logic after `next` returns           |
 
 ### Common Layer Patterns
 
@@ -616,14 +616,14 @@ public class PipelinedAspect extends AbstractPipelineAspect {
 
 The base class provides the following execution paths:
 
-| Method                                   | Path   | Visibility  | Description                                    |
-|------------------------------------------|--------|-------------|------------------------------------------------|
-| `executeAround(pjp)`                    | Hot    | `protected` | Extracts `Method`, delegates to cached pipeline|
-| `execute(executor, method)`              | Hot    | `public`    | Uses cached `ResolvedPipeline` per method      |
-| `execute(executor)`                      | Cold   | `protected` | Builds fresh chain from all providers          |
-| `getResolvedPipeline(method)`            | Hot    | `public`    | Returns cached pipeline for diagnostics        |
-| `inspectPipeline(executor)`              | Cold   | `public`    | Full `JoinPointWrapper` chain (introspection)  |
-| `inspectPipeline(executor, method)`      | Cold   | `public`    | Filtered `JoinPointWrapper` chain              |
+| Method                              | Path | Visibility  | Description                                     |
+|-------------------------------------|------|-------------|-------------------------------------------------|
+| `executeAround(pjp)`                | Hot  | `protected` | Extracts `Method`, delegates to cached pipeline |
+| `execute(executor, method)`         | Hot  | `public`    | Uses cached `ResolvedPipeline` per method       |
+| `execute(executor)`                 | Cold | `protected` | Builds fresh chain from all providers           |
+| `getResolvedPipeline(method)`       | Hot  | `public`    | Returns cached pipeline for diagnostics         |
+| `inspectPipeline(executor)`         | Cold | `public`    | Full `JoinPointWrapper` chain (introspection)   |
+| `inspectPipeline(executor, method)` | Cold | `public`    | Filtered `JoinPointWrapper` chain               |
 
 ### The @Around Advice and Method Extraction
 
@@ -845,10 +845,10 @@ visible at compile time** when using `javac` — only the AspectJ compiler
 the portable alternative: it is a regular Java API call, compiles with any
 Java compiler, and resolves the woven method internally via reflection.
 
-| Approach | Compiler | Availability | Error mode |
-|---|---|---|---|
-| `MyAspect.aspectOf()` | `ajc` only | Compile-time visible | Compile error with `javac` |
-| `Aspects.aspectOf(MyAspect.class)` | Any (`javac`, `ajc`) | Always compiles | `NoAspectBoundException` at runtime if not woven |
+| Approach                           | Compiler             | Availability         | Error mode                                       |
+|------------------------------------|----------------------|----------------------|--------------------------------------------------|
+| `MyAspect.aspectOf()`              | `ajc` only           | Compile-time visible | Compile error with `javac`                       |
+| `Aspects.aspectOf(MyAspect.class)` | Any (`javac`, `ajc`) | Always compiles      | `NoAspectBoundException` at runtime if not woven |
 
 **Recommendation:** Always use `Aspects.aspectOf(Class)` in application code
 and tests. It works with every compiler and every weaving strategy. Reserve
@@ -899,15 +899,15 @@ No `JoinPointWrapper` objects, no `AbstractBaseWrapper` chains, no
 
 The design directly mirrors the proxy module's `SyncDispatchExtension`:
 
-| Proxy module                                  | Aspect module                                  |
-|-----------------------------------------------|-------------------------------------------------|
-| `SyncDispatchExtension.nextStepFactory`       | `ResolvedPipeline.chainFactory`                |
-| `Function<InternalExecutor, InternalExecutor>`| `Function<InternalExecutor, InternalExecutor>` |
-| Composed once in `linkInner()`                | Composed once in `resolve()`                   |
-| `buildTerminal(method, args, target)` per call| Terminal lambda with `pjp::proceed` per call   |
-| `executeChain(chainId, callId, terminal)`     | `chainFactory.apply(terminal).execute(...)`    |
-| `MethodHandleCache` — shared across stack     | `ConcurrentHashMap<Method, ResolvedPipeline>`  |
-| One cache per proxy stack                     | One cache per aspect instance                  |
+| Proxy module                                   | Aspect module                                  |
+|------------------------------------------------|------------------------------------------------|
+| `SyncDispatchExtension.nextStepFactory`        | `ResolvedPipeline.chainFactory`                |
+| `Function<InternalExecutor, InternalExecutor>` | `Function<InternalExecutor, InternalExecutor>` |
+| Composed once in `linkInner()`                 | Composed once in `resolve()`                   |
+| `buildTerminal(method, args, target)` per call | Terminal lambda with `pjp::proceed` per call   |
+| `executeChain(chainId, callId, terminal)`      | `chainFactory.apply(terminal).execute(...)`    |
+| `MethodHandleCache` — shared across stack      | `ConcurrentHashMap<Method, ResolvedPipeline>`  |
+| One cache per proxy stack                      | One cache per aspect instance                  |
 
 Both approaches share the same insight: the layer chain structure is
 **deterministic** for a given method signature and does not need to be
@@ -920,15 +920,15 @@ in `AbstractAsyncPipelineAspect`.
 
 ### Per-Call Cost Comparison
 
-| Step                          | Without caching         | With ResolvedPipeline  |
-|-------------------------------|-------------------------|------------------------|
-| Filter providers              | Every call              | Once per Method        |
-| Sort providers                | Every call              | Once per Method        |
-| Extract LayerActions          | Every call              | Once per Method        |
-| Compose chain                 | N wrapper objects       | 0 objects (pre-composed)|
-| Terminal executor             | 1 lambda                | 1 lambda               |
-| Chain/call IDs                | AtomicLong in wrappers  | AtomicLong in pipeline |
-| HashMap lookup                | —                       | 1 `get()` (fast path)  |
+| Step                 | Without caching        | With ResolvedPipeline    |
+|----------------------|------------------------|--------------------------|
+| Filter providers     | Every call             | Once per Method          |
+| Sort providers       | Every call             | Once per Method          |
+| Extract LayerActions | Every call             | Once per Method          |
+| Compose chain        | N wrapper objects      | 0 objects (pre-composed) |
+| Terminal executor    | 1 lambda               | 1 lambda                 |
+| Chain/call IDs       | AtomicLong in wrappers | AtomicLong in pipeline   |
+| HashMap lookup       | —                      | 1 `get()` (fast path)    |
 
 ### Diagnostics on the Cached Pipeline
 
@@ -1026,6 +1026,7 @@ System.out.println(chain.toStringHierarchy());
 ```
 
 Output:
+
 ```
 Chain-ID: 42 (current call-ID: 0)
 AUTHORIZATION
@@ -1111,13 +1112,13 @@ public class AsyncResilienceAspect extends AbstractAsyncPipelineAspect {
 
 The base class provides the same hot/cold path split as the sync version:
 
-| Method                                            | Path   | Description                                      |
-|---------------------------------------------------|--------|--------------------------------------------------|
-| `executeThroughAsync(executor, method)`            | Hot    | Uses cached `AsyncResolvedPipeline` per method   |
-| `executeThroughAsync(executor)`                    | Cold   | Builds fresh `AsyncJoinPointWrapper` chain       |
-| `resolvedAsyncPipeline(method)`                    | Hot    | Returns cached pipeline for diagnostics          |
-| `buildAsyncPipeline(executor)`                     | Cold   | Full `Wrapper` introspection chain               |
-| `buildAsyncPipeline(executor, method)`             | Cold   | Filtered `Wrapper` introspection chain           |
+| Method                                  | Path | Description                                    |
+|-----------------------------------------|------|------------------------------------------------|
+| `executeThroughAsync(executor, method)` | Hot  | Uses cached `AsyncResolvedPipeline` per method |
+| `executeThroughAsync(executor)`         | Cold | Builds fresh `AsyncJoinPointWrapper` chain     |
+| `resolvedAsyncPipeline(method)`         | Hot  | Returns cached pipeline for diagnostics        |
+| `buildAsyncPipeline(executor)`          | Cold | Full `Wrapper` introspection chain             |
+| `buildAsyncPipeline(executor, method)`  | Cold | Filtered `Wrapper` introspection chain         |
 
 ### Two-Phase Execution Semantics
 
@@ -1587,6 +1588,7 @@ key is `Method` because `canHandle(Method)` can produce different layer sets
 for different methods (e.g. `greet()` gets 3 layers, `farewell()` gets 2).
 
 The per-call cost is reduced to:
+
 - One `ConcurrentHashMap.get()` (fast path, no locking after initial population)
 - One terminal lambda creation (captures `pjp::proceed`)
 - One `AtomicLong.incrementAndGet()` for the call ID
@@ -1599,10 +1601,10 @@ when full `Wrapper` interface support (`inner()`, type-safe traversal) is needed
 
 The aspect base class now has a clear separation:
 
-| Path | Method | Purpose | Allocations per call |
-|------|--------|---------|---------------------|
-| **Hot** | `executeAround(pjp)` / `execute(executor, method)` | Production execution | 1 lambda |
-| **Cold** | `inspectPipeline(executor, method)` | Testing / introspection | N wrapper objects |
+| Path     | Method                                             | Purpose                 | Allocations per call |
+|----------|----------------------------------------------------|-------------------------|----------------------|
+| **Hot**  | `executeAround(pjp)` / `execute(executor, method)` | Production execution    | 1 lambda             |
+| **Cold** | `inspectPipeline(executor, method)`                | Testing / introspection | N wrapper objects    |
 
 The hot path uses `ResolvedPipeline` (no wrapper objects, pre-composed chain
 factory). The cold path uses `AspectPipelineBuilder` + `JoinPointWrapper` (full
