@@ -1,6 +1,5 @@
 package eu.inqudium.aspect.pipeline.integration;
 
-import eu.inqudium.aspect.pipeline.integration.perlayer.BenchmarkService;
 import org.openjdk.jmh.annotations.*;
 import org.openjdk.jmh.infra.Blackhole;
 import org.openjdk.jmh.profile.GCProfiler;
@@ -78,7 +77,7 @@ public class WovenPipelineBenchmark {
 
     @Setup
     public void setup() {
-        service = new BenchmarkService();
+        service = new BenchmarkService(Blackhole::consumeCPU);
     }
 
     // ======================== Group 1: Baseline vs. woven (@Resilient) ========================

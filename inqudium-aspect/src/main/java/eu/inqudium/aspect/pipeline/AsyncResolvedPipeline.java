@@ -18,11 +18,9 @@ import java.util.concurrent.CompletionStage;
  * structure on every call.
  *
  * <p>The async counterpart to {@link ResolvedPipeline}. Applies the same
- * zero-allocation optimization: the {@link AsyncLayerAction} chain is
- * materialized once as a permanent linked structure of
- * {@link InternalAsyncExecutor} lambdas. The innermost lambda reads the
- * actual terminal from a {@link ThreadLocal} slot set at the start of each
- * {@link #execute} call.</p>
+ * optimization: {@link AsyncLayerAction} references are extracted from
+ * providers once at resolution time and stored in a pre-built array. At
+ * invocation time, the chain is composed inline via a simple reverse loop.</p>
  *
  * <h3>Two-phase execution</h3>
  * <p>Each async layer has two phases:</p>
@@ -35,47 +33,41 @@ import java.util.concurrent.CompletionStage;
  * </ul>
  *
  * <h3>Thread safety</h3>
- * <p>Instances are safe for concurrent use. The pre-built chain is immutable;
- * the {@link ThreadLocal} terminal slot provides per-thread isolation; the
- * call-ID counter is an {@link java.util.concurrent.atomic.AtomicLong}.</p>
+ * <p>Instances are safe for concurrent use. The pre-built action array is
+ * immutable; the chain composition is purely stack-local; the call-ID
+ * counter is an {@link java.util.concurrent.atomic.AtomicLong}. No
+ * {@code ThreadLocal} or shared mutable state is used — the pipeline is
+ * safe for virtual threads, reactive pipelines, and coroutines.</p>
  *
  * @since 0.7.0
  */
 public final class AsyncResolvedPipeline {
 
     /**
+     * Sentinel empty action array.
+     */
+    private static final AsyncLayerAction<Void, Object>[] EMPTY_ACTIONS = newActionArray(0);
+
+    /**
      * Sentinel instance for methods with no applicable async layers.
      */
     private static final AsyncResolvedPipeline EMPTY = new AsyncResolvedPipeline(
-            null, null, PipelineDiagnostics.EMPTY);
+            EMPTY_ACTIONS, PipelineDiagnostics.EMPTY);
 
     /**
-     * Pre-built async chain head — the outermost executor. All chain lambdas
-     * are permanent objects created once during {@link #fromProviders}. The
-     * innermost lambda (terminal proxy) reads the actual terminal from
-     * {@link #terminalSlot}.
-     *
-     * <p>{@code null} for empty pipelines.</p>
+     * Pre-built, immutable array of async layer actions in execution order
+     * (outermost first). Extracted from providers once during
+     * {@link #fromProviders}.
      */
-    private final InternalAsyncExecutor<Void, Object> head;
-
-    /**
-     * Thread-local slot for the per-invocation terminal executor.
-     *
-     * <p>{@code null} for empty pipelines.</p>
-     */
-    private final ThreadLocal<InternalAsyncExecutor<Void, Object>> terminalSlot;
+    private final AsyncLayerAction<Void, Object>[] actions;
 
     private final PipelineDiagnostics diagnostics;
 
     // ======================== Construction ========================
 
-    private AsyncResolvedPipeline(
-            InternalAsyncExecutor<Void, Object> head,
-            ThreadLocal<InternalAsyncExecutor<Void, Object>> terminalSlot,
-            PipelineDiagnostics diagnostics) {
-        this.head = head;
-        this.terminalSlot = terminalSlot;
+    private AsyncResolvedPipeline(AsyncLayerAction<Void, Object>[] actions,
+                                  PipelineDiagnostics diagnostics) {
+        this.actions = actions;
         this.diagnostics = diagnostics;
     }
 
@@ -102,10 +94,7 @@ public final class AsyncResolvedPipeline {
      * Builds an {@code AsyncResolvedPipeline} from an already filtered and
      * sorted provider list.
      *
-     * <p>Creates a permanent chain of {@link InternalAsyncExecutor} lambdas
-     * in a single reverse pass. The innermost lambda is a "terminal proxy"
-     * that reads the actual terminal from a {@link ThreadLocal} slot at
-     * execution time.</p>
+     * <p>Extracts async layer actions and names in a single pass.</p>
      */
     private static AsyncResolvedPipeline fromProviders(
             List<? extends AsyncAspectLayerProvider<Object>> providers) {
@@ -114,27 +103,22 @@ public final class AsyncResolvedPipeline {
         }
 
         int size = providers.size();
+        AsyncLayerAction<Void, Object>[] acts = newActionArray(size);
         String[] names = new String[size];
 
-        ThreadLocal<InternalAsyncExecutor<Void, Object>> slot = new ThreadLocal<>();
-
-        // Terminal proxy — permanent lambda that reads the actual terminal
-        // from the ThreadLocal slot at execution time
-        InternalAsyncExecutor<Void, Object> current = (cid, callId, arg) ->
-                slot.get().executeAsync(cid, callId, arg);
-
-        // Build chain once in reverse — permanent lambdas, not per-call
-        for (int i = size - 1; i >= 0; i--) {
+        for (int i = 0; i < size; i++) {
             AsyncAspectLayerProvider<Object> p = providers.get(i);
+            acts[i] = p.asyncLayerAction();
             names[i] = p.layerName();
-            AsyncLayerAction<Void, Object> action = p.asyncLayerAction();
-            InternalAsyncExecutor<Void, Object> next = current;
-            current = (cid, callId, arg) ->
-                    action.executeAsync(cid, callId, arg, next);
         }
 
-        return new AsyncResolvedPipeline(current, slot,
+        return new AsyncResolvedPipeline(acts,
                 PipelineDiagnostics.create(List.of(names)));
+    }
+
+    @SuppressWarnings("unchecked")
+    private static AsyncLayerAction<Void, Object>[] newActionArray(int size) {
+        return new AsyncLayerAction[size];
     }
 
     // ======================== Execution ========================
@@ -146,8 +130,9 @@ public final class AsyncResolvedPipeline {
      * synchronous start phase or the asynchronous completion phase — are delivered
      * through the returned {@link CompletionStage}.</p>
      *
-     * <p>Per-call cost: one terminal lambda, one {@code ThreadLocal.set/remove}
-     * pair, and the chain traversal. No chain-lambda allocations.</p>
+     * <p>Per-call cost: one reverse loop creating N+1 lambdas (terminal + one
+     * per layer), then chain traversal. No {@code ThreadLocal}, no shared
+     * mutable state.</p>
      *
      * @param coreExecutor the join point execution (typically {@code pjp::proceed}),
      *                     whose return value must be a {@link CompletionStage}
@@ -157,8 +142,10 @@ public final class AsyncResolvedPipeline {
     @SuppressWarnings("unchecked")
     public CompletionStage<Object> execute(JoinPointExecutor<Object> coreExecutor) {
         long callId = diagnostics.nextCallId();
+        long cid = diagnostics.chainId();
 
-        InternalAsyncExecutor<Void, Object> terminal = (cid, caid, arg) -> {
+        // Terminal — wraps the actual method invocation, validates return type
+        InternalAsyncExecutor<Void, Object> current = (c, ca, a) -> {
             Object result;
             try {
                 result = coreExecutor.proceed();
@@ -183,16 +170,15 @@ public final class AsyncResolvedPipeline {
                             + "to restrict the async pipeline to compatible methods.");
         };
 
+        // Compose chain inside-out from pre-built action array
+        for (int i = actions.length - 1; i >= 0; i--) {
+            AsyncLayerAction<Void, Object> action = actions[i];
+            InternalAsyncExecutor<Void, Object> next = current;
+            current = (c, ca, a) -> action.executeAsync(c, ca, a, next);
+        }
+
         try {
-            if (head == null) {
-                return terminal.executeAsync(diagnostics.chainId(), callId, null);
-            }
-            try {
-                terminalSlot.set(terminal);
-                return head.executeAsync(diagnostics.chainId(), callId, null);
-            } finally {
-                terminalSlot.remove();
-            }
+            return current.executeAsync(cid, callId, null);
         } catch (CompletionException e) {
             Throwable cause = e.getCause();
             return CompletableFuture.failedFuture(cause != null ? cause : e);
