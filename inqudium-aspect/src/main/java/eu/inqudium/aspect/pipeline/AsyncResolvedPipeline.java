@@ -1,6 +1,7 @@
 package eu.inqudium.aspect.pipeline;
 
 import eu.inqudium.core.pipeline.JoinPointExecutor;
+import eu.inqudium.core.pipeline.Throws;
 import eu.inqudium.imperative.core.pipeline.AsyncLayerAction;
 import eu.inqudium.imperative.core.pipeline.InternalAsyncExecutor;
 
@@ -10,10 +11,7 @@ import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.CompletionStage;
-import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Function;
-
-import static eu.inqudium.core.pipeline.ChainIdGenerator.CHAIN_ID_COUNTER;
 
 /**
  * A pre-composed, immutable async pipeline that can be executed repeatedly with
@@ -37,8 +35,8 @@ import static eu.inqudium.core.pipeline.ChainIdGenerator.CHAIN_ID_COUNTER;
  *
  * <h3>Thread safety</h3>
  * <p>Instances are immutable and safe for concurrent use. The only mutable
- * state is the {@link AtomicLong} call-ID counter, which is thread-safe
- * by design.</p>
+ * state is the call-ID counter inside {@link PipelineDiagnostics}, which is
+ * thread-safe by design.</p>
  *
  * @since 0.7.0
  */
@@ -46,44 +44,23 @@ public final class AsyncResolvedPipeline {
 
     /**
      * Sentinel instance for methods with no applicable async layers.
-     * Avoids allocating a chain ID for empty pipelines.
      */
     private static final AsyncResolvedPipeline EMPTY = new AsyncResolvedPipeline(
-            Function.identity(), 0L, List.of());
+            Function.identity(), PipelineDiagnostics.EMPTY);
 
-    /**
-     * The pre-composed async chain factory. Takes a terminal async executor
-     * and returns the fully composed chain that traverses all layers before
-     * reaching the terminal.
-     */
     private final Function<InternalAsyncExecutor<Void, Object>,
             InternalAsyncExecutor<Void, Object>> chainFactory;
 
-    /**
-     * Unique chain ID, drawn from the same global counter as wrapper chains.
-     */
-    private final long chainId;
-
-    /**
-     * Shared call-ID counter — incremented once per invocation.
-     */
-    private final AtomicLong callIdCounter = new AtomicLong();
-
-    /**
-     * Layer names in order (outermost first), retained for diagnostics.
-     */
-    private final List<String> layerNames;
+    private final PipelineDiagnostics diagnostics;
 
     // ======================== Construction ========================
 
     private AsyncResolvedPipeline(
             Function<InternalAsyncExecutor<Void, Object>,
                     InternalAsyncExecutor<Void, Object>> chainFactory,
-            long chainId,
-            List<String> layerNames) {
+            PipelineDiagnostics diagnostics) {
         this.chainFactory = chainFactory;
-        this.chainId = chainId;
-        this.layerNames = layerNames;
+        this.diagnostics = diagnostics;
     }
 
     /**
@@ -122,8 +99,6 @@ public final class AsyncResolvedPipeline {
         int size = providers.size();
         String[] names = new String[size];
 
-        // Compose chain factory and collect names in a single reverse pass.
-        // No intermediate actions list — each action is consumed immediately.
         Function<InternalAsyncExecutor<Void, Object>,
                 InternalAsyncExecutor<Void, Object>> factory = Function.identity();
 
@@ -142,7 +117,7 @@ public final class AsyncResolvedPipeline {
         }
 
         return new AsyncResolvedPipeline(
-                factory, CHAIN_ID_COUNTER.incrementAndGet(), List.of(names));
+                factory, PipelineDiagnostics.create(List.of(names)));
     }
 
     // ======================== Execution ========================
@@ -178,19 +153,14 @@ public final class AsyncResolvedPipeline {
      */
     @SuppressWarnings("unchecked")
     public CompletionStage<Object> execute(JoinPointExecutor<Object> coreExecutor) {
-        long callId = callIdCounter.incrementAndGet();
+        long callId = diagnostics.nextCallId();
 
-        // Terminal: invokes pjp::proceed and validates the return type.
-        // Exceptions here end up in the synchronous start phase and are
-        // caught by the outer try-catch below.
         InternalAsyncExecutor<Void, Object> terminal = (cid, caid, arg) -> {
             Object result;
             try {
                 result = coreExecutor.proceed();
-            } catch (RuntimeException | Error e) {
-                throw e;
             } catch (Throwable t) {
-                throw new CompletionException(t);
+                throw Throws.wrapChecked(t);
             }
 
             if (result instanceof CompletionStage<?> stage) {
@@ -207,7 +177,8 @@ public final class AsyncResolvedPipeline {
         };
 
         try {
-            return chainFactory.apply(terminal).executeAsync(chainId, callId, null);
+            return chainFactory.apply(terminal)
+                    .executeAsync(diagnostics.chainId(), callId, null);
         } catch (CompletionException e) {
             // Unwrap transported checked exceptions from the terminal.
             // Guard against null cause — if absent, deliver the
@@ -230,22 +201,22 @@ public final class AsyncResolvedPipeline {
 
     /** Returns the chain ID assigned to this resolved pipeline. */
     public long chainId() {
-        return chainId;
+        return diagnostics.chainId();
     }
 
     /** Returns the current (most recently generated) call ID. */
     public long currentCallId() {
-        return callIdCounter.get();
+        return diagnostics.currentCallId();
     }
 
     /** Returns the layer names in order (outermost first). */
     public List<String> layerNames() {
-        return layerNames;
+        return diagnostics.layerNames();
     }
 
     /** Returns the number of layers in this pipeline. */
     public int depth() {
-        return layerNames.size();
+        return diagnostics.depth();
     }
 
     /**
@@ -253,17 +224,6 @@ public final class AsyncResolvedPipeline {
      * {@link eu.inqudium.core.pipeline.Wrapper#toStringHierarchy()}.
      */
     public String toStringHierarchy() {
-        StringBuilder sb = new StringBuilder();
-        sb.append("Chain-ID: ").append(chainId)
-                .append(" (current call-ID: ").append(callIdCounter.get())
-                .append(")\n");
-
-        for (int i = 0; i < layerNames.size(); i++) {
-            if (i > 0) {
-                sb.append("  ".repeat(i - 1)).append("  └── ");
-            }
-            sb.append(layerNames.get(i)).append("\n");
-        }
-        return sb.toString();
+        return diagnostics.toStringHierarchy();
     }
 }

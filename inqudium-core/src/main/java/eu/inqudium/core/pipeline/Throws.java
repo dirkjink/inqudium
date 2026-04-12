@@ -1,7 +1,10 @@
 package eu.inqudium.core.pipeline;
 
+import java.util.concurrent.CompletionException;
+
 /**
- * Utility for rethrowing checked exceptions without wrapping them.
+ * Utility for rethrowing and transporting checked exceptions without wrapping
+ * them in {@link RuntimeException}.
  *
  * <p>This class uses a well-known "sneaky throw" technique that exploits Java's
  * type erasure to bypass the compiler's checked-exception rules at the bytecode
@@ -26,9 +29,17 @@ package eu.inqudium.core.pipeline;
  * actually executed — the inner throw fires first.</p>
  *
  * <h3>Usage in the framework</h3>
- * <p>This utility is used primarily by {@link eu.inqudium.core.pipeline.proxy.DispatchExtension}
- * to rethrow declared checked exceptions from proxied method calls without wrapping
- * them in {@link RuntimeException} or {@link java.lang.reflect.UndeclaredThrowableException}.</p>
+ * <p>This utility is used by pipeline infrastructure to transport checked exceptions
+ * through functional interfaces that do not declare them:</p>
+ * <ul>
+ *   <li>{@link #wrapChecked(Throwable)} — wraps a checked exception in
+ *       {@link CompletionException} for transport through a chain, while letting
+ *       unchecked exceptions pass through directly.</li>
+ *   <li>{@link #unwrapAndRethrow(CompletionException)} — unwraps the transported
+ *       exception at the chain boundary and rethrows the original type.</li>
+ *   <li>{@link #rethrow(Throwable)} — the low-level sneaky-throw primitive used
+ *       by the other methods.</li>
+ * </ul>
  *
  * @since 0.5.0
  */
@@ -57,15 +68,76 @@ public final class Throws {
      */
     @SuppressWarnings("unchecked")
     public static <E extends Throwable> RuntimeException rethrow(Throwable t) throws E {
-        // Null guard: rethrowing null would produce a confusing NullPointerException
-        // deep in the call stack — fail fast with a clear message instead
         if (t == null) {
             throw new NullPointerException("Cannot rethrow null cause");
         }
-        // The cast to E is erased at runtime — this effectively becomes
-        // "throw (Throwable) t", which the JVM executes without any
-        // checked-exception verification. The compiler sees "throws E" and
-        // infers the type from context, but at bytecode level no wrapping occurs.
         throw (E) t;
+    }
+
+    /**
+     * Wraps a checked exception in {@link CompletionException} for transport through
+     * functional interfaces that do not declare checked exceptions.
+     *
+     * <p>Unchecked exceptions ({@link RuntimeException} and {@link Error}) are rethrown
+     * directly — only checked exceptions are wrapped. This preserves the original
+     * exception type for unchecked throwables and avoids unnecessary nesting.</p>
+     *
+     * <p>Typical usage in a terminal executor:</p>
+     * <pre>{@code
+     * InternalExecutor<Void, Object> terminal = (cid, callId, arg) -> {
+     *     try {
+     *         return coreExecutor.proceed();
+     *     } catch (Throwable t) {
+     *         throw Throws.wrapChecked(t);
+     *     }
+     * };
+     * }</pre>
+     *
+     * @param t the throwable to wrap or rethrow
+     * @return never — always throws
+     * @throws RuntimeException if {@code t} is a {@link RuntimeException} (rethrown as-is)
+     * @throws Error            if {@code t} is an {@link Error} (rethrown as-is)
+     * @throws CompletionException wrapping {@code t} if it is a checked exception
+     * @since 0.7.0
+     */
+    public static RuntimeException wrapChecked(Throwable t) {
+        if (t instanceof RuntimeException re) {
+            throw re;
+        }
+        if (t instanceof Error err) {
+            throw err;
+        }
+        throw new CompletionException(t);
+    }
+
+    /**
+     * Unwraps a {@link CompletionException} and rethrows the original cause using
+     * the sneaky-throw mechanism.
+     *
+     * <p>If the {@code CompletionException} has no cause (which should not happen
+     * in well-behaved code but is possible), the {@code CompletionException} itself
+     * is rethrown to avoid masking the error.</p>
+     *
+     * <p>This is the counterpart to {@link #wrapChecked(Throwable)} — together they
+     * provide transparent checked-exception transport through functional chains:</p>
+     * <pre>{@code
+     * // Wrap at the terminal:
+     * catch (Throwable t) { throw Throws.wrapChecked(t); }
+     *
+     * // Unwrap at the chain boundary:
+     * catch (CompletionException e) { throw Throws.unwrapAndRethrow(e); }
+     * }</pre>
+     *
+     * @param e the completion exception to unwrap
+     * @return never — always throws
+     * @throws CompletionException if the cause is {@code null} (rethrows {@code e} itself)
+     * @since 0.7.0
+     */
+    public static RuntimeException unwrapAndRethrow(CompletionException e) {
+        Throwable cause = e.getCause();
+        if (cause == null) {
+            throw e;
+        }
+        throw rethrow(cause);
     }
 }

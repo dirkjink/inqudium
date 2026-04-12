@@ -9,10 +9,7 @@ import java.lang.reflect.Method;
 import java.util.Comparator;
 import java.util.List;
 import java.util.concurrent.CompletionException;
-import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Function;
-
-import static eu.inqudium.core.pipeline.ChainIdGenerator.CHAIN_ID_COUNTER;
 
 /**
  * A pre-composed, immutable pipeline that can be executed repeatedly with
@@ -46,8 +43,8 @@ import static eu.inqudium.core.pipeline.ChainIdGenerator.CHAIN_ID_COUNTER;
  *
  * <h3>Thread safety</h3>
  * <p>Instances are immutable and safe for concurrent use. The only mutable
- * state is the {@link AtomicLong} call-ID counter, which is thread-safe
- * by design.</p>
+ * state is the call-ID counter inside {@link PipelineDiagnostics}, which is
+ * thread-safe by design.</p>
  *
  * @since 0.7.0
  */
@@ -55,53 +52,22 @@ public final class ResolvedPipeline {
 
     /**
      * Sentinel instance for methods with no applicable layers.
-     * Avoids allocating a chain ID for empty pipelines.
      */
     private static final ResolvedPipeline EMPTY = new ResolvedPipeline(
-            Function.identity(), 0L, List.of());
+            Function.identity(), PipelineDiagnostics.EMPTY);
 
-    /**
-     * The pre-composed chain factory. Takes a terminal executor (the actual
-     * method invocation) and returns the fully composed chain that traverses
-     * all layers before reaching the terminal.
-     *
-     * <p>For a three-layer pipeline [A, B, C] (outermost to innermost), the
-     * factory produces:</p>
-     * <pre>
-     *   terminal → A.execute(chainId, callId, null,
-     *                B.execute(chainId, callId, null,
-     *                  C.execute(chainId, callId, null, terminal)))
-     * </pre>
-     */
     private final Function<InternalExecutor<Void, Object>,
             InternalExecutor<Void, Object>> chainFactory;
 
-    /**
-     * Unique chain ID for this resolved pipeline, drawn from the same global
-     * counter as wrapper chains to avoid ID collisions.
-     */
-    private final long chainId;
-
-    /**
-     * Shared call-ID counter. Incremented once per invocation — same semantics
-     * as {@link eu.inqudium.core.pipeline.AbstractBaseWrapper#generateCallId()}.
-     */
-    private final AtomicLong callIdCounter = new AtomicLong();
-
-    /**
-     * The layer names in order (outermost first), retained for diagnostics.
-     */
-    private final List<String> layerNames;
+    private final PipelineDiagnostics diagnostics;
 
     // ======================== Construction ========================
 
     private ResolvedPipeline(
             Function<InternalExecutor<Void, Object>, InternalExecutor<Void, Object>> chainFactory,
-            long chainId,
-            List<String> layerNames) {
+            PipelineDiagnostics diagnostics) {
         this.chainFactory = chainFactory;
-        this.chainId = chainId;
-        this.layerNames = layerNames;
+        this.diagnostics = diagnostics;
     }
 
     /**
@@ -143,8 +109,6 @@ public final class ResolvedPipeline {
         int size = providers.size();
         String[] names = new String[size];
 
-        // Compose chain factory and collect names in a single reverse pass.
-        // No intermediate actions list — each action is consumed immediately.
         Function<InternalExecutor<Void, Object>,
                 InternalExecutor<Void, Object>> factory = Function.identity();
 
@@ -161,7 +125,7 @@ public final class ResolvedPipeline {
             };
         }
 
-        return new ResolvedPipeline(factory, CHAIN_ID_COUNTER.incrementAndGet(), List.of(names));
+        return new ResolvedPipeline(factory, PipelineDiagnostics.create(List.of(names)));
     }
 
     // ======================== Execution ========================
@@ -181,72 +145,44 @@ public final class ResolvedPipeline {
      * @throws Throwable any exception from the delegate or from layer actions
      */
     public Object execute(JoinPointExecutor<Object> coreExecutor) throws Throwable {
-        long callId = callIdCounter.incrementAndGet();
+        long callId = diagnostics.nextCallId();
 
-        // Build the terminal executor — the only per-call allocation
         InternalExecutor<Void, Object> terminal = (cid, caid, arg) -> {
             try {
                 return coreExecutor.proceed();
-            } catch (RuntimeException | Error e) {
-                throw e;
             } catch (Throwable t) {
-                throw new CompletionException(t);
+                throw Throws.wrapChecked(t);
             }
         };
 
         try {
-            // Apply the pre-composed chain factory and execute
-            return chainFactory.apply(terminal).execute(chainId, callId, null);
+            return chainFactory.apply(terminal)
+                    .execute(diagnostics.chainId(), callId, null);
         } catch (CompletionException e) {
-            // Unwrap the transported checked exception.
-            // Guard against null cause — if absent, rethrow the CompletionException
-            // itself rather than producing a confusing NullPointerException.
-            Throwable cause = e.getCause();
-            if (cause == null) {
-                throw e;
-            }
-            // Use sneaky-throw to rethrow the original checked exception without
-            // wrapping it in RuntimeException or UndeclaredThrowableException.
-            throw Throws.rethrow(cause);
+            throw Throws.unwrapAndRethrow(e);
         }
     }
 
     // ======================== Diagnostics ========================
 
-    /**
-     * Returns the chain ID assigned to this resolved pipeline.
-     *
-     * @return the chain ID (unique, from the global counter)
-     */
+    /** Returns the chain ID assigned to this resolved pipeline. */
     public long chainId() {
-        return chainId;
+        return diagnostics.chainId();
     }
 
-    /**
-     * Returns the current (most recently generated) call ID.
-     *
-     * @return the latest call ID, or 0 if never executed
-     */
+    /** Returns the current (most recently generated) call ID. */
     public long currentCallId() {
-        return callIdCounter.get();
+        return diagnostics.currentCallId();
     }
 
-    /**
-     * Returns the layer names in order (outermost first).
-     *
-     * @return an unmodifiable list of layer names
-     */
+    /** Returns the layer names in order (outermost first). */
     public List<String> layerNames() {
-        return layerNames;
+        return diagnostics.layerNames();
     }
 
-    /**
-     * Returns the number of layers in this pipeline.
-     *
-     * @return the layer count
-     */
+    /** Returns the number of layers in this pipeline. */
     public int depth() {
-        return layerNames.size();
+        return diagnostics.depth();
     }
 
     /**
@@ -256,17 +192,6 @@ public final class ResolvedPipeline {
      * @return a formatted hierarchy string
      */
     public String toStringHierarchy() {
-        StringBuilder sb = new StringBuilder();
-        sb.append("Chain-ID: ").append(chainId)
-                .append(" (current call-ID: ").append(callIdCounter.get())
-                .append(")\n");
-
-        for (int i = 0; i < layerNames.size(); i++) {
-            if (i > 0) {
-                sb.append("  ".repeat(i - 1)).append("  └── ");
-            }
-            sb.append(layerNames.get(i)).append("\n");
-        }
-        return sb.toString();
+        return diagnostics.toStringHierarchy();
     }
 }
