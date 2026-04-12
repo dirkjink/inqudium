@@ -9,7 +9,6 @@ import java.lang.reflect.Method;
 import java.util.Comparator;
 import java.util.List;
 import java.util.concurrent.CompletionException;
-import java.util.function.Function;
 
 /**
  * A pre-composed, immutable pipeline that can be executed repeatedly with
@@ -23,28 +22,28 @@ import java.util.function.Function;
  * what order, with what actions) is <strong>deterministic per Method</strong>.
  * Only the terminal executor ({@code pjp::proceed}) changes between calls.</p>
  *
- * <p>This class applies the same optimization used by
- * {@code SyncDispatchExtension} in the proxy module: it pre-composes the
- * {@link LayerAction} chain into a single
- * {@code Function<InternalExecutor, InternalExecutor>} at resolution time.
- * At invocation time, only the terminal executor is created (capturing
- * {@code pjp::proceed}), applied to the pre-built factory, and executed.</p>
+ * <h3>Zero-allocation hot path</h3>
+ * <p>The layer chain is materialized <strong>once</strong> at resolution time
+ * as a permanent linked structure of {@link InternalExecutor} lambdas. The
+ * innermost lambda (the "terminal proxy") reads the actual terminal from a
+ * {@link ThreadLocal} slot that is set at the start of each {@link #execute}
+ * call and removed in a {@code finally} block.</p>
  *
- * <h3>Per-call cost comparison</h3>
+ * <p>This eliminates all per-invocation object allocations beyond the single
+ * terminal lambda that captures {@code pjp::proceed}:</p>
  * <table>
  *   <tr><th></th><th>JoinPointWrapper chain</th><th>ResolvedPipeline</th></tr>
  *   <tr><td>Filter providers</td><td>every call</td><td>once</td></tr>
  *   <tr><td>Sort providers</td><td>every call</td><td>once</td></tr>
- *   <tr><td>Extract LayerActions</td><td>every call</td><td>once</td></tr>
- *   <tr><td>Compose chain</td><td>N wrapper objects</td><td>0 objects (pre-composed)</td></tr>
+ *   <tr><td>Compose chain</td><td>N wrapper objects</td><td>0 (pre-built)</td></tr>
  *   <tr><td>Terminal executor</td><td>1 lambda</td><td>1 lambda</td></tr>
- *   <tr><td>Chain/call IDs</td><td>via AtomicLong in wrapper</td><td>via AtomicLong here</td></tr>
+ *   <tr><td>Chain lambdas</td><td>—</td><td>0 (permanent)</td></tr>
  * </table>
  *
  * <h3>Thread safety</h3>
- * <p>Instances are immutable and safe for concurrent use. The only mutable
- * state is the call-ID counter inside {@link PipelineDiagnostics}, which is
- * thread-safe by design.</p>
+ * <p>Instances are safe for concurrent use. The pre-built chain is immutable;
+ * the {@link ThreadLocal} terminal slot provides per-thread isolation; the
+ * call-ID counter is an {@link java.util.concurrent.atomic.AtomicLong}.</p>
  *
  * @since 0.7.0
  */
@@ -54,19 +53,37 @@ public final class ResolvedPipeline {
      * Sentinel instance for methods with no applicable layers.
      */
     private static final ResolvedPipeline EMPTY = new ResolvedPipeline(
-            Function.identity(), PipelineDiagnostics.EMPTY);
+            null, null, PipelineDiagnostics.EMPTY);
 
-    private final Function<InternalExecutor<Void, Object>,
-            InternalExecutor<Void, Object>> chainFactory;
+    /**
+     * Pre-built chain head — the outermost executor. All chain lambdas are
+     * permanent objects created once during {@link #fromProviders}. The
+     * innermost lambda (terminal proxy) reads the actual terminal from
+     * {@link #terminalSlot}.
+     *
+     * <p>{@code null} for empty pipelines (no applicable layers).</p>
+     */
+    private final InternalExecutor<Void, Object> head;
+
+    /**
+     * Thread-local slot for the per-invocation terminal executor. Set before
+     * chain execution, read by the terminal proxy lambda, removed in a
+     * {@code finally} block after execution completes.
+     *
+     * <p>{@code null} for empty pipelines.</p>
+     */
+    private final ThreadLocal<InternalExecutor<Void, Object>> terminalSlot;
 
     private final PipelineDiagnostics diagnostics;
 
     // ======================== Construction ========================
 
     private ResolvedPipeline(
-            Function<InternalExecutor<Void, Object>, InternalExecutor<Void, Object>> chainFactory,
+            InternalExecutor<Void, Object> head,
+            ThreadLocal<InternalExecutor<Void, Object>> terminalSlot,
             PipelineDiagnostics diagnostics) {
-        this.chainFactory = chainFactory;
+        this.head = head;
+        this.terminalSlot = terminalSlot;
         this.diagnostics = diagnostics;
     }
 
@@ -75,8 +92,9 @@ public final class ResolvedPipeline {
      * by the target method.
      *
      * <p>This is the main factory method. It performs filtering, sorting, and
-     * chain composition <strong>once</strong>. The returned instance can then
-     * be invoked repeatedly with different {@link JoinPointExecutor}s.</p>
+     * chain construction <strong>once</strong>. The returned instance can then
+     * be invoked repeatedly with different {@link JoinPointExecutor}s without
+     * any per-call allocations beyond the terminal lambda.</p>
      *
      * @param providers all registered providers (will be filtered and sorted)
      * @param method    the target method for {@code canHandle} filtering
@@ -96,9 +114,11 @@ public final class ResolvedPipeline {
      * Builds a {@code ResolvedPipeline} from an already filtered and sorted
      * provider list.
      *
-     * <p>Composes the chain factory and collects layer names in a single
-     * reverse pass — no intermediate action or name lists are created.
-     * Each provider is visited exactly once.</p>
+     * <p>Creates a permanent chain of {@link InternalExecutor} lambdas in a
+     * single reverse pass. The innermost lambda is a "terminal proxy" that
+     * reads the actual terminal from a {@link ThreadLocal} slot at execution
+     * time — this allows the chain structure to be built once and reused
+     * across all invocations without per-call allocations.</p>
      */
     private static ResolvedPipeline fromProviders(
             List<? extends AspectLayerProvider<Object>> providers) {
@@ -109,23 +129,26 @@ public final class ResolvedPipeline {
         int size = providers.size();
         String[] names = new String[size];
 
-        Function<InternalExecutor<Void, Object>,
-                InternalExecutor<Void, Object>> factory = Function.identity();
+        ThreadLocal<InternalExecutor<Void, Object>> slot = new ThreadLocal<>();
 
+        // Terminal proxy — permanent lambda that reads the actual terminal
+        // from the ThreadLocal slot at execution time. This is the only
+        // point where the per-call terminal enters the pre-built chain.
+        InternalExecutor<Void, Object> current = (cid, callId, arg) ->
+                slot.get().execute(cid, callId, arg);
+
+        // Build chain once in reverse — each lambda captures the next
+        // executor by reference. These are permanent objects, not per-call.
         for (int i = size - 1; i >= 0; i--) {
             AspectLayerProvider<Object> p = providers.get(i);
             names[i] = p.layerName();
             LayerAction<Void, Object> action = p.layerAction();
-            Function<InternalExecutor<Void, Object>,
-                    InternalExecutor<Void, Object>> outer = factory;
-
-            factory = terminal -> {
-                InternalExecutor<Void, Object> next = outer.apply(terminal);
-                return (chainId, callId, arg) -> action.execute(chainId, callId, arg, next);
-            };
+            InternalExecutor<Void, Object> next = current;
+            current = (cid, callId, arg) -> action.execute(cid, callId, arg, next);
         }
 
-        return new ResolvedPipeline(factory, PipelineDiagnostics.create(List.of(names)));
+        return new ResolvedPipeline(current, slot,
+                PipelineDiagnostics.create(List.of(names)));
     }
 
     // ======================== Execution ========================
@@ -133,8 +156,10 @@ public final class ResolvedPipeline {
     /**
      * Executes the pre-composed pipeline with the given join point executor.
      *
-     * <p>Per-call cost: one terminal lambda creation, one {@code AtomicLong.incrementAndGet()},
-     * and the chain traversal itself. No filtering, sorting, or wrapper-object allocation.</p>
+     * <p>Per-call cost: one terminal lambda creation, one
+     * {@code AtomicLong.incrementAndGet()}, one {@code ThreadLocal.set/remove}
+     * pair, and the chain traversal itself. No chain-lambda allocations —
+     * the pre-built chain is reused as-is.</p>
      *
      * <p>Checked exceptions from the delegate are transported via
      * {@link CompletionException} and unwrapped before re-throwing, preserving
@@ -156,8 +181,16 @@ public final class ResolvedPipeline {
         };
 
         try {
-            return chainFactory.apply(terminal)
-                    .execute(diagnostics.chainId(), callId, null);
+            if (head == null) {
+                // Empty pipeline — execute terminal directly, no chain
+                return terminal.execute(diagnostics.chainId(), callId, null);
+            }
+            try {
+                terminalSlot.set(terminal);
+                return head.execute(diagnostics.chainId(), callId, null);
+            } finally {
+                terminalSlot.remove();
+            }
         } catch (CompletionException e) {
             throw Throws.unwrapAndRethrow(e);
         }

@@ -11,7 +11,6 @@ import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.CompletionStage;
-import java.util.function.Function;
 
 /**
  * A pre-composed, immutable async pipeline that can be executed repeatedly with
@@ -19,9 +18,11 @@ import java.util.function.Function;
  * structure on every call.
  *
  * <p>The async counterpart to {@link ResolvedPipeline}. Applies the same
- * optimization: the {@link AsyncLayerAction} chain is composed into a single
- * {@code Function<InternalAsyncExecutor, InternalAsyncExecutor>} at resolution
- * time. At invocation time, only the terminal executor is created.</p>
+ * zero-allocation optimization: the {@link AsyncLayerAction} chain is
+ * materialized once as a permanent linked structure of
+ * {@link InternalAsyncExecutor} lambdas. The innermost lambda reads the
+ * actual terminal from a {@link ThreadLocal} slot set at the start of each
+ * {@link #execute} call.</p>
  *
  * <h3>Two-phase execution</h3>
  * <p>Each async layer has two phases:</p>
@@ -34,9 +35,9 @@ import java.util.function.Function;
  * </ul>
  *
  * <h3>Thread safety</h3>
- * <p>Instances are immutable and safe for concurrent use. The only mutable
- * state is the call-ID counter inside {@link PipelineDiagnostics}, which is
- * thread-safe by design.</p>
+ * <p>Instances are safe for concurrent use. The pre-built chain is immutable;
+ * the {@link ThreadLocal} terminal slot provides per-thread isolation; the
+ * call-ID counter is an {@link java.util.concurrent.atomic.AtomicLong}.</p>
  *
  * @since 0.7.0
  */
@@ -46,20 +47,35 @@ public final class AsyncResolvedPipeline {
      * Sentinel instance for methods with no applicable async layers.
      */
     private static final AsyncResolvedPipeline EMPTY = new AsyncResolvedPipeline(
-            Function.identity(), PipelineDiagnostics.EMPTY);
+            null, null, PipelineDiagnostics.EMPTY);
 
-    private final Function<InternalAsyncExecutor<Void, Object>,
-            InternalAsyncExecutor<Void, Object>> chainFactory;
+    /**
+     * Pre-built async chain head — the outermost executor. All chain lambdas
+     * are permanent objects created once during {@link #fromProviders}. The
+     * innermost lambda (terminal proxy) reads the actual terminal from
+     * {@link #terminalSlot}.
+     *
+     * <p>{@code null} for empty pipelines.</p>
+     */
+    private final InternalAsyncExecutor<Void, Object> head;
+
+    /**
+     * Thread-local slot for the per-invocation terminal executor.
+     *
+     * <p>{@code null} for empty pipelines.</p>
+     */
+    private final ThreadLocal<InternalAsyncExecutor<Void, Object>> terminalSlot;
 
     private final PipelineDiagnostics diagnostics;
 
     // ======================== Construction ========================
 
     private AsyncResolvedPipeline(
-            Function<InternalAsyncExecutor<Void, Object>,
-                    InternalAsyncExecutor<Void, Object>> chainFactory,
+            InternalAsyncExecutor<Void, Object> head,
+            ThreadLocal<InternalAsyncExecutor<Void, Object>> terminalSlot,
             PipelineDiagnostics diagnostics) {
-        this.chainFactory = chainFactory;
+        this.head = head;
+        this.terminalSlot = terminalSlot;
         this.diagnostics = diagnostics;
     }
 
@@ -83,12 +99,13 @@ public final class AsyncResolvedPipeline {
     }
 
     /**
-     * Builds an {@code AsyncResolvedPipeline} from an already filtered and sorted
-     * provider list.
+     * Builds an {@code AsyncResolvedPipeline} from an already filtered and
+     * sorted provider list.
      *
-     * <p>Composes the chain factory and collects layer names in a single
-     * reverse pass — no intermediate action or name lists are created.
-     * Each provider is visited exactly once.</p>
+     * <p>Creates a permanent chain of {@link InternalAsyncExecutor} lambdas
+     * in a single reverse pass. The innermost lambda is a "terminal proxy"
+     * that reads the actual terminal from a {@link ThreadLocal} slot at
+     * execution time.</p>
      */
     private static AsyncResolvedPipeline fromProviders(
             List<? extends AsyncAspectLayerProvider<Object>> providers) {
@@ -99,25 +116,25 @@ public final class AsyncResolvedPipeline {
         int size = providers.size();
         String[] names = new String[size];
 
-        Function<InternalAsyncExecutor<Void, Object>,
-                InternalAsyncExecutor<Void, Object>> factory = Function.identity();
+        ThreadLocal<InternalAsyncExecutor<Void, Object>> slot = new ThreadLocal<>();
 
+        // Terminal proxy — permanent lambda that reads the actual terminal
+        // from the ThreadLocal slot at execution time
+        InternalAsyncExecutor<Void, Object> current = (cid, callId, arg) ->
+                slot.get().executeAsync(cid, callId, arg);
+
+        // Build chain once in reverse — permanent lambdas, not per-call
         for (int i = size - 1; i >= 0; i--) {
             AsyncAspectLayerProvider<Object> p = providers.get(i);
             names[i] = p.layerName();
             AsyncLayerAction<Void, Object> action = p.asyncLayerAction();
-            Function<InternalAsyncExecutor<Void, Object>,
-                    InternalAsyncExecutor<Void, Object>> outer = factory;
-
-            factory = terminal -> {
-                InternalAsyncExecutor<Void, Object> next = outer.apply(terminal);
-                return (chainId, callId, arg) ->
-                        action.executeAsync(chainId, callId, arg, next);
-            };
+            InternalAsyncExecutor<Void, Object> next = current;
+            current = (cid, callId, arg) ->
+                    action.executeAsync(cid, callId, arg, next);
         }
 
-        return new AsyncResolvedPipeline(
-                factory, PipelineDiagnostics.create(List.of(names)));
+        return new AsyncResolvedPipeline(current, slot,
+                PipelineDiagnostics.create(List.of(names)));
     }
 
     // ======================== Execution ========================
@@ -127,24 +144,10 @@ public final class AsyncResolvedPipeline {
      *
      * <p>This method <strong>never throws</strong>. All exceptions — whether from the
      * synchronous start phase or the asynchronous completion phase — are delivered
-     * through the returned {@link CompletionStage}. This guarantees a uniform error
-     * channel for callers:</p>
+     * through the returned {@link CompletionStage}.</p>
      *
-     * <ul>
-     *   <li><strong>Synchronous failures</strong> (e.g. a layer's start-phase throws
-     *       before creating a {@code CompletionStage}) are caught and wrapped in a
-     *       {@link java.util.concurrent.CompletableFuture#failedFuture failed future}.</li>
-     *   <li><strong>Asynchronous failures</strong> (e.g. the downstream
-     *       {@code CompletionStage} completes exceptionally) propagate naturally
-     *       through the returned stage.</li>
-     * </ul>
-     *
-     * <p>This eliminates a common pitfall for {@link AsyncAspectLayerProvider}
-     * implementors: a {@code throw new IllegalArgumentException()} in a layer's
-     * start phase is delivered through the same channel as a
-     * {@code CompletableFuture.failedFuture(new IllegalArgumentException())},
-     * so the caller can handle both uniformly via {@code .exceptionally()},
-     * {@code .handle()}, or {@code .whenComplete()}.</p>
+     * <p>Per-call cost: one terminal lambda, one {@code ThreadLocal.set/remove}
+     * pair, and the chain traversal. No chain-lambda allocations.</p>
      *
      * @param coreExecutor the join point execution (typically {@code pjp::proceed}),
      *                     whose return value must be a {@link CompletionStage}
@@ -164,8 +167,6 @@ public final class AsyncResolvedPipeline {
             }
 
             if (result == null) {
-                // Technically valid — a method may return null instead of an
-                // empty future. Translate to a safely completed stage.
                 return CompletableFuture.completedFuture(null);
             }
 
@@ -183,17 +184,19 @@ public final class AsyncResolvedPipeline {
         };
 
         try {
-            return chainFactory.apply(terminal)
-                    .executeAsync(diagnostics.chainId(), callId, null);
+            if (head == null) {
+                return terminal.executeAsync(diagnostics.chainId(), callId, null);
+            }
+            try {
+                terminalSlot.set(terminal);
+                return head.executeAsync(diagnostics.chainId(), callId, null);
+            } finally {
+                terminalSlot.remove();
+            }
         } catch (CompletionException e) {
-            // Unwrap transported checked exceptions from the terminal.
-            // Guard against null cause — if absent, deliver the
-            // CompletionException itself rather than producing a confusing NPE.
             Throwable cause = e.getCause();
             return CompletableFuture.failedFuture(cause != null ? cause : e);
         } catch (Throwable e) {
-            // Any synchronous exception from a layer's start phase is
-            // converted to a failed future — uniform error channel
             return CompletableFuture.failedFuture(e);
         }
     }
