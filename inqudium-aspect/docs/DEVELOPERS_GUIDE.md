@@ -21,6 +21,7 @@
    - [Extending AbstractPipelineAspect](#extending-abstractpipelineaspect)
    - [The @Around Advice and Method Extraction](#the-around-advice-and-method-extraction)
    - [Exposing the Pipeline for Testing](#exposing-the-pipeline-for-testing)
+   - [Accessing the Aspect Singleton at Runtime](#accessing-the-aspect-singleton-at-runtime)
 9. [Pipeline Caching with ResolvedPipeline](#pipeline-caching-with-resolvedpipeline)
    - [How It Works](#how-it-works)
    - [Parallel to SyncDispatchExtension](#parallel-to-syncdispatchextension)
@@ -673,6 +674,167 @@ public ResolvedPipeline getResolvedPipeline(Method method) {
     return resolvedPipeline(method);
 }
 ```
+
+### Accessing the Aspect Singleton at Runtime
+
+AspectJ manages aspect lifecycle internally. By default every `@Aspect` class
+is a **singleton** — one instance per class loader. AspectJ creates that
+instance the first time the aspect's advice is triggered and retains it for
+the lifetime of the class loader. There is no public constructor call you
+control; the instance simply *appears* when weaving kicks in.
+
+To obtain a reference to that singleton — for diagnostics, pipeline
+inspection, or dependency injection — use the
+**`org.aspectj.lang.Aspects`** utility class. It is part of `aspectjrt`
+(already on your classpath via the `inqudium-aspect` transitive dependency)
+and works identically for compile-time weaving (CTW) and load-time weaving
+(LTW).
+
+#### The `Aspects` Utility
+
+`org.aspectj.lang.Aspects` provides two static methods per instantiation
+model:
+
+```java
+import org.aspectj.lang.Aspects;
+
+// Retrieve the singleton instance — throws NoAspectBoundException if
+// the aspect has not been instantiated yet (i.e. no advice has fired).
+PipelinedAspect aspect = Aspects.aspectOf(PipelinedAspect.class);
+
+// Check whether the singleton exists without risking an exception.
+boolean bound = Aspects.hasAspect(PipelinedAspect.class);
+```
+
+Under the hood, `Aspects.aspectOf(Class)` locates the `aspectOf()` method
+that the AspectJ weaver injects into every concrete aspect class, and
+invokes it via reflection. The result is the same object that the weaver
+uses internally — there is no second instance, no copy.
+
+#### When Is the Singleton Available?
+
+The singleton is created lazily by the weaver on first advice execution.
+This means:
+
+- **After weaving + first matched join point:** `Aspects.aspectOf(...)` returns
+  the instance. This is the normal production case.
+- **Before any advice fires:** `Aspects.aspectOf(...)` throws
+  `NoAspectBoundException`. Guard with `Aspects.hasAspect(...)` if your
+  access point might run before any woven method is called.
+- **Without weaving (plain `javac`, no LTW agent):** The `aspectOf()` method
+  does not exist on the class. `Aspects.aspectOf(...)` throws
+  `NoAspectBoundException`. This is expected in unit tests that test
+  the pipeline logic without weaving — use the test constructor instead
+  (see [Extending AbstractPipelineAspect](#extending-abstractpipelineaspect)).
+
+#### Practical Use Cases
+
+**Runtime diagnostics** — inspect the live pipeline of a running application:
+
+```java
+if (Aspects.hasAspect(PipelinedAspect.class)) {
+    PipelinedAspect aspect = Aspects.aspectOf(PipelinedAspect.class);
+    Method method = OrderService.class.getMethod("placeOrder", OrderRequest.class);
+
+    ResolvedPipeline pipeline = aspect.getResolvedPipeline(method);
+    System.out.println(pipeline.toStringHierarchy());
+    // Chain-ID: 42 (current call-ID: 137)
+    // AUTHORIZATION
+    //   └── LOGGING
+    //     └── TIMING
+}
+```
+
+**Exposing diagnostics via a health endpoint:**
+
+```java
+@RestController
+public class PipelineDiagnosticsController {
+
+    @GetMapping("/debug/pipeline/{methodName}")
+    public String pipelineInfo(@PathVariable String methodName) throws Exception {
+        if (!Aspects.hasAspect(PipelinedAspect.class)) {
+            return "Aspect not bound — weaving may not be active.";
+        }
+
+        PipelinedAspect aspect = Aspects.aspectOf(PipelinedAspect.class);
+        Method method = GreetingService.class.getMethod(methodName, String.class);
+        ResolvedPipeline pipeline = aspect.getResolvedPipeline(method);
+
+        return "Layers: " + pipeline.layerNames()
+             + "\nDepth: " + pipeline.depth()
+             + "\nCalls: " + pipeline.currentCallId()
+             + "\n\n" + pipeline.toStringHierarchy();
+    }
+}
+```
+
+**Spring integration** — register the woven singleton as a Spring bean so
+it can be injected into other components:
+
+```xml
+<bean id="pipelinedAspect"
+      class="eu.inqudium.aspect.pipeline.example.PipelinedAspect"
+      factory-method="aspectOf" />
+```
+
+Or with Java configuration:
+
+```java
+@Configuration
+public class AspectConfig {
+
+    @Bean
+    @ConditionalOnClass(name = "org.aspectj.lang.Aspects")
+    public PipelinedAspect pipelinedAspect() {
+        return Aspects.aspectOf(PipelinedAspect.class);
+    }
+}
+```
+
+This allows injecting the live aspect into any Spring-managed component for
+monitoring or configuration — while the aspect itself continues to be
+managed by the AspectJ runtime.
+
+**Integration tests with weaving** — when running with the `aspectj-maven-plugin`
+or the LTW agent, the full woven aspect is available:
+
+```java
+@Test
+void woven_aspect_singleton_has_expected_layer_count() throws Exception {
+    // Given — the woven singleton (requires CTW or LTW to be active)
+    assertThat(Aspects.hasAspect(PipelinedAspect.class)).isTrue();
+    PipelinedAspect aspect = Aspects.aspectOf(PipelinedAspect.class);
+
+    // When
+    Method method = GreetingService.class.getMethod("greet", String.class);
+    ResolvedPipeline pipeline = aspect.getResolvedPipeline(method);
+
+    // Then
+    assertThat(pipeline.depth()).isEqualTo(3);
+    assertThat(pipeline.layerNames())
+            .containsExactly("AUTHORIZATION", "LOGGING", "TIMING");
+}
+```
+
+#### `Aspects.aspectOf` vs. Direct `MyAspect.aspectOf()`
+
+AspectJ weaves a `public static MyAspect aspectOf()` method directly into
+every concrete aspect class. This method is callable at runtime but **not
+visible at compile time** when using `javac` — only the AspectJ compiler
+(`ajc`) makes it visible during compilation. `Aspects.aspectOf(Class)` is
+the portable alternative: it is a regular Java API call, compiles with any
+Java compiler, and resolves the woven method internally via reflection.
+
+| Approach | Compiler | Availability | Error mode |
+|---|---|---|---|
+| `MyAspect.aspectOf()` | `ajc` only | Compile-time visible | Compile error with `javac` |
+| `Aspects.aspectOf(MyAspect.class)` | Any (`javac`, `ajc`) | Always compiles | `NoAspectBoundException` at runtime if not woven |
+
+**Recommendation:** Always use `Aspects.aspectOf(Class)` in application code
+and tests. It works with every compiler and every weaving strategy. Reserve
+direct `MyAspect.aspectOf()` for native `.aj` aspect files compiled with
+`ajc`.
 
 ---
 
