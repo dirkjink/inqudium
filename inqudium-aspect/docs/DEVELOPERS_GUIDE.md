@@ -169,14 +169,14 @@ when, whether, and how to invoke it.
 // A LayerAction is the fundamental unit of behavior.
 // It receives chainId, callId, the argument, and a reference to the next step.
 LayerAction<Void, Object> timing = (chainId, callId, arg, next) -> {
-    long start = System.nanoTime();
-    try {
-        return next.execute(chainId, callId, arg);  // proceed to next layer
-    } finally {
-        long elapsed = System.nanoTime() - start;
-        metrics.record(elapsed);
-    }
-};
+            long start = System.nanoTime();
+            try {
+                return next.execute(chainId, callId, arg);  // proceed to next layer
+            } finally {
+                long elapsed = System.nanoTime() - start;
+                metrics.record(elapsed);
+            }
+        };
 ```
 
 Key properties of the chain:
@@ -195,6 +195,7 @@ to the intercepted method. The `proceed()` method on that handle matches the
 `JoinPointExecutor` functional interface from `inqudium-core`:
 
 ```java
+
 @FunctionalInterface
 public interface JoinPointExecutor<R> {
     R proceed() throws Throwable;
@@ -218,6 +219,7 @@ pjp::proceed  ──►  JoinPointWrapper chain  ──►  chain.proceed()
 Add `inqudium-aspect` to your **application** module's POM:
 
 ```xml
+
 <dependency>
     <groupId>eu.inqudium</groupId>
     <artifactId>inqudium-aspect</artifactId>
@@ -233,6 +235,7 @@ The module declares `aspectjrt`, `aspectjweaver`, `inqudium-core`, and
 `aspectj-maven-plugin` to your application's POM:
 
 ```xml
+
 <plugin>
     <groupId>dev.aspectj</groupId>
     <artifactId>aspectj-maven-plugin</artifactId>
@@ -279,9 +282,11 @@ The module declares `aspectjrt`, `aspectjweaver`, `inqudium-core`, and
 **Step 1** — Define a trigger annotation:
 
 ```java
+
 @Target(ElementType.METHOD)
 @Retention(RetentionPolicy.RUNTIME)
-public @interface Resilient {}
+public @interface Resilient {
+}
 ```
 
 **Step 2** — Implement a layer provider:
@@ -290,10 +295,14 @@ public @interface Resilient {}
 public class LoggingLayerProvider implements AspectLayerProvider<Object> {
 
     @Override
-    public String layerName() { return "LOGGING"; }
+    public String layerName() {
+        return "LOGGING";
+    }
 
     @Override
-    public int order() { return 10; }
+    public int order() {
+        return 10;
+    }
 
     @Override
     public LayerAction<Void, Object> layerAction() {
@@ -305,7 +314,7 @@ public class LoggingLayerProvider implements AspectLayerProvider<Object> {
                 return result;
             } catch (Exception e) {
                 log.error("[chain={}, call={}] failed: {}",
-                          chainId, callId, e.getMessage());
+                        chainId, callId, e.getMessage());
                 throw e;
             }
         };
@@ -316,11 +325,12 @@ public class LoggingLayerProvider implements AspectLayerProvider<Object> {
 **Step 3** — Create the aspect:
 
 ```java
+
 @Aspect
 public class ResilienceAspect extends AbstractPipelineAspect {
 
     private final List<AspectLayerProvider<Object>> providers = List.of(
-        new LoggingLayerProvider()
+            new LoggingLayerProvider()
     );
 
     @Override
@@ -381,8 +391,11 @@ Every synchronous layer provider implements four contract methods:
 public interface AspectLayerProvider<R> {
 
     String layerName();                   // diagnostic name, e.g. "RETRY"
+
     int order();                          // priority (lower = outermost)
+
     LayerAction<Void, R> layerAction();   // the around-advice logic
+
     default boolean canHandle(Method m);  // method filter (default: true)
 }
 ```
@@ -436,44 +449,62 @@ The `next` parameter is the next step in the chain. You can:
 #### Pre-processing (fire-and-forget logging)
 
 ```java
-(chainId, callId, arg, next) -> {
-    log.info("[chain={}, call={}] entering", chainId, callId);
-    return next.execute(chainId, callId, arg);
+(chainId,callId,arg,next)->{
+        log.
+
+info("[chain={}, call={}] entering",chainId, callId);
+    return next.
+
+execute(chainId, callId, arg);
 }
 ```
 
 #### Pre- and post-processing (timing)
 
 ```java
-(chainId, callId, arg, next) -> {
-    long start = System.nanoTime();
-    try {
-        return next.execute(chainId, callId, arg);
-    } finally {
-        metrics.record(System.nanoTime() - start);
-    }
-}
+(chainId,callId,arg,next)->{
+long start = System.nanoTime();
+    try{
+            return next.
+
+execute(chainId, callId, arg);
+    }finally{
+            metrics.
+
+record(System.nanoTime() -start);
+        }
+        }
 ```
 
 #### Exception handling (fallback)
 
 ```java
-(chainId, callId, arg, next) -> {
-    try {
-        return next.execute(chainId, callId, arg);
-    } catch (Exception e) {
+(chainId,callId,arg,next)->{
+        try{
+        return next.
+
+execute(chainId, callId, arg);
+    }catch(
+Exception e){
         return fallbackValue;
     }
-}
+            }
 ```
 
 #### Conditional execution (caching)
 
 ```java
-(chainId, callId, arg, next) -> {
-    if (cache.containsKey(arg)) return cache.get(arg);
-    Object result = next.execute(chainId, callId, arg);
-    cache.put(arg, result);
+(chainId,callId,arg,next)->{
+        if(cache.
+
+containsKey(arg))return cache.
+
+get(arg);
+
+Object result = next.execute(chainId, callId, arg);
+    cache.
+
+put(arg, result);
     return result;
 }
 ```
@@ -481,29 +512,44 @@ The `next` parameter is the next step in the chain. You can:
 #### Retry with backoff
 
 ```java
-(chainId, callId, arg, next) -> {
-    int maxAttempts = 3;
-    Exception lastException = null;
-    for (int i = 0; i < maxAttempts; i++) {
-        try {
-            return next.execute(chainId, callId, arg);
-        } catch (RuntimeException e) {
-            lastException = e;
-            Thread.sleep((long) Math.pow(2, i) * 100);
+(chainId,callId,arg,next)->{
+int maxAttempts = 3;
+Exception lastException = null;
+    for(
+int i = 0;
+i<maxAttempts;i++){
+        try{
+        return next.
+
+execute(chainId, callId, arg);
+        }catch(
+RuntimeException e){
+lastException =e;
+            Thread.
+
+sleep((long) Math.
+
+pow(2,i) *100);
         }
-    }
-    throw lastException;
+        }
+        throw lastException;
 }
 ```
 
 #### Authorization (short-circuit)
 
 ```java
-(chainId, callId, arg, next) -> {
-    if (!securityContext.isAuthorized()) {
-        throw new SecurityException("Access denied");
+(chainId,callId,arg,next)->{
+        if(!securityContext.
+
+isAuthorized()){
+        throw new
+
+SecurityException("Access denied");
     }
-    return next.execute(chainId, callId, arg);
+            return next.
+
+execute(chainId, callId, arg);
 }
 ```
 
@@ -518,10 +564,14 @@ provider declare which methods it supports:
 public class TimingLayerProvider implements AspectLayerProvider<Object> {
 
     @Override
-    public String layerName() { return "TIMING"; }
+    public String layerName() {
+        return "TIMING";
+    }
 
     @Override
-    public int order() { return 30; }
+    public int order() {
+        return 30;
+    }
 
     @Override
     public boolean canHandle(Method method) {
@@ -538,7 +588,7 @@ public class TimingLayerProvider implements AspectLayerProvider<Object> {
             } finally {
                 long elapsed = System.nanoTime() - start;
                 System.out.printf("[chain=%d, call=%d] took %d µs%n",
-                                  chainId, callId, elapsed / 1000);
+                        chainId, callId, elapsed / 1000);
             }
         };
     }
@@ -561,16 +611,28 @@ Common `canHandle` patterns:
 
 ```java
 // Only methods returning CompletionStage
-method.getReturnType().isAssignableFrom(CompletionStage.class)
+method.getReturnType().
+
+isAssignableFrom(CompletionStage .class)
 
 // Only methods in a specific interface
-method.getDeclaringClass() == OrderRepository.class
+method.
+
+getDeclaringClass() ==OrderRepository .
+
+class
 
 // Only methods with a specific annotation
-method.isAnnotationPresent(Idempotent.class)
+method.
+
+isAnnotationPresent(Idempotent .class)
 
 // Only methods whose name matches a pattern
-method.getName().startsWith("find")
+method.
+
+getName().
+
+startsWith("find")
 ```
 
 The default implementation returns `true`, so providers that should apply
@@ -586,6 +648,7 @@ universally need no override.
 chain execution. A subclass only needs to implement `layerProviders()`:
 
 ```java
+
 @Aspect
 public class PipelinedAspect extends AbstractPipelineAspect {
 
@@ -594,9 +657,9 @@ public class PipelinedAspect extends AbstractPipelineAspect {
     // AspectJ singleton — wires the production layer stack
     public PipelinedAspect() {
         this(List.of(
-            new AuthorizationLayerProvider(),
-            new LoggingLayerProvider(),
-            new TimingLayerProvider()
+                new AuthorizationLayerProvider(),
+                new LoggingLayerProvider(),
+                new TimingLayerProvider()
         ));
     }
 
@@ -633,6 +696,7 @@ extracts the `Method` via `instanceof` pattern matching, resolves the
 cached pipeline, and executes through it:
 
 ```java
+
 @Around("@annotation(eu.inqudium.aspect.pipeline.example.Pipelined)")
 public Object around(ProceedingJoinPoint pjp) throws Throwable {
     return executeAround(pjp);
@@ -644,6 +708,7 @@ logging or conditional logic), extract it yourself and call `execute()`
 directly:
 
 ```java
+
 @Around("@annotation(eu.inqudium.aspect.pipeline.example.Pipelined)")
 public Object around(ProceedingJoinPoint pjp) throws Throwable {
     Method method = ((MethodSignature) pjp.getSignature()).getMethod();
@@ -666,9 +731,15 @@ inherit them directly — no delegation wrappers needed:
 // Already public on AbstractPipelineAspect — inherited by every subclass:
 
 aspect.execute(executor, method);          // hot path, cached pipeline
-aspect.getResolvedPipeline(method);        // cached pipeline for diagnostics
-aspect.inspectPipeline(executor);          // cold path, full Wrapper chain
-aspect.inspectPipeline(executor, method);  // cold path, filtered chain
+aspect.
+
+getResolvedPipeline(method);        // cached pipeline for diagnostics
+aspect.
+
+inspectPipeline(executor);          // cold path, full Wrapper chain
+aspect.
+
+inspectPipeline(executor, method);  // cold path, filtered chain
 ```
 
 Only `executeAround(pjp)` and `execute(executor)` (no method parameter)
@@ -680,8 +751,8 @@ call the public methods without any AspectJ weaving:
 
 ```java
 PipelinedAspect aspect = new PipelinedAspect(List.of(
-    new LoggingLayerProvider(trace),
-    new TimingLayerProvider(trace)
+        new LoggingLayerProvider(trace),
+        new TimingLayerProvider(trace)
 ));
 
 // Execute through the pipeline — lambda stands in for pjp::proceed
@@ -721,8 +792,8 @@ import org.aspectj.lang.Aspects;
 // the aspect has not been instantiated yet (i.e. no advice has fired).
 PipelinedAspect aspect = Aspects.aspectOf(PipelinedAspect.class);
 
-// Check whether the singleton exists without risking an exception.
-boolean bound = Aspects.hasAspect(PipelinedAspect.class);
+        // Check whether the singleton exists without risking an exception.
+        boolean bound = Aspects.hasAspect(PipelinedAspect.class);
 ```
 
 Under the hood, `Aspects.aspectOf(Class)` locates the `aspectOf()` method
@@ -751,22 +822,25 @@ This means:
 **Runtime diagnostics** — inspect the live pipeline of a running application:
 
 ```java
-if (Aspects.hasAspect(PipelinedAspect.class)) {
-    PipelinedAspect aspect = Aspects.aspectOf(PipelinedAspect.class);
-    Method method = OrderService.class.getMethod("placeOrder", OrderRequest.class);
+if(Aspects.hasAspect(PipelinedAspect .class)){
+PipelinedAspect aspect = Aspects.aspectOf(PipelinedAspect.class);
+Method method = OrderService.class.getMethod("placeOrder", OrderRequest.class);
 
-    ResolvedPipeline pipeline = aspect.getResolvedPipeline(method);
-    System.out.println(pipeline.toStringHierarchy());
-    // Chain-ID: 42 (current call-ID: 137)
-    // AUTHORIZATION
-    //   └── LOGGING
-    //     └── TIMING
-}
+ResolvedPipeline pipeline = aspect.getResolvedPipeline(method);
+    System.out.
+
+println(pipeline.toStringHierarchy());
+        // Chain-ID: 42 (current call-ID: 137)
+        // AUTHORIZATION
+        //   └── LOGGING
+        //     └── TIMING
+        }
 ```
 
 **Exposing diagnostics via a health endpoint:**
 
 ```java
+
 @RestController
 public class PipelineDiagnosticsController {
 
@@ -781,9 +855,9 @@ public class PipelineDiagnosticsController {
         ResolvedPipeline pipeline = aspect.getResolvedPipeline(method);
 
         return "Layers: " + pipeline.layerNames()
-             + "\nDepth: " + pipeline.depth()
-             + "\nCalls: " + pipeline.currentCallId()
-             + "\n\n" + pipeline.toStringHierarchy();
+                + "\nDepth: " + pipeline.depth()
+                + "\nCalls: " + pipeline.currentCallId()
+                + "\n\n" + pipeline.toStringHierarchy();
     }
 }
 ```
@@ -792,14 +866,16 @@ public class PipelineDiagnosticsController {
 it can be injected into other components:
 
 ```xml
+
 <bean id="pipelinedAspect"
       class="eu.inqudium.aspect.pipeline.example.PipelinedAspect"
-      factory-method="aspectOf" />
+      factory-method="aspectOf"/>
 ```
 
 Or with Java configuration:
 
 ```java
+
 @Configuration
 public class AspectConfig {
 
@@ -819,6 +895,7 @@ managed by the AspectJ runtime.
 or the LTW agent, the full woven aspect is available:
 
 ```java
+
 @Test
 void woven_aspect_singleton_has_expected_layer_count() throws Exception {
     // Given — the woven singleton (requires CTW or LTW to be active)
@@ -940,15 +1017,25 @@ of the `Wrapper` interface:
 ResolvedPipeline pipeline = aspect.getResolvedPipeline(method);
 
 // Layer information
-pipeline.layerNames();       // ["AUTHORIZATION", "LOGGING", "TIMING"]
-pipeline.depth();            // 3
+pipeline.
+
+layerNames();       // ["AUTHORIZATION", "LOGGING", "TIMING"]
+pipeline.
+
+depth();            // 3
 
 // ID tracking
-pipeline.chainId();          // globally unique, from CHAIN_ID_COUNTER
-pipeline.currentCallId();    // increments with each execute()
+pipeline.
+
+chainId();          // globally unique, from CHAIN_ID_COUNTER
+pipeline.
+
+currentCallId();    // increments with each execute()
 
 // Hierarchy visualization
-System.out.println(pipeline.toStringHierarchy());
+System.out.
+
+println(pipeline.toStringHierarchy());
 // Output:
 // Chain-ID: 42 (current call-ID: 7)
 // AUTHORIZATION
@@ -976,9 +1063,13 @@ rich introspection capabilities:
 ```java
 public interface Wrapper<S extends Wrapper<S>> {
     S inner();                    // next inner layer, or null
+
     long chainId();               // shared across all layers
+
     long currentCallId();         // increments per proceed()
+
     String layerDescription();    // e.g. "AUTHORIZATION"
+
     String toStringHierarchy();   // formatted tree output
 }
 ```
@@ -991,9 +1082,13 @@ JoinPointWrapper<Object> chain = aspect.inspectPipeline(() -> "dummy", method);
 // Traverse outermost → innermost
 List<String> layerNames = new ArrayList<>();
 Wrapper<?> current = chain;
-while (current != null) {
-    layerNames.add(current.layerDescription());
-    current = current.inner();
+while(current !=null){
+        layerNames.
+
+add(current.layerDescription());
+current =current.
+
+inner();
 }
 // Result: ["AUTHORIZATION", "LOGGING", "TIMING"]
 ```
@@ -1003,20 +1098,32 @@ while (current != null) {
 ```java
 long expectedChainId = chain.chainId();
 Wrapper<?> current = chain;
-while (current != null) {
-    assert current.chainId() == expectedChainId;
-    current = current.inner();
+while(current !=null){
+        assert current.
+
+chainId() ==expectedChainId;
+current =current.
+
+inner();
 }
 ```
 
 ### Observing Call ID Progression
 
 ```java
-assert chain.currentCallId() == 0;   // before any execution
-chain.proceed();
-assert chain.currentCallId() == 1;   // after first invocation
-chain.proceed();
-assert chain.currentCallId() == 2;   // after second invocation
+assert chain.currentCallId() ==0;   // before any execution
+        chain.
+
+proceed();
+assert chain.
+
+currentCallId() ==1;   // after first invocation
+        chain.
+
+proceed();
+assert chain.
+
+currentCallId() ==2;   // after second invocation
 ```
 
 ### Printing the Hierarchy
@@ -1037,16 +1144,20 @@ AUTHORIZATION
 ### Verifying canHandle Filtering Effects
 
 ```java
-Method greetMethod   = GreetingService.class.getMethod("greet", String.class);
+Method greetMethod = GreetingService.class.getMethod("greet", String.class);
 Method farewellMethod = GreetingService.class.getMethod("farewell", String.class);
 
 // greet() has @Pipelined → all three layers
 JoinPointWrapper<Object> greetChain = aspect.inspectPipeline(() -> "g", greetMethod);
-assert countLayers(greetChain) == 3;
+assert
+
+countLayers(greetChain) ==3;
 
 // farewell() has no @Pipelined → TimingLayerProvider.canHandle returns false
 JoinPointWrapper<Object> farewellChain = aspect.inspectPipeline(() -> "f", farewellMethod);
-assert countLayers(farewellChain) == 2;  // AUTHORIZATION + LOGGING only
+assert
+
+countLayers(farewellChain) ==2;  // AUTHORIZATION + LOGGING only
 ```
 
 ---
@@ -1062,7 +1173,9 @@ counterpart of every class.
 public interface AsyncAspectLayerProvider<R> {
 
     String layerName();
+
     int order();
+
     AsyncLayerAction<Void, R> asyncLayerAction();
 
     // Default: only methods returning CompletionStage
@@ -1089,12 +1202,13 @@ Uses the same caching strategy as the synchronous counterpart: an
 executor is created per call.
 
 ```java
+
 @Aspect
 public class AsyncResilienceAspect extends AbstractAsyncPipelineAspect {
 
     private final List<AsyncAspectLayerProvider<Object>> providers = List.of(
-        new AsyncBulkheadLayerProvider(),
-        new AsyncTimingLayerProvider()
+            new AsyncBulkheadLayerProvider(),
+            new AsyncTimingLayerProvider()
     );
 
     @Override
@@ -1154,8 +1268,15 @@ public class AsyncBulkheadLayerProvider implements AsyncAspectLayerProvider<Obje
 
     private final Semaphore permits;
 
-    @Override public String layerName() { return "BULKHEAD"; }
-    @Override public int order() { return 10; }
+    @Override
+    public String layerName() {
+        return "BULKHEAD";
+    }
+
+    @Override
+    public int order() {
+        return 10;
+    }
 
     @Override
     public AsyncLayerAction<Void, Object> asyncLayerAction() {
@@ -1169,7 +1290,7 @@ public class AsyncBulkheadLayerProvider implements AsyncAspectLayerProvider<Obje
                 throw t;
             }
             return stage.whenComplete((r, e) ->
-                permits.release()                            // end phase
+                    permits.release()                            // end phase
             );
         };
     }
@@ -1190,9 +1311,11 @@ This section walks through the full example included in the `example` package.
 ### Step 1 — The Trigger Annotation
 
 ```java
+
 @Target(ElementType.METHOD)
 @Retention(RetentionPolicy.RUNTIME)
-public @interface Pipelined {}
+public @interface Pipelined {
+}
 ```
 
 ### Step 2 — The Target Service
@@ -1219,8 +1342,15 @@ public class GreetingService {
 ```java
 public class AuthorizationLayerProvider implements AspectLayerProvider<Object> {
 
-    @Override public String layerName() { return "AUTHORIZATION"; }
-    @Override public int order() { return 10; }
+    @Override
+    public String layerName() {
+        return "AUTHORIZATION";
+    }
+
+    @Override
+    public int order() {
+        return 10;
+    }
 
     @Override
     public LayerAction<Void, Object> layerAction() {
@@ -1239,8 +1369,15 @@ public class AuthorizationLayerProvider implements AspectLayerProvider<Object> {
 ```java
 public class LoggingLayerProvider implements AspectLayerProvider<Object> {
 
-    @Override public String layerName() { return "LOGGING"; }
-    @Override public int order() { return 20; }
+    @Override
+    public String layerName() {
+        return "LOGGING";
+    }
+
+    @Override
+    public int order() {
+        return 20;
+    }
 
     @Override
     public LayerAction<Void, Object> layerAction() {
@@ -1264,8 +1401,15 @@ public class LoggingLayerProvider implements AspectLayerProvider<Object> {
 ```java
 public class TimingLayerProvider implements AspectLayerProvider<Object> {
 
-    @Override public String layerName() { return "TIMING"; }
-    @Override public int order() { return 30; }
+    @Override
+    public String layerName() {
+        return "TIMING";
+    }
+
+    @Override
+    public int order() {
+        return 30;
+    }
 
     @Override
     public boolean canHandle(Method method) {
@@ -1281,7 +1425,7 @@ public class TimingLayerProvider implements AspectLayerProvider<Object> {
             } finally {
                 long elapsed = System.nanoTime() - start;
                 log.info("[chain={}, call={}] took {} µs",
-                         chainId, callId, elapsed / 1000);
+                        chainId, callId, elapsed / 1000);
             }
         };
     }
@@ -1291,6 +1435,7 @@ public class TimingLayerProvider implements AspectLayerProvider<Object> {
 ### Step 4 — The Concrete Aspect
 
 ```java
+
 @Aspect
 public class PipelinedAspect extends AbstractPipelineAspect {
 
@@ -1300,9 +1445,9 @@ public class PipelinedAspect extends AbstractPipelineAspect {
     // Aspects.aspectOf(PipelinedAspect.class) returns this instance.
     public PipelinedAspect() {
         this(List.of(
-            new AuthorizationLayerProvider(),
-            new LoggingLayerProvider(),
-            new TimingLayerProvider()
+                new AuthorizationLayerProvider(),
+                new LoggingLayerProvider(),
+                new TimingLayerProvider()
         ));
     }
 
@@ -1427,14 +1572,15 @@ Since `JoinPointExecutor` is a functional interface, you can test layers
 without any AspectJ weaving — just pass a lambda:
 
 ```java
+
 @Test
 void all_three_layers_execute_in_correct_order() throws Throwable {
     // Given
     List<String> trace = new ArrayList<>();
     PipelinedAspect aspect = new PipelinedAspect(List.of(
-        new AuthorizationLayerProvider(trace, true),
-        new LoggingLayerProvider(trace),
-        new TimingLayerProvider(trace)
+            new AuthorizationLayerProvider(trace, true),
+            new LoggingLayerProvider(trace),
+            new TimingLayerProvider(trace)
     ));
 
     // When — lambda stands in for pjp::proceed
@@ -1452,14 +1598,15 @@ void all_three_layers_execute_in_correct_order() throws Throwable {
 ### Introspecting the Chain in Tests
 
 ```java
+
 @Test
 void non_pipelined_method_excludes_timing_layer() throws Exception {
     // Given
     Method farewellMethod = GreetingService.class.getMethod("farewell", String.class);
     PipelinedAspect aspect = new PipelinedAspect(List.of(
-        new AuthorizationLayerProvider(trace, true),
-        new LoggingLayerProvider(trace),
-        new TimingLayerProvider(trace)
+            new AuthorizationLayerProvider(trace, true),
+            new LoggingLayerProvider(trace),
+            new TimingLayerProvider(trace)
     ));
 
     // When
@@ -1481,6 +1628,7 @@ void non_pipelined_method_excludes_timing_layer() throws Exception {
 ### Verifying Chain IDs and Call IDs
 
 ```java
+
 @Test
 void all_layers_share_the_same_chain_id() {
     JoinPointWrapper<Object> chain = aspect.inspectPipeline(() -> "x", method);
@@ -1489,8 +1637,8 @@ void all_layers_share_the_same_chain_id() {
     Wrapper<?> current = chain;
     while (current != null) {
         assertThat(current.chainId())
-            .as("chainId of layer '%s'", current.layerDescription())
-            .isEqualTo(expectedChainId);
+                .as("chainId of layer '%s'", current.layerDescription())
+                .isEqualTo(expectedChainId);
         current = current.inner();
     }
 }
@@ -1531,14 +1679,19 @@ public Object execute(JoinPointExecutor<Object> coreExecutor) throws Throwable {
     InternalExecutor<Void, Object> terminal = (cid, caid, arg) -> {
         try {
             return coreExecutor.proceed();
-        } catch (RuntimeException | Error e) { throw e; }
-        catch (Throwable t) { throw new CompletionException(t); }
+        } catch (RuntimeException | Error e) {
+            throw e;
+        } catch (Throwable t) {
+            throw new CompletionException(t);
+        }
     };
     try {
         return chainFactory.apply(terminal).execute(chainId, callId, null);
     } catch (CompletionException e) {
         Throwable cause = e.getCause();
-        if (cause == null) { throw e; }       // guard against null cause
+        if (cause == null) {
+            throw e;
+        }       // guard against null cause
         throw Throws.rethrow(cause);           // unwrap and re-throw original
     }
 }
@@ -1558,14 +1711,17 @@ is needed.
 Each layer can catch and handle exceptions independently:
 
 ```java
-(chainId, callId, arg, next) -> {
-    try {
-        return next.execute(chainId, callId, arg);
-    } catch (SpecificException e) {
+(chainId,callId,arg,next)->{
+        try{
+        return next.
+
+execute(chainId, callId, arg);
+    }catch(
+SpecificException e){
         return fallbackValue;  // swallow and substitute
     }
-    // Other exceptions propagate to outer layers
-}
+            // Other exceptions propagate to outer layers
+            }
 ```
 
 Outer layers see whatever the inner layer lets through. This creates a natural
@@ -1647,16 +1803,23 @@ Function<InternalExecutor, InternalExecutor> factory = Function.identity();
 String[] names = new String[providers.size()];
 
 // Walk in reverse — innermost provider wraps terminal first
-for (int i = providers.size() - 1; i >= 0; i--) {
-    AspectLayerProvider<Object> p = providers.get(i);
-    names[i] = p.layerName();
-    LayerAction action = p.layerAction();
-    Function<InternalExecutor, InternalExecutor> outer = factory;
-    factory = terminal -> {
-        InternalExecutor next = outer.apply(terminal);
-        return (cid, callId, arg) -> action.execute(cid, callId, arg, next);
+for(
+int i = providers.size() - 1;
+i >=0;i--){
+AspectLayerProvider<Object> p = providers.get(i);
+names[i]=p.
+
+layerName();
+
+LayerAction action = p.layerAction();
+Function<InternalExecutor, InternalExecutor> outer = factory;
+factory =terminal ->{
+InternalExecutor next = outer.apply(terminal);
+        return(cid,callId,arg)->action.
+
+execute(cid, callId, arg, next);
     };
-}
+            }
 ```
 
 At execution time, `chainFactory.apply(terminal)` resolves the entire chain
@@ -1692,12 +1855,13 @@ public MyAspect(List<AspectLayerProvider<Object>> providers) {
 Alternatively, use the field-initializer pattern to avoid the issue entirely:
 
 ```java
+
 @Aspect
 public class MyAspect extends AbstractPipelineAspect {
     // Field initializer runs during the implicit no-arg constructor
     private final List<AspectLayerProvider<Object>> providers = List.of(
-        new LoggingLayerProvider(),
-        new TimingLayerProvider()
+            new LoggingLayerProvider(),
+            new TimingLayerProvider()
     );
 
     @Override

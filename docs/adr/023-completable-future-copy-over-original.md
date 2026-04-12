@@ -60,7 +60,9 @@ CompletableFuture<Integer> original = new CompletableFuture<>();
 CompletableFuture<Integer> branchA = original.thenApply(v -> v + 10);  // branch A
 CompletableFuture<Integer> branchB = original.thenApply(v -> v * 10);  // branch B
 
-original.complete(5);
+original.
+
+complete(5);
 // branchA = 15, branchB = 50 — independent, unaware of each other
 ```
 
