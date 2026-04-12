@@ -64,7 +64,8 @@ public class AsyncAspectPipelineBuilder<R> {
         if (provider == null) {
             throw new IllegalArgumentException("Provider must not be null");
         }
-        return addLayer(provider.layerName(), provider.asyncLayerAction());
+        layers.add(new NamedAsyncLayer<>(provider.layerName(), provider.order(), provider.asyncLayerAction()));
+        return this;
     }
 
     /**
@@ -79,11 +80,10 @@ public class AsyncAspectPipelineBuilder<R> {
      */
     public AsyncAspectPipelineBuilder<R> addProviders(List<? extends AsyncAspectLayerProvider<R>> providers) {
         requireNonNullElements(providers);
-        // Stream, sort, and add directly — no intermediate list copy,
-        // no per-element addProvider/addLayer indirection
+        // Store order alongside name and action for global sorting in buildChain
         providers.stream()
                 .sorted(Comparator.comparingInt(AsyncAspectLayerProvider::order))
-                .forEach(p -> layers.add(new NamedAsyncLayer<>(p.layerName(), p.asyncLayerAction())));
+                .forEach(p -> layers.add(new NamedAsyncLayer<>(p.layerName(), p.order(), p.asyncLayerAction())));
         return this;
     }
 
@@ -105,12 +105,11 @@ public class AsyncAspectPipelineBuilder<R> {
         if (method == null) {
             throw new IllegalArgumentException("Method must not be null");
         }
-        // Single pipeline: filter, sort, add — no intermediate toList(),
-        // no per-element addProvider/addLayer indirection
+        // Store order alongside name and action for global sorting in buildChain
         providers.stream()
                 .filter(p -> p.canHandle(method))
                 .sorted(Comparator.comparingInt(AsyncAspectLayerProvider::order))
-                .forEach(p -> layers.add(new NamedAsyncLayer<>(p.layerName(), p.asyncLayerAction())));
+                .forEach(p -> layers.add(new NamedAsyncLayer<>(p.layerName(), p.order(), p.asyncLayerAction())));
         return this;
     }
 
@@ -144,11 +143,18 @@ public class AsyncAspectPipelineBuilder<R> {
             return new AsyncJoinPointWrapper<>("passthrough", coreExecutor);
         }
 
-        // Build inside-out: last registered layer wraps the core executor,
+        // Global stable sort by order — ensures correct ordering even when
+        // layers are added via multiple addProviders() or addProvider() calls.
+        // Layers with equal order retain their registration order (stable sort).
+        List<NamedAsyncLayer<R>> sorted = layers.stream()
+                .sorted(Comparator.comparingInt(NamedAsyncLayer::order))
+                .toList();
+
+        // Build inside-out: last layer wraps the core executor,
         // each preceding layer wraps the result of the previous iteration.
         AsyncJoinPointWrapper<R> current = null;
-        for (int i = layers.size() - 1; i >= 0; i--) {
-            NamedAsyncLayer<R> layer = layers.get(i);
+        for (int i = sorted.size() - 1; i >= 0; i--) {
+            NamedAsyncLayer<R> layer = sorted.get(i);
             JoinPointExecutor<CompletionStage<R>> delegate =
                     (current != null) ? current : coreExecutor;
             current = new AsyncJoinPointWrapper<>(layer.name(), delegate, layer.action());
@@ -180,10 +186,12 @@ public class AsyncAspectPipelineBuilder<R> {
      * A named async layer pair.
      *
      * @param name   the layer name for diagnostics
+     * @param order  the priority order (lower = outermost); used for global
+     *               stable sort in {@link #buildChain}
      * @param action the async around-advice logic
      * @param <R>    the result type of the chain
      */
-    public record NamedAsyncLayer<R>(String name, AsyncLayerAction<Void, R> action) {
+    public record NamedAsyncLayer<R>(String name, int order, AsyncLayerAction<Void, R> action) {
 
         public NamedAsyncLayer {
             if (name == null) {
@@ -192,6 +200,14 @@ public class AsyncAspectPipelineBuilder<R> {
             if (action == null) {
                 throw new IllegalArgumentException("Layer action must not be null");
             }
+        }
+
+        /**
+         * Convenience constructor that defaults order to {@code Integer.MAX_VALUE},
+         * preserving backward compatibility for manually added layers.
+         */
+        public NamedAsyncLayer(String name, AsyncLayerAction<Void, R> action) {
+            this(name, Integer.MAX_VALUE, action);
         }
     }
 }

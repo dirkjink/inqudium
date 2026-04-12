@@ -75,13 +75,37 @@ public final class AsyncResolvedPipeline {
      * Resolves and pre-composes an async pipeline from the given providers,
      * filtered by the target method.
      *
+     * <p>In addition to each provider's {@code canHandle(method)} check, this
+     * method enforces that the target method returns a {@link CompletionStage}.
+     * This prevents misuse when a subclass overrides {@code canHandle()} without
+     * retaining the return-type guard.</p>
+     *
      * @param providers all registered async providers (will be filtered and sorted)
      * @param method    the target method for {@code canHandle} filtering
      * @return a pre-composed, reusable async pipeline
+     * @throws IllegalArgumentException if providers or method is null
+     * @throws IllegalStateException if the method does not return a CompletionStage
      */
     public static AsyncResolvedPipeline resolve(
             List<? extends AsyncAspectLayerProvider<Object>> providers,
             Method method) {
+        if (providers == null) {
+            throw new IllegalArgumentException("Providers list must not be null");
+        }
+        if (method == null) {
+            throw new IllegalArgumentException("Method must not be null");
+        }
+
+        // Guard: async pipelines are only meaningful for CompletionStage-returning methods
+        if (!CompletionStage.class.isAssignableFrom(method.getReturnType())) {
+            throw new IllegalStateException(
+                    "AsyncResolvedPipeline.resolve() requires a method returning "
+                            + "CompletionStage, but " + method.getDeclaringClass().getSimpleName()
+                            + "#" + method.getName() + " returns "
+                            + method.getReturnType().getSimpleName()
+                            + ". Use ResolvedPipeline for synchronous methods.");
+        }
+
         List<? extends AsyncAspectLayerProvider<Object>> applicable = providers.stream()
                 .filter(p -> p.canHandle(method))
                 .sorted(Comparator.comparingInt(AsyncAspectLayerProvider::order))
@@ -139,7 +163,6 @@ public final class AsyncResolvedPipeline {
      * @return a {@link CompletionStage} carrying the result or the failure —
      *         never {@code null}, never throws
      */
-    @SuppressWarnings("unchecked")
     public CompletionStage<Object> execute(JoinPointExecutor<Object> coreExecutor) {
         long callId = diagnostics.nextCallId();
         long cid = diagnostics.chainId();
@@ -158,7 +181,9 @@ public final class AsyncResolvedPipeline {
             }
 
             if (result instanceof CompletionStage<?> stage) {
-                return (CompletionStage<Object>) stage;
+                @SuppressWarnings("unchecked")
+                CompletionStage<Object> typed = (CompletionStage<Object>) stage;
+                return typed;
             }
 
             throw new IllegalStateException(

@@ -21,16 +21,22 @@ final class PipelineDiagnostics {
 
     /**
      * Sentinel instance for empty pipelines — avoids allocating a chain ID.
+     *
+     * <p>The {@link #nextCallId()} and {@link #currentCallId()} methods
+     * always return 0 for this instance, so that empty pipelines across
+     * the JVM do not share and mutate a single counter.</p>
      */
-    static final PipelineDiagnostics EMPTY = new PipelineDiagnostics(0L, List.of());
+    static final PipelineDiagnostics EMPTY = new PipelineDiagnostics(0L, List.of(), true);
 
     private final long chainId;
     private final AtomicLong callIdCounter = new AtomicLong();
     private final List<String> layerNames;
+    private final boolean empty;
 
-    private PipelineDiagnostics(long chainId, List<String> layerNames) {
+    private PipelineDiagnostics(long chainId, List<String> layerNames, boolean empty) {
         this.chainId = chainId;
         this.layerNames = layerNames;
+        this.empty = empty;
     }
 
     /**
@@ -41,16 +47,20 @@ final class PipelineDiagnostics {
      * @return a new diagnostics instance with a globally unique chain ID
      */
     static PipelineDiagnostics create(List<String> layerNames) {
-        return new PipelineDiagnostics(CHAIN_ID_COUNTER.incrementAndGet(), layerNames);
+        return new PipelineDiagnostics(CHAIN_ID_COUNTER.incrementAndGet(), layerNames, false);
     }
 
     /**
      * Generates the next call ID. Called once per pipeline execution.
      *
-     * @return the next call ID (monotonically increasing)
+     * <p>Returns 0 for the {@link #EMPTY} sentinel — no counter is
+     * incremented, so empty pipelines do not pollute each other's
+     * diagnostics.</p>
+     *
+     * @return the next call ID (monotonically increasing), or 0 for empty pipelines
      */
     long nextCallId() {
-        return callIdCounter.incrementAndGet();
+        return empty ? 0L : callIdCounter.incrementAndGet();
     }
 
     /**
@@ -81,7 +91,7 @@ final class PipelineDiagnostics {
      *         never executed
      */
     long currentCallId() {
-        return callIdCounter.get();
+        return empty ? 0L : callIdCounter.get();
     }
 
     /**
@@ -123,8 +133,13 @@ final class PipelineDiagnostics {
     String toStringHierarchy() {
         StringBuilder sb = new StringBuilder();
         sb.append("Chain-ID: ").append(chainId)
-                .append(" (current call-ID: ").append(callIdCounter.get())
+                .append(" (current call-ID: ").append(currentCallId())
                 .append(")\n");
+
+        if (layerNames.isEmpty()) {
+            sb.append("(empty — no layers)\n");
+            return sb.toString();
+        }
 
         for (int i = 0; i < layerNames.size(); i++) {
             if (i > 0) {

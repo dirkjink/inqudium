@@ -62,6 +62,37 @@ public abstract class AbstractAsyncPipelineAspect {
      */
     private volatile List<AsyncAspectLayerProvider<Object>> cachedProviders;
 
+    // ======================== Constructors ========================
+
+    /**
+     * Creates an aspect with an explicit, immutable list of async providers.
+     *
+     * <p>This is the preferred constructor for most aspects. The provider list
+     * is captured directly — no lazy initialization, no
+     * {@code asyncLayerProviders()} call needed.</p>
+     *
+     * @param providers the ordered async layer providers for the pipeline
+     */
+    protected AbstractAsyncPipelineAspect(List<AsyncAspectLayerProvider<Object>> providers) {
+        this.cachedProviders = List.copyOf(providers);
+    }
+
+    /**
+     * Creates an aspect that resolves providers lazily via
+     * {@link #asyncLayerProviders()}.
+     *
+     * <p>Use this constructor when providers are not available at construction
+     * time — for example, when they depend on a DI container that is initialized
+     * after aspect instantiation. The provider list is resolved exactly once on
+     * first access using double-checked locking.</p>
+     *
+     * <p>Subclasses using this constructor <strong>must</strong> override
+     * {@link #asyncLayerProviders()}.</p>
+     */
+    protected AbstractAsyncPipelineAspect() {
+        // cachedProviders remains null → resolved lazily via asyncLayerProviders()
+    }
+
     /**
      * Returns the ordered list of async layer providers for this aspect.
      *
@@ -69,21 +100,32 @@ public abstract class AbstractAsyncPipelineAspect {
      * instance — the result is captured in an immutable snapshot and reused for
      * all pipeline resolutions.</p>
      *
+     * <p>Not called when using the
+     * {@link #AbstractAsyncPipelineAspect(List)} constructor — the providers
+     * are captured directly.</p>
+     *
      * <p>Implementations may return a new list on each call (the framework
      * handles deduplication), but returning a pre-built, immutable list is
      * recommended for clarity.</p>
      *
      * @return the async layer providers, never {@code null}
+     * @throws UnsupportedOperationException if the no-arg constructor is used
+     *         without overriding this method
      */
-    protected abstract List<AsyncAspectLayerProvider<Object>> asyncLayerProviders();
+    protected List<AsyncAspectLayerProvider<Object>> asyncLayerProviders() {
+        throw new UnsupportedOperationException(
+                getClass().getSimpleName() + " uses the no-arg constructor but does not "
+                        + "override asyncLayerProviders(). Either pass providers via "
+                        + "super(providers) or override asyncLayerProviders().");
+    }
 
     /**
      * Returns the cached provider snapshot, initializing it on first access
-     * via double-checked locking.
+     * via double-checked locking when the no-arg constructor was used.
      *
-     * <p>Guarantees that {@link #asyncLayerProviders()} is called exactly once,
-     * even under concurrent access — matching the contract documented on that
-     * method.</p>
+     * <p>When providers were passed via the
+     * {@link #AbstractAsyncPipelineAspect(List)} constructor, this method
+     * simply returns the pre-initialized snapshot without synchronization.</p>
      */
     private List<AsyncAspectLayerProvider<Object>> providers() {
         List<AsyncAspectLayerProvider<Object>> snapshot = cachedProviders;
@@ -138,10 +180,13 @@ public abstract class AbstractAsyncPipelineAspect {
     /**
      * Resolves (or retrieves from cache) the async pipeline for the given method.
      *
-     * <p>Uses the cached provider snapshot from {@link #providers()}, which is
-     * resolved once per aspect lifetime. The snapshot is then passed into
-     * {@link ConcurrentHashMap#computeIfAbsent} — no subclass code runs inside
-     * the map's bucket lock.</p>
+     * <p><strong>Trade-off note:</strong> Between the fast-path {@code get()} miss
+     * and the {@code computeIfAbsent}, another thread may have already populated
+     * the entry. In that case, {@code providers()} is called "unnecessarily" —
+     * but after first initialization it is merely a volatile read (~1ns), which
+     * is cheaper than restructuring to avoid it. Calling {@code providers()}
+     * outside of {@code computeIfAbsent} ensures no subclass code
+     * ({@link #asyncLayerProviders()}) ever runs inside a CHM bucket lock.</p>
      */
     private AsyncResolvedPipeline resolveAsyncPipeline(Method method) {
         // Fast path: already cached — no locking, no provider access
@@ -174,7 +219,6 @@ public abstract class AbstractAsyncPipelineAspect {
      *                     {@link CompletionStage}
      * @return a {@link CompletionStage} carrying the result or failure
      */
-    @SuppressWarnings("unchecked")
     protected CompletionStage<Object> executeThroughAsync(
             JoinPointExecutor<Object> coreExecutor) {
 
@@ -185,7 +229,9 @@ public abstract class AbstractAsyncPipelineAspect {
                     return CompletableFuture.completedFuture(null);
                 }
                 if (result instanceof CompletionStage<?> stage) {
-                    return (CompletionStage<Object>) stage;
+                    @SuppressWarnings("unchecked")
+                    CompletionStage<Object> typed = (CompletionStage<Object>) stage;
+                    return typed;
                 }
                 throw new IllegalStateException(
                         "AsyncPipelineAspect expected the proxied method to return a "

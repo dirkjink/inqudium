@@ -165,6 +165,12 @@ public abstract class AbstractPipelineAspect {
                             + "). Ensure the @Around pointcut only matches method executions.");
         }
         Method method = methodSignature.getMethod();
+        if (method == null) {
+            throw new IllegalStateException(
+                    getClass().getSimpleName() + " received a MethodSignature with a null "
+                            + "Method for join point: " + pjp.getSignature().toLongString()
+                            + ". This may indicate a synthetic or unresolvable method.");
+        }
         return resolvePipeline(method).execute(pjp::proceed);
     }
 
@@ -254,6 +260,14 @@ public abstract class AbstractPipelineAspect {
 
     /**
      * Resolves (or retrieves from cache) the pipeline for the given method.
+     *
+     * <p><strong>Trade-off note:</strong> Between the fast-path {@code get()} miss
+     * and the {@code computeIfAbsent}, another thread may have already populated
+     * the entry. In that case, {@code providers()} is called "unnecessarily" —
+     * but after first initialization it is merely a volatile read (~1ns), which
+     * is cheaper than restructuring to avoid it. Calling {@code providers()}
+     * outside of {@code computeIfAbsent} ensures no subclass code
+     * ({@link #layerProviders()}) ever runs inside a CHM bucket lock.</p>
      */
     private ResolvedPipeline resolvePipeline(Method method) {
         ResolvedPipeline pipeline = pipelineCache.get(method);

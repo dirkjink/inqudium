@@ -94,9 +94,17 @@ public final class ResolvedPipeline {
      * @param providers all registered providers (will be filtered and sorted)
      * @param method    the target method for {@code canHandle} filtering
      * @return a pre-composed, reusable pipeline
+     * @throws IllegalArgumentException if providers or method is null
      */
     public static ResolvedPipeline resolve(List<? extends AspectLayerProvider<Object>> providers,
                                            Method method) {
+        if (providers == null) {
+            throw new IllegalArgumentException("Providers list must not be null");
+        }
+        if (method == null) {
+            throw new IllegalArgumentException("Method must not be null");
+        }
+
         List<? extends AspectLayerProvider<Object>> applicable = providers.stream()
                 .filter(p -> p.canHandle(method))
                 .sorted(Comparator.comparingInt(AspectLayerProvider::order))

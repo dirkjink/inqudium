@@ -79,7 +79,8 @@ public class AspectPipelineBuilder<R> {
         if (provider == null) {
             throw new IllegalArgumentException("Provider must not be null");
         }
-        return addLayer(provider.layerName(), provider.layerAction());
+        layers.add(new NamedLayer<>(provider.layerName(), provider.order(), provider.layerAction()));
+        return this;
     }
 
     /**
@@ -95,11 +96,10 @@ public class AspectPipelineBuilder<R> {
      */
     public AspectPipelineBuilder<R> addProviders(List<? extends AspectLayerProvider<R>> providers) {
         requireNonNullElements(providers);
-        // Stream, sort, and add directly — no intermediate list copy,
-        // no per-element addProvider/addLayer indirection
+        // Store order alongside name and action for global sorting in buildChain
         providers.stream()
                 .sorted(Comparator.comparingInt(AspectLayerProvider::order))
-                .forEach(p -> layers.add(new NamedLayer<>(p.layerName(), p.layerAction())));
+                .forEach(p -> layers.add(new NamedLayer<>(p.layerName(), p.order(), p.layerAction())));
         return this;
     }
 
@@ -123,12 +123,11 @@ public class AspectPipelineBuilder<R> {
         if (method == null) {
             throw new IllegalArgumentException("Method must not be null");
         }
-        // Single pipeline: filter, sort, add — no intermediate toList(),
-        // no per-element addProvider/addLayer indirection
+        // Store order alongside name and action for global sorting in buildChain
         providers.stream()
                 .filter(p -> p.canHandle(method))
                 .sorted(Comparator.comparingInt(AspectLayerProvider::order))
-                .forEach(p -> layers.add(new NamedLayer<>(p.layerName(), p.layerAction())));
+                .forEach(p -> layers.add(new NamedLayer<>(p.layerName(), p.order(), p.layerAction())));
         return this;
     }
 
@@ -165,11 +164,18 @@ public class AspectPipelineBuilder<R> {
             return new JoinPointWrapper<>("passthrough", coreExecutor);
         }
 
-        // Build inside-out: last registered layer wraps the core executor,
+        // Global stable sort by order — ensures correct ordering even when
+        // layers are added via multiple addProviders() or addProvider() calls.
+        // Layers with equal order retain their registration order (stable sort).
+        List<NamedLayer<R>> sorted = layers.stream()
+                .sorted(Comparator.comparingInt(NamedLayer::order))
+                .toList();
+
+        // Build inside-out: last layer wraps the core executor,
         // each preceding layer wraps the result of the previous iteration.
         JoinPointWrapper<R> current = null;
-        for (int i = layers.size() - 1; i >= 0; i--) {
-            NamedLayer<R> layer = layers.get(i);
+        for (int i = sorted.size() - 1; i >= 0; i--) {
+            NamedLayer<R> layer = sorted.get(i);
             JoinPointExecutor<R> delegate = (current != null) ? current : coreExecutor;
             current = new JoinPointWrapper<>(layer.name(), delegate, layer.action());
         }
@@ -197,13 +203,16 @@ public class AspectPipelineBuilder<R> {
     }
 
     /**
-     * A named layer pair — associates a human-readable name with a {@link LayerAction}.
+     * A named layer pair — associates a human-readable name, a priority order,
+     * and a {@link LayerAction}.
      *
      * @param name   the layer name for diagnostics
+     * @param order  the priority order (lower = outermost); used for global
+     *               stable sort in {@link #buildChain}
      * @param action the around-advice logic
      * @param <R>    the return type of the chain
      */
-    public record NamedLayer<R>(String name, LayerAction<Void, R> action) {
+    public record NamedLayer<R>(String name, int order, LayerAction<Void, R> action) {
 
         /**
          * Compact constructor with null validation.
@@ -215,6 +224,14 @@ public class AspectPipelineBuilder<R> {
             if (action == null) {
                 throw new IllegalArgumentException("Layer action must not be null");
             }
+        }
+
+        /**
+         * Convenience constructor that defaults order to {@code Integer.MAX_VALUE},
+         * preserving backward compatibility for manually added layers.
+         */
+        public NamedLayer(String name, LayerAction<Void, R> action) {
+            this(name, Integer.MAX_VALUE, action);
         }
     }
 }
