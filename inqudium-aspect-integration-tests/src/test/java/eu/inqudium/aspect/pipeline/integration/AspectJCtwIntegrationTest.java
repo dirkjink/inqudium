@@ -3,6 +3,7 @@ package eu.inqudium.aspect.pipeline.integration;
 import eu.inqudium.aspect.pipeline.ResolvedPipeline;
 import eu.inqudium.core.pipeline.JoinPointWrapper;
 import eu.inqudium.core.pipeline.Wrapper;
+import org.aspectj.lang.Aspects;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -120,7 +121,7 @@ class AspectJCtwIntegrationTest {
         @Test
         void aspect_of_returns_a_non_null_singleton() {
             // When — ajc generated aspectOf() during CTW
-            ResilienceAspect singleton = ResilienceAspect.aspectOf();
+            ResilienceAspect singleton = Aspects.aspectOf(ResilienceAspect.class);
 
             // Then
             assertThat(singleton).isNotNull();
@@ -129,14 +130,14 @@ class AspectJCtwIntegrationTest {
         @Test
         void has_aspect_returns_true_after_weaving() {
             // Then
-            assertThat(ResilienceAspect.hasAspect()).isTrue();
+            assertThat(Aspects.hasAspect(ResilienceAspect.class)).isTrue();
         }
 
         @Test
         void aspect_of_returns_the_same_instance_on_repeated_calls() {
             // When
-            ResilienceAspect first = ResilienceAspect.aspectOf();
-            ResilienceAspect second = ResilienceAspect.aspectOf();
+            ResilienceAspect first = Aspects.aspectOf(ResilienceAspect.class);
+            ResilienceAspect second = Aspects.aspectOf(ResilienceAspect.class);
 
             // Then — singleton identity
             assertThat(first).isSameAs(second);
@@ -157,7 +158,7 @@ class AspectJCtwIntegrationTest {
 
         @BeforeEach
         void setUp() throws NoSuchMethodException {
-            singleton = ResilienceAspect.aspectOf();
+            singleton = Aspects.aspectOf(ResilienceAspect.class);
             placeOrderMethod = OrderService.class.getMethod("placeOrder", String.class, int.class);
             getStatusMethod = OrderService.class.getMethod("getStatus", String.class);
         }
@@ -290,7 +291,7 @@ class AspectJCtwIntegrationTest {
         @Test
         void print_layer_summary_for_all_service_methods() {
             // Given
-            ResilienceAspect singleton = ResilienceAspect.aspectOf();
+            ResilienceAspect singleton = Aspects.aspectOf(ResilienceAspect.class);
 
             // When
             System.out.println("=== CTW Integration: Layer summary for OrderService ===");
