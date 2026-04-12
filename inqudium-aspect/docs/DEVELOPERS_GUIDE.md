@@ -77,7 +77,7 @@ allocation on the hot path.
 │  │                                                               │    │
 │  │  AbstractPipelineAspect                                       │    │
 │  │    ├── layerProviders()  → List<AspectLayerProvider>          │    │
-│  │    └── executeThrough(executor, method)                       │    │
+│  │    └── executeAround(pjp) / execute(executor, method)         │    │
 │  │          │                                                    │    │
 │  │          ▼                                                    │    │
 │  │  ConcurrentHashMap<Method, ResolvedPipeline>                  │    │
@@ -102,9 +102,9 @@ allocation on the hot path.
 ```
 
 **Data flow (first call)**: AspectJ intercepts a method call → the `@Around` advice
-extracts the `Method` and passes `pjp::proceed` to `executeThrough` → the
-`ResolvedPipeline` is resolved (providers filtered, sorted, chain factory composed)
-and cached → the terminal executor is created and passed through the pre-composed
+calls `executeAround(pjp)` which extracts the `Method` and delegates to the
+`ResolvedPipeline` (providers filtered, sorted, chain factory composed and
+cached) → the terminal executor is created and passed through the pre-composed
 chain.
 
 **Data flow (subsequent calls)**: The cached `ResolvedPipeline` is retrieved from the
@@ -330,8 +330,7 @@ public class ResilienceAspect extends AbstractPipelineAspect {
 
     @Around("@annotation(eu.example.Resilient)")
     public Object around(ProceedingJoinPoint pjp) throws Throwable {
-        Method method = ((MethodSignature) pjp.getSignature()).getMethod();
-        return executeThrough(pjp::proceed, method);
+        return executeAround(pjp);
     }
 }
 ```
@@ -615,64 +614,84 @@ public class PipelinedAspect extends AbstractPipelineAspect {
 }
 ```
 
-The base class provides two execution paths — a cached hot path and a cold
-path for introspection:
+The base class provides the following execution paths:
 
-| Method                                   | Path   | Description                                    |
-|------------------------------------------|--------|------------------------------------------------|
-| `executeThrough(executor, method)`       | Hot    | Uses cached `ResolvedPipeline` per method      |
-| `executeThrough(executor)`               | Cold   | Builds fresh chain from all providers          |
-| `resolvedPipeline(method)`               | Hot    | Returns cached pipeline for diagnostics        |
-| `buildPipeline(executor)`                | Cold   | Full `JoinPointWrapper` chain (introspection)  |
-| `buildPipeline(executor, method)`        | Cold   | Filtered `JoinPointWrapper` chain              |
+| Method                                   | Path   | Visibility  | Description                                    |
+|------------------------------------------|--------|-------------|------------------------------------------------|
+| `executeAround(pjp)`                    | Hot    | `protected` | Extracts `Method`, delegates to cached pipeline|
+| `execute(executor, method)`              | Hot    | `public`    | Uses cached `ResolvedPipeline` per method      |
+| `execute(executor)`                      | Cold   | `protected` | Builds fresh chain from all providers          |
+| `getResolvedPipeline(method)`            | Hot    | `public`    | Returns cached pipeline for diagnostics        |
+| `inspectPipeline(executor)`              | Cold   | `public`    | Full `JoinPointWrapper` chain (introspection)  |
+| `inspectPipeline(executor, method)`      | Cold   | `public`    | Filtered `JoinPointWrapper` chain              |
 
 ### The @Around Advice and Method Extraction
 
-The `@Around` advice is the bridge between AspectJ and the pipeline. The key
-steps are:
-
-1. Extract the `Method` from the `ProceedingJoinPoint`.
-2. Pass `pjp::proceed` as a `JoinPointExecutor` to the pipeline.
+The `@Around` advice is the bridge between AspectJ and the pipeline. The
+simplest approach uses `executeAround(pjp)` — a single call that safely
+extracts the `Method` via `instanceof` pattern matching, resolves the
+cached pipeline, and executes through it:
 
 ```java
 @Around("@annotation(eu.inqudium.aspect.pipeline.example.Pipelined)")
 public Object around(ProceedingJoinPoint pjp) throws Throwable {
-    // Step 1: Extract the target method for canHandle filtering
-    Method method = ((MethodSignature) pjp.getSignature()).getMethod();
+    return executeAround(pjp);
+}
+```
 
-    // Step 2: Execute through the pipeline
-    // pjp::proceed matches JoinPointExecutor's functional interface
+If you need access to the `Method` before entering the pipeline (e.g. for
+logging or conditional logic), extract it yourself and call `execute()`
+directly:
+
+```java
+@Around("@annotation(eu.inqudium.aspect.pipeline.example.Pipelined)")
+public Object around(ProceedingJoinPoint pjp) throws Throwable {
+    Method method = ((MethodSignature) pjp.getSignature()).getMethod();
+    log.debug("Entering pipeline for {}", method.getName());
     return execute(pjp::proceed, method);
 }
 ```
 
-When `executeThrough(executor, method)` is called, the `ResolvedPipeline` for
+When `execute(executor, method)` is called, the `ResolvedPipeline` for
 that method is retrieved from a `ConcurrentHashMap` (or resolved and cached on
 first access). Only the terminal executor (`pjp::proceed`) is created per call —
 the chain structure itself is pre-composed and reused.
 
 ### Exposing the Pipeline for Testing
 
-Since `executeThrough`, `buildPipeline`, and `resolvedPipeline` are `protected`,
-a concrete aspect should expose public delegation methods for testability:
+The base class exposes its key methods as `public`, so concrete aspects
+inherit them directly — no delegation wrappers needed:
 
 ```java
-// Execute with method filtering (hot path — uses cached ResolvedPipeline)
-public Object execute(JoinPointExecutor<Object> coreExecutor, Method method)
-        throws Throwable {
-    return executeThrough(coreExecutor, method);
-}
+// Already public on AbstractPipelineAspect — inherited by every subclass:
 
-// Inspect without executing — full Wrapper introspection (cold path)
-public JoinPointWrapper<Object> inspectPipeline(
-        JoinPointExecutor<Object> coreExecutor, Method method) {
-    return buildPipeline(coreExecutor, method);
-}
+aspect.execute(executor, method);          // hot path, cached pipeline
+aspect.getResolvedPipeline(method);        // cached pipeline for diagnostics
+aspect.inspectPipeline(executor);          // cold path, full Wrapper chain
+aspect.inspectPipeline(executor, method);  // cold path, filtered chain
+```
 
-// Access the cached, pre-composed pipeline for diagnostics
-public ResolvedPipeline getResolvedPipeline(Method method) {
-    return resolvedPipeline(method);
-}
+Only `executeAround(pjp)` and `execute(executor)` (no method parameter)
+are `protected` — these are intended for use inside `@Around` advice, not
+by external callers.
+
+Tests can instantiate the aspect directly via the test constructor and
+call the public methods without any AspectJ weaving:
+
+```java
+PipelinedAspect aspect = new PipelinedAspect(List.of(
+    new LoggingLayerProvider(trace),
+    new TimingLayerProvider(trace)
+));
+
+// Execute through the pipeline — lambda stands in for pjp::proceed
+Object result = aspect.execute(() -> "Hello!", method);
+
+// Inspect the chain without executing
+JoinPointWrapper<Object> chain = aspect.inspectPipeline(() -> "dummy", method);
+
+// Access the cached pipeline diagnostics
+ResolvedPipeline pipeline = aspect.getResolvedPipeline(method);
 ```
 
 ### Accessing the Aspect Singleton at Runtime
@@ -938,7 +957,7 @@ System.out.println(pipeline.toStringHierarchy());
 ```
 
 For full `Wrapper` introspection (`inner()`, type-safe chain traversal), use
-`buildPipeline()` on the cold path — this constructs a `JoinPointWrapper` chain
+`inspectPipeline()` on the cold path — this constructs a `JoinPointWrapper` chain
 that implements the complete `Wrapper<S>` interface.
 
 ---
@@ -946,7 +965,7 @@ that implements the complete `Wrapper<S>` interface.
 ## Chain Introspection via the Wrapper Interface
 
 > **Note:** The `Wrapper` interface provides full chain traversal via `inner()`
-> and is available on the **cold path** (`buildPipeline()`). For lightweight
+> and is available on the **cold path** (`inspectPipeline()`). For lightweight
 > diagnostics on the **hot path**, use `ResolvedPipeline.layerNames()`,
 > `.depth()`, and `.toStringHierarchy()` — see
 > [Diagnostics on the Cached Pipeline](#diagnostics-on-the-cached-pipeline).
@@ -1044,7 +1063,11 @@ public interface AsyncAspectLayerProvider<R> {
     String layerName();
     int order();
     AsyncLayerAction<Void, R> asyncLayerAction();
-    default boolean canHandle(Method method) { return true; }
+
+    // Default: only methods returning CompletionStage
+    default boolean canHandle(Method method) {
+        return CompletionStage.class.isAssignableFrom(method.getReturnType());
+    }
 }
 ```
 
@@ -1273,7 +1296,7 @@ public class PipelinedAspect extends AbstractPipelineAspect {
     private final List<AspectLayerProvider<Object>> providers;
 
     // AspectJ singleton — wires the production layer stack.
-    // PipelinedAspect.aspectOf() returns this instance for diagnostics.
+    // Aspects.aspectOf(PipelinedAspect.class) returns this instance.
     public PipelinedAspect() {
         this(List.of(
             new AuthorizationLayerProvider(),
@@ -1294,26 +1317,11 @@ public class PipelinedAspect extends AbstractPipelineAspect {
 
     @Around("@annotation(eu.inqudium.aspect.pipeline.example.Pipelined)")
     public Object around(ProceedingJoinPoint pjp) throws Throwable {
-        Method method = ((MethodSignature) pjp.getSignature()).getMethod();
-        return execute(pjp::proceed, method);
+        return executeAround(pjp);
     }
 
-    // Public delegation for testing
-    public Object execute(JoinPointExecutor<Object> executor, Method method)
-            throws Throwable {
-        return executeThrough(executor, method);
-    }
-
-    // Cold path — full Wrapper introspection
-    public JoinPointWrapper<Object> inspectPipeline(
-            JoinPointExecutor<Object> executor, Method method) {
-        return buildPipeline(executor, method);
-    }
-
-    // Hot path — access the cached, pre-composed pipeline
-    public ResolvedPipeline getResolvedPipeline(Method method) {
-        return resolvedPipeline(method);
-    }
+    // execute(executor, method), inspectPipeline(executor, method), and
+    // getResolvedPipeline(method) are inherited as public from the base class.
 }
 ```
 
@@ -1326,11 +1334,11 @@ public class PipelinedAspect extends AbstractPipelineAspect {
     │
     ▼
   AspectJ @Around advice
-    │  Method method = ((MethodSignature) pjp.getSignature()).getMethod();
-    │  execute(pjp::proceed, method)
+    │  executeAround(pjp)
     │
     ▼
-  AbstractPipelineAspect.executeThrough(executor, method)
+  AbstractPipelineAspect.executeAround(pjp)
+    │  extract Method from ProceedingJoinPoint
     │  ConcurrentHashMap: cache miss for greet-Method
     │
     ▼
@@ -1376,10 +1384,10 @@ public class PipelinedAspect extends AbstractPipelineAspect {
     │
     ▼
   AspectJ @Around advice
-    │  execute(pjp::proceed, method)
+    │  executeAround(pjp)
     │
     ▼
-  AbstractPipelineAspect.executeThrough(executor, method)
+  AbstractPipelineAspect.executeAround(pjp)
     │  ConcurrentHashMap: cache HIT for greet-Method
     │  (no filtering, no sorting, no chain composition)
     │
@@ -1517,6 +1525,8 @@ with the same transport mechanism:
 ```java
 // Inside ResolvedPipeline (hot path):
 public Object execute(JoinPointExecutor<Object> coreExecutor) throws Throwable {
+    long callId = callIdCounter.incrementAndGet();
+
     InternalExecutor<Void, Object> terminal = (cid, caid, arg) -> {
         try {
             return coreExecutor.proceed();
@@ -1526,7 +1536,9 @@ public Object execute(JoinPointExecutor<Object> coreExecutor) throws Throwable {
     try {
         return chainFactory.apply(terminal).execute(chainId, callId, null);
     } catch (CompletionException e) {
-        throw e.getCause();  // unwrap and re-throw original
+        Throwable cause = e.getCause();
+        if (cause == null) { throw e; }       // guard against null cause
+        throw Throws.rethrow(cause);           // unwrap and re-throw original
     }
 }
 ```
@@ -1580,7 +1592,7 @@ The per-call cost is reduced to:
 - One `AtomicLong.incrementAndGet()` for the call ID
 - The chain traversal itself (nested lambda calls, no object allocation)
 
-The `buildPipeline()` methods remain available for cold-path introspection
+The `inspectPipeline()` methods remain available for cold-path introspection
 when full `Wrapper` interface support (`inner()`, type-safe traversal) is needed.
 
 ### Hot Path vs. Cold Path
@@ -1589,8 +1601,8 @@ The aspect base class now has a clear separation:
 
 | Path | Method | Purpose | Allocations per call |
 |------|--------|---------|---------------------|
-| **Hot** | `executeThrough(executor, method)` | Production execution | 1 lambda |
-| **Cold** | `buildPipeline(executor, method)` | Testing / introspection | N wrapper objects |
+| **Hot** | `executeAround(pjp)` / `execute(executor, method)` | Production execution | 1 lambda |
+| **Cold** | `inspectPipeline(executor, method)` | Testing / introspection | N wrapper objects |
 
 The hot path uses `ResolvedPipeline` (no wrapper objects, pre-composed chain
 factory). The cold path uses `AspectPipelineBuilder` + `JoinPointWrapper` (full
@@ -1604,6 +1616,11 @@ layers with method-specific constraints need to override `canHandle`. The
 default `true` means existing providers work without changes after the
 method was added to the interface.
 
+> **Note:** `AsyncAspectLayerProvider` has a different default — it checks
+> `CompletionStage.class.isAssignableFrom(method.getReturnType())`. This
+> prevents async layers from accidentally wrapping synchronous methods
+> where the `CompletionStage` cast in the terminal would fail at runtime.
+
 ### Why Separate Sync and Async Hierarchies?
 
 The sync path uses `LayerAction` + `InternalExecutor` (direct return values).
@@ -1614,20 +1631,24 @@ common (sync) case without benefiting it.
 
 ### Why inside-out Chain Construction?
 
-Both `AspectPipelineBuilder.buildChain()` and `ResolvedPipeline.resolve()`
-iterate layers in reverse order. The last layer wraps the core executor (or
+Both `AspectPipelineBuilder.buildChain()` and `ResolvedPipeline.fromProviders()`
+iterate in reverse order. The last layer wraps the core executor (or
 terminal), the second-to-last wraps that, and so on. This produces a chain
 where the first registered (lowest-order) layer is outermost.
 
-For `ResolvedPipeline`, this means the `chainFactory` is built as:
+For `ResolvedPipeline`, the `chainFactory` and layer names are built in a
+single reverse pass — no intermediate `actions` list:
 
 ```java
 // Start with identity (terminal passes through)
 Function<InternalExecutor, InternalExecutor> factory = Function.identity();
+String[] names = new String[providers.size()];
 
-// Walk in reverse — innermost layer wraps terminal first
-for (int i = actions.size() - 1; i >= 0; i--) {
-    LayerAction action = actions.get(i);
+// Walk in reverse — innermost provider wraps terminal first
+for (int i = providers.size() - 1; i >= 0; i--) {
+    AspectLayerProvider<Object> p = providers.get(i);
+    names[i] = p.layerName();
+    LayerAction action = p.layerAction();
     Function<InternalExecutor, InternalExecutor> outer = factory;
     factory = terminal -> {
         InternalExecutor next = outer.apply(terminal);
