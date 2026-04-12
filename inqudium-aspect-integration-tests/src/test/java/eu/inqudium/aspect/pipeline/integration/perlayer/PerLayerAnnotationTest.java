@@ -51,7 +51,7 @@ class PerLayerAnnotationTest {
 
             // Then
             assertThat(pipeline.layerNames())
-                    .containsExactly("AUTH", "LOG", "TIME");
+                    .containsExactly("AUTHORIZATION", "LOGGING", "TIMING");
             assertThat(pipeline.depth()).isEqualTo(3);
         }
 
@@ -65,7 +65,7 @@ class PerLayerAnnotationTest {
 
             // Then
             assertThat(pipeline.layerNames())
-                    .containsExactly("AUTH", "LOG");
+                    .containsExactly("AUTHORIZATION", "LOGGING");
         }
 
         @Test
@@ -78,7 +78,7 @@ class PerLayerAnnotationTest {
 
             // Then
             assertThat(pipeline.layerNames())
-                    .containsExactly("LOG");
+                    .containsExactly("LOGGING");
             assertThat(pipeline.depth()).isEqualTo(1);
         }
 
@@ -92,7 +92,7 @@ class PerLayerAnnotationTest {
 
             // Then — LOG is skipped, order is preserved
             assertThat(pipeline.layerNames())
-                    .containsExactly("AUTH", "TIME");
+                    .containsExactly("AUTHORIZATION", "TIMING");
         }
 
         @Test

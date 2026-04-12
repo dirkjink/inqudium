@@ -1,6 +1,9 @@
 package eu.inqudium.aspect.pipeline.integration.perlayer;
 
 import eu.inqudium.aspect.pipeline.AbstractPipelineAspect;
+import eu.inqudium.aspect.pipeline.integration.AuthorizationLayer;
+import eu.inqudium.aspect.pipeline.integration.LoggingLayer;
+import eu.inqudium.aspect.pipeline.integration.TimingLayer;
 import org.aspectj.lang.ProceedingJoinPoint;
 import org.aspectj.lang.annotation.Around;
 import org.aspectj.lang.annotation.Aspect;
@@ -29,9 +32,9 @@ public class PerLayerAspect extends AbstractPipelineAspect {
 
     public PerLayerAspect() {
         super(List.of(
-                new AuthLayer(),
-                new LogLayer(),
-                new TimeLayer()
+                new AuthorizationLayer(),
+                new LoggingLayer(),
+                new TimingLayer()
         ));
     }
 

@@ -175,14 +175,13 @@ class AspectJCtwIntegrationTest {
         }
 
         @Test
-        void non_resilient_method_has_two_layers_because_timing_filters_by_annotation() {
-            // Given — getStatus() has no @Resilient → TimingLayer.canHandle returns false
+        void non_annotated_method_produces_empty_pipeline() {
+            // Given — getStatus() has no annotations at all
             ResolvedPipeline pipeline = singleton.getResolvedPipeline(getStatusMethod);
 
-            // Then
-            assertThat(pipeline.layerNames())
-                    .containsExactly("AUTHORIZATION", "LOGGING");
-            assertThat(pipeline.depth()).isEqualTo(2);
+            // Then — no layer matches, pipeline is empty
+            assertThat(pipeline.layerNames()).isEmpty();
+            assertThat(pipeline.depth()).isEqualTo(0);
         }
 
         @Test
