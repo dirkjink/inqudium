@@ -12,7 +12,7 @@
 
     <artifactId>inqudium-spring-boot3</artifactId>
 
-    <name>Inqudium Spring Boot 3 Starter</name>
+    <name>Inqudium :: Spring Boot 3</name>
     <description>Auto-configuration, @InqShield annotation, and Actuator endpoint for Spring Boot 3.</description>
 
     <dependencies>

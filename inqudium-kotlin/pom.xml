@@ -12,7 +12,7 @@
 
     <artifactId>inqudium-kotlin</artifactId>
 
-    <name>Inqudium Kotlin Coroutines</name>
+    <name>Inqudium :: Kotlin</name>
     <description>Native Kotlin Coroutine implementation — Mutex, delay(), Flow. All elements, no thread bridges.
     </description>
 

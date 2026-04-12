@@ -12,7 +12,7 @@
 
     <artifactId>inqudium-context-slf4j</artifactId>
 
-    <name>Inqudium Context Bridge: SLF4J MDC</name>
+    <name>Inqudium :: Context Bridge :: SLF4J MDC</name>
     <description>InqContextPropagator implementation for SLF4J MDC. Add to classpath for automatic MDC propagation
         through resilience elements.
     </description>

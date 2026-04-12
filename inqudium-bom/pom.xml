@@ -9,7 +9,7 @@
     <version>${revision}</version>
     <packaging>pom</packaging>
 
-    <name>Inqudium BOM</name>
+    <name>Inqudium :: BOM</name>
     <description>Bill of Materials for Inqudium — import this to align versions across modules.</description>
 
     <properties>

@@ -9,7 +9,7 @@
     <version>${revision}</version>
     <packaging>pom</packaging>
 
-    <name>Inqudium</name>
+    <name>Inqudium :: Parent</name>
     <description>Native resilience for every JVM paradigm.</description>
     <url>https://inqudium.eu</url>
     <inceptionYear>2026</inceptionYear>

@@ -11,7 +11,7 @@
 
     <artifactId>inqudium-imperative</artifactId>
 
-    <name>Inqudium Imperative Concurrency</name>
+    <name>Inqudium :: Imperative</name>
     <description>Imperative concurrency is a paradigm where tasks are executed
         in a sequential or thread-per-task manner
     </description>
