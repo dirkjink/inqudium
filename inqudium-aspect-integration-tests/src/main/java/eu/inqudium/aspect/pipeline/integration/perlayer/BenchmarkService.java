@@ -1,8 +1,6 @@
-package eu.inqudium.aspect.pipeline.integration;
+package eu.inqudium.aspect.pipeline.integration.perlayer;
 
-import eu.inqudium.aspect.pipeline.integration.perlayer.Authorized;
-import eu.inqudium.aspect.pipeline.integration.perlayer.Logged;
-import eu.inqudium.aspect.pipeline.integration.perlayer.Timed;
+import eu.inqudium.aspect.pipeline.integration.Resilient;
 
 /**
  * Service with identical method bodies but different annotation combinations.

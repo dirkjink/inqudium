@@ -48,12 +48,7 @@ public class AsyncAspectPipelineBuilder<R> {
      * @throws IllegalArgumentException if name or action is null
      */
     public AsyncAspectPipelineBuilder<R> addLayer(String name, AsyncLayerAction<Void, R> action) {
-        if (name == null) {
-            throw new IllegalArgumentException("Layer name must not be null");
-        }
-        if (action == null) {
-            throw new IllegalArgumentException("Layer action must not be null");
-        }
+        // Null validation delegated to NamedAsyncLayer compact constructor
         layers.add(new NamedAsyncLayer<>(name, action));
         return this;
     }
@@ -83,20 +78,12 @@ public class AsyncAspectPipelineBuilder<R> {
      * @throws IllegalArgumentException if providers is null or contains null elements
      */
     public AsyncAspectPipelineBuilder<R> addProviders(List<? extends AsyncAspectLayerProvider<R>> providers) {
-        if (providers == null) {
-            throw new IllegalArgumentException("Providers list must not be null");
-        }
-        for (int i = 0; i < providers.size(); i++) {
-            if (providers.get(i) == null) {
-                throw new IllegalArgumentException(
-                        "Provider at index " + i + " must not be null");
-            }
-        }
-        List<? extends AsyncAspectLayerProvider<R>> sorted = new ArrayList<>(providers);
-        sorted.sort(Comparator.comparingInt(AsyncAspectLayerProvider::order));
-        for (AsyncAspectLayerProvider<R> provider : sorted) {
-            addProvider(provider);
-        }
+        requireNonNullElements(providers);
+        // Stream, sort, and add directly — no intermediate list copy,
+        // no per-element addProvider/addLayer indirection
+        providers.stream()
+                .sorted(Comparator.comparingInt(AsyncAspectLayerProvider::order))
+                .forEach(p -> layers.add(new NamedAsyncLayer<>(p.layerName(), p.asyncLayerAction())));
         return this;
     }
 
@@ -114,25 +101,16 @@ public class AsyncAspectPipelineBuilder<R> {
      */
     public AsyncAspectPipelineBuilder<R> addProviders(
             List<? extends AsyncAspectLayerProvider<R>> providers, Method method) {
-        if (providers == null) {
-            throw new IllegalArgumentException("Providers list must not be null");
-        }
+        requireNonNullElements(providers);
         if (method == null) {
             throw new IllegalArgumentException("Method must not be null");
         }
-        for (int i = 0; i < providers.size(); i++) {
-            if (providers.get(i) == null) {
-                throw new IllegalArgumentException(
-                        "Provider at index " + i + " must not be null");
-            }
-        }
-        List<? extends AsyncAspectLayerProvider<R>> filtered = providers.stream()
+        // Single pipeline: filter, sort, add — no intermediate toList(),
+        // no per-element addProvider/addLayer indirection
+        providers.stream()
                 .filter(p -> p.canHandle(method))
                 .sorted(Comparator.comparingInt(AsyncAspectLayerProvider::order))
-                .toList();
-        for (AsyncAspectLayerProvider<R> provider : filtered) {
-            addProvider(provider);
-        }
+                .forEach(p -> layers.add(new NamedAsyncLayer<>(p.layerName(), p.asyncLayerAction())));
         return this;
     }
 
@@ -176,6 +154,26 @@ public class AsyncAspectPipelineBuilder<R> {
             current = new AsyncJoinPointWrapper<>(layer.name(), delegate, layer.action());
         }
         return current;
+    }
+
+    // ======================== Internal ========================
+
+    /**
+     * Validates that the list and all its elements are non-null.
+     *
+     * @param list the list to validate
+     * @throws IllegalArgumentException if the list or any element is null
+     */
+    private static void requireNonNullElements(List<?> list) {
+        if (list == null) {
+            throw new IllegalArgumentException("Providers list must not be null");
+        }
+        for (int i = 0; i < list.size(); i++) {
+            if (list.get(i) == null) {
+                throw new IllegalArgumentException(
+                        "Provider at index " + i + " must not be null");
+            }
+        }
     }
 
     /**

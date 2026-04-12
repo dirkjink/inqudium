@@ -118,7 +118,6 @@ public final class ResolvedPipeline {
      */
     public static ResolvedPipeline resolve(List<? extends AspectLayerProvider<Object>> providers,
                                            Method method) {
-        // Resolve applicable providers once — filter and sort in a single pass
         List<? extends AspectLayerProvider<Object>> applicable = providers.stream()
                 .filter(p -> p.canHandle(method))
                 .sorted(Comparator.comparingInt(AspectLayerProvider::order))
@@ -129,8 +128,11 @@ public final class ResolvedPipeline {
 
     /**
      * Builds a {@code ResolvedPipeline} from an already filtered and sorted
-     * provider list. Extracts actions and names in separate passes over the
-     * same list — no redundant filtering or sorting.
+     * provider list.
+     *
+     * <p>Composes the chain factory and collects layer names in a single
+     * reverse pass — no intermediate action or name lists are created.
+     * Each provider is visited exactly once.</p>
      */
     private static ResolvedPipeline fromProviders(
             List<? extends AspectLayerProvider<Object>> providers) {
@@ -138,33 +140,18 @@ public final class ResolvedPipeline {
             return EMPTY;
         }
 
-        List<LayerAction<Void, Object>> actions = providers.stream()
-                .map(AspectLayerProvider::layerAction)
-                .toList();
+        int size = providers.size();
+        String[] names = new String[size];
 
-        List<String> names = providers.stream()
-                .map(AspectLayerProvider::layerName)
-                .toList();
-
-        return new ResolvedPipeline(
-                composeFactory(actions), CHAIN_ID_COUNTER.incrementAndGet(), names);
-    }
-
-    /**
-     * Composes the chain factory inside-out from the sorted list of actions.
-     *
-     * <p>Walks the action list in reverse: the innermost action wraps the
-     * terminal first, each outer action wraps the result of the previous
-     * iteration.</p>
-     */
-    private static Function<InternalExecutor<Void, Object>,
-            InternalExecutor<Void, Object>> composeFactory(
-            List<LayerAction<Void, Object>> actions) {
+        // Compose chain factory and collect names in a single reverse pass.
+        // No intermediate actions list — each action is consumed immediately.
         Function<InternalExecutor<Void, Object>,
                 InternalExecutor<Void, Object>> factory = Function.identity();
 
-        for (int i = actions.size() - 1; i >= 0; i--) {
-            LayerAction<Void, Object> action = actions.get(i);
+        for (int i = size - 1; i >= 0; i--) {
+            AspectLayerProvider<Object> p = providers.get(i);
+            names[i] = p.layerName();
+            LayerAction<Void, Object> action = p.layerAction();
             Function<InternalExecutor<Void, Object>,
                     InternalExecutor<Void, Object>> outer = factory;
 
@@ -173,7 +160,8 @@ public final class ResolvedPipeline {
                 return (chainId, callId, arg) -> action.execute(chainId, callId, arg, next);
             };
         }
-        return factory;
+
+        return new ResolvedPipeline(factory, CHAIN_ID_COUNTER.incrementAndGet(), List.of(names));
     }
 
     // ======================== Execution ========================

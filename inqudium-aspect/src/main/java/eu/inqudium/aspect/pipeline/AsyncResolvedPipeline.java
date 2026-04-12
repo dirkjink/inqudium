@@ -97,7 +97,6 @@ public final class AsyncResolvedPipeline {
     public static AsyncResolvedPipeline resolve(
             List<? extends AsyncAspectLayerProvider<Object>> providers,
             Method method) {
-        // Resolve applicable providers once — filter and sort in a single pass
         List<? extends AsyncAspectLayerProvider<Object>> applicable = providers.stream()
                 .filter(p -> p.canHandle(method))
                 .sorted(Comparator.comparingInt(AsyncAspectLayerProvider::order))
@@ -108,8 +107,11 @@ public final class AsyncResolvedPipeline {
 
     /**
      * Builds an {@code AsyncResolvedPipeline} from an already filtered and sorted
-     * provider list. Extracts actions and names in separate passes over the
-     * same list — no redundant filtering or sorting.
+     * provider list.
+     *
+     * <p>Composes the chain factory and collects layer names in a single
+     * reverse pass — no intermediate action or name lists are created.
+     * Each provider is visited exactly once.</p>
      */
     private static AsyncResolvedPipeline fromProviders(
             List<? extends AsyncAspectLayerProvider<Object>> providers) {
@@ -117,29 +119,18 @@ public final class AsyncResolvedPipeline {
             return EMPTY;
         }
 
-        List<AsyncLayerAction<Void, Object>> actions = providers.stream()
-                .map(AsyncAspectLayerProvider::asyncLayerAction)
-                .toList();
+        int size = providers.size();
+        String[] names = new String[size];
 
-        List<String> names = providers.stream()
-                .map(AsyncAspectLayerProvider::layerName)
-                .toList();
-
-        return new AsyncResolvedPipeline(
-                composeFactory(actions), CHAIN_ID_COUNTER.incrementAndGet(), names);
-    }
-
-    /**
-     * Composes the chain factory inside-out from the sorted list of async actions.
-     */
-    private static Function<InternalAsyncExecutor<Void, Object>,
-            InternalAsyncExecutor<Void, Object>> composeFactory(
-            List<AsyncLayerAction<Void, Object>> actions) {
+        // Compose chain factory and collect names in a single reverse pass.
+        // No intermediate actions list — each action is consumed immediately.
         Function<InternalAsyncExecutor<Void, Object>,
                 InternalAsyncExecutor<Void, Object>> factory = Function.identity();
 
-        for (int i = actions.size() - 1; i >= 0; i--) {
-            AsyncLayerAction<Void, Object> action = actions.get(i);
+        for (int i = size - 1; i >= 0; i--) {
+            AsyncAspectLayerProvider<Object> p = providers.get(i);
+            names[i] = p.layerName();
+            AsyncLayerAction<Void, Object> action = p.asyncLayerAction();
             Function<InternalAsyncExecutor<Void, Object>,
                     InternalAsyncExecutor<Void, Object>> outer = factory;
 
@@ -149,7 +140,9 @@ public final class AsyncResolvedPipeline {
                         action.executeAsync(chainId, callId, arg, next);
             };
         }
-        return factory;
+
+        return new AsyncResolvedPipeline(
+                factory, CHAIN_ID_COUNTER.incrementAndGet(), List.of(names));
     }
 
     // ======================== Execution ========================
