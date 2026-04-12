@@ -88,18 +88,23 @@
                     <source>${maven.compiler.release}</source>
                     <target>${maven.compiler.release}</target>
                     <showWeaveInfo>true</showWeaveInfo>
-                    <aspectLibraries>
-                        <aspectLibrary>
-                            <groupId>eu.inqudium</groupId>
-                            <artifactId>inqudium-aspect</artifactId>
-                        </aspectLibrary>
-                    </aspectLibraries>
+                    <!--
+                      No aspectLibraries needed — the @Aspect class (ResilienceAspect)
+                      is compiled in this module itself. ajc discovers it automatically.
+                      aspectLibraries would only be needed for cross-module weaving
+                      (aspects in a dependency JAR).
+                    -->
                 </configuration>
                 <executions>
                     <execution>
                         <goals>
+                            <!--
+                              Only compile — all annotated classes (OrderService,
+                              PaymentService, BenchmarkService) are in src/main/java.
+                              test-compile is omitted to avoid classpath conflicts with
+                              JMH's annotation processor (jmh-generator-annprocess).
+                            -->
                             <goal>compile</goal>
-                            <goal>test-compile</goal>
                         </goals>
                     </execution>
                 </executions>
