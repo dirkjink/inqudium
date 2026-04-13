@@ -3,6 +3,7 @@ package eu.inqudium.imperative.circuitbreaker;
 import eu.inqudium.core.element.InqElementType;
 import eu.inqudium.core.element.circuitbreaker.CircuitBreakerCore;
 import eu.inqudium.core.element.circuitbreaker.CircuitBreakerException;
+import eu.inqudium.core.element.circuitbreaker.CircuitBreakerSnapshot;
 import eu.inqudium.core.element.circuitbreaker.CircuitState;
 import eu.inqudium.core.element.circuitbreaker.PermissionResult;
 import eu.inqudium.core.element.circuitbreaker.StateTransition;

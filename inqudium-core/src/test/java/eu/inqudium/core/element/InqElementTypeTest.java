@@ -18,6 +18,18 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 @DisplayName("InqElementType")
 class InqElementTypeTest {
 
+    // ======================== Helpers ========================
+
+    /**
+     * Returns true for element types that participate in pipeline ordering.
+     * CACHE and NO_ELEMENT have order 0 and are excluded from pipeline
+     * composition.
+     */
+    private static boolean isPipelineElement(InqElementType type) {
+        return type != InqElementType.NO_ELEMENT
+                && type != InqElementType.CACHE;
+    }
+
     // ======================== Enum constants ========================
 
     @Nested
@@ -259,13 +271,13 @@ class InqElementTypeTest {
 
         @ParameterizedTest(name = "{0} → {1}")
         @CsvSource({
-                "CACHE,            100",
-                "TIME_LIMITER,     200",
-                "TRAFFIC_SHAPER,   300",
-                "RATE_LIMITER,     400",
-                "BULKHEAD,         500",
-                "CIRCUIT_BREAKER,  600",
-                "RETRY,            700",
+                "TIME_LIMITER,     100",
+                "TRAFFIC_SHAPER,   200",
+                "RATE_LIMITER,     300",
+                "BULKHEAD,         400",
+                "CIRCUIT_BREAKER,  500",
+                "RETRY,            600",
+                "CACHE,            0",
                 "NO_ELEMENT,       0"
         })
         void each_type_returns_its_expected_pipeline_order(InqElementType type, int expectedOrder) {
@@ -284,9 +296,10 @@ class InqElementTypeTest {
 
             @Test
             void all_pipeline_element_orders_are_spaced_by_100() {
-                // Given — only elements intended for pipeline composition (excluding NO_ELEMENT)
+                // Given — only elements intended for pipeline composition
+                // (excluding CACHE and NO_ELEMENT which have order 0)
                 var pipelineTypes = Arrays.stream(InqElementType.values())
-                        .filter(t -> t != InqElementType.NO_ELEMENT)
+                        .filter(InqElementTypeTest::isPipelineElement)
                         .sorted(Comparator.comparingInt(InqElementType::defaultPipelineOrder))
                         .toList();
 
@@ -305,9 +318,10 @@ class InqElementTypeTest {
             }
 
             @Test
-            void all_pipeline_orders_are_unique() {
-                // Given
+            void all_pipeline_element_orders_are_unique() {
+                // Given — only pipeline elements (CACHE and NO_ELEMENT share order 0)
                 var orders = Arrays.stream(InqElementType.values())
+                        .filter(InqElementTypeTest::isPipelineElement)
                         .map(InqElementType::defaultPipelineOrder)
                         .toList();
 
@@ -330,18 +344,18 @@ class InqElementTypeTest {
         class CanonicalOrdering {
 
             @Test
-            void cache_is_the_outermost_pipeline_element() {
+            void time_limiter_is_the_outermost_pipeline_element() {
                 // Given
-                var cache = InqElementType.CACHE;
+                var timeLimiter = InqElementType.TIME_LIMITER;
 
                 // When
-                int cacheOrder = cache.defaultPipelineOrder();
+                int timeLimiterOrder = timeLimiter.defaultPipelineOrder();
 
-                // Then — lowest order among all pipeline elements (excluding NO_ELEMENT)
+                // Then — lowest order among all pipeline elements
                 Arrays.stream(InqElementType.values())
-                        .filter(t -> t != InqElementType.NO_ELEMENT)
-                        .forEach(t -> assertThat(cacheOrder)
-                                .as("CACHE should be outermost, but %s has lower order", t)
+                        .filter(InqElementTypeTest::isPipelineElement)
+                        .forEach(t -> assertThat(timeLimiterOrder)
+                                .as("TIME_LIMITER should be outermost, but %s has lower order", t)
                                 .isLessThanOrEqualTo(t.defaultPipelineOrder()));
             }
 
@@ -355,6 +369,7 @@ class InqElementTypeTest {
 
                 // Then — highest order among all pipeline elements
                 Arrays.stream(InqElementType.values())
+                        .filter(InqElementTypeTest::isPipelineElement)
                         .forEach(t -> assertThat(retryOrder)
                                 .as("RETRY should be innermost, but %s has higher order", t)
                                 .isGreaterThanOrEqualTo(t.defaultPipelineOrder()));
@@ -422,7 +437,6 @@ class InqElementTypeTest {
             void full_canonical_order_matches_adr_017() {
                 // Given — ADR-017 canonical order (outermost → innermost)
                 var expectedOrder = List.of(
-                        InqElementType.CACHE,
                         InqElementType.TIME_LIMITER,
                         InqElementType.TRAFFIC_SHAPER,
                         InqElementType.RATE_LIMITER,
@@ -433,7 +447,7 @@ class InqElementTypeTest {
 
                 // When — sort all pipeline types by their default order
                 var actualOrder = Arrays.stream(InqElementType.values())
-                        .filter(t -> t != InqElementType.NO_ELEMENT)
+                        .filter(InqElementTypeTest::isPipelineElement)
                         .sorted(Comparator.comparingInt(InqElementType::defaultPipelineOrder))
                         .toList();
 
@@ -443,8 +457,8 @@ class InqElementTypeTest {
         }
 
         @Nested
-        @DisplayName("NO_ELEMENT sentinel")
-        class NoElementSentinel {
+        @DisplayName("Non-pipeline types (CACHE, NO_ELEMENT)")
+        class NonPipelineTypes {
 
             @Test
             void no_element_has_order_zero() {
@@ -453,15 +467,32 @@ class InqElementTypeTest {
             }
 
             @Test
-            void no_element_has_lowest_order_of_all_types() {
-                // Given
-                int noElementOrder = InqElementType.NO_ELEMENT.defaultPipelineOrder();
+            void cache_has_order_zero() {
+                // Given — Cache is not a pipeline element (ADR-017, ADR-024):
+                // it is a separate interceptor that short-circuits the entire
+                // call on a hit, so the pipeline is never entered.
 
                 // When / Then
-                Arrays.stream(InqElementType.values()).forEach(type ->
-                        assertThat(noElementOrder)
-                                .as("NO_ELEMENT should have lowest order, but %s is lower", type)
-                                .isLessThanOrEqualTo(type.defaultPipelineOrder()));
+                assertThat(InqElementType.CACHE.defaultPipelineOrder()).isZero();
+            }
+
+            @Test
+            void cache_and_no_element_share_order_zero() {
+                // Given — both are non-pipeline types
+
+                // When / Then
+                assertThat(InqElementType.CACHE.defaultPipelineOrder())
+                        .isEqualTo(InqElementType.NO_ELEMENT.defaultPipelineOrder())
+                        .isZero();
+            }
+
+            @Test
+            void cache_still_has_a_valid_symbol_and_error_code() {
+                // Given — CACHE retains its identity for events and error codes
+
+                // When / Then
+                assertThat(InqElementType.CACHE.symbol()).isEqualTo("CA");
+                assertThat(InqElementType.CACHE.errorCode(1)).isEqualTo("INQ-CA-001");
             }
         }
     }

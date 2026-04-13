@@ -16,14 +16,18 @@ import java.util.Locale;
  *
  * <h3>Standard pipeline ordering (ADR-017)</h3>
  * <pre>
- *   CACHE (100)                          ← outermost: return cached result before any resilience work
- *     └── TIME_LIMITER (200)                 ← bound total caller wait time including retries (ADR-010)
- *           └── TRAFFIC_SHAPER (300)             ← smooth bursts into steady flow before rate limiting
- *                 └── RATE_LIMITER (400)              ← throttle before breaker's sliding window
- *                       └── BULKHEAD (500)                ← concurrency bounded at pipeline level
- *                             └── CIRCUIT_BREAKER (600)       ← sees each retry attempt individually
- *                                   └── RETRY (700)               ← innermost: retries only the call
+ *   TIME_LIMITER (100)                 ← outermost: bound total caller wait time including retries (ADR-010)
+ *     └── TRAFFIC_SHAPER (200)             ← smooth bursts into steady flow before rate limiting
+ *           └── RATE_LIMITER (300)              ← throttle before breaker's sliding window
+ *                 └── BULKHEAD (400)                ← concurrency bounded at pipeline level
+ *                       └── CIRCUIT_BREAKER (500)       ← sees each retry attempt individually
+ *                             └── RETRY (600)               ← innermost: retries only the call
  * </pre>
+ *
+ * <p>Cache is deliberately excluded from this ordering — it is not a pipeline
+ * element but a separate interceptor that short-circuits the entire call on a
+ * hit (see ADR-017, ADR-024). {@code CACHE} retains its symbol and error codes
+ * but has a {@code defaultPipelineOrder()} of 0.</p>
  *
  * <p>The values are spaced by 100 to leave room for custom or
  * application-specific elements that need to be inserted between standard
@@ -42,68 +46,74 @@ public enum InqElementType {
     /**
      * Circuit breaker — cascading failure shield.
      *
-     * <p>Default pipeline order: 600. Inside bulkhead, outside retry: sees
+     * <p>Default pipeline order: 500. Inside bulkhead, outside retry: sees
      * each individual retry attempt in its sliding window, enabling fast
      * failure detection.</p>
      */
-    CIRCUIT_BREAKER("CB", 600),
+    CIRCUIT_BREAKER("CB", 500),
 
     /**
      * Retry — configurable backoff on transient failures.
      *
-     * <p>Default pipeline order: 700. Innermost by default: retries only
+     * <p>Default pipeline order: 600. Innermost by default: retries only
      * the actual call. The circuit-breaker counts each attempt individually,
      * and the time-limiter bounds total wait time across all attempts.</p>
      */
-    RETRY("RT", 700),
+    RETRY("RT", 600),
 
     /**
      * Rate limiter — throughput control via token bucket.
      *
-     * <p>Default pipeline order: 400. Outside bulkhead and circuit-breaker:
+     * <p>Default pipeline order: 300. Outside bulkhead and circuit-breaker:
      * controls the rate at which calls enter the pipeline. Retries don't
      * consume additional permits since retry sits inside.</p>
      */
-    RATE_LIMITER("RL", 400),
+    RATE_LIMITER("RL", 300),
 
     /**
      * Bulkhead — failure isolation via concurrency limiting.
      *
-     * <p>Default pipeline order: 500. Inside rate-limiter, outside
+     * <p>Default pipeline order: 400. Inside rate-limiter, outside
      * circuit-breaker: concurrency is bounded at the pipeline level,
      * not just the call level.</p>
      */
-    BULKHEAD("BH", 500),
+    BULKHEAD("BH", 400),
 
     /**
      * Time limiter — caller wait time bound, no thread interrupt.
      *
-     * <p>Default pipeline order: 200. Outside traffic-shaper and retry
+     * <p>Default pipeline order: 100. Outside traffic-shaper and retry
      * (ADR-010): bounds total caller wait time including shaping delays
      * and all retry attempts. For per-attempt time bounding, use a higher
      * order value to place the time limiter inside retry.</p>
      */
-    TIME_LIMITER("TL", 200),
+    TIME_LIMITER("TL", 100),
 
     /**
      * Traffic shaper — burst smoothing via controlled delay.
      *
-     * <p>Default pipeline order: 300. Inside time-limiter (shaping delays
+     * <p>Default pipeline order: 200. Inside time-limiter (shaping delays
      * are covered by the caller's time budget), outside rate-limiter
      * (smooths bursts into a steady flow before tokens are consumed).</p>
      *
      * @since 0.8.0
      */
-    TRAFFIC_SHAPER("TS", 300),
+    TRAFFIC_SHAPER("TS", 200),
 
     /**
      * Cache — response caching to reduce load.
      *
-     * <p>Default pipeline order: 100. Outermost: returns a cached result
-     * before any resilience work (permit acquisition, rate tokens, etc.)
-     * is performed.</p>
+     * <p>Cache is <strong>not a pipeline element</strong>. Unlike the other
+     * resilience elements which wrap the method call with additional behavior,
+     * a cache interceptor (e.g. Spring {@code @Cacheable}) <em>replaces</em>
+     * the entire method execution on a hit — the pipeline is never entered.</p>
+     *
+     * <p>This type is retained for error codes (ADR-021) and event
+     * identification (ADR-003), but its {@code defaultPipelineOrder()} is 0
+     * (same as {@link #NO_ELEMENT}). The ordering of cache interceptors
+     * relative to the Inqudium pipeline is governed by ADR-024.</p>
      */
-    CACHE("CA", 100),
+    CACHE("CA", 0),
 
     /**
      * No element — used for system-level codes outside any specific element

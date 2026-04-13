@@ -50,10 +50,12 @@ public interface PipelineOrdering {
      * {@link InqElementType#defaultPipelineOrder()}.
      *
      * <pre>
-     *   CACHE (100) → TIME_LIMITER (200) → TRAFFIC_SHAPER (300)
-     *     → RATE_LIMITER (400) → BULKHEAD (500) → CIRCUIT_BREAKER (600)
-     *     → RETRY (700)
+     *   TIME_LIMITER (100) → TRAFFIC_SHAPER (200) → RATE_LIMITER (300)
+     *     → BULKHEAD (400) → CIRCUIT_BREAKER (500) → RETRY (600)
      * </pre>
+     *
+     * <p>Cache is not part of the pipeline — it is a separate interceptor
+     * that runs before the pipeline (see ADR-024).</p>
      *
      * <p>Rationale: the time-limiter bounds total caller wait time including
      * shaping delays and retries; the traffic-shaper smooths bursts before
@@ -73,9 +75,8 @@ public interface PipelineOrdering {
      * sequence (ADR-017).
      *
      * <pre>
-     *   CACHE (100) → RETRY (200) → CIRCUIT_BREAKER (300)
-     *     → TRAFFIC_SHAPER (400) → RATE_LIMITER (500)
-     *     → TIME_LIMITER (600) → BULKHEAD (700)
+     *   RETRY (100) → CIRCUIT_BREAKER (200) → TRAFFIC_SHAPER (300)
+     *     → RATE_LIMITER (400) → TIME_LIMITER (500) → BULKHEAD (600)
      * </pre>
      *
      * <p>In this model, retry is outermost (each retry sees a fresh
@@ -129,13 +130,12 @@ public interface PipelineOrdering {
 
         static {
             EnumMap<InqElementType, Integer> r4j = new EnumMap<>(InqElementType.class);
-            r4j.put(InqElementType.CACHE, 100);
-            r4j.put(InqElementType.RETRY, 200);
-            r4j.put(InqElementType.CIRCUIT_BREAKER, 300);
-            r4j.put(InqElementType.TRAFFIC_SHAPER, 400);
-            r4j.put(InqElementType.RATE_LIMITER, 500);
-            r4j.put(InqElementType.TIME_LIMITER, 600);
-            r4j.put(InqElementType.BULKHEAD, 700);
+            r4j.put(InqElementType.RETRY, 100);
+            r4j.put(InqElementType.CIRCUIT_BREAKER, 200);
+            r4j.put(InqElementType.TRAFFIC_SHAPER, 300);
+            r4j.put(InqElementType.RATE_LIMITER, 400);
+            r4j.put(InqElementType.TIME_LIMITER, 500);
+            r4j.put(InqElementType.BULKHEAD, 600);
             RESILIENCE4J = of(r4j);
         }
 

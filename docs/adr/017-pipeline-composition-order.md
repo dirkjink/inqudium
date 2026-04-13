@@ -2,7 +2,7 @@
 
 **Status:** Accepted  
 **Date:** 2026-03-23  
-**Last updated:** 2026-04-12  
+**Last updated:** 2026-04-13  
 **Deciders:** Core team
 
 ## Context
@@ -63,7 +63,7 @@ default, bounding the total caller wait time (ADR-010).
 **RateLimiter position:** Resilience4J places RateLimiter outside TimeLimiter but inside CircuitBreaker. This means
 retried calls don't consume additional rate limit permits (good), but the rate limit is not visible to the Circuit
 Breaker (the breaker doesn't know about rate limiting). In Inqudium, RateLimiter sits outside CircuitBreaker — the rate
-limit is the first filter after cache, preventing excessive load from even reaching the breaker's sliding window.
+limit is a global constraint, preventing excessive load from even reaching the breaker's sliding window.
 
 **Bulkhead position:** Resilience4J places Bulkhead as the innermost element. This means the concurrency limit only
 applies to the actual call, not to the retry sequence. In Inqudium, Bulkhead sits outside CircuitBreaker — concurrency
@@ -127,40 +127,44 @@ The Pipeline API provides named orderings as factory methods. Each encoding repr
 #### `PipelineOrder.INQUDIUM` — the Inqudium canonical order (default)
 
 ```
-Call → Cache → TimeLimiter → TrafficShaper → RateLimiter → Bulkhead → CircuitBreaker → Retry → [call]
-       ①        ②             ③               ④             ⑤           ⑥                ⑦
+Call → [Cache] → TimeLimiter → TrafficShaper → RateLimiter → Bulkhead → CircuitBreaker → Retry → [call]
+       external   ①             ②               ③             ④           ⑤                ⑥
 ```
 
-**① Cache** — If a cached result exists, return immediately. No other element is invoked.
+> **Note:** Cache (e.g. Spring `@Cacheable`) is not part of the Inqudium pipeline. It is a separate interceptor that
+> runs *before* the pipeline. On a cache hit, the Inqudium pipeline is never entered. The ordering of cache and other
+> external interceptors relative to the Inqudium pipeline is governed by ADR-024.
 
-**② TimeLimiter** — Bounds total caller wait time including shaping delays and retries. If 3 retries each take 3s, the
+**① TimeLimiter** — Bounds total caller wait time including shaping delays and retries. If 3 retries each take 3s, the
 TimeLimiter at 8s cuts the total short (ADR-010). Also covers any delay introduced by the TrafficShaper.
 
-**③ TrafficShaper** — Smooths bursts into a steady flow before rate tokens are consumed. Inside TimeLimiter so that
+**② TrafficShaper** — Smooths bursts into a steady flow before rate tokens are consumed. Inside TimeLimiter so that
 shaping delays are covered by the caller's time budget — a slow-drip shaper cannot cause unbounded waiting. Outside
 RateLimiter so that the smoothed flow consumes tokens at a predictable rate.
 
-**④ Rate Limiter** — Controls the rate at which calls enter the pipeline. Outside Retry: retries don't consume
+**③ Rate Limiter** — Controls the rate at which calls enter the pipeline. Outside Retry: retries don't consume
 additional permits. Outside CircuitBreaker: rate limit gates before the breaker's sliding window.
 
-**⑤ Bulkhead** — Limits concurrent calls at the pipeline level. Even calls the breaker passes through are bounded.
+**④ Bulkhead** — Limits concurrent calls at the pipeline level. Even calls the breaker passes through are bounded.
 
-**⑥ Circuit Breaker** — Records each individual attempt in the sliding window. Opens fast because it sees every retry
+**⑤ Circuit Breaker** — Records each individual attempt in the sliding window. Opens fast because it sees every retry
 attempt as a separate call.
 
-**⑦ Retry** — Innermost. Retries the actual call. The breaker counts each attempt. The TimeLimiter bounds the total
+**⑥ Retry** — Innermost. Retries the actual call. The breaker counts each attempt. The TimeLimiter bounds the total
 time. The RateLimiter doesn't penalize retries.
 
 #### `PipelineOrder.RESILIENCE4J` — Resilience4J compatible order
 
 ```
-Call → Retry → CircuitBreaker → TrafficShaper → RateLimiter → TimeLimiter → Bulkhead → [call]
+Call → [Cache] → Retry → CircuitBreaker → TrafficShaper → RateLimiter → TimeLimiter → Bulkhead → [call]
+       external
 ```
 
 For projects migrating from Resilience4J (ADR-006) that want behavioral parity with their existing configuration. The
 Retry is outermost: it retries the entire pipeline including the CircuitBreaker check. The TimeLimiter bounds each
 individual attempt, not the total time. TrafficShaper is placed before RateLimiter in both profiles — smoothing bursts
-before tokens are consumed is independent of the overall ordering strategy.
+before tokens are consumed is independent of the overall ordering strategy. Cache remains outside the pipeline in both
+profiles (see ADR-024).
 
 #### `PipelineOrder.custom(...)` — fully custom order
 
@@ -252,6 +256,33 @@ cause unbounded caller wait time. Consider moving TrafficShaper inside TimeLimit
 Note: the R4J-compatible order triggers the same warnings as a custom order would. The warnings are informational, not
 errors — the developer chose this order intentionally when selecting `PipelineOrder.RESILIENCE4J`.
 
+### Cache is not a pipeline element
+
+Caching differs fundamentally from all other resilience elements. Retry, CircuitBreaker, Bulkhead, and the other
+elements provide *additional behavior around* the method call — they decide *whether* and *how* the call proceeds, but
+the method body always contains the actual remote call. Cache, on the other hand, *replaces* the method execution
+entirely on a hit — the method body (and therefore the entire resilience pipeline) is never entered.
+
+In practice, caching is typically implemented by annotating the same method that performs the remote call:
+
+```java
+@Cacheable("products")
+@InqCircuitBreaker("cb")
+@InqRetry("rt")
+public Product findById(Long id) {
+    return remoteService.call(id);   // only executed on cache miss
+}
+```
+
+Here, `@Cacheable` is a separate Spring interceptor that short-circuits the entire call on a cache hit. The Inqudium
+pipeline only runs on a cache miss. This means Cache does not participate in `PipelineOrder` — it is not sorted among
+TimeLimiter, Bulkhead, etc. Instead, the correct behavior depends on the *interceptor priority* of the cache
+interceptor relative to the Inqudium aspect interceptor.
+
+Ensuring the correct interceptor ordering between Cache, Inqudium, and other external interceptors (Security,
+Validation, Transaction) is a framework integration concern, not a pipeline composition concern. This is addressed in
+**ADR-024: Spring interceptor ordering**.
+
 ### `@InqShield` with stacked element annotations
 
 #### Why not a heterogeneous annotation array
@@ -332,12 +363,6 @@ public @interface InqTimeLimiter {
 @Target(ElementType.METHOD)
 @Retention(RetentionPolicy.RUNTIME)
 public @interface InqTrafficShaper {
-    String value();
-}
-
-@Target(ElementType.METHOD)
-@Retention(RetentionPolicy.RUNTIME)
-public @interface InqCache {
     String value();
 }
 ```
@@ -523,7 +548,10 @@ choosing.
 
 **Neutral:**
 
-- Not all seven elements are used in every pipeline. A pipeline with only CircuitBreaker + Retry is perfectly valid and
-  common. The predefined orders determine the relative position of whichever elements are present.
+- Not all six pipeline elements are used in every pipeline. A pipeline with only CircuitBreaker + Retry is perfectly
+  valid
+  and common. The predefined orders determine the relative position of whichever elements are present.
+- Cache is deliberately excluded from the pipeline ordering. It is a separate interceptor whose priority relative to the
+  Inqudium aspect is managed by the framework integration layer (ADR-024), not by `PipelineOrder`.
 - The predefined orderings can be extended in future versions (e.g. `PipelineOrder.HIGH_THROUGHPUT` with a
   bulkhead-first strategy) without breaking existing configurations.
