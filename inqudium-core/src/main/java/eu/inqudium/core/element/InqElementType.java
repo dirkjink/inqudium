@@ -101,21 +101,6 @@ public enum InqElementType {
     TRAFFIC_SHAPER("TS", 200),
 
     /**
-     * Cache — response caching to reduce load.
-     *
-     * <p>Cache is <strong>not a pipeline element</strong>. Unlike the other
-     * resilience elements which wrap the method call with additional behavior,
-     * a cache interceptor (e.g. Spring {@code @Cacheable}) <em>replaces</em>
-     * the entire method execution on a hit — the pipeline is never entered.</p>
-     *
-     * <p>This type is retained for error codes (ADR-021) and event
-     * identification (ADR-003), but its {@code defaultPipelineOrder()} is 0
-     * (same as {@link #NO_ELEMENT}). The ordering of cache interceptors
-     * relative to the Inqudium pipeline is governed by ADR-024.</p>
-     */
-    CACHE("CA", 0),
-
-    /**
      * No element — used for system-level codes outside any specific element
      * (pipeline, ServiceLoader, registry).
      *

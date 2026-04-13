@@ -26,8 +26,7 @@ class InqElementTypeTest {
      * composition.
      */
     private static boolean isPipelineElement(InqElementType type) {
-        return type != InqElementType.NO_ELEMENT
-                && type != InqElementType.CACHE;
+        return type != InqElementType.NO_ELEMENT;
     }
 
     // ======================== Enum constants ========================
@@ -41,7 +40,7 @@ class InqElementTypeTest {
             // Given
             var expectedNames = List.of(
                     "CIRCUIT_BREAKER", "RETRY", "RATE_LIMITER", "BULKHEAD",
-                    "TIME_LIMITER", "TRAFFIC_SHAPER", "CACHE", "NO_ELEMENT"
+                    "TIME_LIMITER", "TRAFFIC_SHAPER", "NO_ELEMENT"
             );
 
             // When
@@ -54,12 +53,12 @@ class InqElementTypeTest {
         }
 
         @Test
-        void exactly_eight_element_types_exist() {
+        void exactly_seven_element_types_exist() {
             // Given / When
             var values = InqElementType.values();
 
             // Then
-            assertThat(values).hasSize(8);
+            assertThat(values).hasSize(7);
         }
     }
 
@@ -77,7 +76,6 @@ class InqElementTypeTest {
                 "BULKHEAD,        BH",
                 "TIME_LIMITER,    TL",
                 "TRAFFIC_SHAPER,  TS",
-                "CACHE,           CA",
                 "NO_ELEMENT,      XX"
         })
         void each_element_type_returns_its_expected_symbol(InqElementType type, String expectedSymbol) {
@@ -131,7 +129,6 @@ class InqElementTypeTest {
                 "BULKHEAD,        999, INQ-BH-999",
                 "TIME_LIMITER,    7,   INQ-TL-007",
                 "TRAFFIC_SHAPER,  50,  INQ-TS-050",
-                "CACHE,           1,   INQ-CA-001",
                 "NO_ELEMENT,      0,   INQ-XX-000"
         })
         void generates_correctly_formatted_error_code(InqElementType type, int number, String expected) {
@@ -277,7 +274,6 @@ class InqElementTypeTest {
                 "BULKHEAD,         400",
                 "CIRCUIT_BREAKER,  500",
                 "RETRY,            600",
-                "CACHE,            0",
                 "NO_ELEMENT,       0"
         })
         void each_type_returns_its_expected_pipeline_order(InqElementType type, int expectedOrder) {
@@ -464,35 +460,6 @@ class InqElementTypeTest {
             void no_element_has_order_zero() {
                 // Given / When / Then
                 assertThat(InqElementType.NO_ELEMENT.defaultPipelineOrder()).isZero();
-            }
-
-            @Test
-            void cache_has_order_zero() {
-                // Given — Cache is not a pipeline element (ADR-017, ADR-024):
-                // it is a separate interceptor that short-circuits the entire
-                // call on a hit, so the pipeline is never entered.
-
-                // When / Then
-                assertThat(InqElementType.CACHE.defaultPipelineOrder()).isZero();
-            }
-
-            @Test
-            void cache_and_no_element_share_order_zero() {
-                // Given — both are non-pipeline types
-
-                // When / Then
-                assertThat(InqElementType.CACHE.defaultPipelineOrder())
-                        .isEqualTo(InqElementType.NO_ELEMENT.defaultPipelineOrder())
-                        .isZero();
-            }
-
-            @Test
-            void cache_still_has_a_valid_symbol_and_error_code() {
-                // Given — CACHE retains its identity for events and error codes
-
-                // When / Then
-                assertThat(InqElementType.CACHE.symbol()).isEqualTo("CA");
-                assertThat(InqElementType.CACHE.errorCode(1)).isEqualTo("INQ-CA-001");
             }
         }
     }
