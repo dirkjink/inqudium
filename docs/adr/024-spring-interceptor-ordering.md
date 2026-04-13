@@ -26,6 +26,7 @@ Spring interceptors.
 A typical service method may carry annotations from multiple frameworks:
 
 ```java
+
 @PreAuthorize("hasRole('ADMIN')")
 @Cacheable("products")
 @InqCircuitBreaker("cb")
@@ -90,25 +91,26 @@ These priorities are defined in a central constants class:
 ```java
 public final class InqInterceptorOrder {
 
-    private InqInterceptorOrder() {}
+    private InqInterceptorOrder() {
+    }
 
     /** Reject unauthorized calls before any resilience work. */
-    public static final int SECURITY      = 100;
+    public static final int SECURITY = 100;
 
     /** Reject invalid input before any resilience work. */
-    public static final int VALIDATION    = 200;
+    public static final int VALIDATION = 200;
 
     /** Return cached results before entering the pipeline. */
-    public static final int CACHE         = 300;
+    public static final int CACHE = 300;
 
     /** Measure total duration including retries and shaping delays. */
     public static final int OBSERVABILITY = 400;
 
     /** The Inqudium resilience pipeline. */
-    public static final int INQ_PIPELINE  = 500;
+    public static final int INQ_PIPELINE = 500;
 
     /** Each retry attempt gets a fresh transaction boundary. */
-    public static final int TRANSACTION   = 600;
+    public static final int TRANSACTION = 600;
 }
 ```
 
@@ -165,6 +167,7 @@ The `inqudium-spring-boot-starter` automatically adjusts the priorities of detec
 canonical ordering. No manual `@Order` configuration is required.
 
 ```java
+
 @AutoConfiguration
 @ConditionalOnClass(AbstractPipelineAspect.class)
 public class InqInterceptorOrderAutoConfiguration {
@@ -205,6 +208,7 @@ public class InqInterceptorOrderAutoConfiguration {
 The Inqudium aspect itself is annotated with `@Order(InqInterceptorOrder.INQ_PIPELINE)`:
 
 ```java
+
 @Aspect
 @Component
 @Order(InqInterceptorOrder.INQ_PIPELINE)
@@ -260,7 +264,7 @@ advisor or aspect, the auto-configuration does not override it:
 ```java
 // Developer explicitly wants Transaction outside Inqudium — auto-config does not interfere
 @Bean
-public PlatformTransactionManager transactionManager() { ... }
+public PlatformTransactionManager transactionManager() { ...}
 
 @Bean
 public TransactionInterceptor transactionInterceptor() {

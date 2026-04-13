@@ -94,11 +94,11 @@ Without a pipeline, the developer chains decorations manually:
 
 ```java
 Supplier<R> resilient = retry.decorateSupplier(
-    circuitBreaker.decorateSupplier(
-        rateLimiter.decorateSupplier(
-            () -> service.call()
+        circuitBreaker.decorateSupplier(
+                rateLimiter.decorateSupplier(
+                        () -> service.call()
+                )
         )
-    )
 );
 ```
 
@@ -107,10 +107,10 @@ explicit, readable, and validates it:
 
 ```java
 Supplier<R> resilient = InqPipeline
-    .of(() -> service.call())
-    .shield(circuitBreaker)
-    .shield(retry)
-    .decorate();
+        .of(() -> service.call())
+        .shield(circuitBreaker)
+        .shield(retry)
+        .decorate();
 ```
 
 But beyond readability, the Pipeline API provides:
@@ -170,12 +170,12 @@ profiles (see ADR-024).
 
 ```java
 var order = PipelineOrder.custom(
-    InqElementType.RETRY,
-    InqElementType.CIRCUIT_BREAKER,
-    InqElementType.TRAFFIC_SHAPER,
-    InqElementType.RATE_LIMITER,
-    InqElementType.TIME_LIMITER,
-    InqElementType.BULKHEAD
+        InqElementType.RETRY,
+        InqElementType.CIRCUIT_BREAKER,
+        InqElementType.TRAFFIC_SHAPER,
+        InqElementType.RATE_LIMITER,
+        InqElementType.TIME_LIMITER,
+        InqElementType.BULKHEAD
 );
 ```
 
@@ -186,37 +186,37 @@ For applications with specific ordering requirements that neither predefined ord
 ```java
 // Default: Inqudium canonical order
 var resilient = InqPipeline
-    .of(() -> service.call())
-    .order(PipelineOrder.INQUDIUM)           // default, can be omitted
-    .shield(circuitBreaker)
-    .shield(retry)
-    .shield(rateLimiter)
-    .shield(trafficShaper)
-    .decorate();
+                .of(() -> service.call())
+                .order(PipelineOrder.INQUDIUM)           // default, can be omitted
+                .shield(circuitBreaker)
+                .shield(retry)
+                .shield(rateLimiter)
+                .shield(trafficShaper)
+                .decorate();
 
 // Resilience4J compatible order
 var resilient = InqPipeline
-    .of(() -> service.call())
-    .order(PipelineOrder.RESILIENCE4J)
-    .shield(circuitBreaker)
-    .shield(retry)
-    .shield(rateLimiter)
-    .shield(trafficShaper)
-    .decorate();
+        .of(() -> service.call())
+        .order(PipelineOrder.RESILIENCE4J)
+        .shield(circuitBreaker)
+        .shield(retry)
+        .shield(rateLimiter)
+        .shield(trafficShaper)
+        .decorate();
 
 // Custom order
 var resilient = InqPipeline
-    .of(() -> service.call())
-    .order(PipelineOrder.custom(
-        InqElementType.CIRCUIT_BREAKER,
-        InqElementType.RETRY,
-        InqElementType.TRAFFIC_SHAPER,
-        InqElementType.RATE_LIMITER))
-    .shield(circuitBreaker)
-    .shield(retry)
-    .shield(rateLimiter)
-    .shield(trafficShaper)
-    .decorate();
+        .of(() -> service.call())
+        .order(PipelineOrder.custom(
+                InqElementType.CIRCUIT_BREAKER,
+                InqElementType.RETRY,
+                InqElementType.TRAFFIC_SHAPER,
+                InqElementType.RATE_LIMITER))
+        .shield(circuitBreaker)
+        .shield(retry)
+        .shield(rateLimiter)
+        .shield(trafficShaper)
+        .decorate();
 ```
 
 When `.order()` is set, the `shield()` calls can be in **any order** — the pipeline sorts them according to the
@@ -266,6 +266,7 @@ entirely on a hit — the method body (and therefore the entire resilience pipel
 In practice, caching is typically implemented by annotating the same method that performs the remote call:
 
 ```java
+
 @Cacheable("products")
 @InqCircuitBreaker("cb")
 @InqRetry("rt")
@@ -302,17 +303,19 @@ Each element is a standalone method-level annotation. `@InqShield` controls only
 references:
 
 ```java
+
 @InqShield
 @InqCircuitBreaker("paymentCb")
 @InqRetry("paymentRetry")
 @InqTimeLimiter("paymentTl")
 @InqTrafficShaper("paymentTs")
-public PaymentResult processPayment(PaymentRequest request) { ... }
+public PaymentResult processPayment(PaymentRequest request) { ...}
 ```
 
 The `@InqShield` annotation:
 
 ```java
+
 @Target(ElementType.METHOD)
 @Retention(RetentionPolicy.RUNTIME)
 public @interface InqShield {
@@ -330,6 +333,7 @@ public @interface InqShield {
 Each element annotation:
 
 ```java
+
 @Target(ElementType.METHOD)
 @Retention(RetentionPolicy.RUNTIME)
 public @interface InqCircuitBreaker {
@@ -386,10 +390,17 @@ var sorted = order.sort(elements);
 
 // Build pipeline
 var pipeline = InqPipeline.of(() -> joinPoint.proceed());
-for (var element : sorted) {
-    pipeline = pipeline.shield(registry.resolve(element));
-}
-return pipeline.decorate().get();
+for(
+var element :sorted){
+pipeline =pipeline.
+
+shield(registry.resolve(element));
+        }
+        return pipeline.
+
+decorate().
+
+get();
 ```
 
 #### Ordering modes
@@ -471,9 +482,10 @@ the AOP aspect with `PipelineOrder.INQUDIUM` (canonical order).
 This design means the most common case — canonical order with a few elements — is the simplest:
 
 ```java
+
 @InqCircuitBreaker("paymentCb")
 @InqRetry("paymentRetry")
-public PaymentResult processPayment(PaymentRequest request) { ... }
+public PaymentResult processPayment(PaymentRequest request) { ...}
 ```
 
 No boilerplate, no ceremony. The intent is immediately clear.
@@ -487,16 +499,16 @@ overridden:
 ```java
 // Default: retries on application exceptions, ignores Inqudium rejections
 var retry = Retry.of("paymentRetry", RetryConfig.builder()
-    .maxAttempts(3)
-    .build());
+                .maxAttempts(3)
+                .build());
 // InqCallNotPermittedException, InqRequestNotPermittedException, 
 // InqBulkheadFullException are ignored by default
 
 // Override: retry on specific Inqudium exceptions (rare, must be explicit)
 var retry = Retry.of("paymentRetry", RetryConfig.builder()
-    .maxAttempts(3)
-    .retryOnInqExceptions(true)   // opt-in, not default
-    .build());
+        .maxAttempts(3)
+        .retryOnInqExceptions(true)   // opt-in, not default
+        .build());
 ```
 
 ### Documentation: decision matrix

@@ -49,7 +49,7 @@
     <!-- ═══════════════════════════════════════════════════════ -->
     <properties>
         <!-- Version management -->
-        <revision>0.2.0-SNAPSHOT</revision>
+        <revision>0.7.0-SNAPSHOT</revision>
 
         <!-- Encoding -->
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
