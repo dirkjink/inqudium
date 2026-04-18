@@ -39,7 +39,7 @@ import static org.assertj.core.api.Assertions.catchThrowableOfType;
  * without {@code Thread.sleep()} (ADR-016).
  */
 @DisplayNameGeneration(DisplayNameGenerator.ReplaceUnderscores.class)
-class ImperativeCircuitBreakerSlidingWindowTest {
+class CircuitBreakerTest {
 
     private static final Duration WAIT_DURATION = Duration.ofSeconds(30);
     private static final long NANOS_PER_SECOND = 1_000_000_000L;
