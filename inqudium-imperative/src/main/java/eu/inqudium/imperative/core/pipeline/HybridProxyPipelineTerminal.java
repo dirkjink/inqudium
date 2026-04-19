@@ -6,6 +6,7 @@ import eu.inqudium.core.pipeline.InqPipeline;
 import eu.inqudium.core.pipeline.JoinPointExecutor;
 import eu.inqudium.core.pipeline.proxy.MethodHandleCache;
 import eu.inqudium.core.pipeline.proxy.MethodInvoker;
+import eu.inqudium.core.pipeline.proxy.ProxyInvocationSupport;
 
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
@@ -167,7 +168,10 @@ public final class HybridProxyPipelineTerminal {
                             + "which require an interface type.");
         }
 
-        String summary = buildSummary(interfaceType, target);
+        // Summary string built once at proxy creation; reused for every
+        // toString() invocation on the resulting proxy instance.
+        String summary = ProxyInvocationSupport.buildSummary(
+                "HybridPipelineProxy", interfaceType, target, pipeline);
 
         return (T) Proxy.newProxyInstance(
                 interfaceType.getClassLoader(),
@@ -311,24 +315,6 @@ public final class HybridProxyPipelineTerminal {
                 (accFn, element) -> executor ->
                         ((InqAsyncDecorator<Void, Object>) asAsyncDecorator(element))
                                 .decorateAsyncJoinPoint(accFn.apply(executor)));
-    }
-
-    private String buildSummary(Class<?> interfaceType, Object target) {
-        StringBuilder sb = new StringBuilder();
-        sb.append("HybridPipelineProxy[")
-                .append(interfaceType.getSimpleName())
-                .append(" → ")
-                .append(target.getClass().getSimpleName())
-                .append(", ");
-        if (pipeline.isEmpty()) {
-            sb.append("no elements (pass-through)");
-        } else {
-            sb.append(pipeline.depth()).append(" elements: ");
-            sb.append(pipeline.chain("target",
-                    (acc, element) -> element.getName() + " → " + acc));
-        }
-        sb.append(']');
-        return sb.toString();
     }
 
     // ======================== Internal: cached chain holder ========================

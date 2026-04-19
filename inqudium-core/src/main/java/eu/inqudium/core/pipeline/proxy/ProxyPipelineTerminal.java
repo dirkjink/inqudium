@@ -3,7 +3,6 @@ package eu.inqudium.core.pipeline.proxy;
 import eu.inqudium.core.pipeline.InqPipeline;
 import eu.inqudium.core.pipeline.SyncPipelineTerminal;
 
-import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Proxy;
 import java.util.Objects;
 
@@ -44,22 +43,21 @@ import java.util.Objects;
  * <h3>Method dispatch</h3>
  * <ul>
  *   <li>Interface methods: routed through the pipeline via
- *       {@link SyncPipelineTerminal#execute}</li>
+ *       {@link SyncPipelineTerminal#execute}, invoked on the target through
+ *       a pre-built {@link MethodInvoker} — no reflection overhead, no
+ *       {@code InvocationTargetException} wrap/unwrap on the hot path.</li>
  *   <li>{@code toString()}: returns a diagnostic string showing the pipeline
- *       structure and target class</li>
+ *       structure and target class (see
+ *       {@link ProxyInvocationSupport#buildSummary}).</li>
  *   <li>{@code equals()}, {@code hashCode()}: delegated to the proxy identity
- *       (not the target) to avoid accidental pipeline execution</li>
+ *       (not the target) to avoid accidental pipeline execution.</li>
  * </ul>
- *
- * <h3>Exception handling</h3>
- * <p>{@link InvocationTargetException} from the reflective
- * {@code method.invoke()} call is automatically unwrapped — the caller
- * sees the original exception type, not the reflective wrapper.</p>
  *
  * <h3>Thread safety</h3>
  * <p>Instances are immutable and safe for concurrent use. Created proxies
  * are also thread-safe — the pipeline elements determine concurrency
- * behavior (e.g. a bulkhead limits concurrent calls).</p>
+ * behavior (e.g. a bulkhead limits concurrent calls). The per-instance
+ * {@link MethodHandleCache} is thread-safe and populated lazily per method.</p>
  *
  * @since 0.8.0
  */
@@ -67,6 +65,13 @@ public final class ProxyPipelineTerminal {
 
     private final InqPipeline pipeline;
     private final SyncPipelineTerminal syncTerminal;
+
+    /**
+     * Per-instance cache of {@link MethodInvoker}s. Each proxied method
+     * has its invoker resolved here exactly once, then reused across all
+     * subsequent invocations.
+     */
+    private final MethodHandleCache handleCache = new MethodHandleCache();
 
     private ProxyPipelineTerminal(InqPipeline pipeline) {
         this.pipeline = pipeline;
@@ -85,19 +90,6 @@ public final class ProxyPipelineTerminal {
         return new ProxyPipelineTerminal(pipeline);
     }
 
-    /**
-     * Invokes the target method, unwrapping {@link InvocationTargetException}
-     * so the caller sees the original exception type.
-     */
-    private static Object invokeTarget(
-            java.lang.reflect.Method method, Object target, Object[] args) throws Throwable {
-        try {
-            return method.invoke(target, args);
-        } catch (InvocationTargetException e) {
-            throw e.getCause();
-        }
-    }
-
     // ======================== Proxy creation ========================
 
     /**
@@ -109,8 +101,6 @@ public final class ProxyPipelineTerminal {
         return pipeline;
     }
 
-    // ======================== Internal ========================
-
     /**
      * Creates a JDK dynamic proxy that routes all method calls through
      * the pipeline before delegating to the target.
@@ -118,7 +108,7 @@ public final class ProxyPipelineTerminal {
      * <p>The proxy implements the given interface. Every method call on
      * the proxy traverses the full pipeline (outermost element first,
      * innermost last), then invokes the corresponding method on the
-     * target via reflection.</p>
+     * target through a pre-built {@link MethodInvoker}.</p>
      *
      * <pre>{@code
      * MyService proxy = terminal.protect(MyService.class, realService);
@@ -146,7 +136,10 @@ public final class ProxyPipelineTerminal {
                             + "which require an interface type.");
         }
 
-        String pipelineSummary = buildPipelineSummary(interfaceType, target);
+        // Summary string built once at proxy creation; reused for every
+        // toString() invocation on the resulting proxy instance.
+        String pipelineSummary = ProxyInvocationSupport.buildSummary(
+                "InqPipelineProxy", interfaceType, target, pipeline);
 
         return (T) Proxy.newProxyInstance(
                 interfaceType.getClassLoader(),
@@ -154,48 +147,30 @@ public final class ProxyPipelineTerminal {
                 (proxy, method, args) -> {
 
                     // Object.toString — diagnostic output
-                    if (method.getName().equals("toString")
+                    if ("toString".equals(method.getName())
                             && method.getParameterCount() == 0) {
                         return pipelineSummary;
                     }
 
                     // Object.equals — proxy identity
-                    if (method.getName().equals("equals")
+                    if ("equals".equals(method.getName())
                             && method.getParameterCount() == 1) {
                         return proxy == args[0];
                     }
 
                     // Object.hashCode — proxy identity
-                    if (method.getName().equals("hashCode")
+                    if ("hashCode".equals(method.getName())
                             && method.getParameterCount() == 0) {
                         return System.identityHashCode(proxy);
                     }
 
-                    // All other methods: route through the pipeline
-                    return syncTerminal.execute(() -> invokeTarget(method, target, args));
+                    // Service methods — resolve the pre-built invoker once per
+                    // method (cached on the second invocation), then route the
+                    // terminal through the sync pipeline. The MethodInvoker path
+                    // replaces the previous Method.invoke reflection call and
+                    // removes the InvocationTargetException wrap/unwrap overhead.
+                    MethodInvoker invoker = handleCache.resolveInvoker(method);
+                    return syncTerminal.execute(() -> invoker.invoke(target, args));
                 });
-    }
-
-    /**
-     * Builds a diagnostic string for the proxy's toString().
-     */
-    private String buildPipelineSummary(Class<?> interfaceType, Object target) {
-        StringBuilder sb = new StringBuilder();
-        sb.append("InqPipelineProxy[")
-                .append(interfaceType.getSimpleName())
-                .append(" → ")
-                .append(target.getClass().getSimpleName())
-                .append(", ");
-
-        if (pipeline.isEmpty()) {
-            sb.append("no elements (pass-through)");
-        } else {
-            sb.append(pipeline.depth()).append(" elements: ");
-            sb.append(pipeline.chain("target",
-                    (acc, element) -> element.getName() + " → " + acc));
-        }
-
-        sb.append(']');
-        return sb.toString();
     }
 }
