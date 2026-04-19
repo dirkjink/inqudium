@@ -6,6 +6,8 @@ import eu.inqudium.core.element.InqElementRegistry;
 import eu.inqudium.core.pipeline.InqDecorator;
 import eu.inqudium.core.pipeline.InqPipeline;
 import eu.inqudium.core.pipeline.JoinPointExecutor;
+import eu.inqudium.core.pipeline.SyncPipelineTerminal;
+import eu.inqudium.imperative.core.pipeline.AsyncPipelineTerminal;
 import eu.inqudium.imperative.core.pipeline.InqAsyncDecorator;
 import org.aspectj.lang.ProceedingJoinPoint;
 import org.aspectj.lang.annotation.Around;
@@ -61,8 +63,39 @@ import java.util.function.Function;
  * compile-time weaving. It requires {@code spring-boot-starter-aop} on the
  * classpath. For AspectJ CTW, use {@code inqudium-aspect} module instead.</p>
  *
- * @see PipelineFactory
+ * <h3>Self-invocation caveat</h3>
+ * <p><strong>Calls from within the same bean bypass the proxy and the
+ * resilience pipeline.</strong> This is a fundamental property of Spring AOP's
+ * proxy-based architecture — not specific to Inqudium. Example:</p>
+ * <pre>{@code
+ * @Service
+ * public class OrderService {
+ *
+ *     @InqCircuitBreaker("orderCb")
+ *     public String placeOrder(String item) {
+ *         return remoteService.call(item);           // ← protected by CB
+ *     }
+ *
+ *     public String bulkPlace(List<String> items) {
+ *         return items.stream()
+ *                 .map(this::placeOrder)              // ← BYPASSES the proxy!
+ *                 .collect(joining(", "));             //    CB is NOT applied
+ *     }
+ * }
+ * }</pre>
+ *
+ * <p>Workarounds:</p>
+ * <ul>
+ *   <li><strong>Inject self:</strong> {@code @Lazy @Autowired OrderService self;}
+ *       and call {@code self.placeOrder(item)} instead of {@code this.placeOrder(item)}</li>
+ *   <li><strong>Extract to another bean:</strong> move the annotated method to a
+ *       separate {@code @Service} that is injected into this one</li>
+ *   <li><strong>Use AspectJ CTW:</strong> switch to {@code inqudium-aspect} module
+ *       which uses compile-time weaving and does not have this limitation</li>
+ * </ul>
+ *
  * @since 0.8.0
+ * @see PipelineFactory
  */
 @Aspect
 public class InqShieldAspect {
@@ -86,63 +119,50 @@ public class InqShieldAspect {
     // --- Method-level: @annotation matches direct method annotations ---
 
     @Pointcut("@annotation(eu.inqudium.annotation.InqCircuitBreaker)")
-    private void circuitBreakerMethod() {
-    }
+    private void circuitBreakerMethod() {}
 
     @Pointcut("@annotation(eu.inqudium.annotation.InqRetry)")
-    private void retryMethod() {
-    }
+    private void retryMethod() {}
 
     @Pointcut("@annotation(eu.inqudium.annotation.InqBulkhead)")
-    private void bulkheadMethod() {
-    }
+    private void bulkheadMethod() {}
 
     @Pointcut("@annotation(eu.inqudium.annotation.InqRateLimiter)")
-    private void rateLimiterMethod() {
-    }
+    private void rateLimiterMethod() {}
 
     @Pointcut("@annotation(eu.inqudium.annotation.InqTimeLimiter)")
-    private void timeLimiterMethod() {
-    }
+    private void timeLimiterMethod() {}
 
     @Pointcut("@annotation(eu.inqudium.annotation.InqTrafficShaper)")
-    private void trafficShaperMethod() {
-    }
+    private void trafficShaperMethod() {}
 
     // --- Type-level: @within matches class-level annotations ---
 
     @Pointcut("@within(eu.inqudium.annotation.InqCircuitBreaker)")
-    private void circuitBreakerType() {
-    }
+    private void circuitBreakerType() {}
 
     @Pointcut("@within(eu.inqudium.annotation.InqRetry)")
-    private void retryType() {
-    }
+    private void retryType() {}
 
     @Pointcut("@within(eu.inqudium.annotation.InqBulkhead)")
-    private void bulkheadType() {
-    }
+    private void bulkheadType() {}
 
     @Pointcut("@within(eu.inqudium.annotation.InqRateLimiter)")
-    private void rateLimiterType() {
-    }
+    private void rateLimiterType() {}
 
     @Pointcut("@within(eu.inqudium.annotation.InqTimeLimiter)")
-    private void timeLimiterType() {
-    }
+    private void timeLimiterType() {}
 
     @Pointcut("@within(eu.inqudium.annotation.InqTrafficShaper)")
-    private void trafficShaperType() {
-    }
+    private void trafficShaperType() {}
 
     // --- Combined: any Inq annotation on method or class ---
 
     @Pointcut("circuitBreakerMethod() || retryMethod() || bulkheadMethod() || " +
-            "rateLimiterMethod() || timeLimiterMethod() || trafficShaperMethod() || " +
-            "circuitBreakerType() || retryType() || bulkheadType() || " +
-            "rateLimiterType() || timeLimiterType() || trafficShaperType()")
-    private void inqProtected() {
-    }
+              "rateLimiterMethod() || timeLimiterMethod() || trafficShaperMethod() || " +
+              "circuitBreakerType() || retryType() || bulkheadType() || " +
+              "rateLimiterType() || timeLimiterType() || trafficShaperType()")
+    private void inqProtected() {}
 
     // ======================== Advice ========================
 
