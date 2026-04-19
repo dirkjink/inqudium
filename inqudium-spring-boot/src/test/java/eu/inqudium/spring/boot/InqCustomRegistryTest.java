@@ -57,24 +57,40 @@ class InqCustomRegistryTest {
     @EnableAutoConfiguration
     static class CustomRegistryConfig {
 
-        static class StubElement implements InqDecorator<Void, Object> {
-            private final String name;
-            StubElement(String name) { this.name = name; }
-            @Override public String getName() { return name; }
-            @Override public InqElementType getElementType() { return InqElementType.CIRCUIT_BREAKER; }
-            @Override public InqEventPublisher getEventPublisher() { return null; }
-            @Override
-            public Object execute(long chainId, long callId, Void arg,
-                                  InternalExecutor<Void, Object> next) {
-                return next.execute(chainId, callId, arg);
-            }
-        }
-
         @Bean
         public InqElementRegistry inqElementRegistry() {
             return InqElementRegistry.builder()
                     .register("customCb", new StubElement("customCb"))
                     .build();
+        }
+
+        static class StubElement implements InqDecorator<Void, Object> {
+            private final String name;
+
+            StubElement(String name) {
+                this.name = name;
+            }
+
+            @Override
+            public String getName() {
+                return name;
+            }
+
+            @Override
+            public InqElementType getElementType() {
+                return InqElementType.CIRCUIT_BREAKER;
+            }
+
+            @Override
+            public InqEventPublisher getEventPublisher() {
+                return null;
+            }
+
+            @Override
+            public Object execute(long chainId, long callId, Void arg,
+                                  InternalExecutor<Void, Object> next) {
+                return next.execute(chainId, callId, arg);
+            }
         }
     }
 }

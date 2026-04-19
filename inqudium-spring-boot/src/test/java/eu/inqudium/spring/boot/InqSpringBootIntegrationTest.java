@@ -121,9 +121,20 @@ class InqSpringBootIntegrationTest {
             this.type = type;
         }
 
-        @Override public String getName() { return name; }
-        @Override public InqElementType getElementType() { return type; }
-        @Override public InqEventPublisher getEventPublisher() { return null; }
+        @Override
+        public String getName() {
+            return name;
+        }
+
+        @Override
+        public InqElementType getElementType() {
+            return type;
+        }
+
+        @Override
+        public InqEventPublisher getEventPublisher() {
+            return null;
+        }
 
         @Override
         public Object execute(long chainId, long callId, Void arg,
@@ -138,7 +149,7 @@ class InqSpringBootIntegrationTest {
 
         @Override
         public CompletionStage<Object> executeAsync(long chainId, long callId, Void arg,
-                                                     InternalAsyncExecutor<Void, Object> next) {
+                                                    InternalAsyncExecutor<Void, Object> next) {
             TRACE.add(name + ":async-enter");
             return next.executeAsync(chainId, callId, arg)
                     .whenComplete((r, e) -> TRACE.add(name + ":async-exit"));
@@ -149,7 +160,9 @@ class InqSpringBootIntegrationTest {
     // Service beans — injected by Spring, proxied by Spring AOP
     // =========================================================================
 
-    /** METHOD-level annotations only. */
+    /**
+     * METHOD-level annotations only.
+     */
     @Service
     static class OrderService {
 
@@ -212,7 +225,9 @@ class InqSpringBootIntegrationTest {
         }
     }
 
-    /** TYPE-level annotation — all public methods are protected. */
+    /**
+     * TYPE-level annotation — all public methods are protected.
+     */
     @Service
     @InqCircuitBreaker("globalCb")
     static class InventoryService {
@@ -228,7 +243,9 @@ class InqSpringBootIntegrationTest {
         }
     }
 
-    /** TYPE + METHOD merge — METHOD overrides TYPE for same element type. */
+    /**
+     * TYPE + METHOD merge — METHOD overrides TYPE for same element type.
+     */
     @Service
     @InqCircuitBreaker("globalCb")
     @InqRetry("globalRetry")
@@ -255,7 +272,9 @@ class InqSpringBootIntegrationTest {
         }
     }
 
-    /** Resilience4J ordering via @InqShield. */
+    /**
+     * Resilience4J ordering via @InqShield.
+     */
     @Service
     static class NotificationService {
 
@@ -269,7 +288,9 @@ class InqSpringBootIntegrationTest {
         }
     }
 
-    /** Shared element: uses the same "orderCb" as OrderService. */
+    /**
+     * Shared element: uses the same "orderCb" as OrderService.
+     */
     @Service
     static class PaymentService {
 
@@ -626,6 +647,8 @@ class InqSpringBootIntegrationTest {
 
         @Autowired
         NotificationService notificationService;
+        @Autowired
+        ShippingService shippingService;
 
         @Test
         void resilience4j_ordering_reverses_the_pipeline() {
@@ -662,9 +685,6 @@ class InqSpringBootIntegrationTest {
             assertThat(standardTrace.getFirst()).startsWith("orderBh:");
             assertThat(r4jTrace.getFirst()).startsWith("orderRetry:");
         }
-
-        @Autowired
-        ShippingService shippingService;
     }
 
     // =========================================================================
@@ -763,7 +783,8 @@ class InqSpringBootIntegrationTest {
             CompletionStage<String> stage = orderService.failingAsyncWithPipeline();
             try {
                 stage.toCompletableFuture().join();
-            } catch (CompletionException ignored) {}
+            } catch (CompletionException ignored) {
+            }
 
             // Then — the method body ran (CORE trace present)
             assertThat(TRACE).contains("CORE:failingAsyncWithPipeline");
@@ -775,7 +796,8 @@ class InqSpringBootIntegrationTest {
             CompletionStage<String> stage = orderService.failingAsyncWithPipeline();
             try {
                 stage.toCompletableFuture().join();
-            } catch (CompletionException ignored) {}
+            } catch (CompletionException ignored) {
+            }
 
             // Then — elements should have recorded their enter/exit around the core
             //        The exact trace depends on how AsyncJoinPointWrapper handles
