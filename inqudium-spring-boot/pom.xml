@@ -7,7 +7,6 @@
         <groupId>eu.inqudium</groupId>
         <artifactId>inqudium-parent</artifactId>
         <version>${revision}</version>
-        <relativePath>../pom.xml</relativePath>
     </parent>
 
     <artifactId>inqudium-spring-boot</artifactId>
@@ -22,6 +21,11 @@
         <!-- Annotation scanning + PipelineFactory -->
         <dependency>
             <groupId>eu.inqudium</groupId>
+            <artifactId>inqudium-annotation</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>eu.inqudium</groupId>
             <artifactId>inqudium-annotation-support</artifactId>
             <version>${project.version}</version>
         </dependency>
@@ -31,6 +35,7 @@
             <groupId>eu.inqudium</groupId>
             <artifactId>inqudium-imperative</artifactId>
             <version>${project.version}</version>
+            <optional>true</optional>
         </dependency>
 
         <!-- Spring Boot auto-configuration -->

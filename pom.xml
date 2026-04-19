@@ -97,13 +97,40 @@
     <!-- ═══════════════════════════════════════════════════════ -->
     <dependencyManagement>
         <dependencies>
-            <!-- Inqudium modules (via BOM) -->
             <dependency>
                 <groupId>eu.inqudium</groupId>
-                <artifactId>inqudium-bom</artifactId>
-                <version>${revision}</version>
-                <type>pom</type>
-                <scope>import</scope>
+                <artifactId>inqudium-core</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>eu.inqudium</groupId>
+                <artifactId>inqudium-aspect</artifactId>
+                <version>${project.version}</version>
+                <optional>true</optional>
+            </dependency>
+            <dependency>
+                <groupId>eu.inqudium</groupId>
+                <artifactId>inqudium-spring-boot</artifactId>
+                <version>${project.version}</version>
+                <optional>true</optional>
+            </dependency>
+            <dependency>
+                <groupId>eu.inqudium</groupId>
+                <artifactId>inqudium-annotation</artifactId>
+                <version>${project.version}</version>
+                <optional>true</optional>
+            </dependency>
+            <dependency>
+                <groupId>eu.inqudium</groupId>
+                <artifactId>inqudium-annotation-support</artifactId>
+                <version>${project.version}</version>
+                <optional>true</optional>
+            </dependency>
+            <dependency>
+                <groupId>eu.inqudium</groupId>
+                <artifactId>inqudium-imperative</artifactId>
+                <version>${project.version}</version>
+                <optional>true</optional>
             </dependency>
 
             <!-- Kotlin -->

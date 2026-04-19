@@ -3,18 +3,17 @@
          xmlns="http://maven.apache.org/POM/4.0.0"
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <groupId>eu.inqudium</groupId>
+        <artifactId>inqudium-parent</artifactId>
+        <version>${revision}</version>
+    </parent>
 
-    <groupId>eu.inqudium</groupId>
     <artifactId>inqudium-bom</artifactId>
-    <version>${revision}</version>
     <packaging>pom</packaging>
 
     <name>Inqudium :: BOM</name>
     <description>Bill of Materials for Inqudium — import this to align versions across modules.</description>
-
-    <properties>
-        <revision>0.7.0-SNAPSHOT</revision>
-    </properties>
 
     <dependencyManagement>
         <dependencies>
@@ -95,7 +94,6 @@
             <plugin>
                 <groupId>org.codehaus.mojo</groupId>
                 <artifactId>flatten-maven-plugin</artifactId>
-                <version>1.6.0</version>
                 <configuration>
                     <updatePomFile>true</updatePomFile>
                     <flattenMode>bom</flattenMode>
