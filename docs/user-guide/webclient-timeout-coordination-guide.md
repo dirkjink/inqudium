@@ -274,9 +274,9 @@ Reactor Netty has a **dedicated** configuration point:
 
 ```kotlin
 HttpClient.create()
-  .secure { spec ->
-    spec.handshakeTimeout(Duration.ofMillis(3000))
-  }
+    .secure { spec ->
+        spec.handshakeTimeout(Duration.ofMillis(3000))
+    }
 ```
 
 The default in Reactor Netty is **10 seconds**. If `secure()` is never called, this default applies — meaning a hanging
@@ -313,24 +313,24 @@ The TLS handshake must be included in both the timeout configuration and the RSS
 
 ```kotlin
 data class AdapterTimeoutConfig(
-  val connectTimeoutMs: Int = 500,
-  val tlsHandshakeTimeoutMs: Int = 2000,
-  val responseTimeoutMs: Int = 3000,
-  val readTimeoutMs: Int = 2000,
-  val writeTimeoutMs: Int = 500,
-  // ...
+    val connectTimeoutMs: Int = 500,
+    val tlsHandshakeTimeoutMs: Int = 2000,
+    val responseTimeoutMs: Int = 3000,
+    val readTimeoutMs: Int = 2000,
+    val writeTimeoutMs: Int = 500,
+    // ...
 ) {
-  val timeLimiterTimeoutMs: Long
-    get() {
-      val rss = sqrt(
-        connectTimeoutMs.toDouble().pow(2)
-        + tlsHandshakeTimeoutMs.toDouble().pow(2)
-        + responseTimeoutMs.toDouble().pow(2)
-        + readTimeoutMs.toDouble().pow(2)
-      )
-      val sigmaAdjusted = rss * sigmaLevel / 3.0
-      return (sigmaAdjusted + bulkheadMaxWaitMs + timeLimiterBufferMs).toLong()
-    }
+    val timeLimiterTimeoutMs: Long
+        get() {
+            val rss = sqrt(
+                connectTimeoutMs.toDouble().pow(2)
+                        + tlsHandshakeTimeoutMs.toDouble().pow(2)
+                        + responseTimeoutMs.toDouble().pow(2)
+                        + readTimeoutMs.toDouble().pow(2)
+            )
+            val sigmaAdjusted = rss * sigmaLevel / 3.0
+            return (sigmaAdjusted + bulkheadMaxWaitMs + timeLimiterBufferMs).toLong()
+        }
 }
 ```
 
@@ -338,17 +338,17 @@ WebClient factory with explicit TLS timeout:
 
 ```kotlin
 HttpClient.create()
-  .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, config.connectTimeoutMs)
-  .secure { spec ->
-    spec.handshakeTimeout(
-      Duration.ofMillis(config.tlsHandshakeTimeoutMs.toLong())
-    )
-  }
-  .responseTimeout(Duration.ofMillis(config.responseTimeoutMs.toLong()))
-  .doOnConnected { conn ->
-    conn.addHandlerLast(ReadTimeoutHandler(config.readTimeoutMs.toLong(), TimeUnit.MILLISECONDS))
-    conn.addHandlerLast(WriteTimeoutHandler(config.writeTimeoutMs.toLong(), TimeUnit.MILLISECONDS))
-  }
+    .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, config.connectTimeoutMs)
+    .secure { spec ->
+        spec.handshakeTimeout(
+            Duration.ofMillis(config.tlsHandshakeTimeoutMs.toLong())
+        )
+    }
+    .responseTimeout(Duration.ofMillis(config.responseTimeoutMs.toLong()))
+    .doOnConnected { conn ->
+        conn.addHandlerLast(ReadTimeoutHandler(config.readTimeoutMs.toLong(), TimeUnit.MILLISECONDS))
+        conn.addHandlerLast(WriteTimeoutHandler(config.writeTimeoutMs.toLong(), TimeUnit.MILLISECONDS))
+    }
 ```
 
 ---
@@ -487,15 +487,15 @@ different response timeouts (different processing complexity).
 
 ```kotlin
 enum class AdapterProfile(
-  val connectTimeoutMs: Int,
-  val responseTimeoutMs: Int,
-  val readTimeoutMs: Int,
-  val writeTimeoutMs: Int
+    val connectTimeoutMs: Int,
+    val responseTimeoutMs: Int,
+    val readTimeoutMs: Int,
+    val writeTimeoutMs: Int
 ) {
-  FAST(500, 1500, 1000, 500),
-  STANDARD(1000, 3000, 2000, 1000),
-  SLOW(1000, 5000, 3000, 1000),
-  EXTERNAL(2000, 8000, 5000, 2000);
+    FAST(500, 1500, 1000, 500),
+    STANDARD(1000, 3000, 2000, 1000),
+    SLOW(1000, 5000, 3000, 1000),
+    EXTERNAL(2000, 8000, 5000, 2000);
 }
 ```
 
@@ -772,24 +772,24 @@ Worst case (sum) for comparison: 8500ms.
 
 ```kotlin
 data class AdapterTimeoutConfig(
-  val connectTimeoutMs: Int = 2500,
-  val responseTimeoutMs: Int = 2500,
-  val readTimeoutMs: Int = 2500,
-  val writeTimeoutMs: Int = 2500,
-  val bulkheadMaxWaitMs: Int = 0,
-  val timeLimiterBufferMs: Int = 500,
-  val sigmaLevel: Int = 2
+    val connectTimeoutMs: Int = 2500,
+    val responseTimeoutMs: Int = 2500,
+    val readTimeoutMs: Int = 2500,
+    val writeTimeoutMs: Int = 2500,
+    val bulkheadMaxWaitMs: Int = 0,
+    val timeLimiterBufferMs: Int = 500,
+    val sigmaLevel: Int = 2
 ) {
-  val timeLimiterTimeoutMs: Long
-    get() {
-      val rss = sqrt(
-        connectTimeoutMs.toDouble().pow(2)
-        + responseTimeoutMs.toDouble().pow(2)
-        + readTimeoutMs.toDouble().pow(2)
-      )
-      val sigmaAdjusted = rss * sigmaLevel / 3.0
-      return (sigmaAdjusted + bulkheadMaxWaitMs + timeLimiterBufferMs).toLong()
-    }
+    val timeLimiterTimeoutMs: Long
+        get() {
+            val rss = sqrt(
+                connectTimeoutMs.toDouble().pow(2)
+                        + responseTimeoutMs.toDouble().pow(2)
+                        + readTimeoutMs.toDouble().pow(2)
+            )
+            val sigmaAdjusted = rss * sigmaLevel / 3.0
+            return (sigmaAdjusted + bulkheadMaxWaitMs + timeLimiterBufferMs).toLong()
+        }
 }
 ```
 
@@ -867,16 +867,16 @@ The TimeLimiter formula must account for the maximum Bulkhead wait time:
 
 ```kotlin
 data class AdapterTimeoutConfig(
-  val connectTimeoutMs: Int = 2500,
-  val responseTimeoutMs: Int = 2500,
-  val readTimeoutMs: Int = 2500,
-  val writeTimeoutMs: Int = 2500,
-  val bulkheadMaxWaitMs: Int = 0,
-  val timeLimiterBufferMs: Int = 500
+    val connectTimeoutMs: Int = 2500,
+    val responseTimeoutMs: Int = 2500,
+    val readTimeoutMs: Int = 2500,
+    val writeTimeoutMs: Int = 2500,
+    val bulkheadMaxWaitMs: Int = 0,
+    val timeLimiterBufferMs: Int = 500
 ) {
-  val timeLimiterTimeoutMs: Long
-    get() = (connectTimeoutMs + responseTimeoutMs + readTimeoutMs
-             + bulkheadMaxWaitMs + timeLimiterBufferMs).toLong()
+    val timeLimiterTimeoutMs: Long
+        get() = (connectTimeoutMs + responseTimeoutMs + readTimeoutMs
+                + bulkheadMaxWaitMs + timeLimiterBufferMs).toLong()
 }
 ```
 
@@ -989,27 +989,27 @@ from the bottom-up approach with a proportional buffer that scales automatically
 
 ```kotlin
 data class AdapterTopDownTimeoutConfig(
-  val timeLimiterTimeoutMs: Int = 4000,
-  val connectTimeoutMs: Int = 100,
-  val monoTimeoutFactor: Double = 0.85
+    val timeLimiterTimeoutMs: Int = 4000,
+    val connectTimeoutMs: Int = 100,
+    val monoTimeoutFactor: Double = 0.85
 ) {
-  /**
-   * Mono.timeout() acts as the inner safety net at 85%
-   * of the total budget. It cancels the reactive pipeline
-   * and cleans up the connection — unlike the TimeLimiter
-   * which only cancels the CompletableFuture.
-   */
-  val monoTimeoutMs: Long
-    get() = (timeLimiterTimeoutMs * monoTimeoutFactor).toLong()
+    /**
+     * Mono.timeout() acts as the inner safety net at 85%
+     * of the total budget. It cancels the reactive pipeline
+     * and cleans up the connection — unlike the TimeLimiter
+     * which only cancels the CompletableFuture.
+     */
+    val monoTimeoutMs: Long
+        get() = (timeLimiterTimeoutMs * monoTimeoutFactor).toLong()
 
-  /**
-   * The response timeout receives the Mono.timeout budget
-   * minus the fixed connect timeout. This is the maximum
-   * time the sidecar (and the upstream behind it) has
-   * to deliver the first response byte.
-   */
-  val responseTimeoutMs: Int
-    get() = (monoTimeoutMs - connectTimeoutMs).toInt()
+    /**
+     * The response timeout receives the Mono.timeout budget
+     * minus the fixed connect timeout. This is the maximum
+     * time the sidecar (and the upstream behind it) has
+     * to deliver the first response byte.
+     */
+    val responseTimeoutMs: Int
+        get() = (monoTimeoutMs - connectTimeoutMs).toInt()
 }
 ```
 
@@ -1101,20 +1101,20 @@ any network topology.
 ```kotlin
 @ConfigurationProperties(prefix = "adapter")
 data class AdapterProperties(
-  val customerService: AdapterEndpointConfig = AdapterEndpointConfig(),
-  val productCatalog: AdapterEndpointConfig = AdapterEndpointConfig(),
-  val inventory: AdapterEndpointConfig = AdapterEndpointConfig(),
-  val paymentGateway: AdapterEndpointConfig = AdapterEndpointConfig(),
-  val shippingProvider: AdapterEndpointConfig = AdapterEndpointConfig(),
-  val authorization: AdapterEndpointConfig = AdapterEndpointConfig(),
-  val orderManagement: AdapterEndpointConfig = AdapterEndpointConfig(),
-  val recommendations: AdapterEndpointConfig = AdapterEndpointConfig(),
-  val invoicing: AdapterEndpointConfig = AdapterEndpointConfig()
+    val customerService: AdapterEndpointConfig = AdapterEndpointConfig(),
+    val productCatalog: AdapterEndpointConfig = AdapterEndpointConfig(),
+    val inventory: AdapterEndpointConfig = AdapterEndpointConfig(),
+    val paymentGateway: AdapterEndpointConfig = AdapterEndpointConfig(),
+    val shippingProvider: AdapterEndpointConfig = AdapterEndpointConfig(),
+    val authorization: AdapterEndpointConfig = AdapterEndpointConfig(),
+    val orderManagement: AdapterEndpointConfig = AdapterEndpointConfig(),
+    val recommendations: AdapterEndpointConfig = AdapterEndpointConfig(),
+    val invoicing: AdapterEndpointConfig = AdapterEndpointConfig()
 )
 
 data class AdapterEndpointConfig(
-  val baseUrl: String = "http://localhost:8080",
-  val timeouts: AdapterTimeoutConfig = AdapterTimeoutConfig()
+    val baseUrl: String = "http://localhost:8080",
+    val timeouts: AdapterTimeoutConfig = AdapterTimeoutConfig()
 )
 ```
 
@@ -1124,24 +1124,24 @@ data class AdapterEndpointConfig(
 @Component
 class WebClientFactory {
 
-  fun createWebClient(
-    builder: WebClient.Builder,
-    config: AdapterEndpointConfig
-  ): WebClient =
-    builder
-      .baseUrl(config.baseUrl)
-      .enableDefaultRequestLogging()
-      .enableDefaultResponseLogging()
-      .clientConnector(
-        connectTimeoutMillis = config.timeouts.connectTimeoutMs,
-        responseTimeoutMillis = config.timeouts.responseTimeoutMs,
-        readTimeoutMillis = config.timeouts.readTimeoutMs,
-        writeTimeoutMillis = config.timeouts.writeTimeoutMs
-      )
-      .defaultStatusHandler({ _ -> true }, { _ -> Mono.empty() })
-      .filter(createStatusCodeHandlingFilter(createDefaultStatusCodeConfiguration()))
-      .filter(unSupportedHttpStatusCodesFilter())
-      .build()
+    fun createWebClient(
+        builder: WebClient.Builder,
+        config: AdapterEndpointConfig
+    ): WebClient =
+        builder
+            .baseUrl(config.baseUrl)
+            .enableDefaultRequestLogging()
+            .enableDefaultResponseLogging()
+            .clientConnector(
+                connectTimeoutMillis = config.timeouts.connectTimeoutMs,
+                responseTimeoutMillis = config.timeouts.responseTimeoutMs,
+                readTimeoutMillis = config.timeouts.readTimeoutMs,
+                writeTimeoutMillis = config.timeouts.writeTimeoutMs
+            )
+            .defaultStatusHandler({ _ -> true }, { _ -> Mono.empty() })
+            .filter(createStatusCodeHandlingFilter(createDefaultStatusCodeConfiguration()))
+            .filter(unSupportedHttpStatusCodesFilter())
+            .build()
 }
 ```
 
@@ -1153,36 +1153,36 @@ source:
 ```kotlin
 @Configuration
 class Resilience4jTimeLimiterConfiguration(
-  private val adapterProperties: AdapterProperties
+    private val adapterProperties: AdapterProperties
 ) {
 
-  @Bean
-  fun timeLimiterCustomizer(): TimeLimiterConfigCustomizer =
-    TimeLimiterConfigCustomizer { configName ->
-      val config = resolveTimeoutConfig(configName)
-      if (config != null) {
-        TimeLimiterConfig.custom()
-          .timeoutDuration(
-            Duration.ofMillis(config.timeLimiterTimeoutMs)
-          )
-          .cancelRunningFuture(true)
-          .build()
-      } else {
-        null // Fall back to Resilience4j defaults
-      }
-    }
+    @Bean
+    fun timeLimiterCustomizer(): TimeLimiterConfigCustomizer =
+        TimeLimiterConfigCustomizer { configName ->
+            val config = resolveTimeoutConfig(configName)
+            if (config != null) {
+                TimeLimiterConfig.custom()
+                    .timeoutDuration(
+                        Duration.ofMillis(config.timeLimiterTimeoutMs)
+                    )
+                    .cancelRunningFuture(true)
+                    .build()
+            } else {
+                null // Fall back to Resilience4j defaults
+            }
+        }
 
-  private fun resolveTimeoutConfig(
-    instanceName: String
-  ): AdapterTimeoutConfig? =
-    when (instanceName) {
-      CUSTOMER_SERVICE -> adapterProperties.customerService.timeouts
-      INVOICING -> adapterProperties.invoicing.timeouts
-      PRODUCT_CATALOG -> adapterProperties.productCatalog.timeouts
-      PAYMENT_STATUS -> adapterProperties.paymentGateway.timeouts
-      // ... further mappings
-      else -> null
-    }
+    private fun resolveTimeoutConfig(
+        instanceName: String
+    ): AdapterTimeoutConfig? =
+        when (instanceName) {
+            CUSTOMER_SERVICE -> adapterProperties.customerService.timeouts
+            INVOICING -> adapterProperties.invoicing.timeouts
+            PRODUCT_CATALOG -> adapterProperties.productCatalog.timeouts
+            PAYMENT_STATUS -> adapterProperties.paymentGateway.timeouts
+            // ... further mappings
+            else -> null
+        }
 }
 ```
 
@@ -1191,27 +1191,27 @@ class Resilience4jTimeLimiterConfiguration(
 ```kotlin
 @Component
 class CustomerServiceReactiveAdapter(
-  builder: WebClient.Builder,
-  webClientFactory: WebClientFactory,
-  adapterProperties: AdapterProperties
+    builder: WebClient.Builder,
+    webClientFactory: WebClientFactory,
+    adapterProperties: AdapterProperties
 ) : CustomerServiceAdapterSpec {
 
-  private val webClient = webClientFactory.createWebClient(
-    builder, adapterProperties.customerService
-  )
+    private val webClient = webClientFactory.createWebClient(
+        builder, adapterProperties.customerService
+    )
 
-  @CircuitBreaker(name = CUSTOMER_SERVICE)
-  @Bulkhead(name = CUSTOMER_SERVICE)
-  @TimeLimiter(name = CUSTOMER_SERVICE)
-  override fun findCustomerProfiles(
-    customerIds: List<CustomerIdValue>
-  ): CompletableFuture<PageCustomersDTO> =
-    webClient.get()
-      .uri { /* ... */ }
-      .retrieve()
-      .bodyToMono<PageCustomersDTO>()
-      .toFuture()
-      .nonNull()
+    @CircuitBreaker(name = CUSTOMER_SERVICE)
+    @Bulkhead(name = CUSTOMER_SERVICE)
+    @TimeLimiter(name = CUSTOMER_SERVICE)
+    override fun findCustomerProfiles(
+        customerIds: List<CustomerIdValue>
+    ): CompletableFuture<PageCustomersDTO> =
+        webClient.get()
+            .uri { /* ... */ }
+            .retrieve()
+            .bodyToMono<PageCustomersDTO>()
+            .toFuture()
+            .nonNull()
 }
 ```
 

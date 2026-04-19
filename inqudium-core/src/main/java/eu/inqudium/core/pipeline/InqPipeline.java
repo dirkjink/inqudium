@@ -3,7 +3,11 @@ package eu.inqudium.core.pipeline;
 import eu.inqudium.core.element.InqElement;
 import eu.inqudium.core.element.InqElementType;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.List;
+import java.util.ListIterator;
+import java.util.Objects;
 import java.util.function.BiFunction;
 
 /**

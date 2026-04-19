@@ -114,6 +114,7 @@ class InqPipelineEndToEndTest {
         private final AtomicInteger failureCount = new AtomicInteger(0);
         private final List<String> trace;
         private volatile State state = State.CLOSED;
+
         SimpleCircuitBreaker(String name, int failureThreshold, List<String> trace) {
             this.name = name;
             this.failureThreshold = failureThreshold;
