@@ -227,7 +227,7 @@ public final class HybridAspectPipelineTerminal {
      *
      * @param pjp the proceeding join point provided by AspectJ
      * @return the result — either a direct value (sync) or a
-     *         {@link CompletionStage} (async)
+     * {@link CompletionStage} (async)
      * @throws Throwable any exception from sync methods or pipeline elements
      */
     @SuppressWarnings("unchecked")

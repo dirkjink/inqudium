@@ -5,8 +5,8 @@ import eu.inqudium.imperative.core.pipeline.AsyncJoinPointWrapper;
 
 import java.lang.reflect.Method;
 import java.util.List;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CompletionStage;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Abstract base class for AspectJ aspects that execute method calls through
