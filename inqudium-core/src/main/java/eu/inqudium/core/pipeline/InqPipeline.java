@@ -24,22 +24,22 @@ import java.util.function.BiFunction;
  * <pre>
  *                              InqPipeline
  *                                   │
- *               ┌───────────────────┼───────────────────────┐
- *               │                   │                       │
- *          Sync only           Async only              Hybrid (auto)
- *               │                   │                       │
- *     ┌─────────┴──────┐            │          ┌────────────┴────────────┐
- *     │                │            │          │                         │
- * SyncPipeline   ProxyPipeline      │    HybridProxy              HybridAspect
- *  Terminal       Terminal          │    PipelineTerminal          PipelineTerminal
- *  (core)         (core)            │    (imperative)              (aspect)
- *     │                │            │         │                         │
- *     ▼                ▼            │    ┌────┴────┐               ┌────┴────┐
- *  execute()     protect()          │  sync?     async?          sync?     async?
- *                (Proxy)            │    │         │               │         │
- *                                   │    ▼         ▼               ▼         ▼
- *                           AsyncPipeline  Sync    Async     Sync    Async
- *                            Terminal     Term.    Term.     Term.    Term.
+ *               ┌───────────────────┼─────────────────────────┐
+ *               │                   │                         │
+ *          Sync only           Async only               Hybrid (auto)
+ *               │                   │                         │
+ *     ┌─────────┴──────┐            │            ┌────────────┴────────────┐
+ *     │                │            │            │                         │
+ * SyncPipeline   ProxyPipeline      │      HybridProxy               HybridAspect
+ *  Terminal        Terminal         │    PipelineTerminal          PipelineTerminal
+ *  (core)           (core)          │       (imperative)               (aspect)
+ *     │                │            │            │                         │
+ *     ▼                ▼            │       ┌────┴────┐               ┌────┴────┐
+ *  execute()       protect()        │     sync?     async?          sync?     async?
+ *                  (Proxy)          │       │         │               │         │
+ *                                   │       ▼         ▼               ▼         ▼
+ *                           AsyncPipeline  Sync     Async           Sync    Async
+ *                            Terminal      Term.    Term.           Term.   Term.
  *                           (imperative)
  * </pre>
  *
