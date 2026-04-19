@@ -6,7 +6,6 @@ import eu.inqudium.core.pipeline.InqPipeline;
 import eu.inqudium.core.pipeline.PipelineOrdering;
 
 import java.lang.reflect.Method;
-import java.util.Comparator;
 import java.util.Objects;
 
 /**
@@ -72,7 +71,7 @@ public final class PipelineFactory {
      * @param registry the element registry for name → instance lookup
      * @return the built pipeline, or an empty pipeline if no annotations found
      * @throws InqElementRegistry.InqElementNotFoundException if a scanned
-     *         element name is not found in the registry
+     *                                                        element name is not found in the registry
      */
     public static InqPipeline create(Method method, InqElementRegistry registry) {
         Objects.requireNonNull(method, "Method must not be null");
@@ -94,7 +93,7 @@ public final class PipelineFactory {
      * @param registry the element registry for name → instance lookup
      * @return the built pipeline, or an empty pipeline if the scan is empty
      * @throws InqElementRegistry.InqElementNotFoundException if a scanned
-     *         element name is not found in the registry
+     *                                                        element name is not found in the registry
      */
     public static InqPipeline create(InqAnnotationScanner.ScanResult scan,
                                      InqElementRegistry registry) {

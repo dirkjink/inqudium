@@ -28,25 +28,11 @@ class PipelineFactoryTest {
     // Stub element
     // =========================================================================
 
-    static class StubElement implements InqElement {
-        private final String name;
-        private final InqElementType type;
-
-        StubElement(String name, InqElementType type) {
-            this.name = name;
-            this.type = type;
-        }
-
-        @Override public String getName() { return name; }
-        @Override public InqElementType getElementType() { return type; }
-        @Override public InqEventPublisher getEventPublisher() { return null; }
-    }
+    private InqElementRegistry registry;
 
     // =========================================================================
     // Shared registry
     // =========================================================================
-
-    private InqElementRegistry registry;
 
     @BeforeEach
     void setUp() {
@@ -58,6 +44,31 @@ class PipelineFactoryTest {
                 .build();
     }
 
+    static class StubElement implements InqElement {
+        private final String name;
+        private final InqElementType type;
+
+        StubElement(String name, InqElementType type) {
+            this.name = name;
+            this.type = type;
+        }
+
+        @Override
+        public String getName() {
+            return name;
+        }
+
+        @Override
+        public InqElementType getElementType() {
+            return type;
+        }
+
+        @Override
+        public InqEventPublisher getEventPublisher() {
+            return null;
+        }
+    }
+
     // =========================================================================
     // Test fixtures — annotated classes and methods
     // =========================================================================
@@ -65,17 +76,21 @@ class PipelineFactoryTest {
     static class SimpleService {
         @InqCircuitBreaker("paymentCb")
         @InqRetry("paymentRetry")
-        public void protectedMethod() {}
+        public void protectedMethod() {
+        }
 
-        public void unannotatedMethod() {}
+        public void unannotatedMethod() {
+        }
     }
 
     @InqCircuitBreaker("paymentCb")
     static class TypeLevelService {
-        public void inheritedMethod() {}
+        public void inheritedMethod() {
+        }
 
         @InqRetry("paymentRetry")
-        public void methodAddsRetry() {}
+        public void methodAddsRetry() {
+        }
     }
 
     @InqShield(order = "RESILIENCE4J")
@@ -83,26 +98,30 @@ class PipelineFactoryTest {
         @InqCircuitBreaker("paymentCb")
         @InqRetry("paymentRetry")
         @InqBulkhead("paymentBh")
-        public void r4jOrder() {}
+        public void r4jOrder() {
+        }
     }
 
     static class CustomOrderService {
         @InqShield(order = "CUSTOM")
         @InqRetry("paymentRetry")
         @InqCircuitBreaker("paymentCb")
-        public void customOrder() {}
+        public void customOrder() {
+        }
     }
 
     @InqTimeLimiter("globalTl")
     static class MergeService {
         @InqCircuitBreaker("paymentCb")
         @InqRetry("paymentRetry")
-        public void mergedMethod() {}
+        public void mergedMethod() {
+        }
     }
 
     static class UnknownElementService {
         @InqCircuitBreaker("unknownCb")
-        public void missingElement() {}
+        public void missingElement() {
+        }
     }
 
     // =========================================================================

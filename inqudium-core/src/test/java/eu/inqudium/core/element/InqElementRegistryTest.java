@@ -18,6 +18,18 @@ class InqElementRegistryTest {
     // Stub elements
     // =========================================================================
 
+    private static StubElement cb(String name) {
+        return new StubElement(name, InqElementType.CIRCUIT_BREAKER);
+    }
+
+    private static StubElement rt(String name) {
+        return new StubElement(name, InqElementType.RETRY);
+    }
+
+    private static StubElement bh(String name) {
+        return new StubElement(name, InqElementType.BULKHEAD);
+    }
+
     static class StubElement implements InqDecorator<Void, Object> {
         private final String name;
         private final InqElementType type;
@@ -27,9 +39,20 @@ class InqElementRegistryTest {
             this.type = type;
         }
 
-        @Override public String getName() { return name; }
-        @Override public InqElementType getElementType() { return type; }
-        @Override public InqEventPublisher getEventPublisher() { return null; }
+        @Override
+        public String getName() {
+            return name;
+        }
+
+        @Override
+        public InqElementType getElementType() {
+            return type;
+        }
+
+        @Override
+        public InqEventPublisher getEventPublisher() {
+            return null;
+        }
 
         @Override
         public Object execute(long chainId, long callId, Void arg,
@@ -43,21 +66,20 @@ class InqElementRegistryTest {
      * wrong subtypes at runtime.
      */
     static class OtherElement implements InqElement {
-        @Override public String getName() { return "other"; }
-        @Override public InqElementType getElementType() { return InqElementType.BULKHEAD; }
-        @Override public InqEventPublisher getEventPublisher() { return null; }
-    }
+        @Override
+        public String getName() {
+            return "other";
+        }
 
-    private static StubElement cb(String name) {
-        return new StubElement(name, InqElementType.CIRCUIT_BREAKER);
-    }
+        @Override
+        public InqElementType getElementType() {
+            return InqElementType.BULKHEAD;
+        }
 
-    private static StubElement rt(String name) {
-        return new StubElement(name, InqElementType.RETRY);
-    }
-
-    private static StubElement bh(String name) {
-        return new StubElement(name, InqElementType.BULKHEAD);
+        @Override
+        public InqEventPublisher getEventPublisher() {
+            return null;
+        }
     }
 
     // =========================================================================
