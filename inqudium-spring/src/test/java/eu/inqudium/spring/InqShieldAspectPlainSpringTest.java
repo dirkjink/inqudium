@@ -43,6 +43,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 class InqShieldAspectPlainSpringTest {
 
     static final List<String> TRACE = Collections.synchronizedList(new ArrayList<>());
+    @Autowired
+    OrderService orderService;
+
+    // =========================================================================
+    // Dual tracing element
+    // =========================================================================
 
     @BeforeEach
     void clearTrace() {
@@ -50,7 +56,7 @@ class InqShieldAspectPlainSpringTest {
     }
 
     // =========================================================================
-    // Dual tracing element
+    // Service
     // =========================================================================
 
     static class TracingElement implements InqDecorator<Void, Object>,
@@ -64,9 +70,20 @@ class InqShieldAspectPlainSpringTest {
             this.type = type;
         }
 
-        @Override public String getName() { return name; }
-        @Override public InqElementType getElementType() { return type; }
-        @Override public InqEventPublisher getEventPublisher() { return null; }
+        @Override
+        public String getName() {
+            return name;
+        }
+
+        @Override
+        public InqElementType getElementType() {
+            return type;
+        }
+
+        @Override
+        public InqEventPublisher getEventPublisher() {
+            return null;
+        }
 
         @Override
         public Object execute(long chainId, long callId, Void arg,
@@ -81,7 +98,7 @@ class InqShieldAspectPlainSpringTest {
 
         @Override
         public CompletionStage<Object> executeAsync(long chainId, long callId, Void arg,
-                                                     InternalAsyncExecutor<Void, Object> next) {
+                                                    InternalAsyncExecutor<Void, Object> next) {
             TRACE.add(name + ":async-enter");
             return next.executeAsync(chainId, callId, arg)
                     .whenComplete((r, e) -> TRACE.add(name + ":async-exit"));
@@ -89,7 +106,7 @@ class InqShieldAspectPlainSpringTest {
     }
 
     // =========================================================================
-    // Service
+    // Plain Spring configuration (no Boot, no auto-config)
     // =========================================================================
 
     static class OrderService {
@@ -114,7 +131,7 @@ class InqShieldAspectPlainSpringTest {
     }
 
     // =========================================================================
-    // Plain Spring configuration (no Boot, no auto-config)
+    // Tests
     // =========================================================================
 
     @Configuration
@@ -139,13 +156,6 @@ class InqShieldAspectPlainSpringTest {
             return new OrderService();
         }
     }
-
-    // =========================================================================
-    // Tests
-    // =========================================================================
-
-    @Autowired
-    OrderService orderService;
 
     @Nested
     @DisplayName("Sync interception")
