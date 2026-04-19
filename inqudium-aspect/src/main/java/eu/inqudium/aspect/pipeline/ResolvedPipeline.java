@@ -3,6 +3,7 @@ package eu.inqudium.aspect.pipeline;
 import eu.inqudium.core.pipeline.InternalExecutor;
 import eu.inqudium.core.pipeline.JoinPointExecutor;
 import eu.inqudium.core.pipeline.LayerAction;
+import eu.inqudium.core.pipeline.PipelineDiagnostics;
 import eu.inqudium.core.pipeline.Throws;
 
 import java.lang.reflect.Method;
@@ -26,10 +27,10 @@ import java.util.concurrent.CompletionException;
  *
  * <h3>Hot-path optimization</h3>
  * <p>The {@link LayerAction} references are extracted from providers
- * <strong>once</strong> at resolution time and stored in a pre-built array.
- * At invocation time, the chain is composed inline via a simple reverse
- * loop over that array — no {@code Function<F,F>} cascade, no
- * {@code ThreadLocal}, no per-call provider access.</p>
+ * <strong>once</strong> at resolution time and stored in a pre-built array
+ * in outermost-first order. At invocation time, the chain is composed inline
+ * via a simple reverse loop over that array — no {@code Function<F,F>}
+ * cascade, no {@code ThreadLocal}, no per-call provider access.</p>
  *
  * <p>Each invocation creates N+1 small {@link InternalExecutor} lambdas
  * (one terminal + one per layer). These lambdas are short-lived, do not
@@ -49,9 +50,10 @@ import java.util.concurrent.CompletionException;
  * <h3>Thread safety</h3>
  * <p>Instances are safe for concurrent use. The pre-built action array is
  * immutable; the chain composition is purely stack-local; the call-ID
- * counter is an {@link java.util.concurrent.atomic.AtomicLong}. No
- * {@code ThreadLocal} or shared mutable state is used — the pipeline is
- * safe for virtual threads, reactive pipelines, and coroutines.</p>
+ * counter lives in {@link PipelineDiagnostics} and is backed by an
+ * {@link java.util.concurrent.atomic.AtomicLong}. No {@code ThreadLocal}
+ * or shared mutable state is used — the pipeline is safe for virtual threads,
+ * reactive pipelines, and coroutines.</p>
  *
  * @since 0.7.0
  */
@@ -69,9 +71,9 @@ public final class ResolvedPipeline {
             EMPTY_ACTIONS, PipelineDiagnostics.EMPTY);
 
     /**
-     * Pre-built, immutable array of layer actions in execution order
-     * (outermost first). Extracted from providers once during
-     * {@link #fromProviders} — no per-call provider access.
+     * Pre-built, immutable array of layer actions in outermost-first order.
+     * Extracted from providers once during {@link #fromProviders} — no
+     * per-call provider access.
      */
     private final LayerAction<Void, Object>[] actions;
 
@@ -208,7 +210,9 @@ public final class ResolvedPipeline {
         };
 
         // Compose chain inside-out from pre-built action array.
-        // Each lambda captures only 2 references: the action and next.
+        // Actions are stored in outermost-first order, so reverse iteration
+        // wraps each layer around the prior result — the last iteration
+        // (i=0) yields the outermost executor.
         for (int i = actions.length - 1; i >= 0; i--) {
             LayerAction<Void, Object> action = actions[i];
             InternalExecutor<Void, Object> next = current;

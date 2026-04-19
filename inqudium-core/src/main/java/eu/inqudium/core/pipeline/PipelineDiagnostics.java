@@ -1,23 +1,24 @@
-package eu.inqudium.aspect.pipeline;
+package eu.inqudium.core.pipeline;
 
 import java.util.List;
 import java.util.concurrent.atomic.AtomicLong;
 
-import static eu.inqudium.core.pipeline.ChainIdGenerator.CHAIN_ID_COUNTER;
-
 /**
  * Shared diagnostics state for pre-composed pipelines.
  *
- * <p>Both {@link ResolvedPipeline} and {@link AsyncResolvedPipeline} maintain
- * identical diagnostic information — chain ID, call-ID counter, layer names,
- * and the same {@code toStringHierarchy()} rendering. This class extracts
- * that shared state to avoid duplication.</p>
+ * <p>Centralizes the bookkeeping that every pipeline terminal needs —
+ * chain ID, per-invocation call-ID counter, layer names, and a formatted
+ * hierarchy rendering. Used by {@code ResolvedPipeline},
+ * {@code AsyncResolvedPipeline}, {@code SyncPipelineTerminal}, and
+ * {@code HybridAspectPipelineTerminal} to avoid duplicating these fields.</p>
  *
  * <h3>Thread safety</h3>
  * <p>Instances are safe for concurrent use. The only mutable state is the
  * {@link AtomicLong} call-ID counter, which is thread-safe by design.</p>
+ *
+ * @since 0.7.0
  */
-final class PipelineDiagnostics {
+public final class PipelineDiagnostics {
 
     /**
      * Sentinel instance for empty pipelines — avoids allocating a chain ID.
@@ -26,7 +27,8 @@ final class PipelineDiagnostics {
      * always return 0 for this instance, so that empty pipelines across
      * the JVM do not share and mutate a single counter.</p>
      */
-    static final PipelineDiagnostics EMPTY = new PipelineDiagnostics(0L, List.of(), true);
+    public static final PipelineDiagnostics EMPTY =
+            new PipelineDiagnostics(0L, List.of(), true);
 
     private final long chainId;
     private final AtomicLong callIdCounter = new AtomicLong();
@@ -46,8 +48,9 @@ final class PipelineDiagnostics {
      *                   an immutable list (e.g. from {@link List#of(Object[])})
      * @return a new diagnostics instance with a globally unique chain ID
      */
-    static PipelineDiagnostics create(List<String> layerNames) {
-        return new PipelineDiagnostics(CHAIN_ID_COUNTER.incrementAndGet(), layerNames, false);
+    public static PipelineDiagnostics create(List<String> layerNames) {
+        return new PipelineDiagnostics(
+                ChainIdGenerator.CHAIN_ID_COUNTER.incrementAndGet(), layerNames, false);
     }
 
     /**
@@ -59,7 +62,7 @@ final class PipelineDiagnostics {
      *
      * @return the next call ID (monotonically increasing), or 0 for empty pipelines
      */
-    long nextCallId() {
+    public long nextCallId() {
         return empty ? 0L : callIdCounter.incrementAndGet();
     }
 
@@ -68,7 +71,7 @@ final class PipelineDiagnostics {
      *
      * @return the chain ID (unique, from the global counter; 0 for empty pipelines)
      */
-    long chainId() {
+    public long chainId() {
         return chainId;
     }
 
@@ -90,7 +93,7 @@ final class PipelineDiagnostics {
      * @return the latest call ID (globally, across all threads), or 0 if
      * never executed
      */
-    long currentCallId() {
+    public long currentCallId() {
         return empty ? 0L : callIdCounter.get();
     }
 
@@ -99,7 +102,7 @@ final class PipelineDiagnostics {
      *
      * @return an unmodifiable list of layer names
      */
-    List<String> layerNames() {
+    public List<String> layerNames() {
         return layerNames;
     }
 
@@ -108,13 +111,13 @@ final class PipelineDiagnostics {
      *
      * @return the layer count
      */
-    int depth() {
+    public int depth() {
         return layerNames.size();
     }
 
     /**
      * Returns a diagnostic string similar to
-     * {@link eu.inqudium.core.pipeline.Wrapper#toStringHierarchy()}.
+     * {@link Wrapper#toStringHierarchy()}.
      *
      * <p>Example output for a three-layer pipeline:</p>
      * <pre>
@@ -130,7 +133,7 @@ final class PipelineDiagnostics {
      *
      * @return a formatted hierarchy string
      */
-    String toStringHierarchy() {
+    public String toStringHierarchy() {
         StringBuilder sb = new StringBuilder();
         sb.append("Chain-ID: ").append(chainId)
                 .append(" (current call-ID: ").append(currentCallId())

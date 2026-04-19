@@ -1,6 +1,7 @@
 package eu.inqudium.aspect.pipeline;
 
 import eu.inqudium.core.pipeline.JoinPointExecutor;
+import eu.inqudium.core.pipeline.PipelineDiagnostics;
 import eu.inqudium.imperative.core.pipeline.AsyncLayerAction;
 import eu.inqudium.imperative.core.pipeline.InternalAsyncExecutor;
 
@@ -19,8 +20,8 @@ import java.util.concurrent.CompletionStage;
  * the chain structure on every call.
  *
  * <p>Async counterpart to {@link ResolvedPipeline}, using the same
- * array-based composition pattern. The per-call cost is a single reverse
- * loop over the pre-built {@link AsyncLayerAction} array — no
+ * array-based composition pattern. Layer actions are stored in outermost-first
+ * order; the per-call cost is a single reverse loop over that array — no
  * {@code Function.apply()} dispatch, no cascade unwinding.</p>
  *
  * <h3>Two-phase execution semantics</h3>
@@ -42,9 +43,9 @@ import java.util.concurrent.CompletionStage;
  * <h3>Thread safety</h3>
  * <p>Instances are safe for concurrent use. The action array is immutable;
  * chain composition is purely stack-local; the call-ID counter lives in
- * {@link PipelineDiagnostics} and is backed by an {@link java.util.concurrent.atomic.AtomicLong}.
- * No {@code ThreadLocal} or shared mutable state — safe for virtual threads
- * and reactive pipelines.</p>
+ * {@link PipelineDiagnostics} and is backed by an
+ * {@link java.util.concurrent.atomic.AtomicLong}. No {@code ThreadLocal} or
+ * shared mutable state — safe for virtual threads and reactive pipelines.</p>
  *
  * @since 0.7.0
  */
@@ -62,9 +63,8 @@ public final class AsyncResolvedPipeline {
             EMPTY_ACTIONS, PipelineDiagnostics.EMPTY);
 
     /**
-     * Pre-built, immutable array of async layer actions in execution order
-     * (outermost first). Extracted from providers once during
-     * {@link #fromProviders} — no per-call provider access.
+     * Pre-built, immutable array of async layer actions in outermost-first
+     * order. Extracted from providers once during {@link #fromProviders}.
      */
     private final AsyncLayerAction<Void, Object>[] actions;
 
@@ -172,7 +172,7 @@ public final class AsyncResolvedPipeline {
      * @param coreExecutor the join point execution (typically
      *                     {@code () -> (CompletionStage<Object>) pjp.proceed()})
      * @return a {@link CompletionStage} carrying the result or the failure —
-     * never {@code null}, never throws
+     *         never {@code null}, never throws
      */
     public CompletionStage<Object> execute(
             JoinPointExecutor<CompletionStage<Object>> coreExecutor) {
@@ -192,7 +192,8 @@ public final class AsyncResolvedPipeline {
         };
 
         // Compose chain inside-out from the pre-built action array.
-        // Each lambda captures only 2 references: the action and next.
+        // Actions are stored in outermost-first order; reverse iteration
+        // wraps each layer around the prior result.
         for (int i = actions.length - 1; i >= 0; i--) {
             AsyncLayerAction<Void, Object> action = actions[i];
             InternalAsyncExecutor<Void, Object> next = current;
@@ -214,9 +215,7 @@ public final class AsyncResolvedPipeline {
 
     // ======================== Diagnostics ========================
 
-    /**
-     * Returns the chain ID assigned to this resolved pipeline.
-     */
+    /** Returns the chain ID assigned to this resolved pipeline. */
     public long chainId() {
         return diagnostics.chainId();
     }
@@ -229,16 +228,12 @@ public final class AsyncResolvedPipeline {
         return diagnostics.currentCallId();
     }
 
-    /**
-     * Returns the layer names in order (outermost first).
-     */
+    /** Returns the layer names in order (outermost first). */
     public List<String> layerNames() {
         return diagnostics.layerNames();
     }
 
-    /**
-     * Returns the number of layers in this pipeline.
-     */
+    /** Returns the number of layers in this pipeline. */
     public int depth() {
         return diagnostics.depth();
     }

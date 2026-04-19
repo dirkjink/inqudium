@@ -3,13 +3,11 @@ package eu.inqudium.core.pipeline;
 import eu.inqudium.core.element.InqElement;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.CompletionException;
-import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Supplier;
-
-import static eu.inqudium.core.pipeline.ChainIdGenerator.CHAIN_ID_COUNTER;
 
 /**
  * Synchronous terminal for an {@link InqPipeline}.
@@ -35,6 +33,12 @@ import static eu.inqudium.core.pipeline.ChainIdGenerator.CHAIN_ID_COUNTER;
  * executor on every call should use {@link #execute(JoinPointExecutor)}
  * instead.</p>
  *
+ * <h3>Storage convention</h3>
+ * <p>Layer actions are stored in <strong>outermost-first</strong> order —
+ * consistent with {@code ResolvedPipeline} and {@code AsyncResolvedPipeline}.
+ * The {@link PipelineDiagnostics#layerNames()} returned by {@link #layerNames()}
+ * follows the same convention.</p>
+ *
  * <h3>Usage</h3>
  * <pre>{@code
  * InqPipeline pipeline = InqPipeline.builder()
@@ -56,20 +60,11 @@ import static eu.inqudium.core.pipeline.ChainIdGenerator.CHAIN_ID_COUNTER;
  * decorated.get();
  * }</pre>
  *
- * <h3>Dispatch mechanism integration</h3>
- * <p>{@code SyncPipelineTerminal} is dispatch-agnostic — the caller provides
- * the core executor, which can be:</p>
- * <ul>
- *   <li>A plain lambda: {@code () -> service.call()}</li>
- *   <li>A JDK Proxy target: {@code () -> method.invoke(target, args)}</li>
- *   <li>An AspectJ join point: {@code pjp::proceed}</li>
- * </ul>
- *
  * <h3>Thread safety</h3>
  * <p>Instances are immutable and safe for concurrent use. The action array
- * is populated once at construction; the call-ID counter is a thread-safe
- * {@link AtomicLong}. No {@code ThreadLocal} or shared mutable state — safe
- * for virtual threads.</p>
+ * is populated once at construction; the call-ID counter in
+ * {@link PipelineDiagnostics} is thread-safe. No {@code ThreadLocal} or
+ * shared mutable state — safe for virtual threads.</p>
  *
  * @since 0.8.0
  */
@@ -78,7 +73,7 @@ public final class SyncPipelineTerminal {
     private final InqPipeline pipeline;
 
     /**
-     * Pre-extracted layer actions in element order (innermost first).
+     * Pre-extracted layer actions in outermost-first order.
      * {@code InqDecorator} extends {@link LayerAction}, so the decorator
      * references from the pipeline serve directly as layer actions — no
      * per-call extraction or casting needed on the hot path.
@@ -86,37 +81,26 @@ public final class SyncPipelineTerminal {
     private final LayerAction<Void, Object>[] actions;
 
     /**
-     * Chain identifier for this terminal instance. Allocated once from the
-     * global {@link ChainIdGenerator#CHAIN_ID_COUNTER} and reused across all
-     * invocations of {@link #execute(JoinPointExecutor)}. Note that
-     * {@link #decorateJoinPoint(JoinPointExecutor)} uses its own chain ID
-     * via {@link BaseWrapper} — the two paths are independent.
+     * Shared diagnostics state — chain ID, per-invocation call-ID counter,
+     * layer names, and formatted hierarchy rendering.
      */
-    private final long chainId;
-
-    /**
-     * Per-invocation call-ID counter for the {@link #execute(JoinPointExecutor)}
-     * hot path. Separate from any counters in the wrapper chain built by
-     * {@link #decorateJoinPoint(JoinPointExecutor)}.
-     */
-    private final AtomicLong callIdCounter = new AtomicLong();
+    private final PipelineDiagnostics diagnostics;
 
     @SuppressWarnings("unchecked")
     private SyncPipelineTerminal(InqPipeline pipeline) {
         this.pipeline = pipeline;
 
         // Extract the pipeline's elements exactly once using chain() as an
-        // element-collecting fold. The accumulator is the same mutable list
-        // on every step — we just append. Order follows the pipeline's native
-        // iteration order (innermost first, as confirmed by the decorator
-        // semantics: the first element applied to the seed becomes the
-        // innermost wrapper).
+        // element-collecting fold. Native iteration order is innermost-first;
+        // we reverse to the outermost-first convention shared with
+        // ResolvedPipeline/AsyncResolvedPipeline.
         List<InqElement> elements = pipeline.chain(
                 new ArrayList<InqElement>(),
                 (list, element) -> {
                     list.add(element);
                     return list;
                 });
+        Collections.reverse(elements);
 
         // Pre-cast every element to LayerAction once. InqDecorator extends
         // LayerAction, so the single instanceof check in asDecorator() also
@@ -124,11 +108,14 @@ public final class SyncPipelineTerminal {
         // here rather than on the first hot-path call.
         int size = elements.size();
         LayerAction<Void, Object>[] acts = new LayerAction[size];
+        List<String> names = new ArrayList<>(size);
         for (int i = 0; i < size; i++) {
-            acts[i] = (LayerAction<Void, Object>) asDecorator(elements.get(i));
+            InqElement element = elements.get(i);
+            acts[i] = (LayerAction<Void, Object>) asDecorator(element);
+            names.add(element.getElementType().name() + "(" + element.getName() + ")");
         }
         this.actions = acts;
-        this.chainId = CHAIN_ID_COUNTER.incrementAndGet();
+        this.diagnostics = PipelineDiagnostics.create(Collections.unmodifiableList(names));
     }
 
     /**
@@ -136,7 +123,7 @@ public final class SyncPipelineTerminal {
      *
      * <p>Eagerly validates that every pipeline element implements
      * {@link InqDecorator} — a {@link ClassCastException} is thrown here
-     * rather than at the first call site.</p>
+     * rather than at the first call site. Misconfigured pipelines fail fast.</p>
      *
      * @param pipeline the composed pipeline
      * @return the sync terminal
@@ -179,11 +166,11 @@ public final class SyncPipelineTerminal {
     /**
      * Executes the given executor through the cached layer-action chain.
      *
-     * <p>Per-call cost: one {@link AtomicLong} CAS for the call ID, one
-     * {@link InternalExecutor} terminal lambda binding the executor,
-     * {@code N} wrapper lambdas composed in a tight loop, and a single
-     * {@link CompletionException}-unwrapping try/catch at the boundary.
-     * The wrapper lambdas capture at most two references each
+     * <p>Per-call cost: one {@link java.util.concurrent.atomic.AtomicLong}
+     * CAS for the call ID, one {@link InternalExecutor} terminal lambda
+     * binding the executor, {@code N} wrapper lambdas composed in a tight
+     * loop, and a single {@link CompletionException}-unwrapping try/catch at
+     * the boundary. The wrapper lambdas capture at most two references each
      * ({@code action} + {@code next}) and do not escape this method's stack
      * frame — strong candidates for JIT escape analysis.</p>
      *
@@ -200,8 +187,8 @@ public final class SyncPipelineTerminal {
      */
     @SuppressWarnings("unchecked")
     public <R> R execute(JoinPointExecutor<R> executor) throws Throwable {
-        long callId = callIdCounter.incrementAndGet();
-        long cid = chainId;
+        long callId = diagnostics.nextCallId();
+        long cid = diagnostics.chainId();
 
         // Terminal: invokes the executor and wraps checked exceptions for
         // transport through the chain's unchecked-only layer actions.
@@ -214,12 +201,10 @@ public final class SyncPipelineTerminal {
         };
 
         // Compose chain from the pre-cached action array. Actions are stored
-        // in innermost-first order, so each iteration wraps the prior result
-        // as an outer layer. After the loop `current` is the outermost executor.
-        // Each lambda captures exactly two references (action + next) — no
-        // Function.apply cascade, no instanceof checks, no wrapper objects.
+        // in outermost-first order; reverse iteration wraps each layer around
+        // the prior result. After the loop `current` is the outermost executor.
         LayerAction<Void, Object>[] acts = actions;
-        for (int i = 0; i < acts.length; i++) {
+        for (int i = acts.length - 1; i >= 0; i--) {
             LayerAction<Void, R> action = (LayerAction<Void, R>) (LayerAction<?, ?>) acts[i];
             InternalExecutor<Void, R> next = current;
             current = (c, ca, a) -> action.execute(c, ca, a, next);
@@ -290,5 +275,51 @@ public final class SyncPipelineTerminal {
                 throw new RuntimeException(t);
             }
         };
+    }
+
+    // ======================== Diagnostics ========================
+
+    /**
+     * Returns the chain ID assigned to this terminal instance.
+     *
+     * <p>Unique across the JVM, allocated once at construction time.
+     * Used as the chain ID for every {@link #execute(JoinPointExecutor)}
+     * invocation.</p>
+     */
+    public long chainId() {
+        return diagnostics.chainId();
+    }
+
+    /**
+     * Returns the most recently generated call ID across all threads.
+     *
+     * <p><strong>Informational only.</strong> In concurrent environments
+     * this value does not correspond to any specific thread's call — see
+     * {@link PipelineDiagnostics#currentCallId()} for details.</p>
+     */
+    public long currentCallId() {
+        return diagnostics.currentCallId();
+    }
+
+    /**
+     * Returns the layer names in outermost-first order. Each name follows
+     * the pattern {@code "ELEMENT_TYPE(name)"}, e.g. {@code "CIRCUIT_BREAKER(cb)"}.
+     */
+    public List<String> layerNames() {
+        return diagnostics.layerNames();
+    }
+
+    /**
+     * Returns the number of layers in this pipeline.
+     */
+    public int depth() {
+        return diagnostics.depth();
+    }
+
+    /**
+     * Returns a diagnostic string rendering the layer hierarchy.
+     */
+    public String toStringHierarchy() {
+        return diagnostics.toStringHierarchy();
     }
 }

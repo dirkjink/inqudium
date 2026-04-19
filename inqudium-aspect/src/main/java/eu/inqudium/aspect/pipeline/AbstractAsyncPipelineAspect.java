@@ -5,8 +5,8 @@ import eu.inqudium.imperative.core.pipeline.AsyncJoinPointWrapper;
 
 import java.lang.reflect.Method;
 import java.util.List;
-import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CompletionStage;
 
 /**
  * Abstract base class for AspectJ aspects that execute method calls through
@@ -186,12 +186,17 @@ public abstract class AbstractAsyncPipelineAspect {
     /**
      * Builds a full {@link AsyncJoinPointWrapper} chain without executing it.
      *
-     * <p>Intended for diagnostics and testing — not for hot-path execution.</p>
+     * <p>Returns a chain with full {@link eu.inqudium.core.pipeline.Wrapper}
+     * introspection. Intended for diagnostics and testing — not for hot-path
+     * execution.</p>
+     *
+     * <p>Naming-consistent with {@link AbstractPipelineAspect#inspectPipeline}
+     * in the sync counterpart.</p>
      *
      * @param coreExecutor the async join point execution
      * @return the outermost wrapper of the assembled async chain
      */
-    protected AsyncJoinPointWrapper<Object> buildAsyncPipeline(
+    public AsyncJoinPointWrapper<Object> inspectAsyncPipeline(
             JoinPointExecutor<CompletionStage<Object>> coreExecutor) {
         return new AsyncAspectPipelineBuilder<Object>()
                 .addProviders(providers())
@@ -208,7 +213,7 @@ public abstract class AbstractAsyncPipelineAspect {
      * @param method       the target method, used to filter providers
      * @return the outermost wrapper of the assembled async chain
      */
-    protected AsyncJoinPointWrapper<Object> buildAsyncPipeline(
+    public AsyncJoinPointWrapper<Object> inspectAsyncPipeline(
             JoinPointExecutor<CompletionStage<Object>> coreExecutor, Method method) {
         return new AsyncAspectPipelineBuilder<Object>()
                 .addProviders(providers(), method)

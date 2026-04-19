@@ -250,7 +250,7 @@ class AbstractAsyncPipelineAspectTest {
             ));
 
             // When
-            AsyncJoinPointWrapper<Object> pipeline = aspect.buildAsyncPipeline(() -> {
+            AsyncJoinPointWrapper<Object> pipeline = aspect.inspectAsyncPipeline(() -> {
                 coreCallCount.incrementAndGet();
                 return CompletableFuture.completedFuture("result");
             });
@@ -271,7 +271,7 @@ class AbstractAsyncPipelineAspectTest {
             ));
 
             // When
-            String hierarchy = aspect.buildAsyncPipeline(
+            String hierarchy = aspect.inspectAsyncPipeline(
                             () -> CompletableFuture.completedFuture(null))
                     .toStringHierarchy();
 
@@ -288,7 +288,7 @@ class AbstractAsyncPipelineAspectTest {
             AbstractAsyncPipelineAspect aspect = asyncAspectWith(List.of(
                     asyncProvider("LAYER", 10, AsyncLayerAction.passThrough())
             ));
-            AsyncJoinPointWrapper<Object> pipeline = aspect.buildAsyncPipeline(
+            AsyncJoinPointWrapper<Object> pipeline = aspect.inspectAsyncPipeline(
                     () -> CompletableFuture.completedFuture("deferred"));
 
             // When
