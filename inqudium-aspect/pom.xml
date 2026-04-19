@@ -28,6 +28,12 @@
             <artifactId>inqudium-core</artifactId>
             <version>${project.version}</version>
         </dependency>
+        <dependency>
+            <groupId>eu.inqudium</groupId>
+            <artifactId>inqudium-imperative</artifactId>
+            <version>${project.version}</version>
+            <optional>true</optional>
+        </dependency>
 
         <!-- ========================= -->
         <!--  Imperative module (async)-->
