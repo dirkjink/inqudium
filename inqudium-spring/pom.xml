@@ -49,6 +49,17 @@
             <scope>compile</scope>
         </dependency>
 
+        <!-- JMH -->
+        <dependency>
+            <groupId>org.openjdk.jmh</groupId>
+            <artifactId>jmh-core</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.openjdk.jmh</groupId>
+            <artifactId>jmh-generator-annprocess</artifactId>
+            <scope>test</scope>
+        </dependency>
         <!-- Logging (SLF4J API only) -->
         <dependency>
             <groupId>org.slf4j</groupId>
@@ -84,6 +95,11 @@
         <dependency>
             <groupId>org.springframework</groupId>
             <artifactId>spring-context</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>eu.inqudium</groupId>
+            <artifactId>inqudium-aspect</artifactId>
             <scope>test</scope>
         </dependency>
     </dependencies>
