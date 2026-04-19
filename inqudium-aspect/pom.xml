@@ -14,10 +14,6 @@
     <name>Inqudium :: Aspect</name>
     <description>AspectJ integration for the inqudium wrapper pipeline</description>
 
-    <properties>
-        <aspectj.version>1.9.22.1</aspectj.version>
-    </properties>
-
     <dependencies>
 
         <!-- ========================= -->
@@ -45,7 +41,7 @@
         <dependency>
             <groupId>org.aspectj</groupId>
             <artifactId>aspectjrt</artifactId>
-            <version>${aspectj.version}</version>
+            <scope>compile</scope>
         </dependency>
         <dependency>
             <groupId>org.aspectj</groupId>

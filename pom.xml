@@ -79,10 +79,12 @@
 
         <!-- Logging -->
         <slf4j.version>2.0.16</slf4j.version>
-        <logback.version>1.5.16</logback.version>
+        <logback.version>1.5.32</logback.version>
 
-        <!-- Spring Boot (for spring-boot3 module) -->
-        <spring-boot.version>3.4.3</spring-boot.version>
+        <!-- Spring & Spring Boot -->
+        <spring.version>7.0.6</spring.version>
+        <spring-boot.version>4.0.5</spring-boot.version>
+        <aspectj.version>1.9.25.1</aspectj.version>
 
         <!-- Plugin versions -->
         <maven-compiler-plugin.version>3.14.0</maven-compiler-plugin.version>
@@ -189,6 +191,17 @@
                 <version>${spring-boot.version}</version>
                 <type>pom</type>
                 <scope>import</scope>
+            </dependency>
+            <dependency>
+                <groupId>org.springframework</groupId>
+                <artifactId>spring-aop</artifactId>
+                <version>${spring.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.aspectj</groupId>
+                <artifactId>aspectjweaver</artifactId>
+                <version>${aspectj.version}</version>
+                <scope>compile</scope>
             </dependency>
 
             <!-- Testing -->
