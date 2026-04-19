@@ -29,16 +29,15 @@ import org.openjdk.jmh.infra.Blackhole;
 public class BaselineSpringAspect {
 
     /**
-     * Monotonically incremented per advice invocation.
-     */
-    @SuppressWarnings("FieldMayBeFinal")
-    private volatile long counter = 0L;
-
-    /**
      * Blackhole captured at setup time — aspects cannot take JMH-injected
      * blackholes through their advice signature, so we hold the reference here.
      */
     private final Blackhole blackhole;
+    /**
+     * Monotonically incremented per advice invocation.
+     */
+    @SuppressWarnings("FieldMayBeFinal")
+    private volatile long counter = 0L;
 
     public BaselineSpringAspect(Blackhole blackhole) {
         this.blackhole = blackhole;

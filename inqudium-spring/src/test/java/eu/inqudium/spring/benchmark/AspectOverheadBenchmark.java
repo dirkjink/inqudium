@@ -15,7 +15,6 @@ import org.openjdk.jmh.annotations.Warmup;
 import org.openjdk.jmh.infra.Blackhole;
 import org.openjdk.jmh.profile.GCProfiler;
 import org.openjdk.jmh.profile.MemPoolProfiler;
-import org.openjdk.jmh.profile.PausesProfiler;
 import org.openjdk.jmh.runner.Runner;
 import org.openjdk.jmh.runner.RunnerException;
 import org.openjdk.jmh.runner.options.Options;
@@ -202,6 +201,29 @@ import java.util.concurrent.TimeUnit;
 @State(Scope.Benchmark)
 public class AspectOverheadBenchmark {
 
+    /**
+     * Fixed input &mdash; its value is irrelevant, only that it is opaque
+     * to the JIT so the target method body cannot be folded into a constant.
+     */
+    private static final int INPUT = 42;
+    /**
+     * Raw target, no proxy, no aspect. The JIT is free to inline
+     * {@link BenchmarkServiceImpl#execute(int)} completely.
+     */
+    private BenchmarkService raw;
+    private BenchmarkService baselineJdkProxy;
+
+    // ---- JDK dynamic proxy variants ----
+    private BenchmarkService inqJdk1;
+    private BenchmarkService inqJdk2;
+    private BenchmarkService inqJdk3;
+    private BenchmarkService baselineCglibProxy;
+
+    // ---- CGLIB subclass proxy variants ----
+    private BenchmarkService inqCglib1;
+    private BenchmarkService inqCglib2;
+    private BenchmarkService inqCglib3;
+
     public static void main(String[] args) throws RunnerException {
         Options opt = new OptionsBuilder()
                 .addProfiler(GCProfiler.class)
@@ -212,39 +234,13 @@ public class AspectOverheadBenchmark {
         new Runner(opt).run();
     }
 
-    /**
-     * Fixed input &mdash; its value is irrelevant, only that it is opaque
-     * to the JIT so the target method body cannot be folded into a constant.
-     */
-    private static final int INPUT = 42;
-
-    /**
-     * Raw target, no proxy, no aspect. The JIT is free to inline
-     * {@link BenchmarkServiceImpl#execute(int)} completely.
-     */
-    private BenchmarkService raw;
-
-    // ---- JDK dynamic proxy variants ----
-
-    private BenchmarkService baselineJdkProxy;
-    private BenchmarkService inqJdk1;
-    private BenchmarkService inqJdk2;
-    private BenchmarkService inqJdk3;
-
-    // ---- CGLIB subclass proxy variants ----
-
-    private BenchmarkService baselineCglibProxy;
-    private BenchmarkService inqCglib1;
-    private BenchmarkService inqCglib2;
-    private BenchmarkService inqCglib3;
-
     @Setup(Level.Trial)
     public void setup(Blackhole bh) {
         // Raw reference, no proxy
         this.raw = new BenchmarkServiceImpl();
 
         // Baselines in both proxy modes
-        this.baselineJdkProxy   = buildProxy(new BaselineSpringAspect(bh), false);
+        this.baselineJdkProxy = buildProxy(new BaselineSpringAspect(bh), false);
         this.baselineCglibProxy = buildProxy(new BaselineSpringAspect(bh), true);
 
         // Inqudium pipeline, JDK proxy, 1/2/3 layers
@@ -264,10 +260,10 @@ public class AspectOverheadBenchmark {
      * {@code ResolvedPipeline.resolve} is deterministic and preserves
      * insertion order.
      *
-     * @param bh                 the JMH blackhole captured at setup time
-     * @param layerCount         how many layers the pipeline should contain
-     * @param proxyTargetClass   {@code false} for JDK dynamic proxy,
-     *                           {@code true} for CGLIB subclass proxy
+     * @param bh               the JMH blackhole captured at setup time
+     * @param layerCount       how many layers the pipeline should contain
+     * @param proxyTargetClass {@code false} for JDK dynamic proxy,
+     *                         {@code true} for CGLIB subclass proxy
      */
     private BenchmarkService buildInqudiumProxy(Blackhole bh, int layerCount,
                                                 boolean proxyTargetClass) {
@@ -283,10 +279,10 @@ public class AspectOverheadBenchmark {
      * {@link AspectJProxyFactory} with the given aspect bound, selecting
      * the proxy mechanism explicitly.
      *
-     * @param aspect             the {@code @Aspect}-annotated advice object
-     * @param proxyTargetClass   {@code false} forces JDK dynamic proxy (via
-     *                           the implemented interface),
-     *                           {@code true} forces CGLIB subclass proxy
+     * @param aspect           the {@code @Aspect}-annotated advice object
+     * @param proxyTargetClass {@code false} forces JDK dynamic proxy (via
+     *                         the implemented interface),
+     *                         {@code true} forces CGLIB subclass proxy
      */
     private BenchmarkService buildProxy(Object aspect, boolean proxyTargetClass) {
         AspectJProxyFactory pf = new AspectJProxyFactory(new BenchmarkServiceImpl());
@@ -345,4 +341,4 @@ public class AspectOverheadBenchmark {
     public int inqudium_cglib_3_layers() {
         return inqCglib3.execute(INPUT);
     }
- }
+}
