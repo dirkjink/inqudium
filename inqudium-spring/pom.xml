@@ -34,29 +34,37 @@
             <groupId>eu.inqudium</groupId>
             <artifactId>inqudium-imperative</artifactId>
             <version>${project.version}</version>
+            <optional>true</optional>
         </dependency>
 
         <!-- Spring AOP (@Aspect, ProceedingJoinPoint) — NOT spring-boot -->
         <dependency>
             <groupId>org.springframework</groupId>
             <artifactId>spring-aop</artifactId>
+            <scope>compile</scope>
         </dependency>
         <dependency>
             <groupId>org.aspectj</groupId>
             <artifactId>aspectjweaver</artifactId>
+            <scope>compile</scope>
         </dependency>
 
         <!-- Logging (SLF4J API only) -->
         <dependency>
             <groupId>org.slf4j</groupId>
             <artifactId>slf4j-api</artifactId>
+            <scope>provided</scope>
         </dependency>
         <dependency>
             <groupId>ch.qos.logback</groupId>
             <artifactId>logback-classic</artifactId>
             <scope>provided</scope>
         </dependency>
-
+        <dependency>
+            <groupId>org.springframework</groupId>
+            <artifactId>spring-aop</artifactId>
+            <scope>compile</scope>
+        </dependency>
         <!-- Test -->
         <dependency>
             <groupId>org.junit.jupiter</groupId>
