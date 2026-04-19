@@ -36,7 +36,7 @@ import java.util.function.Supplier;
  * <h3>Storage convention</h3>
  * <p>Layer actions are stored in <strong>outermost-first</strong> order —
  * consistent with {@code ResolvedPipeline} and {@code AsyncResolvedPipeline}.
- * The {@link PipelineDiagnostics#layerNames()} returned by {@link #layerNames()}
+ * The {@link ResolvedPipelineState#layerNames()} returned by {@link #layerNames()}
  * follows the same convention.</p>
  *
  * <h3>Usage</h3>
@@ -63,7 +63,7 @@ import java.util.function.Supplier;
  * <h3>Thread safety</h3>
  * <p>Instances are immutable and safe for concurrent use. The action array
  * is populated once at construction; the call-ID counter in
- * {@link PipelineDiagnostics} is thread-safe. No {@code ThreadLocal} or
+ * {@link ResolvedPipelineState} is thread-safe. No {@code ThreadLocal} or
  * shared mutable state — safe for virtual threads.</p>
  *
  * @since 0.8.0
@@ -84,7 +84,7 @@ public final class SyncPipelineTerminal {
      * Shared diagnostics state — chain ID, per-invocation call-ID counter,
      * layer names, and formatted hierarchy rendering.
      */
-    private final PipelineDiagnostics diagnostics;
+    private final ResolvedPipelineState pipelineState;
 
     @SuppressWarnings("unchecked")
     private SyncPipelineTerminal(InqPipeline pipeline) {
@@ -115,7 +115,7 @@ public final class SyncPipelineTerminal {
             names.add(element.getElementType().name() + "(" + element.getName() + ")");
         }
         this.actions = acts;
-        this.diagnostics = PipelineDiagnostics.create(Collections.unmodifiableList(names));
+        this.pipelineState = ResolvedPipelineState.create(Collections.unmodifiableList(names));
     }
 
     /**
@@ -187,8 +187,8 @@ public final class SyncPipelineTerminal {
      */
     @SuppressWarnings("unchecked")
     public <R> R execute(JoinPointExecutor<R> executor) throws Throwable {
-        long callId = diagnostics.nextCallId();
-        long cid = diagnostics.chainId();
+        long callId = pipelineState.nextCallId();
+        long cid = pipelineState.chainId();
 
         // Terminal: invokes the executor and wraps checked exceptions for
         // transport through the chain's unchecked-only layer actions.
@@ -287,18 +287,7 @@ public final class SyncPipelineTerminal {
      * invocation.</p>
      */
     public long chainId() {
-        return diagnostics.chainId();
-    }
-
-    /**
-     * Returns the most recently generated call ID across all threads.
-     *
-     * <p><strong>Informational only.</strong> In concurrent environments
-     * this value does not correspond to any specific thread's call — see
-     * {@link PipelineDiagnostics#currentCallId()} for details.</p>
-     */
-    public long currentCallId() {
-        return diagnostics.currentCallId();
+        return pipelineState.chainId();
     }
 
     /**
@@ -306,20 +295,20 @@ public final class SyncPipelineTerminal {
      * the pattern {@code "ELEMENT_TYPE(name)"}, e.g. {@code "CIRCUIT_BREAKER(cb)"}.
      */
     public List<String> layerNames() {
-        return diagnostics.layerNames();
+        return pipelineState.layerNames();
     }
 
     /**
      * Returns the number of layers in this pipeline.
      */
     public int depth() {
-        return diagnostics.depth();
+        return pipelineState.depth();
     }
 
     /**
      * Returns a diagnostic string rendering the layer hierarchy.
      */
     public String toStringHierarchy() {
-        return diagnostics.toStringHierarchy();
+        return pipelineState.toStringHierarchy();
     }
 }

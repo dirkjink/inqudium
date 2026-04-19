@@ -346,22 +346,18 @@ class ProxyWrapperTest {
                     .isInstanceOfSatisfying(Wrapper.class, wrapper -> {
                         long chainId = wrapper.chainId();
                         String layerDescription = wrapper.layerDescription();
-                        long currentCallId = wrapper.currentCallId();
                         assertThat(layerDescription).isEqualTo("outer");
                         assertThat(wrapper.toStringHierarchy()).isEqualToIgnoringNewLines(
-                                "Chain-ID: " + chainId + " (current call-ID: " + currentCallId + ")"
-                                        + layerDescription + "  └── inner");
+                                "Chain-ID: " + chainId + layerDescription + "  └── inner");
                     });
             assertThat(outer)
                     .isInstanceOfSatisfying(Wrapper.class, wrapper -> {
                         Wrapper<?> innerWrapper = wrapper.inner();
                         long chainId = innerWrapper.chainId();
                         String layerDescription = innerWrapper.layerDescription();
-                        long currentCallId = innerWrapper.currentCallId();
                         assertThat(layerDescription).isEqualTo("inner");
                         assertThat(innerWrapper.toStringHierarchy()).isEqualToIgnoringNewLines(
-                                "Chain-ID: " + chainId + " (current call-ID: " + currentCallId + ")"
-                                        + layerDescription);
+                                "Chain-ID: " + chainId + layerDescription);
                     });
             assertThat(result.toCompletableFuture().join()).isEqualTo("async-order-20");
             assertThat(log.events).containsExactly(
@@ -525,22 +521,26 @@ class ProxyWrapperTest {
         @Test
         @DisplayName("should increment callId with each invocation")
         void should_increment_callId_with_each_invocation() {
-            // Given
+            // Given — a recording LayerAction that captures the callId parameter
+            // flowing through the chain on every invocation
+            List<Long> observedCallIds = new ArrayList<>();
+            LayerAction<Void, Object> recording = (chainId, callId, arg, next) -> {
+                observedCallIds.add(callId);
+                return next.execute(chainId, callId, arg);
+            };
             OrderService proxy = ProxyWrapper.createProxy(
                     OrderService.class, target, "counter",
-                    new SyncDispatchExtension(LayerAction.passThrough()));
-            Wrapper<?> wrapper = (Wrapper<?>) proxy;
+                    new SyncDispatchExtension(recording));
 
             // When
-            long callIdBefore = wrapper.currentCallId();
             proxy.getOrder(1);
-            long callIdAfterFirst = wrapper.currentCallId();
             proxy.getOrder(2);
-            long callIdAfterSecond = wrapper.currentCallId();
+            proxy.getOrder(3);
 
-            // Then
-            assertThat(callIdAfterFirst).isGreaterThan(callIdBefore);
-            assertThat(callIdAfterSecond).isGreaterThan(callIdAfterFirst);
+            // Then — each invocation produces a strictly greater callId than the previous
+            assertThat(observedCallIds).hasSize(3);
+            assertThat(observedCallIds.get(1)).isGreaterThan(observedCallIds.get(0));
+            assertThat(observedCallIds.get(2)).isGreaterThan(observedCallIds.get(1));
         }
 
         @Test

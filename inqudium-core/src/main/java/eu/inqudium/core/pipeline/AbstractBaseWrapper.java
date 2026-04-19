@@ -3,30 +3,33 @@ package eu.inqudium.core.pipeline;
 import eu.inqudium.core.element.InqElement;
 
 import java.util.Objects;
-import java.util.concurrent.atomic.AtomicLong;
-
-import static eu.inqudium.core.pipeline.ChainIdGenerator.CHAIN_ID_COUNTER;
+import java.util.function.LongSupplier;
 
 /**
  * Shared base for both synchronous and asynchronous wrapper chains.
  *
  * <p>This abstract class holds the immutable chain structure that all wrapper
  * layers share: the delegate reference, the human-readable layer name, the
- * chain ID, and the per-chain call-ID counter. Subclasses only need to wire
+ * chain ID, and the per-chain call-ID source. Subclasses only need to wire
  * the execution strategy (sync via {@link BaseWrapper}, or async in the
  * corresponding async module).</p>
  *
  * <h3>Chain ID inheritance</h3>
  * <p>When wrapping another {@code AbstractBaseWrapper}, the outer layer inherits
- * the inner layer's chain ID and call-ID counter, ensuring that all layers in
+ * the inner layer's chain ID and call-ID source, ensuring that all layers in
  * the same stack share identical IDs. When wrapping a plain delegate (not a
- * wrapper), a new chain is started with a fresh chain ID from the global counter.</p>
+ * wrapper), a new chain is started with a fresh chain ID from
+ * {@link PipelineIds#nextChainId()} and a fresh call-ID source from
+ * {@link PipelineIds#newInstanceCallIdSource()}.</p>
  *
  * <h3>Call ID generation</h3>
- * <p>The shared {@link AtomicLong} call-ID counter is incremented once per
- * invocation by the outermost layer. Inner layers do not generate new call IDs —
- * they receive the same call ID through the {@link InternalExecutor} chain.
- * This ensures exactly one CAS operation per invocation regardless of chain depth.</p>
+ * <p>The call-ID source is a {@link LongSupplier} produced by
+ * {@link PipelineIds#newInstanceCallIdSource()}. Each chain has its own
+ * supplier (and therefore its own private {@link java.util.concurrent.atomic.AtomicLong}),
+ * so threads calling different chains never contend on a single counter
+ * cache-line. The supplier is invoked once per invocation by the outermost
+ * layer; inner layers receive the resulting call ID as a primitive
+ * parameter through the {@link InternalExecutor} chain.</p>
  *
  * @param <T> the delegate type this wrapper wraps around (e.g. {@code Runnable},
  *            {@code Supplier<T>}, or another wrapper)
@@ -48,18 +51,19 @@ public abstract class AbstractBaseWrapper<T, S extends AbstractBaseWrapper<T, S>
 
     /**
      * Unique identifier for this wrapper chain. All layers wrapping the same
-     * core delegate share the same chain ID. Generated from the global
-     * {@link ChainIdGenerator#CHAIN_ID_COUNTER} when a new chain is started.
+     * core delegate share the same chain ID. Generated from
+     * {@link PipelineIds#nextChainId()} when a new chain is started.
      */
     private final long chainId;
 
     /**
-     * Shared call-ID counter for this chain. Incremented once by the outermost
-     * layer per invocation. All layers in the same chain reference the same
-     * {@link AtomicLong} instance, so the counter is consistent across the
-     * entire stack and safe for concurrent access.
+     * Per-chain call-ID source. All layers in the same chain reference the
+     * same supplier instance, so invoking it from any layer yields IDs from
+     * the same underlying counter. Obtained from
+     * {@link PipelineIds#newInstanceCallIdSource()} for a fresh chain, or
+     * inherited from the inner wrapper when extending an existing chain.
      */
-    private final AtomicLong callIdCounter;
+    private final LongSupplier callIdSource;
 
     /**
      * Core constructor that wires the chain structure.
@@ -71,9 +75,10 @@ public abstract class AbstractBaseWrapper<T, S extends AbstractBaseWrapper<T, S>
      *   <li>Determines whether this is a new chain or an extension of an existing one:
      *       <ul>
      *         <li>If the delegate is itself an {@code AbstractBaseWrapper}, the chain ID
-     *             and call-ID counter are <em>inherited</em> from the inner wrapper.</li>
-     *         <li>Otherwise, a new chain ID is generated from the global counter and
-     *             a fresh call-ID counter is created.</li>
+     *             and call-ID source are <em>inherited</em> from the inner wrapper.</li>
+     *         <li>Otherwise, a new chain ID is generated from
+     *             {@link PipelineIds#nextChainId()} and a fresh call-ID source is
+     *             obtained from {@link PipelineIds#newInstanceCallIdSource()}.</li>
      *       </ul>
      *   </li>
      * </ol>
@@ -91,14 +96,17 @@ public abstract class AbstractBaseWrapper<T, S extends AbstractBaseWrapper<T, S>
 
         // Chain structure inheritance: if the delegate is already a wrapper,
         // join its chain rather than starting a new one. This ensures that
-        // chainId() and currentCallId() are consistent across all layers.
+        // chainId() and generateCallId() are consistent across all layers.
         if (delegate instanceof AbstractBaseWrapper<?, ?> innerWrapper) {
             this.chainId = innerWrapper.chainId();
-            this.callIdCounter = innerWrapper.callIdCounter;
+            this.callIdSource = innerWrapper.callIdSource;
         } else {
-            // New chain: allocate a globally unique chain ID and a fresh counter
-            this.chainId = CHAIN_ID_COUNTER.incrementAndGet();
-            this.callIdCounter = new AtomicLong();
+            // New chain: allocate a globally unique chain ID and a fresh
+            // instance-local call-ID source. The source is a LongSupplier
+            // whose backing AtomicLong is private to this chain — no cross-
+            // chain contention.
+            this.chainId = PipelineIds.nextChainId();
+            this.callIdSource = PipelineIds.newInstanceCallIdSource();
         }
     }
 
@@ -152,19 +160,7 @@ public abstract class AbstractBaseWrapper<T, S extends AbstractBaseWrapper<T, S>
      * @return a new, unique call ID for the current invocation
      */
     protected long generateCallId() {
-        return callIdCounter.incrementAndGet();
-    }
-
-    /**
-     * {@inheritDoc}
-     *
-     * <p>Returns the most recently generated call ID. This is the value
-     * set by the last {@link #generateCallId()} call, which occurs at the
-     * start of each invocation through the outermost wrapper.</p>
-     */
-    @Override
-    public long currentCallId() {
-        return callIdCounter.get();
+        return callIdSource.getAsLong();
     }
 
     /**

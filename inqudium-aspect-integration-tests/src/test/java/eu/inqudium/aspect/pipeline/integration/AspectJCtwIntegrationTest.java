@@ -239,24 +239,6 @@ class AspectJCtwIntegrationTest {
             assertThat(orderPipeline).isNotSameAs(statusPipeline);
             assertThat(orderPipeline.chainId()).isNotEqualTo(statusPipeline.chainId());
         }
-
-        @Test
-        void call_id_increments_with_each_woven_invocation() {
-            // Given
-            ResolvedPipeline pipeline = singleton.getResolvedPipeline(placeOrderMethod);
-
-            // When — measure the increment per single call
-            long before = pipeline.currentCallId();
-            service.placeOrder("A", 1);
-            long afterFirst = pipeline.currentCallId();
-            service.placeOrder("B", 2);
-            long afterSecond = pipeline.currentCallId();
-
-            // Then — each woven call increments the counter by the same amount
-            long incrementPerCall = afterFirst - before;
-            assertThat(incrementPerCall).isPositive();
-            assertThat(afterSecond - afterFirst).isEqualTo(incrementPerCall);
-        }
     }
 
     // =========================================================================

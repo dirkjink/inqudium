@@ -3,12 +3,10 @@ package eu.inqudium.aspect.pipeline;
 import eu.inqudium.core.pipeline.InternalExecutor;
 import eu.inqudium.core.pipeline.JoinPointExecutor;
 import eu.inqudium.core.pipeline.LayerAction;
-import eu.inqudium.core.pipeline.PipelineDiagnostics;
+import eu.inqudium.core.pipeline.ResolvedPipelineState;
 import eu.inqudium.core.pipeline.Throws;
 
 import java.lang.reflect.Method;
-import java.util.ArrayList;
-import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 import java.util.concurrent.CompletionException;
@@ -27,10 +25,10 @@ import java.util.concurrent.CompletionException;
  *
  * <h3>Hot-path optimization</h3>
  * <p>The {@link LayerAction} references are extracted from providers
- * <strong>once</strong> at resolution time and stored in a pre-built array
- * in outermost-first order. At invocation time, the chain is composed inline
- * via a simple reverse loop over that array — no {@code Function<F,F>}
- * cascade, no {@code ThreadLocal}, no per-call provider access.</p>
+ * <strong>once</strong> at resolution time and stored in a pre-built array.
+ * At invocation time, the chain is composed inline via a simple reverse
+ * loop over that array — no {@code Function<F,F>} cascade, no
+ * {@code ThreadLocal}, no per-call provider access.</p>
  *
  * <p>Each invocation creates N+1 small {@link InternalExecutor} lambdas
  * (one terminal + one per layer). These lambdas are short-lived, do not
@@ -49,11 +47,11 @@ import java.util.concurrent.CompletionException;
  *
  * <h3>Thread safety</h3>
  * <p>Instances are safe for concurrent use. The pre-built action array is
- * immutable; the chain composition is purely stack-local; the call-ID
- * counter lives in {@link PipelineDiagnostics} and is backed by an
- * {@link java.util.concurrent.atomic.AtomicLong}. No {@code ThreadLocal}
- * or shared mutable state is used — the pipeline is safe for virtual threads,
- * reactive pipelines, and coroutines.</p>
+ * immutable; the chain composition is purely stack-local; call-ID generation
+ * is delegated to {@link ResolvedPipelineState}, which is thread-safe by
+ * construction. No {@code ThreadLocal} or shared mutable state is used —
+ * the pipeline is safe for virtual threads, reactive pipelines, and
+ * coroutines.</p>
  *
  * @since 0.7.0
  */
@@ -68,23 +66,23 @@ public final class ResolvedPipeline {
      * Sentinel instance for methods with no applicable layers.
      */
     private static final ResolvedPipeline EMPTY = new ResolvedPipeline(
-            EMPTY_ACTIONS, PipelineDiagnostics.EMPTY);
+            EMPTY_ACTIONS, ResolvedPipelineState.EMPTY);
 
     /**
-     * Pre-built, immutable array of layer actions in outermost-first order.
-     * Extracted from providers once during {@link #fromProviders} — no
-     * per-call provider access.
+     * Pre-built, immutable array of layer actions in execution order
+     * (outermost first). Extracted from providers once during
+     * {@link #fromProviders} — no per-call provider access.
      */
     private final LayerAction<Void, Object>[] actions;
 
-    private final PipelineDiagnostics diagnostics;
+    private final ResolvedPipelineState state;
 
     // ======================== Construction ========================
 
     private ResolvedPipeline(LayerAction<Void, Object>[] actions,
-                             PipelineDiagnostics diagnostics) {
+                             ResolvedPipelineState state) {
         this.actions = actions;
-        this.diagnostics = diagnostics;
+        this.state = state;
     }
 
     /**
@@ -118,18 +116,21 @@ public final class ResolvedPipeline {
     }
 
     /**
-     * Resolves and pre-composes a pipeline from the given providers without
-     * applying any {@code canHandle(Method)} filter.
+     * Resolves and pre-composes a pipeline from all given providers without
+     * applying {@code canHandle} filtering — used when no target
+     * {@link Method} is available (e.g. non-method join points, or aspects
+     * that reuse the same chain for every invocation).
      *
-     * <p>Used by {@link AbstractPipelineAspect#execute(JoinPointExecutor)}
-     * when no target method is available. The resulting pipeline includes
-     * all providers sorted by {@link AspectLayerProvider#order()}.</p>
+     * <p>Providers are sorted by {@link AspectLayerProvider#order()} once,
+     * then composed into the permanent action array. The returned instance
+     * can then be invoked repeatedly with different {@link JoinPointExecutor}s.</p>
      *
-     * @param providers all registered providers (will be sorted, not filtered)
-     * @return a pre-composed, reusable pipeline containing every provider
-     * @throws IllegalArgumentException if providers is null
+     * @param providers all registered providers (will be sorted by order)
+     * @return a pre-composed, reusable pipeline
+     * @throws IllegalArgumentException if {@code providers} is null
      */
-    public static ResolvedPipeline resolveAll(List<? extends AspectLayerProvider<Object>> providers) {
+    public static ResolvedPipeline resolveAll(
+            List<? extends AspectLayerProvider<Object>> providers) {
         if (providers == null) {
             throw new IllegalArgumentException("Providers list must not be null");
         }
@@ -145,10 +146,8 @@ public final class ResolvedPipeline {
      * Builds a {@code ResolvedPipeline} from an already filtered and sorted
      * provider list.
      *
-     * <p>Extracts layer actions and names in a single pass. Actions go to a
-     * permanent array; names go to an {@link ArrayList} sized exactly to
-     * avoid growth and wrapped unmodifiable — this avoids the array copy
-     * performed by {@code List.of(E...)} when called with an array argument.</p>
+     * <p>Extracts layer actions and names in a single pass. The actions are
+     * stored in a permanent array; names go to {@link ResolvedPipelineState}.</p>
      */
     private static ResolvedPipeline fromProviders(
             List<? extends AspectLayerProvider<Object>> providers) {
@@ -158,16 +157,15 @@ public final class ResolvedPipeline {
 
         int size = providers.size();
         LayerAction<Void, Object>[] acts = newActionArray(size);
-        List<String> names = new ArrayList<>(size);
+        String[] names = new String[size];
 
         for (int i = 0; i < size; i++) {
             AspectLayerProvider<Object> p = providers.get(i);
             acts[i] = p.layerAction();
-            names.add(p.layerName());
+            names[i] = p.layerName();
         }
 
-        return new ResolvedPipeline(acts,
-                PipelineDiagnostics.create(Collections.unmodifiableList(names)));
+        return new ResolvedPipeline(acts, ResolvedPipelineState.create(List.of(names)));
     }
 
     @SuppressWarnings("unchecked")
@@ -197,8 +195,8 @@ public final class ResolvedPipeline {
      * @throws Throwable any exception from the delegate or from layer actions
      */
     public Object execute(JoinPointExecutor<Object> coreExecutor) throws Throwable {
-        long callId = diagnostics.nextCallId();
-        long cid = diagnostics.chainId();
+        long callId = state.nextCallId();
+        long cid = state.chainId();
 
         // Terminal — wraps the actual method invocation
         InternalExecutor<Void, Object> current = (c, ca, a) -> {
@@ -210,9 +208,7 @@ public final class ResolvedPipeline {
         };
 
         // Compose chain inside-out from pre-built action array.
-        // Actions are stored in outermost-first order, so reverse iteration
-        // wraps each layer around the prior result — the last iteration
-        // (i=0) yields the outermost executor.
+        // Each lambda captures only 2 references: the action and next.
         for (int i = actions.length - 1; i >= 0; i--) {
             LayerAction<Void, Object> action = actions[i];
             InternalExecutor<Void, Object> next = current;
@@ -232,32 +228,21 @@ public final class ResolvedPipeline {
      * Returns the chain ID assigned to this resolved pipeline.
      */
     public long chainId() {
-        return diagnostics.chainId();
-    }
-
-    /**
-     * Returns the most recently generated call ID across all threads.
-     *
-     * <p><strong>Informational only.</strong> In concurrent environments this
-     * value does not correspond to any specific thread's call — see
-     * {@link PipelineDiagnostics#currentCallId()} for details.</p>
-     */
-    public long currentCallId() {
-        return diagnostics.currentCallId();
+        return state.chainId();
     }
 
     /**
      * Returns the layer names in order (outermost first).
      */
     public List<String> layerNames() {
-        return diagnostics.layerNames();
+        return state.layerNames();
     }
 
     /**
      * Returns the number of layers in this pipeline.
      */
     public int depth() {
-        return diagnostics.depth();
+        return state.depth();
     }
 
     /**
@@ -267,6 +252,6 @@ public final class ResolvedPipeline {
      * @return a formatted hierarchy string
      */
     public String toStringHierarchy() {
-        return diagnostics.toStringHierarchy();
+        return state.toStringHierarchy();
     }
 }

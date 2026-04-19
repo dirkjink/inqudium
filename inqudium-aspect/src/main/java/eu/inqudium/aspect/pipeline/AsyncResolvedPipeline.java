@@ -1,81 +1,70 @@
 package eu.inqudium.aspect.pipeline;
 
 import eu.inqudium.core.pipeline.JoinPointExecutor;
-import eu.inqudium.core.pipeline.PipelineDiagnostics;
+import eu.inqudium.core.pipeline.ResolvedPipelineState;
 import eu.inqudium.imperative.core.pipeline.AsyncLayerAction;
 import eu.inqudium.imperative.core.pipeline.InternalAsyncExecutor;
 
 import java.lang.reflect.Method;
-import java.util.ArrayList;
-import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.CompletionStage;
+import java.util.function.Function;
 
 /**
- * A pre-composed, immutable async pipeline that can be executed repeatedly
- * with different {@link JoinPointExecutor} instances — without rebuilding
- * the chain structure on every call.
+ * A pre-composed, immutable async pipeline that can be executed repeatedly with
+ * different {@link JoinPointExecutor} instances — without rebuilding the chain
+ * structure on every call.
  *
- * <p>Async counterpart to {@link ResolvedPipeline}, using the same
- * array-based composition pattern. Layer actions are stored in outermost-first
- * order; the per-call cost is a single reverse loop over that array — no
- * {@code Function.apply()} dispatch, no cascade unwinding.</p>
+ * <p>The async counterpart to {@link ResolvedPipeline}. Applies the same
+ * optimization: the {@link AsyncLayerAction} chain is composed into a single
+ * {@code Function<InternalAsyncExecutor, InternalAsyncExecutor>} at resolution
+ * time. At invocation time, only the terminal executor is created.</p>
  *
- * <h3>Two-phase execution semantics</h3>
+ * <h3>Two-phase execution</h3>
  * <p>Each async layer has two phases:</p>
  * <ul>
- *   <li><strong>Start phase</strong> (synchronous): runs on the calling
- *       thread before {@code next.executeAsync()} returns.</li>
- *   <li><strong>End phase</strong> (asynchronous): attached via
- *       {@code whenComplete()}, {@code thenApply()}, etc. — runs when the
- *       downstream stage completes.</li>
+ *   <li><strong>Start phase</strong> (synchronous): code before
+ *       {@code next.executeAsync()} runs on the calling thread.</li>
+ *   <li><strong>End phase</strong> (asynchronous): code attached via
+ *       {@code whenComplete()}, {@code thenApply()}, etc. runs when the
+ *       async operation completes.</li>
  * </ul>
  *
- * <h3>Error channel</h3>
- * <p>{@link #execute(JoinPointExecutor)} <strong>never throws</strong>. All
- * failures — whether from a layer's synchronous start phase or from the
- * asynchronous completion — are delivered through the returned
- * {@link CompletionStage}.</p>
- *
  * <h3>Thread safety</h3>
- * <p>Instances are safe for concurrent use. The action array is immutable;
- * chain composition is purely stack-local; the call-ID counter lives in
- * {@link PipelineDiagnostics} and is backed by an
- * {@link java.util.concurrent.atomic.AtomicLong}. No {@code ThreadLocal} or
- * shared mutable state — safe for virtual threads and reactive pipelines.</p>
+ * <p>Instances are immutable and safe for concurrent use. Call-ID generation
+ * is delegated to {@link ResolvedPipelineState}, which is thread-safe by
+ * construction.</p>
  *
  * @since 0.7.0
  */
 public final class AsyncResolvedPipeline {
 
     /**
-     * Sentinel empty action array — avoids null checks on the execution path.
+     * The pre-composed async chain factory. Takes a terminal async executor
+     * and returns the fully composed chain that traverses all layers before
+     * reaching the terminal.
      */
-    private static final AsyncLayerAction<Void, Object>[] EMPTY_ACTIONS = newActionArray(0);
+    private final Function<InternalAsyncExecutor<Void, Object>,
+            InternalAsyncExecutor<Void, Object>> chainFactory;
 
     /**
-     * Sentinel instance for methods with no applicable async layers.
+     * Per-instance state — chain ID, call-ID source, and layer names.
+     * Obtained from {@link ResolvedPipelineState#create(List)} at resolution
+     * time.
      */
-    private static final AsyncResolvedPipeline EMPTY = new AsyncResolvedPipeline(
-            EMPTY_ACTIONS, PipelineDiagnostics.EMPTY);
-
-    /**
-     * Pre-built, immutable array of async layer actions in outermost-first
-     * order. Extracted from providers once during {@link #fromProviders}.
-     */
-    private final AsyncLayerAction<Void, Object>[] actions;
-
-    private final PipelineDiagnostics diagnostics;
+    private final ResolvedPipelineState state;
 
     // ======================== Construction ========================
 
-    private AsyncResolvedPipeline(AsyncLayerAction<Void, Object>[] actions,
-                                  PipelineDiagnostics diagnostics) {
-        this.actions = actions;
-        this.diagnostics = diagnostics;
+    private AsyncResolvedPipeline(
+            Function<InternalAsyncExecutor<Void, Object>,
+                    InternalAsyncExecutor<Void, Object>> chainFactory,
+            ResolvedPipelineState state) {
+        this.chainFactory = chainFactory;
+        this.state = state;
     }
 
     /**
@@ -85,18 +74,11 @@ public final class AsyncResolvedPipeline {
      * @param providers all registered async providers (will be filtered and sorted)
      * @param method    the target method for {@code canHandle} filtering
      * @return a pre-composed, reusable async pipeline
-     * @throws IllegalArgumentException if providers or method is null
      */
     public static AsyncResolvedPipeline resolve(
             List<? extends AsyncAspectLayerProvider<Object>> providers,
             Method method) {
-        if (providers == null) {
-            throw new IllegalArgumentException("Providers list must not be null");
-        }
-        if (method == null) {
-            throw new IllegalArgumentException("Method must not be null");
-        }
-
+        // Resolve applicable providers once — filter and sort in a single pass
         List<? extends AsyncAspectLayerProvider<Object>> applicable = providers.stream()
                 .filter(p -> p.canHandle(method))
                 .sorted(Comparator.comparingInt(AsyncAspectLayerProvider::order))
@@ -106,17 +88,19 @@ public final class AsyncResolvedPipeline {
     }
 
     /**
-     * Resolves and pre-composes an async pipeline from the given providers
-     * without applying any {@code canHandle(Method)} filter.
+     * Resolves and pre-composes an async pipeline from all given providers
+     * without applying {@code canHandle} filtering — used when no target
+     * {@link Method} is available (e.g. non-method join points, or aspects
+     * that reuse the same chain for every invocation).
      *
-     * <p>Used by
-     * {@link AbstractAsyncPipelineAspect#executeThroughAsync(JoinPointExecutor)}
-     * when no target method is available. The resulting pipeline includes
-     * all providers sorted by {@link AsyncAspectLayerProvider#order()}.</p>
+     * <p>Providers are sorted by {@link AsyncAspectLayerProvider#order()}
+     * once, then composed into the permanent chain factory. The returned
+     * instance can then be invoked repeatedly with different
+     * {@link JoinPointExecutor}s.</p>
      *
-     * @param providers all registered async providers (will be sorted, not filtered)
-     * @return a pre-composed, reusable async pipeline containing every provider
-     * @throws IllegalArgumentException if providers is null
+     * @param providers all registered async providers (will be sorted by order)
+     * @return a pre-composed, reusable async pipeline
+     * @throws IllegalArgumentException if {@code providers} is null
      */
     public static AsyncResolvedPipeline resolveAll(
             List<? extends AsyncAspectLayerProvider<Object>> providers) {
@@ -132,83 +116,107 @@ public final class AsyncResolvedPipeline {
     }
 
     /**
-     * Builds an {@code AsyncResolvedPipeline} from an already filtered and
-     * sorted provider list. Names go into an {@link ArrayList} sized exactly
-     * and wrapped unmodifiable — this avoids the array copy performed by
-     * {@code List.of(E...)} when called with an array argument.
+     * Builds an {@code AsyncResolvedPipeline} from an already filtered and sorted
+     * provider list. Extracts actions and names in separate passes over the
+     * same list — no redundant filtering or sorting.
      */
     private static AsyncResolvedPipeline fromProviders(
             List<? extends AsyncAspectLayerProvider<Object>> providers) {
-        if (providers.isEmpty()) {
-            return EMPTY;
-        }
+        List<AsyncLayerAction<Void, Object>> actions = providers.stream()
+                .map(AsyncAspectLayerProvider::asyncLayerAction)
+                .toList();
 
-        int size = providers.size();
-        AsyncLayerAction<Void, Object>[] acts = newActionArray(size);
-        List<String> names = new ArrayList<>(size);
+        List<String> names = providers.stream()
+                .map(AsyncAspectLayerProvider::layerName)
+                .toList();
 
-        for (int i = 0; i < size; i++) {
-            AsyncAspectLayerProvider<Object> p = providers.get(i);
-            acts[i] = p.asyncLayerAction();
-            names.add(p.layerName());
-        }
-
-        return new AsyncResolvedPipeline(acts,
-                PipelineDiagnostics.create(Collections.unmodifiableList(names)));
+        return new AsyncResolvedPipeline(
+                composeFactory(actions), ResolvedPipelineState.create(names));
     }
 
-    @SuppressWarnings("unchecked")
-    private static AsyncLayerAction<Void, Object>[] newActionArray(int size) {
-        return new AsyncLayerAction[size];
+    /**
+     * Composes the chain factory inside-out from the sorted list of async actions.
+     */
+    private static Function<InternalAsyncExecutor<Void, Object>,
+            InternalAsyncExecutor<Void, Object>> composeFactory(
+            List<AsyncLayerAction<Void, Object>> actions) {
+        Function<InternalAsyncExecutor<Void, Object>,
+                InternalAsyncExecutor<Void, Object>> factory = Function.identity();
+
+        for (int i = actions.size() - 1; i >= 0; i--) {
+            AsyncLayerAction<Void, Object> action = actions.get(i);
+            Function<InternalAsyncExecutor<Void, Object>,
+                    InternalAsyncExecutor<Void, Object>> outer = factory;
+
+            factory = terminal -> {
+                InternalAsyncExecutor<Void, Object> next = outer.apply(terminal);
+                return (chainId, callId, arg) ->
+                        action.executeAsync(chainId, callId, arg, next);
+            };
+        }
+        return factory;
     }
 
     // ======================== Execution ========================
 
     /**
-     * Executes the pre-composed async pipeline with the given join point
-     * executor. Never throws — all failures are delivered through the
-     * returned {@link CompletionStage}.
+     * Executes the pre-composed async pipeline with the given join point executor.
+     *
+     * <p>This method <strong>never throws</strong>. All exceptions — whether from the
+     * synchronous start phase or the asynchronous completion phase — are delivered
+     * through the returned {@link CompletionStage}. This guarantees a uniform error
+     * channel for callers:</p>
+     *
+     * <ul>
+     *   <li><strong>Synchronous failures</strong> (e.g. a layer's start-phase throws
+     *       before creating a {@code CompletionStage}) are caught and wrapped in a
+     *       {@link java.util.concurrent.CompletableFuture#failedFuture failed future}.</li>
+     *   <li><strong>Asynchronous failures</strong> (e.g. the downstream
+     *       {@code CompletionStage} completes exceptionally) propagate naturally
+     *       through the returned stage.</li>
+     * </ul>
+     *
+     * <p>This eliminates a common pitfall for {@link AsyncAspectLayerProvider}
+     * implementors: a {@code throw new IllegalArgumentException()} in a layer's
+     * start phase is delivered through the same channel as a
+     * {@code CompletableFuture.failedFuture(new IllegalArgumentException())},
+     * so the caller can handle both uniformly via {@code .exceptionally()},
+     * {@code .handle()}, or {@code .whenComplete()}.</p>
      *
      * @param coreExecutor the join point execution (typically
-     *                     {@code () -> (CompletionStage<Object>) pjp.proceed()})
+     *                     {@code () -> (CompletionStage<Object>) pjp.proceed()}),
+     *                     typed to enforce that the return value is a
+     *                     {@link CompletionStage} at compile time
      * @return a {@link CompletionStage} carrying the result or the failure —
      *         never {@code null}, never throws
      */
     public CompletionStage<Object> execute(
             JoinPointExecutor<CompletionStage<Object>> coreExecutor) {
-        long callId = diagnostics.nextCallId();
-        long cid = diagnostics.chainId();
+        long callId = state.nextCallId();
+        long cid = state.chainId();
 
         // Terminal: invokes the typed executor and bridges into the async chain.
-        InternalAsyncExecutor<Void, Object> current = (c, ca, a) -> {
+        // The CompletionStage return type is enforced by the method signature —
+        // no runtime instanceof check needed.
+        InternalAsyncExecutor<Void, Object> terminal = (c, ca, arg) -> {
             try {
                 return coreExecutor.proceed();
             } catch (RuntimeException | Error e) {
                 throw e;
             } catch (Throwable t) {
-                // Transport checked exceptions via CompletionException; unwrapped below
                 throw new CompletionException(t);
             }
         };
 
-        // Compose chain inside-out from the pre-built action array.
-        // Actions are stored in outermost-first order; reverse iteration
-        // wraps each layer around the prior result.
-        for (int i = actions.length - 1; i >= 0; i--) {
-            AsyncLayerAction<Void, Object> action = actions[i];
-            InternalAsyncExecutor<Void, Object> next = current;
-            current = (c, ca, a) -> action.executeAsync(c, ca, a, next);
-        }
-
         try {
-            return current.executeAsync(cid, callId, null);
+            return chainFactory.apply(terminal).executeAsync(cid, callId, null);
         } catch (CompletionException e) {
             // Unwrap transported checked exceptions from the terminal
             Throwable cause = e.getCause();
             return CompletableFuture.failedFuture(cause != null ? cause : e);
         } catch (Throwable e) {
-            // Any synchronous exception from a layer's start phase becomes
-            // a failed future — uniform error channel for callers.
+            // Any synchronous exception from a layer's start phase is
+            // converted to a failed future — uniform error channel
             return CompletableFuture.failedFuture(e);
         }
     }
@@ -217,25 +225,17 @@ public final class AsyncResolvedPipeline {
 
     /** Returns the chain ID assigned to this resolved pipeline. */
     public long chainId() {
-        return diagnostics.chainId();
-    }
-
-    /**
-     * Returns the most recently generated call ID across all threads.
-     * <strong>Informational only.</strong>
-     */
-    public long currentCallId() {
-        return diagnostics.currentCallId();
+        return state.chainId();
     }
 
     /** Returns the layer names in order (outermost first). */
     public List<String> layerNames() {
-        return diagnostics.layerNames();
+        return state.layerNames();
     }
 
     /** Returns the number of layers in this pipeline. */
     public int depth() {
-        return diagnostics.depth();
+        return state.depth();
     }
 
     /**
@@ -243,6 +243,6 @@ public final class AsyncResolvedPipeline {
      * {@link eu.inqudium.core.pipeline.Wrapper#toStringHierarchy()}.
      */
     public String toStringHierarchy() {
-        return diagnostics.toStringHierarchy();
+        return state.toStringHierarchy();
     }
 }

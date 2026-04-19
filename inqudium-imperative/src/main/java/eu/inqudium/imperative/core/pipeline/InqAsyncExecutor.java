@@ -2,7 +2,7 @@ package eu.inqudium.imperative.core.pipeline;
 
 import eu.inqudium.core.pipeline.InqExecutor;
 import eu.inqudium.core.pipeline.JoinPointExecutor;
-import eu.inqudium.core.pipeline.StandaloneIdGenerator;
+import eu.inqudium.core.pipeline.PipelineIds;
 
 import java.util.concurrent.Callable;
 import java.util.concurrent.CompletionException;
@@ -39,8 +39,8 @@ public interface InqAsyncExecutor<A, R> extends AsyncLayerAction<A, R> {
     @SuppressWarnings("unchecked")
     default CompletionStage<Void> executeAsyncRunnable(Runnable runnable) {
         return ((AsyncLayerAction<Void, Void>) this).executeAsync(
-                StandaloneIdGenerator.nextChainId(),
-                StandaloneIdGenerator.nextCallId(),
+                PipelineIds.nextChainId(),
+                PipelineIds.nextStandaloneCallId(),
                 null,
                 (chainId, callId, arg) -> {
                     runnable.run();
@@ -55,8 +55,8 @@ public interface InqAsyncExecutor<A, R> extends AsyncLayerAction<A, R> {
     @SuppressWarnings("unchecked")
     default <T> CompletionStage<T> executeAsyncSupplier(Supplier<CompletionStage<T>> supplier) {
         return ((AsyncLayerAction<Void, T>) this).executeAsync(
-                StandaloneIdGenerator.nextChainId(),
-                StandaloneIdGenerator.nextCallId(),
+                PipelineIds.nextChainId(),
+                PipelineIds.nextStandaloneCallId(),
                 null,
                 (chainId, callId, arg) -> supplier.get()
         );
@@ -71,8 +71,8 @@ public interface InqAsyncExecutor<A, R> extends AsyncLayerAction<A, R> {
             Callable<CompletionStage<V>> callable) throws Exception {
         try {
             return ((AsyncLayerAction<Void, V>) this).executeAsync(
-                    StandaloneIdGenerator.nextChainId(),
-                    StandaloneIdGenerator.nextCallId(),
+                    PipelineIds.nextChainId(),
+                    PipelineIds.nextStandaloneCallId(),
                     null,
                     (chainId, callId, arg) -> {
                         try {
@@ -101,8 +101,8 @@ public interface InqAsyncExecutor<A, R> extends AsyncLayerAction<A, R> {
     default CompletionStage<R> executeAsyncFunction(
             Function<A, CompletionStage<R>> function, A input) {
         return executeAsync(
-                StandaloneIdGenerator.nextChainId(),
-                StandaloneIdGenerator.nextCallId(),
+                PipelineIds.nextChainId(),
+                PipelineIds.nextStandaloneCallId(),
                 input,
                 (chainId, callId, arg) -> function.apply(arg)
         );
@@ -117,8 +117,8 @@ public interface InqAsyncExecutor<A, R> extends AsyncLayerAction<A, R> {
             JoinPointExecutor<CompletionStage<T>> execution) throws Throwable {
         try {
             return ((AsyncLayerAction<Void, T>) this).executeAsync(
-                    StandaloneIdGenerator.nextChainId(),
-                    StandaloneIdGenerator.nextCallId(),
+                    PipelineIds.nextChainId(),
+                    PipelineIds.nextStandaloneCallId(),
                     null,
                     (chainId, callId, arg) -> {
                         try {

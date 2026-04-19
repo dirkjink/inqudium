@@ -35,10 +35,9 @@ public interface Wrapper<S extends Wrapper<S>> {
      * core delegate.
      *
      * <p>This ID is assigned once when the innermost wrapper is constructed
-     * (via a global {@link java.util.concurrent.atomic.AtomicLong} counter) and
-     * then inherited by every outer layer. It serves as a zero-allocation
-     * correlation key for tracing and logging — all layers in the same chain
-     * produce the same {@code chainId}.</p>
+     * (via {@link PipelineIds#nextChainId()}) and then inherited by every outer
+     * layer. It serves as a zero-allocation correlation key for tracing and
+     * logging — all layers in the same chain produce the same {@code chainId}.</p>
      *
      * @return a primitive {@code long} chain identifier (never boxed)
      */
@@ -56,25 +55,13 @@ public interface Wrapper<S extends Wrapper<S>> {
     String layerDescription();
 
     /**
-     * Returns the current value of the chain's shared call-ID counter.
-     *
-     * <p>This counter is incremented once per invocation that enters the chain.
-     * Reading it before and after a call allows external code to confirm that
-     * an invocation traversed the chain and to correlate log entries.</p>
-     *
-     * @return the most recently generated call ID for this chain
-     */
-    long currentCallId();
-
-    /**
      * Renders the entire wrapper hierarchy as a formatted tree string,
      * starting from this layer and traversing inward via {@link #inner()}.
      *
-     * <p>The output includes the chain ID and the current call ID as a header,
-     * followed by each layer's description indented with tree-drawing characters.
-     * Example output:</p>
+     * <p>The output includes the chain ID as a header, followed by each layer's
+     * description indented with tree-drawing characters. Example output:</p>
      * <pre>
-     * Chain-ID: 42 (current call-ID: 7)
+     * Chain-ID: 42
      * auth
      *   └── timing
      *     └── logging
@@ -91,12 +78,9 @@ public interface Wrapper<S extends Wrapper<S>> {
         int maxDepth = 100;
         StringBuilder sb = new StringBuilder();
 
-        // Header line: chain ID and current call ID for tracing context
+        // Header line: chain ID for tracing context
         sb.append("Chain-ID: ")
                 .append(chainId())
-                .append(" (current call-ID: ")
-                .append(currentCallId())
-                .append(")")
                 .append("\n");
 
         // Walk the chain from outermost to innermost layer

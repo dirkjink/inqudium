@@ -6,7 +6,7 @@ import eu.inqudium.core.pipeline.InqPipeline;
 import eu.inqudium.core.pipeline.InternalExecutor;
 import eu.inqudium.core.pipeline.JoinPointExecutor;
 import eu.inqudium.core.pipeline.LayerAction;
-import eu.inqudium.core.pipeline.PipelineDiagnostics;
+import eu.inqudium.core.pipeline.ResolvedPipelineState;
 import eu.inqudium.core.pipeline.Throws;
 import eu.inqudium.imperative.core.pipeline.AsyncLayerAction;
 import eu.inqudium.imperative.core.pipeline.InqAsyncDecorator;
@@ -86,7 +86,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * <h3>Thread safety</h3>
  * <p>Instances are immutable and safe for concurrent use. The action arrays
  * are never modified after construction; the call-ID counter in
- * {@link PipelineDiagnostics} is thread-safe; the async-flag cache uses
+ * {@link ResolvedPipelineState} is thread-safe; the async-flag cache uses
  * {@link ConcurrentHashMap}. Safe for virtual threads.</p>
  *
  * @since 0.8.0
@@ -115,7 +115,7 @@ public final class HybridAspectPipelineTerminal {
      * layer names, and formatted hierarchy rendering. Shared between the
      * sync and async paths since any given call traverses exactly one of them.
      */
-    private final PipelineDiagnostics diagnostics;
+    private final ResolvedPipelineState pipelineState;
 
     /**
      * Cached sync/async decision per {@link Method}. The value is the result
@@ -160,7 +160,7 @@ public final class HybridAspectPipelineTerminal {
         }
         this.syncActions = syncActs;
         this.asyncActions = asyncActs;
-        this.diagnostics = PipelineDiagnostics.create(Collections.unmodifiableList(names));
+        this.pipelineState = ResolvedPipelineState.create(Collections.unmodifiableList(names));
     }
 
     /**
@@ -273,8 +273,8 @@ public final class HybridAspectPipelineTerminal {
      * {@code current} is the outermost executor.</p>
      */
     private Object executeSyncChain(JoinPointExecutor<Object> executor) throws Throwable {
-        long callId = diagnostics.nextCallId();
-        long cid = diagnostics.chainId();
+        long callId = pipelineState.nextCallId();
+        long cid = pipelineState.chainId();
 
         // Terminal: invokes the executor and wraps checked exceptions for
         // transport through the chain's unchecked-only layer actions.
@@ -309,8 +309,8 @@ public final class HybridAspectPipelineTerminal {
      */
     private CompletionStage<Object> executeAsyncChain(
             JoinPointExecutor<CompletionStage<Object>> executor) {
-        long callId = diagnostics.nextCallId();
-        long cid = diagnostics.chainId();
+        long callId = pipelineState.nextCallId();
+        long cid = pipelineState.chainId();
 
         // Terminal: invokes the executor and bridges checked exceptions
         // through CompletionException. Runtime exceptions and errors propagate
@@ -376,15 +376,7 @@ public final class HybridAspectPipelineTerminal {
      * Returns the chain ID assigned to this terminal instance.
      */
     public long chainId() {
-        return diagnostics.chainId();
-    }
-
-    /**
-     * Returns the most recently generated call ID across all threads.
-     * <strong>Informational only.</strong>
-     */
-    public long currentCallId() {
-        return diagnostics.currentCallId();
+        return pipelineState.chainId();
     }
 
     /**
@@ -392,20 +384,20 @@ public final class HybridAspectPipelineTerminal {
      * the pattern {@code "ELEMENT_TYPE(name)"}.
      */
     public List<String> layerNames() {
-        return diagnostics.layerNames();
+        return pipelineState.layerNames();
     }
 
     /**
      * Returns the number of layers in this pipeline.
      */
     public int depth() {
-        return diagnostics.depth();
+        return pipelineState.depth();
     }
 
     /**
      * Returns a diagnostic string rendering the layer hierarchy.
      */
     public String toStringHierarchy() {
-        return diagnostics.toStringHierarchy();
+        return pipelineState.toStringHierarchy();
     }
 }

@@ -191,52 +191,6 @@ class PipelinedAspectTest {
         }
 
         @Test
-        void current_call_id_is_zero_before_any_execution() {
-            // When — no proceed() has been called yet
-            long callId = chain.currentCallId();
-
-            // Then
-            assertThat(callId).isZero();
-        }
-
-        @Test
-        void current_call_id_increments_after_each_execution() throws Throwable {
-            // Given — build a real executable chain
-            JoinPointWrapper<Object> executableChain =
-                    aspect.inspectPipeline(() -> "result");
-
-            // When
-            executableChain.proceed();
-            long afterFirst = executableChain.currentCallId();
-            executableChain.proceed();
-            long afterSecond = executableChain.currentCallId();
-
-            // Then
-            assertThat(afterFirst).isEqualTo(1);
-            assertThat(afterSecond).isEqualTo(2);
-        }
-
-        @Test
-        void call_id_is_consistent_across_all_layers_after_execution() throws Throwable {
-            // Given
-            JoinPointWrapper<Object> executableChain =
-                    aspect.inspectPipeline(() -> "result");
-
-            // When
-            executableChain.proceed();
-
-            // Then — all layers report the same current call ID
-            long expectedCallId = executableChain.currentCallId();
-            Wrapper<?> current = executableChain;
-            while (current != null) {
-                assertThat(current.currentCallId())
-                        .as("currentCallId of layer '%s'", current.layerDescription())
-                        .isEqualTo(expectedCallId);
-                current = current.inner();
-            }
-        }
-
-        @Test
         void to_string_hierarchy_contains_chain_id_and_all_layer_names() {
             // When
             String hierarchy = chain.toStringHierarchy();

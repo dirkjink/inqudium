@@ -627,7 +627,7 @@ class InqPipelineEndToEndTest {
 
     @Nested
     @DisplayName("Pipeline diagnostics")
-    class PipelineDiagnostics {
+    class ResolvedPipelineState {
 
         @Test
         void to_string_shows_element_names_and_types_in_order() {

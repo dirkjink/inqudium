@@ -59,8 +59,8 @@ public interface InqExecutor<A, R> extends LayerAction<A, R> {
     @SuppressWarnings("unchecked")
     default void executeRunnable(Runnable runnable) {
         ((LayerAction<Void, Void>) this).execute(
-                StandaloneIdGenerator.nextChainId(),
-                StandaloneIdGenerator.nextCallId(),
+                PipelineIds.nextChainId(),
+                PipelineIds.nextStandaloneCallId(),
                 null,
                 // Terminal lambda: invokes the runnable and returns null (Void return)
                 (chainId, callId, arg) -> {
@@ -83,8 +83,8 @@ public interface InqExecutor<A, R> extends LayerAction<A, R> {
     @SuppressWarnings("unchecked")
     default <T> T executeSupplier(Supplier<T> supplier) {
         return ((LayerAction<Void, T>) this).execute(
-                StandaloneIdGenerator.nextChainId(),
-                StandaloneIdGenerator.nextCallId(),
+                PipelineIds.nextChainId(),
+                PipelineIds.nextStandaloneCallId(),
                 null,
                 // Terminal lambda: invokes the supplier and returns its value
                 (chainId, callId, arg) -> supplier.get()
@@ -110,8 +110,8 @@ public interface InqExecutor<A, R> extends LayerAction<A, R> {
     default <V> V executeCallable(Callable<V> callable) throws Exception {
         try {
             return ((LayerAction<Void, V>) this).execute(
-                    StandaloneIdGenerator.nextChainId(),
-                    StandaloneIdGenerator.nextCallId(),
+                    PipelineIds.nextChainId(),
+                    PipelineIds.nextStandaloneCallId(),
                     null,
                     (chainId, callId, arg) -> {
                         try {
@@ -141,8 +141,8 @@ public interface InqExecutor<A, R> extends LayerAction<A, R> {
      */
     default R executeFunction(Function<A, R> function, A input) {
         return execute(
-                StandaloneIdGenerator.nextChainId(),
-                StandaloneIdGenerator.nextCallId(),
+                PipelineIds.nextChainId(),
+                PipelineIds.nextStandaloneCallId(),
                 input,
                 // Terminal lambda: invokes the function with the chain argument
                 (chainId, callId, arg) -> function.apply(arg)
@@ -168,8 +168,8 @@ public interface InqExecutor<A, R> extends LayerAction<A, R> {
     default <T> T executeJoinPoint(JoinPointExecutor<T> execution) throws Throwable {
         try {
             return ((LayerAction<Void, T>) this).execute(
-                    StandaloneIdGenerator.nextChainId(),
-                    StandaloneIdGenerator.nextCallId(),
+                    PipelineIds.nextChainId(),
+                    PipelineIds.nextStandaloneCallId(),
                     null,
                     (chainId, callId, arg) -> {
                         try {
