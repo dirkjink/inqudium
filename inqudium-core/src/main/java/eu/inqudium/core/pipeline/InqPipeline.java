@@ -14,17 +14,55 @@ import java.util.function.BiFunction;
  * collects elements, sorts them by {@link PipelineOrdering}, and exposes the
  * ordered list. It knows nothing about execution paradigms (sync, async,
  * reactive) or dispatch mechanisms (functions, dynamic proxy, AspectJ).
- * Terminal operations live in paradigm-specific adapters:</p>
+ * Terminal operations live in paradigm-specific adapters.</p>
  *
- * <table>
- *   <tr><th>Module</th><th>Terminal</th><th>Uses</th></tr>
- *   <tr><td>inqudium-core</td><td>{@link SyncPipelineTerminal}</td>
- *       <td>{@link InqDecorator#decorateJoinPoint}</td></tr>
- *   <tr><td>inqudium-imperative</td><td>AsyncPipelineTerminal</td>
- *       <td>InqAsyncDecorator.decorateAsyncJoinPoint</td></tr>
- *   <tr><td>inqudium-aspect</td><td>AspectPipelineTerminal</td>
- *       <td>InqDecorator + ProceedingJoinPoint</td></tr>
- * </table>
+ * <h3>Terminal landscape</h3>
+ * <pre>
+ *                              InqPipeline
+ *                                  │
+ *               ┌──────────────────┼───────────────────────┐
+ *               │                  │                       │
+ *          Sync only           Async only              Hybrid (auto)
+ *               │                  │                       │
+ *     ┌─────────┴──────┐           │          ┌────────────┴────────────┐
+ *     │                │           │          │                         │
+ * SyncPipeline   ProxyPipeline     │    HybridProxy              HybridAspect
+ *  Terminal       Terminal         │    PipelineTerminal          PipelineTerminal
+ *  (core)         (core)           │    (imperative)              (aspect)
+ *     │                │           │         │                         │
+ *     ▼                ▼           │    ┌────┴────┐              ┌────┴────┐
+ *  execute()     protect()         │  sync?  async?            sync?  async?
+ *                (Proxy)           │    │       │                │       │
+ *                                  │    ▼       ▼                ▼       ▼
+ *                           AsyncPipeline  Sync    Async     Sync    Async
+ *                            Terminal     Term.    Term.     Term.    Term.
+ *                           (imperative)
+ * </pre>
+ *
+ * <h3>Terminal matrix</h3>
+ * <pre>
+ *                     Functions       Dynamic Proxy        AspectJ
+ *                  ┌──────────────┬──────────────────┬──────────────────┐
+ *   Sync           │ SyncPipeline │ ProxyPipeline    │ AspectPipeline   │
+ *                  │ Terminal     │ Terminal         │ Terminal         │
+ *                  ├──────────────┼──────────────────┼──────────────────┤
+ *   Async          │ AsyncPipeline│       —          │       —          │
+ *                  │ Terminal     │                  │                  │
+ *                  ├──────────────┼──────────────────┼──────────────────┤
+ *   Hybrid         │      —¹      │ HybridProxy      │ HybridAspect     │
+ *   (Sync+Async)   │              │ PipelineTerminal │ PipelineTerminal │
+ *                  ├──────────────┼──────────────────┼──────────────────┤
+ *   Reactive       │      —²      │       —²         │       —²         │
+ *   Kotlin Coro.   │      —²      │       —²         │       —²         │
+ *                  └──────────────┴──────────────────┴──────────────────┘
+ *
+ *   ¹ Not needed — the caller chooses sync or async terminal explicitly.
+ *   ² Future paradigm modules; same pattern: new decorator + new terminal.
+ * </pre>
+ *
+ * <p>All terminals use the same {@link #chain} fold mechanism — the only
+ * difference is which {@code decorateXxx()} method they invoke on each
+ * element.</p>
  *
  * <h3>Usage</h3>
  * <pre>{@code
@@ -38,11 +76,20 @@ import java.util.function.BiFunction;
  * // Sync terminal (inqudium-core)
  * SyncPipelineTerminal.of(pipeline).execute(() -> service.call());
  *
+ * // Dynamic proxy terminal (inqudium-core)
+ * ProxyPipelineTerminal.of(pipeline).protect(MyService.class, target);
+ *
  * // Async terminal (inqudium-imperative)
  * AsyncPipelineTerminal.of(pipeline).execute(() -> service.callAsync());
  *
+ * // Hybrid proxy — auto-dispatches sync vs async (inqudium-imperative)
+ * HybridProxyPipelineTerminal.of(pipeline).protect(MyService.class, target);
+ *
  * // AspectJ terminal (inqudium-aspect)
  * AspectPipelineTerminal.of(pipeline).executeAround(pjp);
+ *
+ * // Hybrid AspectJ — auto-dispatches sync vs async (inqudium-aspect)
+ * HybridAspectPipelineTerminal.of(pipeline).executeAround(pjp);
  * }</pre>
  *
  * <h3>Ordering</h3>
