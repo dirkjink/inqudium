@@ -80,14 +80,16 @@ public class InqAutoConfiguration {
      * Discovers all {@link InqElement} beans and registers them by name.
      *
      * <p>Each element's {@link InqElement#getName()} is used as the
-     * registry key. If two elements share the same name, the last one
-     * wins (with a warning logged).</p>
+     * registry key. If two elements share the same name, an
+     * {@link IllegalStateException} is thrown at startup to prevent
+     * ambiguous configurations from reaching production.</p>
      *
      * <p>If a custom {@link InqElementRegistry} bean is already defined,
      * this auto-configured one is skipped.</p>
      *
      * @param elements all InqElement beans discovered by Spring
      * @return the populated registry
+     * @throws IllegalStateException if two elements have the same name
      */
     @Bean
     @ConditionalOnMissingBean
@@ -97,10 +99,14 @@ public class InqAutoConfiguration {
         for (InqElement element : elements) {
             InqElement previous = registry.register(element.getName(), element);
             if (previous != null) {
-                log.warn("Duplicate InqElement name '{}': {} replaced by {}",
-                        element.getName(),
-                        previous.getClass().getSimpleName(),
-                        element.getClass().getSimpleName());
+                throw new IllegalStateException(
+                        "Duplicate InqElement name '" + element.getName()
+                                + "': bean of type " + previous.getClass().getName()
+                                + " is already registered, but a second bean of type "
+                                + element.getClass().getName()
+                                + " has the same name. Each InqElement bean must have a "
+                                + "unique name. Rename one of the beans or provide a "
+                                + "custom InqElementRegistry to resolve the conflict.");
             }
         }
 
