@@ -331,4 +331,99 @@ class HybridAspectPipelineTerminalTest {
             assertThat(trace).containsExactly("CB:async-enter", "CB:async-exit");
         }
     }
+
+    // =========================================================================
+    // Per-Method caching
+    // =========================================================================
+
+    @Nested
+    @DisplayName("Per-Method caching")
+    class PerMethodCaching {
+
+        @Test
+        void repeated_sync_calls_to_the_same_method_reuse_the_cached_chain() throws Throwable {
+            // Given
+            List<String> trace = new ArrayList<>();
+            HybridAspectPipelineTerminal terminal = HybridAspectPipelineTerminal.of(
+                    InqPipeline.builder()
+                            .shield(new DualDecorator("BH", InqElementType.BULKHEAD, trace))
+                            .build());
+
+            // When — three calls to the same sync method
+            terminal.executeAround(syncPjp("A"));
+            terminal.executeAround(syncPjp("B"));
+            terminal.executeAround(syncPjp("C"));
+
+            // Then — identical trace pattern each time (factory reused)
+            assertThat(trace).containsExactly(
+                    "BH:sync-enter", "BH:sync-exit",
+                    "BH:sync-enter", "BH:sync-exit",
+                    "BH:sync-enter", "BH:sync-exit"
+            );
+        }
+
+        @Test
+        void repeated_async_calls_to_the_same_method_reuse_the_cached_chain() throws Throwable {
+            // Given
+            List<String> trace = new ArrayList<>();
+            HybridAspectPipelineTerminal terminal = HybridAspectPipelineTerminal.of(
+                    InqPipeline.builder()
+                            .shield(new DualDecorator("BH", InqElementType.BULKHEAD, trace))
+                            .build());
+
+            // When — three calls to the same async method
+            for (int i = 0; i < 3; i++) {
+                Object result = terminal.executeAround(
+                        asyncPjp(CompletableFuture.completedFuture("R" + i)));
+                ((CompletionStage<?>) result).toCompletableFuture().join();
+            }
+
+            // Then
+            assertThat(trace).containsExactly(
+                    "BH:async-enter", "BH:async-exit",
+                    "BH:async-enter", "BH:async-exit",
+                    "BH:async-enter", "BH:async-exit"
+            );
+        }
+
+        @Test
+        void interleaved_sync_and_async_calls_each_use_the_correct_cached_chain()
+                throws Throwable {
+            // Given
+            List<String> trace = new ArrayList<>();
+            HybridAspectPipelineTerminal terminal = HybridAspectPipelineTerminal.of(
+                    InqPipeline.builder()
+                            .shield(new DualDecorator("BH", InqElementType.BULKHEAD, trace))
+                            .build());
+
+            // When — interleaved: sync, async, sync, async
+            terminal.executeAround(syncPjp("S1"));
+            Object a1 = terminal.executeAround(asyncPjp(CompletableFuture.completedFuture("A1")));
+            ((CompletionStage<?>) a1).toCompletableFuture().join();
+            terminal.executeAround(syncPjp("S2"));
+            Object a2 = terminal.executeAround(asyncPjp(CompletableFuture.completedFuture("A2")));
+            ((CompletionStage<?>) a2).toCompletableFuture().join();
+
+            // Then — each dispatched to the correct cached chain
+            assertThat(trace).containsExactly(
+                    "BH:sync-enter", "BH:sync-exit",
+                    "BH:async-enter", "BH:async-exit",
+                    "BH:sync-enter", "BH:sync-exit",
+                    "BH:async-enter", "BH:async-exit"
+            );
+        }
+
+        @Test
+        void cached_chain_returns_correct_results_on_repeated_calls() throws Throwable {
+            // Given
+            HybridAspectPipelineTerminal terminal = HybridAspectPipelineTerminal.of(
+                    InqPipeline.builder()
+                            .shield(new DualDecorator("CB", InqElementType.CIRCUIT_BREAKER, new ArrayList<>()))
+                            .build());
+
+            // When / Then — first call builds cache, second reuses it
+            assertThat(terminal.executeAround(syncPjp("first"))).isEqualTo("first");
+            assertThat(terminal.executeAround(syncPjp("second"))).isEqualTo("second");
+        }
+    }
 }

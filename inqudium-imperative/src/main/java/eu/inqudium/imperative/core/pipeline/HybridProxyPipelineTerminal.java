@@ -1,77 +1,91 @@
 package eu.inqudium.imperative.core.pipeline;
 
+import eu.inqudium.core.element.InqElement;
+import eu.inqudium.core.pipeline.InqDecorator;
 import eu.inqudium.core.pipeline.InqPipeline;
 import eu.inqudium.core.pipeline.JoinPointExecutor;
-import eu.inqudium.core.pipeline.SyncPipelineTerminal;
 
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
 import java.util.Objects;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Function;
 
 /**
  * Hybrid dynamic proxy terminal that automatically dispatches sync and
  * async method calls through the appropriate pipeline chain.
  *
  * <p>When a proxied method returns {@link CompletionStage}, the call is
- * routed through {@link AsyncPipelineTerminal} — elements use
- * {@link InqAsyncDecorator#decorateAsyncJoinPoint} and the permit/resource
- * lifecycle is tied to the stage's completion. All other methods are routed
- * through {@link SyncPipelineTerminal}.</p>
+ * routed through the async chain (elements use
+ * {@link InqAsyncDecorator#decorateAsyncJoinPoint}, resource lifecycle tied
+ * to stage completion). All other methods use the sync chain.</p>
  *
- * <h3>Why this matters</h3>
- * <p>A sync-only proxy releases resources (bulkhead permits, circuit breaker
- * accounting) as soon as the method returns. For async methods that return
- * {@code CompletionStage}, the method returns <em>before</em> the actual
- * work completes — sync resource release is premature:</p>
+ * <h3>Per-Method caching</h3>
+ * <p>The sync/async decision and the decorator chain factory are resolved
+ * <strong>once per {@link Method}</strong> and cached in a
+ * {@link ConcurrentHashMap}. Subsequent invocations of the same method
+ * only create the terminal lambda ({@code () → method.invoke(target, args)})
+ * and apply the pre-composed chain factory — no iteration, no sorting,
+ * no {@code isAssignableFrom} check.</p>
+ *
  * <pre>
- *   Sync proxy (wrong for async):     Hybrid proxy (correct):
- *   ────────────────────────           ──────────────────────
- *   BH acquire                        BH acquire
- *   target.callAsync()                target.callAsync()
- *   BH release  ← too early!          → returns CompletionStage
- *   stage still running...             stage.whenComplete → BH release  ← correct
+ *   First call to placeOrder():
+ *     1. method.getReturnType() → String → sync         ← once
+ *     2. pipeline.chain(identity, fold) → chainFactory   ← once
+ *     3. cache.put(placeOrder, CachedChain.sync(factory))
+ *     4. factory.apply(() → method.invoke(target, args)) ← per call
+ *     5. chain.proceed()                                  ← per call
+ *
+ *   Subsequent calls to placeOrder():
+ *     1. cache.get(placeOrder) → CachedChain.sync(factory)  ← fast path
+ *     2. factory.apply(() → method.invoke(target, args))     ← per call
+ *     3. chain.proceed()                                      ← per call
  * </pre>
  *
  * <h3>Usage</h3>
  * <pre>{@code
  * InqPipeline pipeline = InqPipeline.builder()
- *         .shield(circuitBreaker)   // implements both InqDecorator and InqAsyncDecorator
+ *         .shield(circuitBreaker)
  *         .shield(bulkhead)
  *         .build();
  *
  * HybridProxyPipelineTerminal terminal = HybridProxyPipelineTerminal.of(pipeline);
  * MyService proxy = terminal.protect(MyService.class, realService);
  *
- * // Sync method → SyncPipelineTerminal
- * proxy.findById(42);
- *
- * // Async method → AsyncPipelineTerminal
- * proxy.findByIdAsync(42);  // returns CompletionStage
+ * proxy.findById(42);           // sync chain
+ * proxy.findByIdAsync(42);      // async chain (CompletionStage return type)
  * }</pre>
  *
  * <h3>Element requirements</h3>
- * <p>Pipeline elements must implement <strong>both</strong>
- * {@link eu.inqudium.core.pipeline.InqDecorator} (for sync methods) and
- * {@link InqAsyncDecorator} (for async methods). The production elements
- * (Bulkhead, CircuitBreaker, Retry, etc.) implement both interfaces.</p>
+ * <p>Elements must implement <strong>both</strong>
+ * {@link InqDecorator} (sync) and {@link InqAsyncDecorator} (async).
+ * A {@link ClassCastException} with a descriptive message is thrown at
+ * chain-build time if an element is missing the required interface.</p>
  *
  * <h3>Thread safety</h3>
- * <p>Instances and created proxies are safe for concurrent use.</p>
+ * <p>Instances and created proxies are safe for concurrent use. The
+ * per-Method cache uses {@link ConcurrentHashMap} — concurrent first-access
+ * to the same method may redundantly build the chain factory (benign race),
+ * but the result is always identical and immutable.</p>
  *
  * @since 0.8.0
  */
 public final class HybridProxyPipelineTerminal {
 
     private final InqPipeline pipeline;
-    private final SyncPipelineTerminal syncTerminal;
-    private final AsyncPipelineTerminal asyncTerminal;
+
+    /**
+     * Pre-composed chain factories, cached per Method. The fast path
+     * (after first access) is a single {@code ConcurrentHashMap.get()}.
+     */
+    private final ConcurrentHashMap<Method, CachedChain> chainCache =
+            new ConcurrentHashMap<>();
 
     private HybridProxyPipelineTerminal(InqPipeline pipeline) {
         this.pipeline = pipeline;
-        this.syncTerminal = SyncPipelineTerminal.of(pipeline);
-        this.asyncTerminal = AsyncPipelineTerminal.of(pipeline);
     }
 
     /**
@@ -97,15 +111,7 @@ public final class HybridProxyPipelineTerminal {
 
     /**
      * Creates a JDK dynamic proxy that routes sync and async method calls
-     * through the appropriate pipeline chain.
-     *
-     * <ul>
-     *   <li>Methods returning {@link CompletionStage} → async chain
-     *       (uniform error channel, never throws)</li>
-     *   <li>All other methods → sync chain</li>
-     *   <li>{@code toString}, {@code equals}, {@code hashCode} → handled
-     *       directly, no pipeline execution</li>
-     * </ul>
+     * through the appropriate cached pipeline chain.
      *
      * @param interfaceType the interface to proxy
      * @param target        the real implementation
@@ -137,42 +143,49 @@ public final class HybridProxyPipelineTerminal {
     // ======================== Generic execution ========================
 
     /**
-     * Executes a sync call through the pipeline.
-     *
-     * @param executor the core execution
-     * @param <R>      the return type
-     * @return the result
-     * @throws Throwable any exception from the core or pipeline elements
+     * Executes a sync call through the pipeline (uncached — builds chain per call).
+     * Useful for unit tests without a proxy.
      */
     public <R> R execute(JoinPointExecutor<R> executor) throws Throwable {
-        return syncTerminal.execute(executor);
+        @SuppressWarnings("unchecked")
+        Function<JoinPointExecutor<Object>, JoinPointExecutor<Object>> factory =
+                buildSyncChainFactory();
+        @SuppressWarnings("unchecked")
+        JoinPointExecutor<Object> chain = factory.apply((JoinPointExecutor<Object>) executor);
+        @SuppressWarnings("unchecked")
+        R result = (R) chain.proceed();
+        return result;
     }
 
     /**
-     * Executes an async call through the pipeline.
-     *
-     * <p>Never throws — all errors are delivered via the returned stage.</p>
-     *
-     * @param executor the core async execution
-     * @param <R>      the result type carried by the CompletionStage
-     * @return a CompletionStage carrying the result or failure
+     * Executes an async call through the pipeline (uncached — builds chain per call).
+     * Useful for unit tests without a proxy. Never throws.
      */
+    @SuppressWarnings("unchecked")
     public <R> CompletionStage<R> executeAsync(
             JoinPointExecutor<CompletionStage<R>> executor) {
-        return asyncTerminal.execute(executor);
+        try {
+            Function<JoinPointExecutor<CompletionStage<Object>>,
+                    JoinPointExecutor<CompletionStage<Object>>> factory =
+                    buildAsyncChainFactory();
+            JoinPointExecutor<CompletionStage<Object>> chain =
+                    factory.apply((JoinPointExecutor<CompletionStage<Object>>) (JoinPointExecutor<?>) executor);
+            return (CompletionStage<R>) chain.proceed();
+        } catch (Throwable e) {
+            return CompletableFuture.failedFuture(e);
+        }
     }
 
-    // ======================== Internal ========================
+    // ======================== Internal: dispatch ========================
 
     /**
-     * Dispatches a proxy method call to the sync or async chain based on
-     * the method's return type.
+     * Dispatches a proxy method call using the cached chain factory.
      */
     @SuppressWarnings("unchecked")
     private Object dispatch(Object proxy, Method method, Object[] args,
                             Object target, String summary) throws Throwable {
 
-        // Object methods — no pipeline execution
+        // Object methods — no pipeline execution, no caching
         if ("toString".equals(method.getName()) && method.getParameterCount() == 0) {
             return summary;
         }
@@ -183,14 +196,99 @@ public final class HybridProxyPipelineTerminal {
             return System.identityHashCode(proxy);
         }
 
-        // Async dispatch: return type is CompletionStage
-        if (CompletionStage.class.isAssignableFrom(method.getReturnType())) {
-            return asyncTerminal.execute(() ->
-                    (CompletionStage<Object>) invokeTarget(method, target, args));
-        }
+        // Resolve cached chain factory (once per Method)
+        CachedChain cached = resolveChain(method);
 
-        // Sync dispatch: all other return types
-        return syncTerminal.execute(() -> invokeTarget(method, target, args));
+        if (cached.async) {
+            // Async: apply pre-composed async factory to the terminal lambda
+            try {
+                JoinPointExecutor<CompletionStage<Object>> terminal =
+                        () -> (CompletionStage<Object>) invokeTarget(method, target, args);
+                return cached.asyncFactory.apply(terminal).proceed();
+            } catch (Throwable e) {
+                return CompletableFuture.failedFuture(e);
+            }
+        } else {
+            // Sync: apply pre-composed sync factory to the terminal lambda
+            JoinPointExecutor<Object> terminal = () -> invokeTarget(method, target, args);
+            return cached.syncFactory.apply(terminal).proceed();
+        }
+    }
+
+    // ======================== Internal: caching ========================
+
+    /**
+     * Resolves the cached chain factory for the given method, building it
+     * on first access. The return-type check and chain composition happen
+     * exactly once per Method.
+     */
+    private CachedChain resolveChain(Method method) {
+        CachedChain cached = chainCache.get(method);
+        if (cached != null) {
+            return cached;
+        }
+        return chainCache.computeIfAbsent(method, this::buildCachedChain);
+    }
+
+    /**
+     * Builds a {@link CachedChain} for the given method: determines sync
+     * vs async based on return type, and pre-composes the chain factory.
+     */
+    private CachedChain buildCachedChain(Method method) {
+        if (CompletionStage.class.isAssignableFrom(method.getReturnType())) {
+            return CachedChain.async(buildAsyncChainFactory());
+        } else {
+            return CachedChain.sync(buildSyncChainFactory());
+        }
+    }
+
+    /**
+     * Pre-composes a sync chain factory by folding the pipeline elements.
+     * The result is a function that, given a terminal executor, produces
+     * the fully decorated chain in a single apply() call.
+     */
+    @SuppressWarnings("unchecked")
+    private Function<JoinPointExecutor<Object>, JoinPointExecutor<Object>> buildSyncChainFactory() {
+        return pipeline.chain(
+                Function.<JoinPointExecutor<Object>>identity(),
+                (accFn, element) -> executor ->
+                        ((InqDecorator<Void, Object>) asDecorator(element))
+                                .decorateJoinPoint(accFn.apply(executor)));
+    }
+
+    /**
+     * Pre-composes an async chain factory by folding the pipeline elements.
+     */
+    @SuppressWarnings("unchecked")
+    private Function<JoinPointExecutor<CompletionStage<Object>>,
+            JoinPointExecutor<CompletionStage<Object>>> buildAsyncChainFactory() {
+        return pipeline.chain(
+                Function.<JoinPointExecutor<CompletionStage<Object>>>identity(),
+                (accFn, element) -> executor ->
+                        ((InqAsyncDecorator<Void, Object>) asAsyncDecorator(element))
+                                .decorateAsyncJoinPoint(accFn.apply(executor)));
+    }
+
+    // ======================== Internal: casting ========================
+
+    private static InqDecorator<?, ?> asDecorator(InqElement element) {
+        if (element instanceof InqDecorator<?, ?> d) return d;
+        throw new ClassCastException(
+                element.getClass().getName() + " ('" + element.getName()
+                        + "', type=" + element.getElementType()
+                        + ") does not implement InqDecorator. "
+                        + "HybridProxyPipelineTerminal requires all elements to implement "
+                        + "InqDecorator for sync methods.");
+    }
+
+    private static InqAsyncDecorator<?, ?> asAsyncDecorator(InqElement element) {
+        if (element instanceof InqAsyncDecorator<?, ?> d) return d;
+        throw new ClassCastException(
+                element.getClass().getName() + " ('" + element.getName()
+                        + "', type=" + element.getElementType()
+                        + ") does not implement InqAsyncDecorator. "
+                        + "HybridProxyPipelineTerminal requires all elements to implement "
+                        + "InqAsyncDecorator for async methods (returning CompletionStage).");
     }
 
     private static Object invokeTarget(Method method, Object target, Object[] args)
@@ -218,5 +316,43 @@ public final class HybridProxyPipelineTerminal {
         }
         sb.append(']');
         return sb.toString();
+    }
+
+    // ======================== Internal: cached chain holder ========================
+
+    /**
+     * Holds the pre-composed chain factory for a single {@link Method}.
+     * Immutable after construction.
+     *
+     * <p>The sync/async decision is made once and stored in the {@code async}
+     * flag. Only the relevant factory field is populated — the other is null.</p>
+     */
+    private static final class CachedChain {
+
+        final boolean async;
+        final Function<JoinPointExecutor<Object>, JoinPointExecutor<Object>> syncFactory;
+        final Function<JoinPointExecutor<CompletionStage<Object>>,
+                JoinPointExecutor<CompletionStage<Object>>> asyncFactory;
+
+        private CachedChain(
+                boolean async,
+                Function<JoinPointExecutor<Object>, JoinPointExecutor<Object>> syncFactory,
+                Function<JoinPointExecutor<CompletionStage<Object>>,
+                        JoinPointExecutor<CompletionStage<Object>>> asyncFactory) {
+            this.async = async;
+            this.syncFactory = syncFactory;
+            this.asyncFactory = asyncFactory;
+        }
+
+        static CachedChain sync(
+                Function<JoinPointExecutor<Object>, JoinPointExecutor<Object>> factory) {
+            return new CachedChain(false, factory, null);
+        }
+
+        static CachedChain async(
+                Function<JoinPointExecutor<CompletionStage<Object>>,
+                        JoinPointExecutor<CompletionStage<Object>>> factory) {
+            return new CachedChain(true, null, factory);
+        }
     }
 }

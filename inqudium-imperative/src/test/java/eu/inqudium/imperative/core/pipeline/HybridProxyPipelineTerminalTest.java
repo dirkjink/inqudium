@@ -374,4 +374,103 @@ class HybridProxyPipelineTerminalTest {
             assertThat(proxy.toString()).contains("HybridPipelineProxy");
         }
     }
+
+    // =========================================================================
+    // Per-Method caching
+    // =========================================================================
+
+    @Nested
+    @DisplayName("Per-Method caching")
+    class PerMethodCaching {
+
+        @Test
+        void repeated_sync_calls_produce_consistent_traces() {
+            // Given — the chain factory is built once per Method
+            List<String> trace = new ArrayList<>();
+            InqPipeline pipeline = InqPipeline.builder()
+                    .shield(new DualDecorator("BH", InqElementType.BULKHEAD, trace))
+                    .build();
+            OrderService proxy = HybridProxyPipelineTerminal.of(pipeline)
+                    .protect(OrderService.class, new RealOrderService());
+
+            // When — three sync calls (first builds factory, rest reuse it)
+            proxy.placeOrder("A");
+            proxy.placeOrder("B");
+            proxy.placeOrder("C");
+
+            // Then — identical trace pattern each time
+            assertThat(trace).containsExactly(
+                    "BH:sync-enter", "BH:sync-exit",
+                    "BH:sync-enter", "BH:sync-exit",
+                    "BH:sync-enter", "BH:sync-exit"
+            );
+        }
+
+        @Test
+        void repeated_async_calls_produce_consistent_traces() {
+            // Given
+            List<String> trace = new ArrayList<>();
+            InqPipeline pipeline = InqPipeline.builder()
+                    .shield(new DualDecorator("BH", InqElementType.BULKHEAD, trace))
+                    .build();
+            OrderService proxy = HybridProxyPipelineTerminal.of(pipeline)
+                    .protect(OrderService.class, new RealOrderService());
+
+            // When — three async calls
+            proxy.placeOrderAsync("A").toCompletableFuture().join();
+            proxy.placeOrderAsync("B").toCompletableFuture().join();
+            proxy.placeOrderAsync("C").toCompletableFuture().join();
+
+            // Then
+            assertThat(trace).containsExactly(
+                    "BH:async-enter", "BH:async-exit",
+                    "BH:async-enter", "BH:async-exit",
+                    "BH:async-enter", "BH:async-exit"
+            );
+        }
+
+        @Test
+        void interleaved_sync_and_async_calls_each_use_the_correct_cached_chain() {
+            // Given
+            List<String> trace = new ArrayList<>();
+            InqPipeline pipeline = InqPipeline.builder()
+                    .shield(new DualDecorator("BH", InqElementType.BULKHEAD, trace))
+                    .build();
+            OrderService proxy = HybridProxyPipelineTerminal.of(pipeline)
+                    .protect(OrderService.class, new RealOrderService());
+
+            // When — interleaved: sync, async, sync, async
+            proxy.placeOrder("S1");
+            proxy.placeOrderAsync("A1").toCompletableFuture().join();
+            proxy.placeOrder("S2");
+            proxy.placeOrderAsync("A2").toCompletableFuture().join();
+
+            // Then — each dispatched to the correct cached chain
+            assertThat(trace).containsExactly(
+                    "BH:sync-enter", "BH:sync-exit",
+                    "BH:async-enter", "BH:async-exit",
+                    "BH:sync-enter", "BH:sync-exit",
+                    "BH:async-enter", "BH:async-exit"
+            );
+        }
+
+        @Test
+        void all_invocations_return_correct_results_after_caching() {
+            // Given
+            OrderService proxy = HybridProxyPipelineTerminal.of(
+                    InqPipeline.builder()
+                            .shield(new DualDecorator("BH", InqElementType.BULKHEAD, new ArrayList<>()))
+                            .build())
+                    .protect(OrderService.class, new RealOrderService());
+
+            // When / Then — first call (builds cache), second call (uses cache)
+            assertThat(proxy.placeOrder("A")).isEqualTo("ordered:A");
+            assertThat(proxy.placeOrder("B")).isEqualTo("ordered:B");
+
+            assertThat(proxy.placeOrderAsync("C").toCompletableFuture().join())
+                    .isEqualTo("async-ordered:C");
+            assertThat(proxy.placeOrderAsync("D").toCompletableFuture().join())
+                    .isEqualTo("async-ordered:D");
+        }
+    }
 }
