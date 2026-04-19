@@ -1,0 +1,124 @@
+package eu.inqudium.spring.boot;
+
+import eu.inqudium.core.element.InqElement;
+import eu.inqudium.core.element.InqElementRegistry;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.boot.autoconfigure.AutoConfiguration;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
+import org.springframework.context.annotation.Bean;
+
+import java.util.List;
+
+/**
+ * Spring Boot auto-configuration for the Inqudium resilience pipeline.
+ *
+ * <h3>What it does</h3>
+ * <ol>
+ *   <li><strong>Discovers</strong> all {@link InqElement} beans in the
+ *       application context (CircuitBreaker, Retry, Bulkhead, etc.)</li>
+ *   <li><strong>Registers</strong> them in an {@link InqElementRegistry}
+ *       using {@link InqElement#getName()} as the lookup key</li>
+ *   <li><strong>Creates</strong> an {@link InqShieldAspect} that intercepts
+ *       methods annotated with {@code @InqCircuitBreaker}, {@code @InqRetry},
+ *       etc. and routes them through the pipeline</li>
+ * </ol>
+ *
+ * <h3>Usage</h3>
+ * <p>Add {@code inqudium-spring} to your classpath — auto-configuration
+ * activates automatically. Define your elements as Spring beans:</p>
+ * <pre>{@code
+ * @Configuration
+ * public class ResilienceConfig {
+ *
+ *     @Bean
+ *     public CircuitBreaker paymentCb() {
+ *         return CircuitBreaker.of(config);  // getName() returns "paymentCb"
+ *     }
+ *
+ *     @Bean
+ *     public Retry paymentRetry() {
+ *         return Retry.of(config);  // getName() returns "paymentRetry"
+ *     }
+ * }
+ * }</pre>
+ *
+ * <p>Then annotate your service methods:</p>
+ * <pre>{@code
+ * @Service
+ * public class PaymentService {
+ *
+ *     @InqCircuitBreaker("paymentCb")
+ *     @InqRetry("paymentRetry")
+ *     public PaymentResult processPayment(PaymentRequest request) {
+ *         return remoteService.call(request);
+ *     }
+ * }
+ * }</pre>
+ *
+ * <h3>Customization</h3>
+ * <p>Define your own {@link InqElementRegistry} bean to override the
+ * auto-discovered one:</p>
+ * <pre>{@code
+ * @Bean
+ * public InqElementRegistry customRegistry() {
+ *     return InqElementRegistry.builder()
+ *             .register("paymentCb", myCustomCb)
+ *             .build();
+ * }
+ * }</pre>
+ *
+ * @since 0.8.0
+ */
+@AutoConfiguration
+public class InqAutoConfiguration {
+
+    private static final Logger log = LoggerFactory.getLogger(InqAutoConfiguration.class);
+
+    /**
+     * Discovers all {@link InqElement} beans and registers them by name.
+     *
+     * <p>Each element's {@link InqElement#getName()} is used as the
+     * registry key. If two elements share the same name, the last one
+     * wins (with a warning logged).</p>
+     *
+     * <p>If a custom {@link InqElementRegistry} bean is already defined,
+     * this auto-configured one is skipped.</p>
+     *
+     * @param elements all InqElement beans discovered by Spring
+     * @return the populated registry
+     */
+    @Bean
+    @ConditionalOnMissingBean
+    public InqElementRegistry inqElementRegistry(List<InqElement> elements) {
+        InqElementRegistry registry = InqElementRegistry.create();
+
+        for (InqElement element : elements) {
+            InqElement previous = registry.register(element.getName(), element);
+            if (previous != null) {
+                log.warn("Duplicate InqElement name '{}': {} replaced by {}",
+                        element.getName(),
+                        previous.getClass().getSimpleName(),
+                        element.getClass().getSimpleName());
+            }
+        }
+
+        log.info("InqElementRegistry initialized with {} element(s): {}",
+                registry.size(), registry.names());
+
+        return registry;
+    }
+
+    /**
+     * Creates the Spring AOP aspect that intercepts annotated methods
+     * and routes them through the Inqudium pipeline.
+     *
+     * @param registry the element registry for name → instance lookup
+     * @return the shield aspect
+     */
+    @Bean
+    @ConditionalOnMissingBean
+    public InqShieldAspect inqShieldAspect(InqElementRegistry registry) {
+        return new InqShieldAspect(registry);
+    }
+}

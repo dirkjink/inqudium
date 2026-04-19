@@ -77,7 +77,7 @@
             <!-- Integrations -->
             <dependency>
                 <groupId>eu.inqudium</groupId>
-                <artifactId>inqudium-spring-boot3</artifactId>
+                <artifactId>inqudium-spring-boot</artifactId>
                 <version>${revision}</version>
             </dependency>
 

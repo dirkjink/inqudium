@@ -38,12 +38,13 @@
         <module>inqudium-kotlin</module>
         <module>inqudium-reactor</module>
         <module>inqudium-rxjava3</module>
-        <module>inqudium-spring-boot3</module>
+        <module>inqudium-spring-boot</module>
         <module>inqudium-imperative</module>
         <module>inqudium-aspect</module>
         <module>inqudium-aspect-integration-tests</module>
         <module>inqudium-annotation</module>
         <module>inqudium-annotation-support</module>
+        <module>inqudium-spring</module>
     </modules>
 
     <!-- ═══════════════════════════════════════════════════════ -->
