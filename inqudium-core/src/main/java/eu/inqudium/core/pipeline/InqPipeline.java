@@ -28,16 +28,16 @@ import java.util.function.BiFunction;
  *               │                   │                       │
  *          Sync only           Async only              Hybrid (auto)
  *               │                   │                       │
- *     ┌─────────┴──────┐           │          ┌────────────┴────────────┐
- *     │                │           │          │                         │
- * SyncPipeline   ProxyPipeline     │    HybridProxy              HybridAspect
- *  Terminal       Terminal         │    PipelineTerminal          PipelineTerminal
- *  (core)         (core)          │    (imperative)              (aspect)
- *     │                │          │         │                         │
- *     ▼                ▼          │    ┌────┴────┐              ┌────┴────┐
- *  execute()     protect()        │  sync?  async?            sync?  async?
- *                (Proxy)          │    │       │                │       │
- *                                 │    ▼       ▼                ▼       ▼
+ *     ┌─────────┴──────┐            │          ┌────────────┴────────────┐
+ *     │                │            │          │                         │
+ * SyncPipeline   ProxyPipeline      │    HybridProxy              HybridAspect
+ *  Terminal       Terminal          │    PipelineTerminal          PipelineTerminal
+ *  (core)         (core)            │    (imperative)              (aspect)
+ *     │                │            │         │                         │
+ *     ▼                ▼            │    ┌────┴────┐               ┌────┴────┐
+ *  execute()     protect()          │  sync?     async?          sync?     async?
+ *                (Proxy)            │    │         │               │         │
+ *                                   │    ▼         ▼               ▼         ▼
  *                           AsyncPipeline  Sync    Async     Sync    Async
  *                            Terminal     Term.    Term.     Term.    Term.
  *                           (imperative)
@@ -53,11 +53,11 @@ import java.util.function.BiFunction;
  *   Async          │ AsyncPipeline│       —          │       —          │
  *                  │ Terminal     │                  │                  │
  *                  ├──────────────┼──────────────────┼──────────────────┤
- *   Hybrid         │      —¹     │ HybridProxy      │ HybridAspect     │
- *   (Sync+Async)   │             │ PipelineTerminal │ PipelineTerminal │
+ *   Hybrid         │      —¹      │ HybridProxy      │ HybridAspect     │
+ *   (Sync+Async)   │              │ PipelineTerminal │ PipelineTerminal │
  *                  ├──────────────┼──────────────────┼──────────────────┤
- *   Reactive       │      —²     │       —²         │       —²         │
- *   Kotlin Coro.   │      —²     │       —²         │       —²         │
+ *   Reactive       │      —²      │       —²         │       —²         │
+ *   Kotlin Coro.   │      —²      │       —²         │       —²         │
  *                  └──────────────┴──────────────────┴──────────────────┘
  *
  *   ¹ Not needed — the caller chooses sync or async terminal explicitly.
