@@ -13,6 +13,7 @@ import java.util.function.Supplier;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.AssertionsForClassTypes.assertThatNoException;
 
 @DisplayName("SyncPipelineTerminal")
 class SyncPipelineTerminalTest {
@@ -365,20 +366,26 @@ class SyncPipelineTerminalTest {
     // Error handling
     // =========================================================================
 
+// =========================================================================
+    // Error handling
+    // =========================================================================
+
     @Nested
     @DisplayName("Error handling")
     class ErrorHandling {
 
         @Test
-        void non_decorator_element_produces_descriptive_class_cast_exception() {
-            // Given — an InqElement that does NOT implement InqDecorator
+        void non_decorator_element_produces_descriptive_class_cast_exception_at_construction() {
+            // Given — an InqElement that does NOT implement InqDecorator.
+            //         Layer actions are pre-extracted in SyncPipelineTerminal's
+            //         constructor, so validation happens eagerly at of(...) —
+            //         not lazily on the first execute(...) call.
             InqPipeline pipeline = InqPipeline.builder()
                     .shield(new NonDecoratorElement())
                     .build();
-            SyncPipelineTerminal terminal = SyncPipelineTerminal.of(pipeline);
 
-            // When / Then
-            assertThatThrownBy(() -> terminal.execute(() -> "fail"))
+            // When / Then — of(...) fails fast with a descriptive message
+            assertThatThrownBy(() -> SyncPipelineTerminal.of(pipeline))
                     .isInstanceOf(ClassCastException.class)
                     .hasMessageContaining("does not implement InqDecorator")
                     .hasMessageContaining("plain")
@@ -387,7 +394,23 @@ class SyncPipelineTerminalTest {
         }
 
         @Test
+        void construction_with_only_decorator_elements_succeeds_without_throwing() {
+            // Given — a pipeline with exclusively InqDecorator elements.
+            //         Documents the happy-path counterpart to the fail-fast
+            //         contract above.
+            InqPipeline pipeline = InqPipeline.builder()
+                    .shield(tracing("cb", InqElementType.CIRCUIT_BREAKER, new ArrayList<>()))
+                    .shield(tracing("rt", InqElementType.RETRY, new ArrayList<>()))
+                    .build();
+
+            // When / Then — construction completes, no exception thrown
+            assertThatNoException().isThrownBy(() -> SyncPipelineTerminal.of(pipeline));
+        }
+
+        @Test
         void null_pipeline_is_rejected() {
+            // Given — no setup needed
+
             // When / Then
             assertThatThrownBy(() -> SyncPipelineTerminal.of(null))
                     .isInstanceOf(NullPointerException.class);

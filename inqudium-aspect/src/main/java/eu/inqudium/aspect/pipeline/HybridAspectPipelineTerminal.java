@@ -3,8 +3,13 @@ package eu.inqudium.aspect.pipeline;
 import eu.inqudium.core.element.InqElement;
 import eu.inqudium.core.pipeline.InqDecorator;
 import eu.inqudium.core.pipeline.InqPipeline;
+import eu.inqudium.core.pipeline.InternalExecutor;
 import eu.inqudium.core.pipeline.JoinPointExecutor;
+import eu.inqudium.core.pipeline.LayerAction;
+import eu.inqudium.core.pipeline.Throws;
+import eu.inqudium.imperative.core.pipeline.AsyncLayerAction;
 import eu.inqudium.imperative.core.pipeline.InqAsyncDecorator;
+import eu.inqudium.imperative.core.pipeline.InternalAsyncExecutor;
 import org.aspectj.lang.ProceedingJoinPoint;
 import org.aspectj.lang.reflect.MethodSignature;
 
@@ -13,48 +18,62 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicLong;
+
+import static eu.inqudium.core.pipeline.ChainIdGenerator.CHAIN_ID_COUNTER;
 
 /**
  * Hybrid AspectJ terminal that automatically dispatches sync and async
  * method calls through the appropriate pipeline chain.
  *
  * <p>When the intercepted method returns {@link CompletionStage}, the call
- * is routed through the async chain (elements use
- * {@link InqAsyncDecorator#decorateAsyncJoinPoint}, resource lifecycle tied
- * to stage completion). All other methods use the sync chain.</p>
+ * is routed through the async layer-action chain. All other methods use the
+ * sync layer-action chain.</p>
  *
- * <h3>Static pre-composition</h3>
- * <p>The pipeline's decorators are extracted into two flat arrays —
- * {@link #syncDecorators} and {@link #asyncDecorators} — <strong>exactly
- * once</strong>, in the constructor. The prior implementation stored a
- * {@code Function<Executor, Executor>} cascade per method: each invocation
- * of {@code factory.apply(terminal)} unwound that cascade recursively,
- * producing {@code N} virtual {@code Function.apply} dispatches on top of
- * the {@code N} wrapper-executor allocations. Since the decorator chain is
- * constant across methods (only the sync/async decision varies), pre-building
- * the arrays at construction eliminates both the cascade and the per-method
- * factory cache.</p>
+ * <h3>Static pre-extraction of layer actions</h3>
+ * <p>At construction time, the pipeline's elements are walked exactly once
+ * and their around-advice is cached as flat arrays:</p>
+ * <ul>
+ *   <li>{@code syncActions}: {@link LayerAction}-references harvested by
+ *       casting each {@link InqDecorator} (which extends
+ *       {@link LayerAction}).</li>
+ *   <li>{@code asyncActions}: {@link AsyncLayerAction}-references harvested
+ *       via method reference on each {@link InqAsyncDecorator}'s
+ *       {@code executeAsync} method.</li>
+ * </ul>
+ *
+ * <p>The previous implementation stored {@code InqDecorator[]} and
+ * {@code InqAsyncDecorator[]} and called {@code decorateJoinPoint} /
+ * {@code decorateAsyncJoinPoint} on every call — producing {@code N}
+ * {@link eu.inqudium.core.pipeline.JoinPointWrapper} /
+ * {@code AsyncJoinPointWrapper} objects per invocation. With layer actions
+ * stored directly, per-call composition produces only {@code N+1}
+ * escape-analysable {@link InternalExecutor} /
+ * {@link InternalAsyncExecutor} lambdas — no heap wrapper objects.</p>
  *
  * <h3>Per-method caching</h3>
- * <p>The only per-method state still cached is the sync/async flag itself,
- * stored in a {@link ConcurrentHashMap} keyed by {@link Method}. This avoids
- * the {@code Class.isAssignableFrom} check on the hot path after the first
- * invocation.</p>
+ * <p>A {@link ConcurrentHashMap} caches the sync/async decision per
+ * {@link Method} — a single {@link Boolean} instead of a whole chain factory.
+ * On hot-path invocations, the only per-method overhead is the
+ * {@code MethodSignature.getMethod()} call (unavoidable — AspectJ provides
+ * a fresh {@link ProceedingJoinPoint} per call) and a {@code get} on the
+ * concurrent map.</p>
  *
  * <pre>
  *   First call to placeOrder():
- *     1. MethodSignature.getMethod()                         ← per call
- *     2. cache miss → method.getReturnType() → sync          ← once per method
- *     3. iterate syncDecorators, compose chain               ← per call
- *     4. chain.proceed()                                     ← per call
+ *     1. MethodSignature.getMethod()                  ← per call
+ *     2. cache miss → isAssignableFrom check          ← once per method
+ *     3. iterate syncActions, compose chain           ← per call, stack-lokal
+ *     4. chain.execute(...)                           ← per call
  *
  *   Subsequent calls to placeOrder():
- *     1. MethodSignature.getMethod()                         ← per call
- *     2. cache hit → Boolean.FALSE                           ← fast path
- *     3. iterate syncDecorators, compose chain               ← per call
- *     4. chain.proceed()                                     ← per call
+ *     1. MethodSignature.getMethod()                  ← per call
+ *     2. cache hit → Boolean.FALSE                    ← fast path
+ *     3. iterate syncActions, compose chain           ← per call, stack-lokal
+ *     4. chain.execute(...)                           ← per call
  * </pre>
  *
  * <h3>Usage</h3>
@@ -77,14 +96,16 @@ import java.util.concurrent.ConcurrentHashMap;
  * }</pre>
  *
  * <h3>Element requirements</h3>
- * <p>Elements must implement <strong>both</strong> {@link InqDecorator} (sync)
- * and {@link InqAsyncDecorator} (async). This is verified eagerly in the
- * constructor — misconfigured pipelines fail fast instead of on first call.</p>
+ * <p>Elements must implement <strong>both</strong> {@link InqDecorator} and
+ * {@link InqAsyncDecorator}. Both contracts are validated eagerly in the
+ * constructor — misconfigured pipelines throw {@link ClassCastException} at
+ * {@link #of(InqPipeline)} rather than on the first call.</p>
  *
  * <h3>Thread safety</h3>
- * <p>Instances are immutable and safe for concurrent use. The decorator arrays
- * are private, never modified after construction. The async-flag cache uses
- * {@link ConcurrentHashMap}.</p>
+ * <p>Instances are immutable and safe for concurrent use. The action arrays
+ * are never modified after construction; the call-ID counter is a thread-safe
+ * {@link AtomicLong}; the async-flag cache uses {@link ConcurrentHashMap}.
+ * Safe for virtual threads.</p>
  *
  * @since 0.8.0
  */
@@ -93,11 +114,34 @@ public final class HybridAspectPipelineTerminal {
     private final InqPipeline pipeline;
 
     /**
-     * Pipeline decorators in composition order (element-order from the
-     * pipeline fold — innermost first). Immutable after construction.
+     * Pre-extracted sync layer actions in pipeline-element order (innermost
+     * first). Since {@link InqDecorator} extends {@link LayerAction}, the
+     * decorator reference itself serves as the layer action — no extra
+     * indirection, no method reference object.
      */
-    private final InqDecorator<Void, Object>[] syncDecorators;
-    private final InqAsyncDecorator<Void, Object>[] asyncDecorators;
+    private final LayerAction<Void, Object>[] syncActions;
+
+    /**
+     * Pre-extracted async layer actions in pipeline-element order (innermost
+     * first). Captured via method reference on
+     * {@link InqAsyncDecorator#executeAsync}, allocated once per element at
+     * construction time.
+     */
+    private final AsyncLayerAction<Void, Object>[] asyncActions;
+
+    /**
+     * Chain identifier for this terminal instance. Allocated once from the
+     * global {@link eu.inqudium.core.pipeline.ChainIdGenerator} and used for
+     * every {@code execute*} invocation.
+     */
+    private final long chainId;
+
+    /**
+     * Per-invocation call-ID counter. Shared by the sync and async paths —
+     * any given call goes through exactly one path, so a single counter
+     * yields globally unique IDs within this terminal's lifetime.
+     */
+    private final AtomicLong callIdCounter = new AtomicLong();
 
     /**
      * Cached sync/async decision per {@link Method}. The value is the result
@@ -109,11 +153,9 @@ public final class HybridAspectPipelineTerminal {
     private HybridAspectPipelineTerminal(InqPipeline pipeline) {
         this.pipeline = pipeline;
 
-        // Extract pipeline elements into an ordered list once.
-        // The accumulator is the same list on every step; we just append.
-        // The resulting order matches the pipeline's native element order —
-        // whichever end the loop in executeAround iterates determines
-        // innermost vs. outermost wrapping.
+        // Walk the pipeline exactly once and collect elements in their native
+        // order (innermost first — confirmed by the decorator fold semantics:
+        // the first element applied to the seed wraps the seed directly).
         List<InqElement> elements = pipeline.chain(
                 new ArrayList<InqElement>(),
                 (list, element) -> {
@@ -121,16 +163,27 @@ public final class HybridAspectPipelineTerminal {
                     return list;
                 });
 
-        // Pre-cast to both decorator types at construction time.
-        // Misconfigured pipelines fail here, not on the first call.
+        // Pre-extract both action variants. Misconfigured pipelines (element
+        // missing one of the two decorator contracts) fail here, not on the
+        // first hot-path call. The instanceof + cast each run exactly once.
         int size = elements.size();
-        this.syncDecorators = new InqDecorator[size];
-        this.asyncDecorators = new InqAsyncDecorator[size];
+        LayerAction<Void, Object>[] syncActs = new LayerAction[size];
+        AsyncLayerAction<Void, Object>[] asyncActs = new AsyncLayerAction[size];
         for (int i = 0; i < size; i++) {
             InqElement element = elements.get(i);
-            this.syncDecorators[i] = (InqDecorator<Void, Object>) asDecorator(element);
-            this.asyncDecorators[i] = (InqAsyncDecorator<Void, Object>) asAsyncDecorator(element);
+            // InqDecorator extends LayerAction — the decorator reference IS
+            // the layer action, no adapter object needed.
+            syncActs[i] = (LayerAction<Void, Object>) asDecorator(element);
+            // InqAsyncDecorator.executeAsync matches AsyncLayerAction's
+            // functional-interface signature — one bound method reference
+            // per element, allocated here at construction.
+            InqAsyncDecorator<Void, Object> asyncDec =
+                    (InqAsyncDecorator<Void, Object>) asAsyncDecorator(element);
+            asyncActs[i] = asyncDec::executeAsync;
         }
+        this.syncActions = syncActs;
+        this.asyncActions = asyncActs;
+        this.chainId = CHAIN_ID_COUNTER.incrementAndGet();
     }
 
     /**
@@ -144,7 +197,7 @@ public final class HybridAspectPipelineTerminal {
      * @param pipeline the composed pipeline
      * @return the hybrid terminal
      * @throws NullPointerException if pipeline is null
-     * @throws ClassCastException if any element fails the decorator contracts
+     * @throws ClassCastException   if any element fails the decorator contracts
      */
     public static HybridAspectPipelineTerminal of(InqPipeline pipeline) {
         Objects.requireNonNull(pipeline, "Pipeline must not be null");
@@ -173,6 +226,8 @@ public final class HybridAspectPipelineTerminal {
                         + "InqAsyncDecorator for async methods (returning CompletionStage).");
     }
 
+    // ======================== Accessors ========================
+
     /**
      * Returns the underlying pipeline.
      */
@@ -184,7 +239,8 @@ public final class HybridAspectPipelineTerminal {
 
     /**
      * Executes the given {@link ProceedingJoinPoint} through the pipeline,
-     * using the pre-built decorator arrays and the cached sync/async flag.
+     * using the pre-extracted layer-action arrays and the cached sync/async
+     * flag.
      *
      * <ul>
      *   <li>Return type is {@link CompletionStage} → async chain
@@ -206,7 +262,7 @@ public final class HybridAspectPipelineTerminal {
         return executeSyncChain(pjp::proceed);
     }
 
-    // ======================== Generic execution ========================
+    // ======================== Generic execution (test utility) ========================
 
     /**
      * Executes a sync call through the pipeline. Useful for unit tests
@@ -219,7 +275,8 @@ public final class HybridAspectPipelineTerminal {
 
     /**
      * Executes an async call through the pipeline. Useful for unit tests
-     * without AspectJ weaving. Never throws.
+     * without AspectJ weaving. Never throws — all failures are delivered
+     * through the returned {@link CompletionStage}.
      */
     @SuppressWarnings("unchecked")
     public <R> CompletionStage<R> executeAsync(
@@ -231,41 +288,95 @@ public final class HybridAspectPipelineTerminal {
     // ======================== Chain composition (hot path) ========================
 
     /**
-     * Composes the sync chain from the pre-built decorator array and executes it.
+     * Composes the sync chain from the pre-built layer-action array and
+     * executes it.
      *
-     * <p>Single tight loop over {@link #syncDecorators}: each iteration calls
-     * {@code decorateJoinPoint} on the decorator, which returns a wrapped
-     * executor. No {@code Function.apply()} dispatch, no per-method factory
-     * lookup, no cascade unwinding.</p>
+     * <p>Per-call cost: one {@link AtomicLong} CAS for the call ID, one
+     * {@link InternalExecutor} terminal lambda binding the executor,
+     * {@code N} wrapper lambdas composed in a tight loop, and a single
+     * {@link CompletionException}-unwrapping try/catch at the boundary.
+     * No wrapper objects, no {@code instanceof} checks, no
+     * {@code Function.apply} cascade.</p>
      */
-    private Object executeSyncChain(JoinPointExecutor<Object> terminal) throws Throwable {
-        JoinPointExecutor<Object> current = terminal;
-        InqDecorator<Void, Object>[] decorators = syncDecorators;
-        // Iterate innermost → outermost (matches the semantics of the prior
-        // Function-cascade: first-added element wraps the terminal directly)
-        for (int i = 0; i < decorators.length; i++) {
-            current = decorators[i].decorateJoinPoint(current);
+    private Object executeSyncChain(JoinPointExecutor<Object> executor) throws Throwable {
+        long callId = callIdCounter.incrementAndGet();
+        long cid = chainId;
+
+        // Terminal: invokes the executor and wraps checked exceptions for
+        // transport through the chain's unchecked-only layer actions.
+        InternalExecutor<Void, Object> current = (c, ca, a) -> {
+            try {
+                return executor.proceed();
+            } catch (Throwable t) {
+                throw Throws.wrapChecked(t);
+            }
+        };
+
+        // Compose chain from the pre-cached action array. Actions are stored
+        // in innermost-first order: forward iteration wraps each prior result
+        // as an outer layer, so the final `current` is the outermost executor.
+        LayerAction<Void, Object>[] acts = syncActions;
+        for (int i = 0; i < acts.length; i++) {
+            LayerAction<Void, Object> action = acts[i];
+            InternalExecutor<Void, Object> next = current;
+            current = (c, ca, a) -> action.execute(c, ca, a, next);
         }
-        return current.proceed();
+
+        try {
+            return current.execute(cid, callId, null);
+        } catch (CompletionException e) {
+            // Unwrap the transported throwable, preserving its original type
+            // (checked exception, runtime exception, or error) via sneaky throw.
+            throw Throws.unwrapAndRethrow(e);
+        }
     }
 
     /**
-     * Composes the async chain from the pre-built decorator array and executes it.
+     * Composes the async chain from the pre-built async layer-action array
+     * and executes it. Never throws — all failures are delivered through the
+     * returned {@link CompletionStage}.
      *
-     * <p>Mirrors {@link #executeSyncChain} for the async path. Any synchronous
-     * failure during chain composition or start-phase execution is delivered
-     * through the returned {@link CompletionStage} — never thrown.</p>
+     * <p>Per-call cost mirrors the sync path: one CAS, one terminal lambda,
+     * {@code N} wrapper lambdas. No {@link eu.inqudium.imperative.core.pipeline.AsyncJoinPointWrapper}
+     * allocations.</p>
      */
     private CompletionStage<Object> executeAsyncChain(
-            JoinPointExecutor<CompletionStage<Object>> terminal) {
-        try {
-            JoinPointExecutor<CompletionStage<Object>> current = terminal;
-            InqAsyncDecorator<Void, Object>[] decorators = asyncDecorators;
-            for (int i = 0; i < decorators.length; i++) {
-                current = decorators[i].decorateAsyncJoinPoint(current);
+            JoinPointExecutor<CompletionStage<Object>> executor) {
+        long callId = callIdCounter.incrementAndGet();
+        long cid = chainId;
+
+        // Terminal: invokes the executor and bridges checked exceptions
+        // through CompletionException. Runtime exceptions and errors propagate
+        // directly and are converted to failed futures at the boundary.
+        InternalAsyncExecutor<Void, Object> current = (c, ca, a) -> {
+            try {
+                return executor.proceed();
+            } catch (RuntimeException | Error e) {
+                throw e;
+            } catch (Throwable t) {
+                throw new CompletionException(t);
             }
-            return current.proceed();
+        };
+
+        // Compose chain from the pre-cached action array (same iteration
+        // pattern as the sync path).
+        AsyncLayerAction<Void, Object>[] acts = asyncActions;
+        for (int i = 0; i < acts.length; i++) {
+            AsyncLayerAction<Void, Object> action = acts[i];
+            InternalAsyncExecutor<Void, Object> next = current;
+            current = (c, ca, a) -> action.executeAsync(c, ca, a, next);
+        }
+
+        try {
+            return current.executeAsync(cid, callId, null);
+        } catch (CompletionException e) {
+            // Transported checked exception from the terminal — surface the
+            // original cause through the failed-future channel.
+            Throwable cause = e.getCause();
+            return CompletableFuture.failedFuture(cause != null ? cause : e);
         } catch (Throwable e) {
+            // Any synchronous failure from a layer's start phase becomes a
+            // failed future — uniform error channel for callers.
             return CompletableFuture.failedFuture(e);
         }
     }
