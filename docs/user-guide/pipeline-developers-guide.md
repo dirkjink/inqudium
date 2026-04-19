@@ -8,7 +8,7 @@ programmatic API, annotation-driven, and Spring/Spring Boot auto-configuration.
 
 ```
 ┌─────────────────────────────────────────────────────┐
-│                    Inqudium Stack                    │
+│                    Inqudium Stack                   │
 ├──────────────────┬──────────────────────────────────┤
 │  inqudium-spring │  inqudium-spring-boot            │
 │  (plain Spring)  │  (auto-configuration)            │
@@ -92,16 +92,16 @@ CompletionStage<String> stage = AsyncPipelineTerminal.of(pipeline)
 
 ```
                       Functions          Proxy            AspectJ
-                   ┌──────────────┬────────────────┬──────────────────┐
-  Sync             │ SyncPipeline │ ProxyPipeline   │ AspectPipeline   │
-                   │ Terminal     │ Terminal        │ Terminal         │
-                   ├──────────────┼────────────────┼──────────────────┤
-  Async            │ AsyncPipeline│       —        │       —          │
-                   │ Terminal     │                │                  │
-                   ├──────────────┼────────────────┼──────────────────┤
-  Hybrid           │      —      │ HybridProxy    │ HybridAspect     │
-  (sync+async)     │              │ PipelineTerminal│ PipelineTerminal │
-                   └──────────────┴────────────────┴──────────────────┘
+                   ┌──────────────┬─────────────────┬───────────────────┐
+  Sync             │ SyncPipeline │ ProxyPipeline   │ AspectPipeline    │
+                   │ Terminal     │ Terminal        │ Terminal          │
+                   ├──────────────┼─────────────────┼───────────────────┤
+  Async            │ AsyncPipeline│       —         │       —           │
+                   │ Terminal     │                 │                   │
+                   ├──────────────┼─────────────────┼───────────────────┤
+  Hybrid           │      —       │ HybridProxy     │ HybridAspect      │
+  (sync+async)     │              │ PipelineTerminal│ PipelineTerminal  │
+                   └──────────────┴─────────────────┴───────────────────┘
 ```
 
 Hybrid terminals dispatch per-method: `CompletionStage` return type → async chain, everything else → sync chain. The
