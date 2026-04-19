@@ -33,11 +33,18 @@ import java.util.concurrent.ConcurrentHashMap;
  * }</pre>
  *
  * <h3>Pipeline caching</h3>
- * <p>The pipeline structure (provider filtering, sorting, and
- * {@link eu.inqudium.core.pipeline.LayerAction} chain composition) is resolved
- * <strong>once</strong> per {@link Method} and cached in a {@link ConcurrentHashMap}.
- * Subsequent calls for the same method reuse the pre-composed chain — only the
- * terminal executor ({@code pjp::proceed}) is created per invocation.</p>
+ * <p>Two caches are maintained:</p>
+ * <ul>
+ *   <li>A per-{@link Method} cache of {@link ResolvedPipeline}s for the
+ *       {@link #executeAround executeAround} / {@link #execute(JoinPointExecutor, Method) execute(..., method)}
+ *       hot path — filtered via {@link AspectLayerProvider#canHandle(Method)}.</li>
+ *   <li>A single unfiltered pipeline used by {@link #execute(JoinPointExecutor)}
+ *       when no method is available. Resolved lazily on first access via
+ *       double-checked locking. This preserves the array-based composition
+ *       of {@link ResolvedPipeline} even when no {@code canHandle} filtering
+ *       applies — avoiding per-call {@link AspectPipelineBuilder} +
+ *       {@link JoinPointWrapper} allocation.</li>
+ * </ul>
  *
  * <h3>Concurrency contract</h3>
  * <p>The provider list is captured exactly once in an immutable snapshot using
@@ -54,7 +61,8 @@ import java.util.concurrent.ConcurrentHashMap;
 public abstract class AbstractPipelineAspect {
 
     /**
-     * Cache of pre-composed pipelines, keyed by the target {@link Method}.
+     * Cache of pre-composed, method-filtered pipelines, keyed by the target
+     * {@link Method}.
      */
     private final ConcurrentHashMap<Method, ResolvedPipeline> pipelineCache =
             new ConcurrentHashMap<>();
@@ -65,14 +73,17 @@ public abstract class AbstractPipelineAspect {
      */
     private volatile List<AspectLayerProvider<Object>> cachedProviders;
 
+    /**
+     * Lazily resolved, unfiltered pipeline — used by
+     * {@link #execute(JoinPointExecutor)} when no target method is available.
+     * Initialized once via double-checked locking.
+     */
+    private volatile ResolvedPipeline unfilteredPipeline;
+
     // ======================== Constructors ========================
 
     /**
      * Creates an aspect with an explicit, immutable list of providers.
-     *
-     * <p>This is the preferred constructor for most aspects. The provider list
-     * is captured directly — no lazy initialization, no {@code layerProviders()}
-     * call needed.</p>
      *
      * @param providers the ordered layer providers for the pipeline
      */
@@ -82,11 +93,6 @@ public abstract class AbstractPipelineAspect {
 
     /**
      * Creates an aspect that resolves providers lazily via {@link #layerProviders()}.
-     *
-     * <p>Use this constructor when providers are not available at construction
-     * time — for example, when they depend on a DI container that is initialized
-     * after aspect instantiation. The provider list is resolved exactly once on
-     * first access using double-checked locking.</p>
      *
      * <p>Subclasses using this constructor <strong>must</strong> override
      * {@link #layerProviders()}.</p>
@@ -102,11 +108,7 @@ public abstract class AbstractPipelineAspect {
      * providers lazily.
      *
      * <p>Called <strong>exactly once</strong> during the lifetime of this
-     * aspect instance, inside a {@code synchronized(this)} block. Safe for
-     * expensive DI lookups or reflection-based discovery.</p>
-     *
-     * <p>Not called when using the {@link #AbstractPipelineAspect(List)}
-     * constructor — the providers are captured directly.</p>
+     * aspect instance, inside a {@code synchronized(this)} block.</p>
      *
      * @return the layer providers, never {@code null}
      * @throws UnsupportedOperationException if the no-arg constructor is used
@@ -142,10 +144,6 @@ public abstract class AbstractPipelineAspect {
     /**
      * Convenience entry point for {@code @Around} advice methods.
      *
-     * <p>Extracts the {@link Method} from the {@link ProceedingJoinPoint},
-     * resolves the cached pipeline, and executes through it. This is the
-     * one-liner that concrete aspects call from their {@code @Around} method:</p>
-     *
      * <pre>{@code
      * @Around("@annotation(MyAnnotation)")
      * public Object around(ProceedingJoinPoint pjp) throws Throwable {
@@ -178,20 +176,18 @@ public abstract class AbstractPipelineAspect {
     }
 
     /**
-     * Executes the given executor through a fresh pipeline built from all
-     * providers (no method filtering, no caching).
+     * Executes the given executor through the cached unfiltered pipeline
+     * (all providers, sorted by order, no {@code canHandle} filter applied).
      *
-     * <p>Prefer {@link #execute(JoinPointExecutor, Method)} on hot paths.</p>
+     * <p>The pipeline is resolved once per aspect instance and reused — the
+     * per-call cost matches {@link #execute(JoinPointExecutor, Method)}.</p>
      *
      * @param coreExecutor the join point execution
      * @return the result of the pipeline execution
      * @throws Throwable any exception from the delegate or from layer actions
      */
     public Object execute(JoinPointExecutor<Object> coreExecutor) throws Throwable {
-        return new AspectPipelineBuilder<Object>()
-                .addProviders(providers())
-                .buildChain(coreExecutor)
-                .proceed();
+        return unfilteredPipeline().execute(coreExecutor);
     }
 
     // ======================== Diagnostics ========================
@@ -199,10 +195,6 @@ public abstract class AbstractPipelineAspect {
     /**
      * Returns the cached {@link ResolvedPipeline} for the given method,
      * resolving it on first access.
-     *
-     * <p>The returned pipeline exposes {@link ResolvedPipeline#layerNames()},
-     * {@link ResolvedPipeline#depth()}, {@link ResolvedPipeline#chainId()},
-     * and {@link ResolvedPipeline#toStringHierarchy()}.</p>
      *
      * @param method the target method
      * @return the pre-composed, cached pipeline
@@ -252,17 +244,32 @@ public abstract class AbstractPipelineAspect {
         if (pipeline != null) {
             return pipeline;
         }
-
         return pipelineCache.computeIfAbsent(method, this::createPipeline);
     }
 
     /**
      * Creates a new pipeline for the given method — called at most once per
-     * method via {@link ConcurrentHashMap#computeIfAbsent}. Extracted as a
-     * named method so that {@code this::createPipeline} produces a stable
-     * method reference without per-call lambda allocation.
+     * method via {@link ConcurrentHashMap#computeIfAbsent}.
      */
     private ResolvedPipeline createPipeline(Method method) {
         return ResolvedPipeline.resolve(providers(), method);
+    }
+
+    /**
+     * Returns the unfiltered pipeline, initializing it on first access via
+     * double-checked locking.
+     */
+    private ResolvedPipeline unfilteredPipeline() {
+        ResolvedPipeline pipeline = unfilteredPipeline;
+        if (pipeline == null) {
+            synchronized (this) {
+                pipeline = unfilteredPipeline;
+                if (pipeline == null) {
+                    pipeline = ResolvedPipeline.resolveAll(providers());
+                    unfilteredPipeline = pipeline;
+                }
+            }
+        }
+        return pipeline;
     }
 }

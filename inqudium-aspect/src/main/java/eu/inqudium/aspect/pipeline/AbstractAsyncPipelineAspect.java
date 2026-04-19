@@ -6,7 +6,6 @@ import eu.inqudium.imperative.core.pipeline.AsyncJoinPointWrapper;
 import java.lang.reflect.Method;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 
 /**
@@ -18,21 +17,24 @@ import java.util.concurrent.CompletionStage;
  * the pipeline.</p>
  *
  * <h3>Pipeline caching</h3>
- * <p>When a {@link Method} is provided, the async pipeline structure (provider
- * filtering, sorting, and {@link eu.inqudium.imperative.core.pipeline.AsyncLayerAction}
- * chain composition) is resolved <strong>once</strong> per method and cached in a
- * {@link ConcurrentHashMap}. Subsequent calls for the same method reuse the
- * pre-composed chain — only the terminal executor ({@code pjp::proceed}) is
- * created per invocation.</p>
- *
- * <p>This mirrors the optimization in {@link AbstractPipelineAspect} and follows
- * the same pattern as {@code SyncDispatchExtension} in the proxy module.</p>
+ * <p>Two caches are maintained:</p>
+ * <ul>
+ *   <li>A per-{@link Method} cache of {@link AsyncResolvedPipeline}s for the
+ *       method-filtered hot path —
+ *       {@link #executeThroughAsync(JoinPointExecutor, Method)}.</li>
+ *   <li>A single unfiltered async pipeline used by
+ *       {@link #executeThroughAsync(JoinPointExecutor)} when no method is
+ *       available. Resolved lazily on first access via double-checked locking.
+ *       This preserves the array-based composition of
+ *       {@link AsyncResolvedPipeline} even when no {@code canHandle} filtering
+ *       applies — avoiding per-call {@link AsyncAspectPipelineBuilder} +
+ *       {@link AsyncJoinPointWrapper} allocation.</li>
+ * </ul>
  *
  * <h3>Two-phase execution</h3>
  * <p>Each async layer has a synchronous start phase (before
  * {@code next.executeAsync()}) and an asynchronous end phase (attached via
- * {@code whenComplete()}, {@code thenApply()}, etc.). The pre-composed chain
- * preserves this two-phase semantics.</p>
+ * {@code whenComplete()}, {@code thenApply()}, etc.).</p>
  *
  * <h3>Exception transport</h3>
  * <p>Checked exceptions from the synchronous start phase are transported via
@@ -40,51 +42,43 @@ import java.util.concurrent.CompletionStage;
  * {@link AsyncResolvedPipeline#execute(JoinPointExecutor)}. Exceptions during
  * the async completion phase surface through the returned
  * {@link CompletionStage}.</p>
- *
- * <h3>Introspection</h3>
- * <p>For diagnostic and testing purposes, the {@link #buildAsyncPipeline} methods
- * still construct a full {@link AsyncJoinPointWrapper} chain with
- * {@link eu.inqudium.core.pipeline.Wrapper} introspection support. These are not
- * used on the hot path.</p>
  */
 public abstract class AbstractAsyncPipelineAspect {
 
     /**
-     * Cache of pre-composed async pipelines, keyed by the target {@link Method}.
+     * Cache of pre-composed, method-filtered async pipelines, keyed by the
+     * target {@link Method}.
      */
     private final ConcurrentHashMap<Method, AsyncResolvedPipeline> pipelineCache =
             new ConcurrentHashMap<>();
 
     /**
      * Lazily initialized, immutable snapshot of the provider list returned by
-     * {@link #asyncLayerProviders()}. Captured exactly once on first access via
-     * double-checked locking and reused for all subsequent pipeline resolutions.
+     * {@link #asyncLayerProviders()}. Captured exactly once on first access
+     * via double-checked locking.
      */
     private volatile List<AsyncAspectLayerProvider<Object>> cachedProviders;
 
     /**
+     * Lazily resolved, unfiltered async pipeline — used by
+     * {@link #executeThroughAsync(JoinPointExecutor)} when no target method
+     * is available. Initialized once via double-checked locking.
+     */
+    private volatile AsyncResolvedPipeline unfilteredPipeline;
+
+    /**
      * Returns the ordered list of async layer providers for this aspect.
      *
-     * <p>Called <strong>exactly once</strong> during the lifetime of this aspect
-     * instance — the result is captured in an immutable snapshot and reused for
-     * all pipeline resolutions. The call happens inside a {@code synchronized(this)}
-     * block to guarantee single execution even when the implementation performs
-     * expensive DI lookups or reflection.</p>
-     *
-     * <p>Implementations may return a new list on each call (the framework
-     * handles deduplication), but returning a pre-built, immutable list is
-     * recommended for clarity.</p>
+     * <p>Called <strong>exactly once</strong> during the lifetime of this
+     * aspect instance.</p>
      *
      * @return the async layer providers, never {@code null}
      */
     protected abstract List<AsyncAspectLayerProvider<Object>> asyncLayerProviders();
 
     /**
-     * Returns the cached provider snapshot, initializing it on first access.
-     *
-     * <p>Uses double-checked locking to guarantee that
-     * {@link #asyncLayerProviders()} is called exactly once, even under
-     * concurrent access. The fast path is a single volatile read.</p>
+     * Returns the cached provider snapshot, initializing it on first access
+     * via double-checked locking.
      */
     private List<AsyncAspectLayerProvider<Object>> providers() {
         List<AsyncAspectLayerProvider<Object>> snapshot = cachedProviders;
@@ -103,20 +97,15 @@ public abstract class AbstractAsyncPipelineAspect {
     // ======================== Hot path: AsyncResolvedPipeline ========================
 
     /**
-     * Executes the given join point through a cached, pre-composed async pipeline
-     * filtered by the target method.
-     *
-     * <p>On first invocation for a given method, the pipeline is resolved and
-     * cached. On subsequent invocations, the cached pipeline is reused — only
-     * the terminal executor is created per call.</p>
+     * Executes the given join point through a cached, pre-composed async
+     * pipeline filtered by the target method.
      *
      * <p>All exceptions — including synchronous failures from a layer's start
-     * phase — are delivered through the returned {@link CompletionStage}, never
-     * thrown directly. This provides a uniform error channel for callers.</p>
+     * phase — are delivered through the returned {@link CompletionStage},
+     * never thrown directly.</p>
      *
      * @param coreExecutor the join point execution (typically
-     *                     {@code () -> (CompletionStage<Object>) pjp.proceed()}),
-     *                     typed to enforce {@link CompletionStage} return at compile time
+     *                     {@code () -> (CompletionStage<Object>) pjp.proceed()})
      * @param method       the target method, used as cache key and for
      *                     {@code canHandle} filtering on first resolution
      * @return a {@link CompletionStage} carrying the result or failure
@@ -124,6 +113,23 @@ public abstract class AbstractAsyncPipelineAspect {
     protected CompletionStage<Object> executeThroughAsync(
             JoinPointExecutor<CompletionStage<Object>> coreExecutor, Method method) {
         return resolveAsyncPipeline(method).execute(coreExecutor);
+    }
+
+    /**
+     * Executes the given join point through the cached unfiltered async
+     * pipeline (all providers, sorted by order, no {@code canHandle} filter
+     * applied).
+     *
+     * <p>The pipeline is resolved once per aspect instance and reused — the
+     * per-call cost matches
+     * {@link #executeThroughAsync(JoinPointExecutor, Method)}.</p>
+     *
+     * @param coreExecutor the join point execution
+     * @return a {@link CompletionStage} carrying the result or failure
+     */
+    protected CompletionStage<Object> executeThroughAsync(
+            JoinPointExecutor<CompletionStage<Object>> coreExecutor) {
+        return unfilteredAsyncPipeline().execute(coreExecutor);
     }
 
     /**
@@ -138,61 +144,41 @@ public abstract class AbstractAsyncPipelineAspect {
     }
 
     /**
-     * Resolves (or retrieves from cache) the async pipeline for the given method.
-     *
-     * <p>Uses the cached provider snapshot from {@link #providers()}, which is
-     * resolved once per aspect lifetime. The snapshot is then passed into
-     * {@link ConcurrentHashMap#computeIfAbsent} — no subclass code runs inside
-     * the map's bucket lock.</p>
+     * Resolves (or retrieves from cache) the async pipeline for the given
+     * method.
      */
     private AsyncResolvedPipeline resolveAsyncPipeline(Method method) {
-        // Fast path: already cached — no locking, no provider access
         AsyncResolvedPipeline pipeline = pipelineCache.get(method);
         if (pipeline != null) {
             return pipeline;
         }
-
         return pipelineCache.computeIfAbsent(method, this::createAsyncPipeline);
     }
 
     /**
      * Creates a new async pipeline for the given method — called at most once
-     * per method via {@link ConcurrentHashMap#computeIfAbsent}. Extracted as a
-     * named method so that {@code this::createAsyncPipeline} produces a stable
-     * method reference without per-call lambda allocation.
+     * per method via {@link ConcurrentHashMap#computeIfAbsent}.
      */
     private AsyncResolvedPipeline createAsyncPipeline(Method method) {
         return AsyncResolvedPipeline.resolve(providers(), method);
     }
 
-    // ======================== Non-cached convenience methods ========================
-
     /**
-     * Builds an async wrapper chain from all providers and executes it.
-     *
-     * <p>This method does <strong>not</strong> use the pipeline cache because
-     * no {@link Method} key is available. Each call builds a fresh chain.
-     * Prefer {@link #executeThroughAsync(JoinPointExecutor, Method)} on hot paths.</p>
-     *
-     * <p>Like the hot path, all exceptions are delivered through the returned
-     * {@link CompletionStage}, never thrown directly.</p>
-     *
-     * @param coreExecutor the join point execution, typed to enforce
-     *                     {@link CompletionStage} return at compile time
-     * @return a {@link CompletionStage} carrying the result or failure
+     * Returns the unfiltered async pipeline, initializing it on first access
+     * via double-checked locking.
      */
-    protected CompletionStage<Object> executeThroughAsync(
-            JoinPointExecutor<CompletionStage<Object>> coreExecutor) {
-
-        try {
-            AsyncJoinPointWrapper<Object> chain = new AsyncAspectPipelineBuilder<Object>()
-                    .addProviders(providers())
-                    .buildChain(coreExecutor);
-
-            return chain.proceed();
-        } catch (Throwable e) {
-            return CompletableFuture.failedFuture(e);
+    private AsyncResolvedPipeline unfilteredAsyncPipeline() {
+        AsyncResolvedPipeline pipeline = unfilteredPipeline;
+        if (pipeline == null) {
+            synchronized (this) {
+                pipeline = unfilteredPipeline;
+                if (pipeline == null) {
+                    pipeline = AsyncResolvedPipeline.resolveAll(providers());
+                    unfilteredPipeline = pipeline;
+                }
+            }
         }
+        return pipeline;
     }
 
     // ======================== Introspection (cold path) ========================

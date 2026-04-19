@@ -6,6 +6,8 @@ import eu.inqudium.core.pipeline.LayerAction;
 import eu.inqudium.core.pipeline.Throws;
 
 import java.lang.reflect.Method;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 import java.util.concurrent.CompletionException;
@@ -114,11 +116,37 @@ public final class ResolvedPipeline {
     }
 
     /**
+     * Resolves and pre-composes a pipeline from the given providers without
+     * applying any {@code canHandle(Method)} filter.
+     *
+     * <p>Used by {@link AbstractPipelineAspect#execute(JoinPointExecutor)}
+     * when no target method is available. The resulting pipeline includes
+     * all providers sorted by {@link AspectLayerProvider#order()}.</p>
+     *
+     * @param providers all registered providers (will be sorted, not filtered)
+     * @return a pre-composed, reusable pipeline containing every provider
+     * @throws IllegalArgumentException if providers is null
+     */
+    public static ResolvedPipeline resolveAll(List<? extends AspectLayerProvider<Object>> providers) {
+        if (providers == null) {
+            throw new IllegalArgumentException("Providers list must not be null");
+        }
+
+        List<? extends AspectLayerProvider<Object>> sorted = providers.stream()
+                .sorted(Comparator.comparingInt(AspectLayerProvider::order))
+                .toList();
+
+        return fromProviders(sorted);
+    }
+
+    /**
      * Builds a {@code ResolvedPipeline} from an already filtered and sorted
      * provider list.
      *
-     * <p>Extracts layer actions and names in a single pass. The actions are
-     * stored in a permanent array; names go to {@link PipelineDiagnostics}.</p>
+     * <p>Extracts layer actions and names in a single pass. Actions go to a
+     * permanent array; names go to an {@link ArrayList} sized exactly to
+     * avoid growth and wrapped unmodifiable — this avoids the array copy
+     * performed by {@code List.of(E...)} when called with an array argument.</p>
      */
     private static ResolvedPipeline fromProviders(
             List<? extends AspectLayerProvider<Object>> providers) {
@@ -128,15 +156,16 @@ public final class ResolvedPipeline {
 
         int size = providers.size();
         LayerAction<Void, Object>[] acts = newActionArray(size);
-        String[] names = new String[size];
+        List<String> names = new ArrayList<>(size);
 
         for (int i = 0; i < size; i++) {
             AspectLayerProvider<Object> p = providers.get(i);
             acts[i] = p.layerAction();
-            names[i] = p.layerName();
+            names.add(p.layerName());
         }
 
-        return new ResolvedPipeline(acts, PipelineDiagnostics.create(List.of(names)));
+        return new ResolvedPipeline(acts,
+                PipelineDiagnostics.create(Collections.unmodifiableList(names)));
     }
 
     @SuppressWarnings("unchecked")

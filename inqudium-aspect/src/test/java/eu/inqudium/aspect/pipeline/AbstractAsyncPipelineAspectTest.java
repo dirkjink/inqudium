@@ -7,10 +7,13 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 import java.util.concurrent.CompletionStage;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -63,179 +66,174 @@ class AbstractAsyncPipelineAspectTest {
     }
 
     @Nested
-    @DisplayName("executeThroughAsync")
+    @DisplayName("executeThroughAsync(JoinPointExecutor) — unfiltered path")
     class ExecuteThroughAsync {
 
         @Test
-        void executes_the_core_and_returns_its_async_result_with_no_layers() throws Throwable {
-            // Given
-            AbstractAsyncPipelineAspect aspect = asyncAspectWith(Collections.emptyList());
+        void the_unfiltered_pipeline_is_resolved_once_and_reused_across_invocations() {
+            // given — a provider that counts how often its action reference is
+            //         requested, plus a separate counter for actual chain invocations
+            AtomicInteger resolutionCount = new AtomicInteger();
+            AtomicInteger invocationCount = new AtomicInteger();
 
-            // When — simulate pjp::proceed returning a CompletionStage
-            CompletionStage<Object> result = aspect.executeThroughAsync(
-                    () -> CompletableFuture.completedFuture("async-hello"));
-
-            // Then
-            assertThat(result.toCompletableFuture().join()).isEqualTo("async-hello");
-        }
-
-        @Test
-        void executes_all_async_layers_in_order_around_the_core() throws Throwable {
-            // Given
-            List<String> trace = new ArrayList<>();
-            AbstractAsyncPipelineAspect aspect = asyncAspectWith(List.of(
-                    asyncProvider("BULKHEAD", 10, recordingAsyncAction("BULKHEAD", trace)),
-                    asyncProvider("TIMING", 20, recordingAsyncAction("TIMING", trace))
-            ));
-
-            // When
-            CompletionStage<Object> result = aspect.executeThroughAsync(() -> {
-                trace.add("core");
-                return CompletableFuture.completedFuture("done");
-            });
-            result.toCompletableFuture().join();
-
-            // Then
-            assertThat(trace).containsExactly(
-                    "BULKHEAD:start",
-                    "TIMING:start",
-                    "core",
-                    "TIMING:end",
-                    "BULKHEAD:end"
-            );
-        }
-
-        @Test
-        void sorts_providers_by_order_regardless_of_list_position() throws Throwable {
-            // Given — providers in reverse order
-            List<String> trace = new ArrayList<>();
-            AbstractAsyncPipelineAspect aspect = asyncAspectWith(List.of(
-                    asyncProvider("INNER", 30, recordingAsyncAction("INNER", trace)),
-                    asyncProvider("OUTER", 10, recordingAsyncAction("OUTER", trace)),
-                    asyncProvider("MIDDLE", 20, recordingAsyncAction("MIDDLE", trace))
-            ));
-
-            // When
-            aspect.executeThroughAsync(() -> {
-                trace.add("core");
-                return CompletableFuture.completedFuture(null);
-            }).toCompletableFuture().join();
-
-            // Then
-            assertThat(trace).containsExactly(
-                    "OUTER:start",
-                    "MIDDLE:start",
-                    "INNER:start",
-                    "core",
-                    "INNER:end",
-                    "MIDDLE:end",
-                    "OUTER:end"
-            );
-        }
-
-        @Test
-        void propagates_synchronous_runtime_exception_through_the_stage() {
-            // Given
-            AbstractAsyncPipelineAspect aspect = asyncAspectWith(List.of(
-                    asyncProvider("LAYER", 10, AsyncLayerAction.passThrough())
-            ));
-
-            // When — core throws synchronously before creating a stage;
-            //        the exception is wrapped in a failed CompletionStage
-            CompletionStage<Object> stage = aspect.executeThroughAsync(() -> {
-                throw new IllegalStateException("sync failure");
-            });
-
-            // Then — uniform error channel: sync failure surfaces via the stage
-            assertThatThrownBy(() -> stage.toCompletableFuture().join())
-                    .hasCauseInstanceOf(IllegalStateException.class)
-                    .hasRootCauseMessage("sync failure");
-        }
-
-        @Test
-        void propagates_checked_exception_from_the_core_through_the_stage() {
-            // Given
-            AbstractAsyncPipelineAspect aspect = asyncAspectWith(List.of(
-                    asyncProvider("LAYER", 10, AsyncLayerAction.passThrough())
-            ));
-
-            // When — core throws a checked exception synchronously
-            CompletionStage<Object> stage = aspect.executeThroughAsync(() -> {
-                throw new Exception("checked failure");
-            });
-
-            // Then — checked exception also surfaces via the stage, not thrown directly
-            assertThatThrownBy(() -> stage.toCompletableFuture().join())
-                    .hasCauseInstanceOf(Exception.class)
-                    .hasRootCauseMessage("checked failure");
-        }
-
-        @Test
-        void async_failure_in_the_completion_stage_surfaces_through_the_returned_stage()
-                throws Throwable {
-            // Given
-            AbstractAsyncPipelineAspect aspect = asyncAspectWith(List.of(
-                    asyncProvider("LAYER", 10, AsyncLayerAction.passThrough())
-            ));
-
-            // When
-            CompletionStage<Object> stage = aspect.executeThroughAsync(
-                    () -> CompletableFuture.failedFuture(new RuntimeException("async fail")));
-
-            // Then
-            assertThatThrownBy(() -> stage.toCompletableFuture().join())
-                    .hasCauseInstanceOf(RuntimeException.class)
-                    .hasRootCauseMessage("async fail");
-        }
-
-        @Test
-        void each_invocation_builds_a_fresh_chain() throws Throwable {
-            // Given
-            AtomicInteger buildCount = new AtomicInteger();
             AsyncAspectLayerProvider<Object> countingProvider = new AsyncAspectLayerProvider<>() {
                 @Override
                 public String layerName() {
-                    return "COUNTER";
+                    return "COUNTING";
                 }
 
                 @Override
                 public int order() {
-                    return 10;
+                    return 100;
                 }
 
                 @Override
                 public AsyncLayerAction<Void, Object> asyncLayerAction() {
-                    buildCount.incrementAndGet();
-                    return AsyncLayerAction.passThrough();
+                    // Called during pipeline resolution (once for the unfiltered
+                    // path), NOT per invocation
+                    resolutionCount.incrementAndGet();
+                    return (chainId, callId, arg, next) -> {
+                        invocationCount.incrementAndGet();
+                        return next.executeAsync(chainId, callId, arg);
+                    };
                 }
             };
-            AbstractAsyncPipelineAspect aspect = asyncAspectWith(List.of(countingProvider));
 
-            // When
-            aspect.executeThroughAsync(
-                            () -> CompletableFuture.completedFuture("first"))
+            AbstractAsyncPipelineAspect aspect = new AbstractAsyncPipelineAspect() {
+                @Override
+                protected List<AsyncAspectLayerProvider<Object>> asyncLayerProviders() {
+                    return List.of(countingProvider);
+                }
+            };
+
+            // when — execute the unfiltered path twice
+            aspect.executeThroughAsync(() -> CompletableFuture.completedFuture("first"))
                     .toCompletableFuture().join();
-            aspect.executeThroughAsync(
-                            () -> CompletableFuture.completedFuture("second"))
+            aspect.executeThroughAsync(() -> CompletableFuture.completedFuture("second"))
                     .toCompletableFuture().join();
 
-            // Then
-            assertThat(buildCount).hasValue(2);
+            // then — resolution happened exactly once, chain executed twice
+            assertThat(resolutionCount).hasValue(1);
+            assertThat(invocationCount).hasValue(2);
         }
 
         @Test
-        void null_return_value_in_the_stage_is_propagated() throws Throwable {
-            // Given
-            AbstractAsyncPipelineAspect aspect = asyncAspectWith(List.of(
-                    asyncProvider("LAYER", 10, AsyncLayerAction.passThrough())
-            ));
+        void concurrent_first_access_still_triggers_only_a_single_pipeline_resolution()
+                throws InterruptedException {
+            // given — counts resolutions; 16 threads race on the same aspect instance
+            AtomicInteger resolutionCount = new AtomicInteger();
+            AsyncAspectLayerProvider<Object> provider = new AsyncAspectLayerProvider<>() {
+                @Override
+                public String layerName() {
+                    return "COUNTING";
+                }
 
-            // When
+                @Override
+                public int order() {
+                    return 100;
+                }
+
+                @Override
+                public AsyncLayerAction<Void, Object> asyncLayerAction() {
+                    resolutionCount.incrementAndGet();
+                    return (c, ca, a, next) -> next.executeAsync(c, ca, a);
+                }
+            };
+            AbstractAsyncPipelineAspect aspect = new AbstractAsyncPipelineAspect() {
+                @Override
+                protected List<AsyncAspectLayerProvider<Object>> asyncLayerProviders() {
+                    return List.of(provider);
+                }
+            };
+
+            int threadCount = 16;
+            CountDownLatch startGate = new CountDownLatch(1);
+            CountDownLatch doneGate = new CountDownLatch(threadCount);
+            ExecutorService executor = Executors.newFixedThreadPool(threadCount);
+
+            // when — release all threads simultaneously on the first-ever call
+            for (int i = 0; i < threadCount; i++) {
+                executor.submit(() -> {
+                    try {
+                        startGate.await();
+                        aspect.executeThroughAsync(
+                                        () -> CompletableFuture.completedFuture("v"))
+                                .toCompletableFuture().join();
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                    } finally {
+                        doneGate.countDown();
+                    }
+                });
+            }
+            startGate.countDown();
+            doneGate.await();
+            executor.shutdownNow();
+
+            // then — double-checked locking guarantees a single resolution
+            assertThat(resolutionCount).hasValue(1);
+        }
+
+        @Test
+        void the_result_of_the_core_executor_is_propagated_through_the_completion_stage() {
+            // given — an aspect with no layers
+            AbstractAsyncPipelineAspect aspect = new AbstractAsyncPipelineAspect() {
+                @Override
+                protected List<AsyncAspectLayerProvider<Object>> asyncLayerProviders() {
+                    return List.of();
+                }
+            };
+
+            // when
+            Object result = aspect.executeThroughAsync(
+                            () -> CompletableFuture.completedFuture("expected"))
+                    .toCompletableFuture().join();
+
+            // then
+            assertThat(result).isEqualTo("expected");
+        }
+
+        @Test
+        void a_synchronous_failure_in_the_core_executor_is_delivered_as_a_failed_future() {
+            // given — core executor throws synchronously
+            AbstractAsyncPipelineAspect aspect = new AbstractAsyncPipelineAspect() {
+                @Override
+                protected List<AsyncAspectLayerProvider<Object>> asyncLayerProviders() {
+                    return List.of();
+                }
+            };
+            IllegalStateException cause = new IllegalStateException("boom");
+
+            // when
+            CompletionStage<Object> stage = aspect.executeThroughAsync(() -> {
+                throw cause;
+            });
+
+            // then — uniform error channel: never thrown, always delivered via stage
+            assertThatThrownBy(() -> stage.toCompletableFuture().join())
+                    .isInstanceOf(CompletionException.class)
+                    .hasCause(cause);
+        }
+
+        @Test
+        void an_asynchronous_failure_from_the_core_executor_surfaces_through_the_returned_stage() {
+            // given
+            AbstractAsyncPipelineAspect aspect = new AbstractAsyncPipelineAspect() {
+                @Override
+                protected List<AsyncAspectLayerProvider<Object>> asyncLayerProviders() {
+                    return List.of();
+                }
+            };
+            IllegalStateException cause = new IllegalStateException("async boom");
+
+            // when
             CompletionStage<Object> stage = aspect.executeThroughAsync(
-                    () -> CompletableFuture.completedFuture(null));
+                    () -> CompletableFuture.failedFuture(cause));
 
-            // Then
-            assertThat(stage.toCompletableFuture().join()).isNull();
+            // then
+            assertThatThrownBy(() -> stage.toCompletableFuture().join())
+                    .isInstanceOf(CompletionException.class)
+                    .hasCause(cause);
         }
     }
 

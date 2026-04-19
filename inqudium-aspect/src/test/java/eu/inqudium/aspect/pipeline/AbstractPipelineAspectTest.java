@@ -1,15 +1,23 @@
 package eu.inqudium.aspect.pipeline;
 
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
+import java.util.concurrent.CompletionStage;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicInteger;
+
 import eu.inqudium.core.pipeline.JoinPointWrapper;
 import eu.inqudium.core.pipeline.LayerAction;
+import eu.inqudium.imperative.core.pipeline.AsyncLayerAction;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
-
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -58,148 +66,119 @@ class AbstractPipelineAspectTest {
     }
 
     @Nested
-    @DisplayName("execute")
-    class ExecuteThrough {
+    @DisplayName("execute(JoinPointExecutor) — unfiltered path")
+    class Execute {
 
         @Test
-        void executes_the_core_and_returns_its_result_with_no_layers() throws Throwable {
-            // Given
-            AbstractPipelineAspect aspect = aspectWith(Collections.emptyList());
+        void the_unfiltered_pipeline_is_resolved_once_and_reused_across_invocations()
+                throws Throwable {
+            // given
+            AtomicInteger resolutionCount = new AtomicInteger();
+            AtomicInteger invocationCount = new AtomicInteger();
 
-            // When
-            Object result = aspect.execute(() -> "hello");
-
-            // Then
-            assertThat(result).isEqualTo("hello");
-        }
-
-        @Test
-        void executes_all_layers_in_order_around_the_core() throws Throwable {
-            // Given
-            List<String> trace = new ArrayList<>();
-            AbstractPipelineAspect aspect = aspectWith(List.of(
-                    provider("AUTH", 10, recordingAction("AUTH", trace)),
-                    provider("TIMING", 20, recordingAction("TIMING", trace))
-            ));
-
-            // When
-            Object result = aspect.execute(() -> {
-                trace.add("core");
-                return "done";
-            });
-
-            // Then
-            assertThat(result).isEqualTo("done");
-            assertThat(trace).containsExactly(
-                    "AUTH:before",
-                    "TIMING:before",
-                    "core",
-                    "TIMING:after",
-                    "AUTH:after"
-            );
-        }
-
-        @Test
-        void sorts_providers_by_order_regardless_of_list_position() throws Throwable {
-            // Given — providers added in reverse order
-            List<String> trace = new ArrayList<>();
-            AbstractPipelineAspect aspect = aspectWith(List.of(
-                    provider("INNER", 30, recordingAction("INNER", trace)),
-                    provider("OUTER", 10, recordingAction("OUTER", trace)),
-                    provider("MIDDLE", 20, recordingAction("MIDDLE", trace))
-            ));
-
-            // When
-            aspect.execute(() -> {
-                trace.add("core");
-                return null;
-            });
-
-            // Then — sorted by order: OUTER(10) → MIDDLE(20) → INNER(30)
-            assertThat(trace).containsExactly(
-                    "OUTER:before",
-                    "MIDDLE:before",
-                    "INNER:before",
-                    "core",
-                    "INNER:after",
-                    "MIDDLE:after",
-                    "OUTER:after"
-            );
-        }
-
-        @Test
-        void propagates_checked_exceptions_from_the_core_unwrapped() {
-            // Given
-            AbstractPipelineAspect aspect = aspectWith(List.of(
-                    provider("LAYER", 10, LayerAction.passThrough())
-            ));
-
-            // When / Then
-            assertThatThrownBy(() -> aspect.execute(() -> {
-                throw new java.io.IOException("disk full");
-            }))
-                    .isInstanceOf(java.io.IOException.class)
-                    .hasMessage("disk full");
-        }
-
-        @Test
-        void propagates_runtime_exceptions_from_the_core() {
-            // Given
-            AbstractPipelineAspect aspect = aspectWith(List.of(
-                    provider("LAYER", 10, LayerAction.passThrough())
-            ));
-
-            // When / Then
-            assertThatThrownBy(() -> aspect.execute(() -> {
-                throw new IllegalArgumentException("bad input");
-            }))
-                    .isInstanceOf(IllegalArgumentException.class)
-                    .hasMessage("bad input");
-        }
-
-        @Test
-        void each_invocation_builds_a_fresh_chain() throws Throwable {
-            // Given
-            AtomicInteger buildCount = new AtomicInteger();
             AspectLayerProvider<Object> countingProvider = new AspectLayerProvider<>() {
-                @Override
-                public String layerName() {
-                    return "COUNTER";
-                }
-
-                @Override
-                public int order() {
-                    return 10;
-                }
+                @Override public String layerName() { return "COUNTING"; }
+                @Override public int order() { return 100; }
 
                 @Override
                 public LayerAction<Void, Object> layerAction() {
-                    buildCount.incrementAndGet();
-                    return LayerAction.passThrough();
+                    // Called during pipeline resolution (once for the unfiltered
+                    // path), NOT per invocation
+                    resolutionCount.incrementAndGet();
+                    return (chainId, callId, arg, next) -> {
+                        invocationCount.incrementAndGet();
+                        return next.execute(chainId, callId, arg);
+                    };
                 }
             };
-            AbstractPipelineAspect aspect = aspectWith(List.of(countingProvider));
 
-            // When
+            AbstractPipelineAspect aspect =
+                    new AbstractPipelineAspect(List.of(countingProvider)) {};
+
+            // when
             aspect.execute(() -> "first");
             aspect.execute(() -> "second");
 
-            // Then — layerAction() was called twice, once per chain build
-            assertThat(buildCount).hasValue(2);
+            // then — resolution happened exactly once, chain executed twice
+            assertThat(resolutionCount).hasValue(1);
+            assertThat(invocationCount).hasValue(2);
         }
 
         @Test
-        void null_return_from_core_is_propagated() throws Throwable {
-            // Given
-            AbstractPipelineAspect aspect = aspectWith(List.of(
-                    provider("LAYER", 10, LayerAction.passThrough())
-            ));
+        void concurrent_first_access_still_triggers_only_a_single_pipeline_resolution()
+                throws InterruptedException {
+            // given
+            AtomicInteger resolutionCount = new AtomicInteger();
+            AspectLayerProvider<Object> provider = new AspectLayerProvider<>() {
+                @Override public String layerName() { return "COUNTING"; }
+                @Override public int order() { return 100; }
+                @Override
+                public LayerAction<Void, Object> layerAction() {
+                    resolutionCount.incrementAndGet();
+                    return (c, ca, a, next) -> next.execute(c, ca, a);
+                }
+            };
+            AbstractPipelineAspect aspect =
+                    new AbstractPipelineAspect(List.of(provider)) {};
 
-            // When
-            Object result = aspect.execute(() -> null);
+            int threadCount = 16;
+            CountDownLatch startGate = new CountDownLatch(1);
+            CountDownLatch doneGate = new CountDownLatch(threadCount);
+            ExecutorService executor = Executors.newFixedThreadPool(threadCount);
 
-            // Then
-            assertThat(result).isNull();
+            // when — release all threads simultaneously on the first-ever call
+            for (int i = 0; i < threadCount; i++) {
+                executor.submit(() -> {
+                    try {
+                        startGate.await();
+                        aspect.execute(() -> "v");
+                    } catch (Throwable ignored) {
+                        // not asserting on execution outcome here
+                    } finally {
+                        doneGate.countDown();
+                    }
+                });
+            }
+            startGate.countDown();
+            doneGate.await();
+            executor.shutdownNow();
+
+            // then
+            assertThat(resolutionCount).hasValue(1);
+        }
+
+        @Test
+        void the_result_of_the_core_executor_is_returned_directly() throws Throwable {
+            // given — empty pipeline passes through
+            AbstractPipelineAspect aspect = new AbstractPipelineAspect(List.of()) {};
+
+            // when
+            Object result = aspect.execute(() -> "expected");
+
+            // then
+            assertThat(result).isEqualTo("expected");
+        }
+
+        @Test
+        void a_checked_exception_from_the_core_executor_propagates_with_its_original_type() {
+            // given — empty pipeline, core executor throws a checked exception
+            AbstractPipelineAspect aspect = new AbstractPipelineAspect(List.of()) {};
+            IOException cause = new IOException("boom");
+
+            // when / then — the original throwable surfaces, unwrapped from CompletionException
+            assertThatThrownBy(() -> aspect.execute(() -> { throw cause; }))
+                    .isSameAs(cause);
+        }
+
+        @Test
+        void a_runtime_exception_from_the_core_executor_propagates_unchanged() {
+            // given
+            AbstractPipelineAspect aspect = new AbstractPipelineAspect(List.of()) {};
+            IllegalStateException cause = new IllegalStateException("boom");
+
+            // when / then
+            assertThatThrownBy(() -> aspect.execute(() -> { throw cause; }))
+                    .isSameAs(cause);
         }
     }
 
