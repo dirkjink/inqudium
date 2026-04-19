@@ -233,7 +233,7 @@ class WrapperPipelineTest {
                     case "JoinPointWrapper" -> new JoinPointWrapper<>((String) null, () -> "x");
                     default -> throw new IllegalStateException("Unknown scenario");
                 }
-            }).isInstanceOf(IllegalArgumentException.class)
+            }).isInstanceOf(NullPointerException.class)
                     .hasMessageContaining("Name must not be null");
         }
 
@@ -250,7 +250,7 @@ class WrapperPipelineTest {
                     case "JoinPointWrapper" -> new JoinPointWrapper<String>("test", null);
                     default -> throw new IllegalStateException("Unknown scenario");
                 }
-            }).isInstanceOf(IllegalArgumentException.class)
+            }).isInstanceOf(NullPointerException.class)
                     .hasMessageContaining("Delegate must not be null");
         }
 

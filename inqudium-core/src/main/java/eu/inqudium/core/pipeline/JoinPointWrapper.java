@@ -6,17 +6,19 @@ import java.util.concurrent.CompletionException;
  * Wrapper for dynamic proxies and Spring AOP join points.
  *
  * <p>Works identically to {@link CallableWrapper} in terms of checked-exception
- * transport, but wraps a {@link JoinPointExecutor} instead of a {@link java.util.concurrent.Callable}.
- * The key difference is the exception contract: {@code JoinPointExecutor.proceed()}
- * declares {@code throws Throwable} (not just {@code throws Exception}), so the
- * unwrapping in {@link #proceed()} re-throws the full {@link Throwable} type.</p>
+ * transport, but wraps a {@link JoinPointExecutor} instead of a
+ * {@link java.util.concurrent.Callable}. The key difference is the exception
+ * contract: {@code JoinPointExecutor.proceed()} declares {@code throws Throwable}
+ * (not just {@code throws Exception}), so {@link #proceed()} re-throws the full
+ * {@link Throwable} type.</p>
  *
  * <h3>Checked exception transport</h3>
  * <ol>
- *   <li>The core execution lambda catches any checked {@code Throwable} from the
- *       delegate and wraps it in {@link CompletionException}.</li>
- *   <li>{@link #proceed()} catches {@code CompletionException} and re-throws the
- *       original cause directly, preserving the full exception type hierarchy.</li>
+ *   <li>The core execution lambda uses {@link Throws#wrapChecked(Throwable)}
+ *       to route checked throwables through the chain as
+ *       {@link CompletionException}.</li>
+ *   <li>{@link #proceed()} uses {@link Throws#unwrapAndRethrow(CompletionException)}
+ *       to sneaky-throw the original cause at the chain boundary.</li>
  * </ol>
  *
  * @param <R> the return type of the join point execution
@@ -59,9 +61,9 @@ public class JoinPointWrapper<R>
     /**
      * Builds the terminal core execution lambda for {@code JoinPointExecutor<R>}.
      *
-     * <p>Runtime exceptions and errors propagate directly. All other throwables
-     * (checked exceptions) are wrapped in {@link CompletionException} for
-     * transport through the chain.</p>
+     * <p>Runtime exceptions and errors propagate directly; checked throwables
+     * are wrapped in {@link CompletionException} via
+     * {@link Throws#wrapChecked(Throwable)}.</p>
      *
      * @param delegate the real join point executor to invoke at the end of the chain
      * @param <R>      the return type
@@ -71,14 +73,8 @@ public class JoinPointWrapper<R>
         return (chainId, callId, arg) -> {
             try {
                 return delegate.proceed();
-            } catch (RuntimeException | Error e) {
-                // Unchecked — propagate directly, no wrapping needed
-                throw e;
             } catch (Throwable t) {
-                // Checked throwable — wrap for transport through the chain.
-                // Unlike CallableWrapper which only wraps Exception, this catches
-                // the full Throwable hierarchy to match JoinPointExecutor's contract.
-                throw new CompletionException(t);
+                throw Throws.wrapChecked(t);
             }
         };
     }
@@ -86,9 +82,9 @@ public class JoinPointWrapper<R>
     /**
      * Entry point: initiates chain traversal and unwraps transported throwables.
      *
-     * <p>If a {@link CompletionException} arrives, its cause is re-thrown directly.
-     * This preserves the {@code JoinPointExecutor} contract — callers see the
-     * same throwable types they would see from the unwrapped delegate.</p>
+     * <p>If a {@link CompletionException} arrives, its cause is sneaky-thrown
+     * directly — preserving any {@code Throwable} subclass (checked exception,
+     * error, or runtime exception).</p>
      *
      * @return the result produced by the join point execution
      * @throws Throwable the original throwable from the delegate, if any
@@ -98,9 +94,7 @@ public class JoinPointWrapper<R>
         try {
             return initiateChain(null);
         } catch (CompletionException e) {
-            // Unwrap and re-throw the original throwable (could be a checked
-            // exception, an Error, or any other Throwable subclass)
-            throw e.getCause();
+            throw Throws.unwrapAndRethrow(e);
         }
     }
 }

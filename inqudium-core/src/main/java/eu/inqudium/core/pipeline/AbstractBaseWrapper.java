@@ -2,6 +2,7 @@ package eu.inqudium.core.pipeline;
 
 import eu.inqudium.core.element.InqElement;
 
+import java.util.Objects;
 import java.util.concurrent.atomic.AtomicLong;
 
 import static eu.inqudium.core.pipeline.ChainIdGenerator.CHAIN_ID_COUNTER;
@@ -79,19 +80,14 @@ public abstract class AbstractBaseWrapper<T, S extends AbstractBaseWrapper<T, S>
      *
      * @param name     a descriptive name for this layer (must not be {@code null})
      * @param delegate the target to wrap (must not be {@code null})
-     * @throws IllegalArgumentException if {@code name} or {@code delegate} is {@code null}
+     * @throws NullPointerException if {@code name} or {@code delegate} is {@code null}
      */
     protected AbstractBaseWrapper(String name, T delegate) {
         // Fail-fast null checks — a null name or delegate would cause confusing
-        // errors much later (e.g. NPE during dispatch or hierarchy rendering)
-        if (name == null) {
-            throw new IllegalArgumentException("Name must not be null");
-        }
-        if (delegate == null) {
-            throw new IllegalArgumentException("Delegate must not be null");
-        }
-        this.name = name;
-        this.delegate = delegate;
+        // errors much later (e.g. NPE during dispatch or hierarchy rendering).
+        // NPE (not IllegalArgumentException) follows the java.util.Objects convention.
+        this.name = Objects.requireNonNull(name, "Name must not be null");
+        this.delegate = Objects.requireNonNull(delegate, "Delegate must not be null");
 
         // Chain structure inheritance: if the delegate is already a wrapper,
         // join its chain rather than starting a new one. This ensures that

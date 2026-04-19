@@ -35,8 +35,10 @@ import java.util.function.Supplier;
  *
  * <h3>Exception Handling</h3>
  * <p>The same two-phase strategy as the wrapper classes is used for checked exceptions:
- * they are wrapped in {@link CompletionException} for transport through the
- * {@link LayerAction} and unwrapped before returning to the caller.</p>
+ * {@link Throws#wrapChecked(Throwable)} transports them through the
+ * {@link LayerAction} as {@link CompletionException}, and
+ * {@link Throws#unwrapAndRethrow(CompletionException)} sneaky-throws the
+ * original type at the caller boundary.</p>
  *
  * @param <A> the argument type flowing through the layer
  * @param <R> the return type flowing back through the layer
@@ -94,8 +96,8 @@ public interface InqExecutor<A, R> extends LayerAction<A, R> {
      * and returns its result. Checked exceptions are preserved.
      *
      * <p>Uses the same two-phase checked-exception transport as
-     * {@link CallableWrapper}: the terminal lambda wraps checked exceptions in
-     * {@link CompletionException}, and this method unwraps them before returning.</p>
+     * {@link CallableWrapper}, implemented via {@link Throws#wrapChecked} at
+     * the terminal and {@link Throws#unwrapAndRethrow} at the caller boundary.</p>
      *
      * <p>Intended for executors with type parameters {@code <Void, V>}.</p>
      *
@@ -114,23 +116,15 @@ public interface InqExecutor<A, R> extends LayerAction<A, R> {
                     (chainId, callId, arg) -> {
                         try {
                             return callable.call();
-                        } catch (RuntimeException | Error e) {
-                            // Unchecked — propagate directly
-                            throw e;
-                        } catch (Exception e) {
-                            // Checked — wrap for transport through the LayerAction
-                            throw new CompletionException(e);
+                        } catch (Throwable t) {
+                            throw Throws.wrapChecked(t);
                         }
                     }
             );
-        } catch (RuntimeException e) {
-            // Unwrap the checked exception if it was wrapped during transport
-            if (e instanceof CompletionException) {
-                Throwable cause = e.getCause();
-                if (cause instanceof Exception) throw (Exception) cause;
-                throw new CompletionException(cause);
-            }
-            throw e;
+        } catch (CompletionException e) {
+            // Sneaky-throw the original cause. The throws Exception signature
+            // remains correct; errors/runtime exceptions pass through unchanged.
+            throw Throws.unwrapAndRethrow(e);
         }
     }
 
@@ -159,9 +153,9 @@ public interface InqExecutor<A, R> extends LayerAction<A, R> {
      * Executes a {@link JoinPointExecutor} directly through this layer's around-advice
      * and returns its result. All throwable types are preserved.
      *
-     * <p>Uses the same checked-exception transport as {@link JoinPointWrapper}:
-     * non-Exception throwables are wrapped in {@link CompletionException} and
-     * unwrapped before returning.</p>
+     * <p>Uses the same two-phase throwable transport as {@link JoinPointWrapper},
+     * implemented via {@link Throws#wrapChecked} at the terminal and
+     * {@link Throws#unwrapAndRethrow} at the caller boundary.</p>
      *
      * <p>Intended for executors with type parameters {@code <Void, T>}.</p>
      *
@@ -180,21 +174,14 @@ public interface InqExecutor<A, R> extends LayerAction<A, R> {
                     (chainId, callId, arg) -> {
                         try {
                             return execution.proceed();
-                        } catch (RuntimeException | Error e) {
-                            // Unchecked — propagate directly
-                            throw e;
                         } catch (Throwable t) {
-                            // Checked throwable — wrap for transport
-                            throw new CompletionException(t);
+                            throw Throws.wrapChecked(t);
                         }
                     }
             );
-        } catch (RuntimeException e) {
-            // Unwrap the original throwable if it was wrapped during transport
-            if (e instanceof CompletionException) {
-                throw e.getCause();
-            }
-            throw e;
+        } catch (CompletionException e) {
+            // Sneaky-throw the original cause (could be any Throwable subtype).
+            throw Throws.unwrapAndRethrow(e);
         }
     }
 }
