@@ -207,7 +207,9 @@ public final class PipelineValidator {
      */
     public record ValidationResult(List<String> warnings) {
 
-        /** A clean result with no warnings. */
+        /**
+         * A clean result with no warnings.
+         */
         static final ValidationResult CLEAN = new ValidationResult(List.of());
 
         /**

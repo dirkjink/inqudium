@@ -127,7 +127,7 @@ public interface PipelineOrdering {
      * @throws NullPointerException if orders is null
      */
     static PipelineOrdering of(Map<InqElementType, Integer> orders,
-                                boolean shouldValidateOnBuild) {
+                               boolean shouldValidateOnBuild) {
         Objects.requireNonNull(orders, "Orders map must not be null");
         EnumMap<InqElementType, Integer> snapshot = new EnumMap<>(orders);
         return new PipelineOrdering() {

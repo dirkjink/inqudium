@@ -1,6 +1,5 @@
 package eu.inqudium.core.pipeline;
 
-import eu.inqudium.core.element.InqElement;
 import eu.inqudium.core.element.InqElementType;
 import eu.inqudium.core.event.InqEventPublisher;
 import eu.inqudium.core.pipeline.PipelineValidator.ValidationResult;
@@ -25,30 +24,6 @@ class PipelineValidatorTest {
     // Stub element — minimal implementation for validation tests
     // =========================================================================
 
-    static class StubElement implements InqDecorator<Void, Object> {
-        private final String name;
-        private final InqElementType type;
-
-        StubElement(String name, InqElementType type) {
-            this.name = name;
-            this.type = type;
-        }
-
-        @Override public String getName() { return name; }
-        @Override public InqElementType getElementType() { return type; }
-        @Override public InqEventPublisher getEventPublisher() { return null; }
-
-        @Override
-        public Object execute(long chainId, long callId, Void arg,
-                              InternalExecutor<Void, Object> next) {
-            return next.execute(chainId, callId, arg);
-        }
-    }
-
-    // =========================================================================
-    // Helper — custom ordering that forces a specific element position
-    // =========================================================================
-
     /**
      * Creates a custom ordering where elements appear in the given order
      * (first argument = outermost = lowest order value).
@@ -59,6 +34,41 @@ class PipelineValidatorTest {
             map.put(outerToInner[i], (i + 1) * 100);
         }
         return PipelineOrdering.of(map);
+    }
+
+    // =========================================================================
+    // Helper — custom ordering that forces a specific element position
+    // =========================================================================
+
+    static class StubElement implements InqDecorator<Void, Object> {
+        private final String name;
+        private final InqElementType type;
+
+        StubElement(String name, InqElementType type) {
+            this.name = name;
+            this.type = type;
+        }
+
+        @Override
+        public String getName() {
+            return name;
+        }
+
+        @Override
+        public InqElementType getElementType() {
+            return type;
+        }
+
+        @Override
+        public InqEventPublisher getEventPublisher() {
+            return null;
+        }
+
+        @Override
+        public Object execute(long chainId, long callId, Void arg,
+                              InternalExecutor<Void, Object> next) {
+            return next.execute(chainId, callId, arg);
+        }
     }
 
     // =========================================================================
