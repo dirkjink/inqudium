@@ -3,11 +3,7 @@ package eu.inqudium.core.pipeline;
 import eu.inqudium.core.element.InqElement;
 import eu.inqudium.core.element.InqElementType;
 
-import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.List;
-import java.util.ListIterator;
-import java.util.Objects;
+import java.util.*;
 import java.util.function.BiFunction;
 
 /**
@@ -23,21 +19,21 @@ import java.util.function.BiFunction;
  * <h3>Terminal landscape</h3>
  * <pre>
  *                              InqPipeline
- *                                  │
- *               ┌──────────────────┼───────────────────────┐
- *               │                  │                       │
+ *                                   │
+ *               ┌───────────────────┼───────────────────────┐
+ *               │                   │                       │
  *          Sync only           Async only              Hybrid (auto)
- *               │                  │                       │
+ *               │                   │                       │
  *     ┌─────────┴──────┐           │          ┌────────────┴────────────┐
  *     │                │           │          │                         │
  * SyncPipeline   ProxyPipeline     │    HybridProxy              HybridAspect
  *  Terminal       Terminal         │    PipelineTerminal          PipelineTerminal
- *  (core)         (core)           │    (imperative)              (aspect)
- *     │                │           │         │                         │
- *     ▼                ▼           │    ┌────┴────┐              ┌────┴────┐
- *  execute()     protect()         │  sync?  async?            sync?  async?
- *                (Proxy)           │    │       │                │       │
- *                                  │    ▼       ▼                ▼       ▼
+ *  (core)         (core)          │    (imperative)              (aspect)
+ *     │                │          │         │                         │
+ *     ▼                ▼          │    ┌────┴────┐              ┌────┴────┐
+ *  execute()     protect()        │  sync?  async?            sync?  async?
+ *                (Proxy)          │    │       │                │       │
+ *                                 │    ▼       ▼                ▼       ▼
  *                           AsyncPipeline  Sync    Async     Sync    Async
  *                            Terminal     Term.    Term.     Term.    Term.
  *                           (imperative)
@@ -45,7 +41,7 @@ import java.util.function.BiFunction;
  *
  * <h3>Terminal matrix</h3>
  * <pre>
- *                     Functions       Dynamic Proxy        AspectJ
+ *                     Functions          Dynamic Proxy        AspectJ
  *                  ┌──────────────┬──────────────────┬──────────────────┐
  *   Sync           │ SyncPipeline │ ProxyPipeline    │ AspectPipeline   │
  *                  │ Terminal     │ Terminal         │ Terminal         │
@@ -53,11 +49,11 @@ import java.util.function.BiFunction;
  *   Async          │ AsyncPipeline│       —          │       —          │
  *                  │ Terminal     │                  │                  │
  *                  ├──────────────┼──────────────────┼──────────────────┤
- *   Hybrid         │      —¹      │ HybridProxy      │ HybridAspect     │
- *   (Sync+Async)   │              │ PipelineTerminal │ PipelineTerminal │
+ *   Hybrid         │      —¹     │ HybridProxy      │ HybridAspect     │
+ *   (Sync+Async)   │             │ PipelineTerminal │ PipelineTerminal │
  *                  ├──────────────┼──────────────────┼──────────────────┤
- *   Reactive       │      —²      │       —²         │       —²         │
- *   Kotlin Coro.   │      —²      │       —²         │       —²         │
+ *   Reactive       │      —²     │       —²         │       —²         │
+ *   Kotlin Coro.   │      —²     │       —²         │       —²         │
  *                  └──────────────┴──────────────────┴──────────────────┘
  *
  *   ¹ Not needed — the caller chooses sync or async terminal explicitly.
@@ -318,7 +314,41 @@ public final class InqPipeline {
          * Sets the pipeline ordering.
          *
          * <p>Determines how elements are sorted in the built pipeline.
-         * If not called, {@link PipelineOrdering#standard()} is used.</p>
+         * If not called, {@link PipelineOrdering#standard()} is used.
+         * The order of {@code shield()} calls is irrelevant when using a
+         * predefined or custom ordering — elements are always sorted at
+         * build time.</p>
+         *
+         * <h4>Built-in orderings</h4>
+         * <pre>{@code
+         * // Standard inqudium order (ADR-017) — this is the default:
+         * .order(PipelineOrdering.standard())
+         * // TL(100) → TS(200) → RL(300) → BH(400) → CB(500) → RT(600)
+         *
+         * // Resilience4J-compatible order:
+         * .order(PipelineOrdering.resilience4j())
+         * // RT(100) → CB(200) → TS(300) → RL(400) → TL(500) → BH(600)
+         * }</pre>
+         *
+         * <h4>Custom ordering via lambda</h4>
+         * <p>Since {@link PipelineOrdering} is a {@code @FunctionalInterface},
+         * any lambda or method reference that maps {@code InqElementType → int}
+         * can be used directly:</p>
+         * <pre>{@code
+         * PipelineOrdering custom = type -> switch (type) {
+         *     case RETRY     -> 10;
+         *     case BULKHEAD  -> 20;
+         *     default        -> type.defaultPipelineOrder();
+         * };
+         *
+         * InqPipeline pipeline = InqPipeline.builder()
+         *         .shield(circuitBreaker)
+         *         .shield(retry)
+         *         .shield(bulkhead)
+         *         .order(custom)
+         *         .build();
+         * // Result: RT(10) → BH(20) → CB(500, default)
+         * }</pre>
          *
          * @param ordering the ordering strategy
          * @return this builder
