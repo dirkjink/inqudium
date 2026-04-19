@@ -172,7 +172,7 @@ public final class AsyncResolvedPipeline {
      * @param coreExecutor the join point execution (typically
      *                     {@code () -> (CompletionStage<Object>) pjp.proceed()})
      * @return a {@link CompletionStage} carrying the result or the failure —
-     *         never {@code null}, never throws
+     * never {@code null}, never throws
      */
     public CompletionStage<Object> execute(
             JoinPointExecutor<CompletionStage<Object>> coreExecutor) {
@@ -214,7 +214,9 @@ public final class AsyncResolvedPipeline {
 
     // ======================== Diagnostics ========================
 
-    /** Returns the chain ID assigned to this resolved pipeline. */
+    /**
+     * Returns the chain ID assigned to this resolved pipeline.
+     */
     public long chainId() {
         return diagnostics.chainId();
     }
@@ -227,12 +229,16 @@ public final class AsyncResolvedPipeline {
         return diagnostics.currentCallId();
     }
 
-    /** Returns the layer names in order (outermost first). */
+    /**
+     * Returns the layer names in order (outermost first).
+     */
     public List<String> layerNames() {
         return diagnostics.layerNames();
     }
 
-    /** Returns the number of layers in this pipeline. */
+    /**
+     * Returns the number of layers in this pipeline.
+     */
     public int depth() {
         return diagnostics.depth();
     }
