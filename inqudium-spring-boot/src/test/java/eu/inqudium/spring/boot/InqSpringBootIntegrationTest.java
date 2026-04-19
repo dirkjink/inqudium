@@ -11,6 +11,7 @@ import eu.inqudium.core.pipeline.InqDecorator;
 import eu.inqudium.core.pipeline.InternalExecutor;
 import eu.inqudium.imperative.core.pipeline.InqAsyncDecorator;
 import eu.inqudium.imperative.core.pipeline.InternalAsyncExecutor;
+import eu.inqudium.spring.InqShieldAspect;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
