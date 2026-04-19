@@ -45,7 +45,7 @@ import java.util.function.BiFunction;
  *
  * <h3>Terminal matrix</h3>
  * <pre>
- *                     Functions          Dynamic Proxy        AspectJ
+ *                     Functions      Dynamic Proxy        AspectJ
  *                  ┌──────────────┬──────────────────┬──────────────────┐
  *   Sync           │ SyncPipeline │ ProxyPipeline    │ AspectPipeline   │
  *                  │ Terminal     │ Terminal         │ Terminal         │
