@@ -46,15 +46,25 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class InqShieldAspectPlainSpringTest {
 
     static final List<String> TRACE = Collections.synchronizedList(new ArrayList<>());
+    @Autowired
+    OrderService orderService;
+
+    // =========================================================================
+    // Dual tracing element
+    // =========================================================================
+    @Autowired
+    InventoryService inventoryService;
+
+    // =========================================================================
+    // Services
+    // =========================================================================
+    @Autowired
+    ShippingService shippingService;
 
     @BeforeEach
     void clearTrace() {
         TRACE.clear();
     }
-
-    // =========================================================================
-    // Dual tracing element
-    // =========================================================================
 
     static class TracingElement implements InqDecorator<Void, Object>,
             InqAsyncDecorator<Void, Object> {
@@ -67,9 +77,20 @@ class InqShieldAspectPlainSpringTest {
             this.type = type;
         }
 
-        @Override public String getName() { return name; }
-        @Override public InqElementType getElementType() { return type; }
-        @Override public InqEventPublisher getEventPublisher() { return null; }
+        @Override
+        public String getName() {
+            return name;
+        }
+
+        @Override
+        public InqElementType getElementType() {
+            return type;
+        }
+
+        @Override
+        public InqEventPublisher getEventPublisher() {
+            return null;
+        }
 
         @Override
         public Object execute(long chainId, long callId, Void arg,
@@ -84,7 +105,7 @@ class InqShieldAspectPlainSpringTest {
 
         @Override
         public CompletionStage<Object> executeAsync(long chainId, long callId, Void arg,
-                                                     InternalAsyncExecutor<Void, Object> next) {
+                                                    InternalAsyncExecutor<Void, Object> next) {
             TRACE.add(name + ":async-enter");
             return next.executeAsync(chainId, callId, arg)
                     .whenComplete((r, e) -> TRACE.add(name + ":async-exit"));
@@ -92,10 +113,12 @@ class InqShieldAspectPlainSpringTest {
     }
 
     // =========================================================================
-    // Services
+    // Plain Spring configuration
     // =========================================================================
 
-    /** METHOD-level annotations. */
+    /**
+     * METHOD-level annotations.
+     */
     static class OrderService {
 
         @InqCircuitBreaker("testCb")
@@ -141,7 +164,13 @@ class InqShieldAspectPlainSpringTest {
         }
     }
 
-    /** TYPE-level annotation — all methods protected. */
+    // =========================================================================
+    // Injected services
+    // =========================================================================
+
+    /**
+     * TYPE-level annotation — all methods protected.
+     */
     @InqCircuitBreaker("testCb")
     static class InventoryService {
 
@@ -156,7 +185,9 @@ class InqShieldAspectPlainSpringTest {
         }
     }
 
-    /** TYPE + METHOD merge. */
+    /**
+     * TYPE + METHOD merge.
+     */
     @InqCircuitBreaker("testCb")
     @InqRetry("testRt")
     static class ShippingService {
@@ -181,10 +212,6 @@ class InqShieldAspectPlainSpringTest {
             return "in-transit:" + trackingId;
         }
     }
-
-    // =========================================================================
-    // Plain Spring configuration
-    // =========================================================================
 
     @Configuration
     @EnableAspectJAutoProxy
@@ -220,14 +247,6 @@ class InqShieldAspectPlainSpringTest {
             return new ShippingService();
         }
     }
-
-    // =========================================================================
-    // Injected services
-    // =========================================================================
-
-    @Autowired OrderService orderService;
-    @Autowired InventoryService inventoryService;
-    @Autowired ShippingService shippingService;
 
     // =========================================================================
     // 1. Sync interception (METHOD-level)
