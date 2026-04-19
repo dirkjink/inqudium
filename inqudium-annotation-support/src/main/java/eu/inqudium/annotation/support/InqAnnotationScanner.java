@@ -1,4 +1,4 @@
-package eu.inqudium.annotation.processor;
+package eu.inqudium.annotation.support;
 
 import eu.inqudium.annotation.InqBulkhead;
 import eu.inqudium.annotation.InqCircuitBreaker;

@@ -43,7 +43,7 @@
         <module>inqudium-aspect</module>
         <module>inqudium-aspect-integration-tests</module>
         <module>inqudium-annotation</module>
-        <module>inqudium-annotation-processor</module>
+        <module>inqudium-annotation-support</module>
     </modules>
 
     <!-- ═══════════════════════════════════════════════════════ -->

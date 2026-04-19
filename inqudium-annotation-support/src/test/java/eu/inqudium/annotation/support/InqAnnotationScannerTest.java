@@ -1,4 +1,4 @@
-package eu.inqudium.annotation.processor;
+package eu.inqudium.annotation.support;
 
 import eu.inqudium.annotation.InqBulkhead;
 import eu.inqudium.annotation.InqCircuitBreaker;
@@ -7,7 +7,7 @@ import eu.inqudium.annotation.InqRetry;
 import eu.inqudium.annotation.InqShield;
 import eu.inqudium.annotation.InqTimeLimiter;
 import eu.inqudium.annotation.InqTrafficShaper;
-import eu.inqudium.annotation.processor.InqAnnotationScanner.ScanResult;
+import eu.inqudium.annotation.support.InqAnnotationScanner.ScanResult;
 import eu.inqudium.core.element.InqElementType;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;

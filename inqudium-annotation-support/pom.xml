@@ -9,7 +9,7 @@
         <version>${revision}</version>
     </parent>
 
-    <artifactId>inqudium-annotation-processor</artifactId>
+    <artifactId>inqudium-annotation-support</artifactId>
     <name>Inqudium :: Annotation Processor</name>
     <description>
         Bridges Inqudium annotations to the core pipeline API.
