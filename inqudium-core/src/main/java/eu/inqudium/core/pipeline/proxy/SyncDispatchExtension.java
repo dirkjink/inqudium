@@ -72,7 +72,7 @@ public class SyncDispatchExtension implements DispatchExtension {
      * Per-extension handle cache — avoids a global singleton and keeps cache
      * sizes proportional to the methods actually dispatched through this extension.
      * When extensions are linked, the outer extension's cache may be inherited
-     * by the linked instance to reuse already-resolved handles.
+     * by the linked instance to reuse already-resolved handles and invokers.
      */
     private final MethodHandleCache handleCache;
 
@@ -102,7 +102,7 @@ public class SyncDispatchExtension implements DispatchExtension {
      * and uses {@code realTarget} as the terminal override.
      *
      * <p>Inherits the outer extension's handle cache so that already-resolved
-     * handles are reused across the linked pair.</p>
+     * handles and invokers are reused across the linked pair.</p>
      *
      * @param action      the around-advice for this (outer) extension
      * @param inner       the inner extension to chain into (or null if no match found)
@@ -151,9 +151,19 @@ public class SyncDispatchExtension implements DispatchExtension {
      * Builds the terminal executor lambda for a specific method invocation.
      *
      * <p>The terminal is the innermost step in the chain — it invokes the actual
-     * method on the target via the cached {@link MethodHandle}. The handle is
-     * eagerly resolved (cached) before the lambda is created, so the first
-     * hot-path call doesn't pay the resolution cost.</p>
+     * method on the target via a pre-built, arity-specialized
+     * {@link MethodInvoker}. The invoker is resolved <strong>once</strong> here
+     * (the result is captured by the returned lambda), eliminating two
+     * per-call costs that the previous implementation paid:</p>
+     * <ol>
+     *   <li>The eager-and-then-discarded {@code handleCache.resolve(method)}
+     *       call, whose result was never used — the lambda body then looked
+     *       the handle up again through {@code handleCache.invoke}.</li>
+     *   <li>The arity switch inside {@code handleCache.invoke(...)}, which
+     *       chose one of several {@code MethodHandle.invoke} signatures at
+     *       runtime. With a pre-built invoker, the correct signature is
+     *       already baked into the invoker's lambda body.</li>
+     * </ol>
      *
      * <p>Exceptions from the method invocation are processed through
      * {@link DispatchExtension#handleException} to unwrap reflection artifacts
@@ -167,11 +177,14 @@ public class SyncDispatchExtension implements DispatchExtension {
     private InternalExecutor<Void, Object> buildTerminal(Method method,
                                                          Object[] args,
                                                          Object target) {
-        // Eagerly resolve the method handle so it's cached before the first call
-        handleCache.resolve(method);
+        // Resolve the pre-built, arity-specialized invoker once. The returned
+        // lambda captures the invoker itself — not the raw method — so the
+        // hot-path call is a direct invoker.invoke(target, args) with no
+        // per-call map lookup and no arity switch.
+        MethodInvoker invoker = handleCache.resolveInvoker(method);
         return (chainId, callId, arg) -> {
             try {
-                return handleCache.invoke(target, method, args);
+                return invoker.invoke(target, args);
             } catch (Throwable e) {
                 // Unwrap reflection wrappers and classify the exception
                 throw handleException(method, e);

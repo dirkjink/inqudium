@@ -24,23 +24,34 @@ import java.util.concurrent.ConcurrentHashMap;
  * proportional to the methods actually dispatched through each extension and avoids
  * a global singleton with unbounded growth.</p>
  *
- * <h3>Hot-path optimization</h3>
- * <p>Instead of the generic {@link MethodHandle#invokeWithArguments} path
- * (which copies arrays internally and performs runtime type checks on every
- * call), this cache dispatches through arity-specialized invocations:</p>
+ * <h3>Hot-path optimization: pre-built per-method invokers</h3>
+ * <p>The original design dispatched through an arity-switch <em>on every call</em>
+ * — choosing one of seven {@code MethodHandle.invoke} signatures at runtime.
+ * That approach had two hidden costs on the hot path: the switch itself, and
+ * the multiple {@code mh.invoke} call-sites inside a single method, which
+ * caused the JIT to oscillate between specializations for methods of varying
+ * arity (visible as the ±27.6 ns variance previously observed on the 5-arg
+ * benchmark).</p>
+ *
+ * <p>This implementation moves the arity decision to <em>resolution time</em>:
+ * {@link #resolveInvoker(Method)} returns a cached, per-method
+ * {@link MethodInvoker} whose body contains exactly one pre-chosen
+ * {@code mh.invoke} signature. The hot path becomes a single map lookup
+ * followed by a direct lambda call with no runtime branching on arity.</p>
+ *
  * <ul>
- *   <li><strong>0–5 parameters:</strong> Direct {@code mh.invoke(target, arg0, arg1, ...)}
- *       calls — no array allocation, no copying.</li>
- *   <li><strong>6+ parameters:</strong> A pre-built {@linkplain MethodHandle#asSpreader spreader}
- *       handle that consumes the argument array directly, eliminating the per-call
- *       array allocation that would be needed to prepend the target to the args.</li>
+ *   <li><strong>0–5 parameters:</strong> direct {@code mh.invoke(target, arg0, ...)}
+ *       captured in the invoker — no array operations, no switch per call.</li>
+ *   <li><strong>6+ parameters:</strong> a pre-built
+ *       {@linkplain MethodHandle#asSpreader spreader} handle is captured in
+ *       the invoker and accepts the argument array directly.</li>
  * </ul>
  *
  * <h3>Thread safety</h3>
  * <p>The internal maps are {@link ConcurrentHashMap}s. Concurrent
- * {@code computeIfAbsent} calls for the same {@code Method} key may
- * redundantly unreflect, but the result is identical and idempotent —
- * no locking is needed beyond what {@code ConcurrentHashMap} provides.</p>
+ * {@code computeIfAbsent} calls for the same {@code Method} key may redundantly
+ * compute the same value, but the result is identical and idempotent — no
+ * locking is needed beyond what {@code ConcurrentHashMap} provides.</p>
  *
  * @since 0.6.0
  */
@@ -54,21 +65,29 @@ public final class MethodHandleCache {
     private static final MethodHandles.Lookup LOOKUP = MethodHandles.lookup();
 
     /**
-     * Primary cache: maps each {@code Method} to its resolved {@code MethodHandle}.
-     * Used for all arity levels. Populated lazily on first access per method.
+     * Reusable empty-arguments constant — avoids per-call allocation when
+     * {@link #invoke(Object, Method, Object[])} is called with {@code null}
+     * for a zero-arg method.
      */
-    private final ConcurrentHashMap<Method, MethodHandle> fastCache =
+    private static final Object[] EMPTY_ARGS = new Object[0];
+
+    /**
+     * Primary cache: maps each {@code Method} to its resolved {@code MethodHandle}.
+     * Populated lazily on first access per method. Exposed through {@link #resolve}
+     * for callers that need the raw handle.
+     */
+    private final ConcurrentHashMap<Method, MethodHandle> handleCache =
             new ConcurrentHashMap<>();
 
     /**
-     * Secondary cache for spreader handles, used only for methods with 6+
-     * parameters. A spreader handle accepts {@code (Object target, Object[] args)}
-     * and spreads the args array into positional parameters, avoiding the manual
-     * array copy that would otherwise be needed.
+     * Invoker cache: maps each {@code Method} to a pre-built, arity-specialized
+     * {@link MethodInvoker}. This is the primary hot-path cache — consulted by
+     * both {@link #resolveInvoker} and {@link #invoke} to eliminate the per-call
+     * arity switch and the redundant handle lookup that the previous
+     * implementation required.
      */
-    private final ConcurrentHashMap<Method, MethodHandle> spreaderCache =
+    private final ConcurrentHashMap<Method, MethodInvoker> invokerCache =
             new ConcurrentHashMap<>();
-
 
     /**
      * Converts a {@code Method} to a {@code MethodHandle} via unreflection.
@@ -113,97 +132,115 @@ public final class MethodHandleCache {
      */
     MethodHandle resolve(Method method) {
         // Fast path: check without locking — hits on every call after the first
-        MethodHandle mh = fastCache.get(method);
+        MethodHandle mh = handleCache.get(method);
         if (mh == null) {
             // Slow path: compute and cache on first access.
-            // computeIfAbsent guarantees at-most-one computation per key,
-            // though concurrent calls may redundantly enter the lambda.
-            mh = fastCache.computeIfAbsent(method, MethodHandleCache::unreflect);
+            // computeIfAbsent guarantees at-most-one effective computation per key.
+            mh = handleCache.computeIfAbsent(method, MethodHandleCache::unreflect);
         }
         return mh;
+    }
+
+    /**
+     * Returns a cached {@link MethodInvoker} for the given method.
+     *
+     * <p>This is the primary entry point for dispatch extensions on the hot path.
+     * The returned invoker has its arity-specialization already chosen at build
+     * time — callers simply hand it a target and an argument array, with no
+     * runtime branching on arity.</p>
+     *
+     * <p>For methods with ≤ 5 parameters, the invoker holds a direct
+     * {@code mh.invoke(target, arg0, …)} call. For methods with 6+ parameters,
+     * it holds a pre-built spreader handle that accepts the argument array
+     * directly. Either way, the hot-path call-site is stable and monomorphic
+     * for any given method, enabling the JIT to fully inline through the
+     * invoker into the underlying method handle.</p>
+     *
+     * <p>Uses the same two-step lookup pattern as {@link #resolve}: a plain
+     * {@code get()} first, with {@code computeIfAbsent()} only on miss.</p>
+     *
+     * @param method the reflected method (must not be {@code null})
+     * @return a reusable, arity-specialized invoker for the method
+     */
+    MethodInvoker resolveInvoker(Method method) {
+        MethodInvoker invoker = invokerCache.get(method);
+        if (invoker == null) {
+            invoker = invokerCache.computeIfAbsent(method, this::buildInvoker);
+        }
+        return invoker;
     }
 
     /**
      * Invokes the cached handle for {@code method} on the given target
      * with the supplied arguments.
      *
-     * <p>Uses arity-specialized dispatch to minimize overhead:</p>
-     * <ul>
-     *   <li><strong>0–5 args:</strong> Direct {@code mh.invoke(target, arg0, ...)} —
-     *       each argument is passed as a separate parameter. No array allocation,
-     *       no spreading, maximum JIT optimization potential.</li>
-     *   <li><strong>6+ args:</strong> Pre-built spreader handle that accepts
-     *       {@code (Object target, Object[] args)} and internally spreads the
-     *       array into positional parameters. The spreader is cached, so the
-     *       conversion cost is paid only once per method.</li>
-     * </ul>
+     * <p>Delegates to {@link #resolveInvoker} and calls the resulting
+     * pre-built invoker. The arity switch is evaluated once at invoker
+     * construction, not on every call.</p>
+     *
+     * <p>For zero-argument methods, callers may pass {@code null} or an empty
+     * array for {@code args} — both are normalized to the shared
+     * {@link #EMPTY_ARGS} constant.</p>
      *
      * @param target the object to invoke the method on
      * @param method the service method (used as cache key)
-     * @param args   the method arguments ({@code null} for zero-arg methods)
+     * @param args   the method arguments ({@code null} is treated as empty)
      * @return the method's return value
      * @throws Throwable if the underlying method throws
      */
     public Object invoke(Object target, Method method, Object[] args) throws Throwable {
-        int arity = (args == null) ? 0 : args.length;
-
-        // Arity-specialized dispatch for common cases (0–5 parameters).
-        // Each case passes arguments directly to avoid array operations.
-        if (arity < 6) {
-            MethodHandle mh = resolve(method);
-
-            return switch (arity) {
-                case 0 -> mh.invoke(target);
-                case 1 -> mh.invoke(target, args[0]);
-                case 2 -> mh.invoke(target, args[0], args[1]);
-                case 3 -> mh.invoke(target, args[0], args[1], args[2]);
-                case 4 -> mh.invoke(target, args[0], args[1], args[2], args[3]);
-                case 5 -> mh.invoke(target, args[0], args[1], args[2], args[3], args[4]);
-                // Unreachable due to the arity < 6 guard, but required by the compiler
-                default -> resolveSpreader(method, arity).invoke(target, args);
-            };
-        } else {
-            // High-arity path: use a pre-built spreader handle that accepts
-            // (Object target, Object[] args) and spreads the array internally.
-            MethodHandle mh = resolveSpreader(method, arity);
-            return mh.invoke(target, args);
-        }
+        // Normalize null args — only relevant for zero-arg methods, where the
+        // invoker body ignores the array anyway. This keeps the contract
+        // compatible with callers that pass null for no-arg methods.
+        Object[] safeArgs = (args == null) ? EMPTY_ARGS : args;
+        return resolveInvoker(method).invoke(target, safeArgs);
     }
 
     /**
-     * Returns a cached spreader handle for high-arity methods (6+ parameters).
+     * Builds a per-method {@link MethodInvoker} with arity-specialized dispatch
+     * baked in. Invoked lazily by {@link #resolveInvoker} on cache miss.
      *
-     * <p>The spreader is built in two steps from the original handle:</p>
-     * <ol>
-     *   <li>{@link MethodHandle#asType} casts all parameter types to {@code Object}
-     *       and the return type to {@code Object}, creating a fully generic handle.</li>
-     *   <li>{@link MethodHandle#asSpreader} converts the trailing parameters into a
-     *       single {@code Object[]} parameter, producing a handle with signature
-     *       {@code (Object target, Object[] args) -> Object}.</li>
-     * </ol>
+     * <p>For methods with ≤ 5 parameters, the generated invoker invokes the
+     * underlying {@link MethodHandle} with the correct number of direct
+     * positional arguments — no array operations, no switch, maximum JIT
+     * optimization potential.</p>
      *
-     * <p>This lets us pass the target and the argument array directly — no
-     * intermediate array copy required to prepend the target.</p>
+     * <p>For methods with 6+ parameters, the invoker captures a pre-built
+     * spreader handle that accepts {@code (Object target, Object[] args)}
+     * and spreads the array into positional parameters internally. The
+     * spreader is built once, here, at resolution time.</p>
      *
-     * @param method the service method (used as cache key)
-     * @param arity  the number of method parameters (excluding the target)
-     * @return a cached spreader handle
+     * @param method the method to build an invoker for
+     * @return a reusable invoker specialized for {@code method}'s arity
      */
-    private MethodHandle resolveSpreader(Method method, int arity) {
-        // Fast path: check without locking
-        MethodHandle mh = spreaderCache.get(method);
-        if (mh == null) {
-            // Slow path: build the spreader and cache it
-            mh = spreaderCache.computeIfAbsent(method, k -> {
-                // Build a fully generic method type: (Object, Object, Object, ...) -> Object
-                // The +1 accounts for the target parameter (first positional arg)
+    private MethodInvoker buildInvoker(Method method) {
+        MethodHandle mh = resolve(method);
+        int arity = method.getParameterCount();
+
+        // Arity-specialized invoker bodies. Each case compiles to a distinct
+        // lambda class — the call-site at invoker.invoke(target, args) sees
+        // a bounded set of types (7 total), well within the JIT's polymorphic
+        // inline cache capacity.
+        switch (arity) {
+            case 0:
+                return (t, a) -> mh.invoke(t);
+            case 1:
+                return (t, a) -> mh.invoke(t, a[0]);
+            case 2:
+                return (t, a) -> mh.invoke(t, a[0], a[1]);
+            case 3:
+                return (t, a) -> mh.invoke(t, a[0], a[1], a[2]);
+            case 4:
+                return (t, a) -> mh.invoke(t, a[0], a[1], a[2], a[3]);
+            case 5:
+                return (t, a) -> mh.invoke(t, a[0], a[1], a[2], a[3], a[4]);
+            default:
+                // High-arity: build the spreader once and capture it. The
+                // invoker body is a single mh.invoke(target, args) call
+                // through the generic (Object, Object[]) -> Object signature.
                 MethodType generic = MethodType.genericMethodType(arity + 1);
-                MethodHandle adapted = unreflect(method).asType(generic);
-                // Convert the trailing 'arity' parameters into a single Object[] spreader,
-                // resulting in: (Object target, Object[] args) -> Object
-                return adapted.asSpreader(Object[].class, arity);
-            });
+                MethodHandle spreader = mh.asType(generic).asSpreader(Object[].class, arity);
+                return (t, a) -> spreader.invoke(t, a);
         }
-        return mh;
     }
 }
