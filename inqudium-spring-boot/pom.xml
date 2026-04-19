@@ -29,6 +29,11 @@
             <artifactId>inqudium-annotation-support</artifactId>
             <version>${project.version}</version>
         </dependency>
+        <dependency>
+            <groupId>eu.inqudium</groupId>
+            <artifactId>inqudium-spring</artifactId>
+            <version>${project.version}</version>
+        </dependency>
 
         <!-- AsyncPipelineTerminal for hybrid sync/async dispatch -->
         <dependency>

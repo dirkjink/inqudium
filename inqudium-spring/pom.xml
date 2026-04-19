@@ -12,9 +12,13 @@
     <artifactId>inqudium-spring</artifactId>
     <name>Inqudium :: Spring</name>
     <description>
-        Spring Boot auto-configuration for Inqudium.
-        Auto-discovers InqElement beans, builds the registry, and provides
-        a Spring AOP aspect that intercepts @InqCircuitBreaker, @InqRetry etc.
+        Plain Spring integration for Inqudium.
+        Provides InqShieldAspect for Spring AOP — works with any Spring
+        application (Spring Boot not required). Users manually configure
+        the InqElementRegistry and register the aspect as a bean.
+
+        For automatic bean discovery and zero-config setup, add
+        inqudium-spring-boot instead.
     </description>
 
     <dependencies>
@@ -32,22 +36,41 @@
             <version>${project.version}</version>
         </dependency>
 
-        <!-- Spring Boot auto-configuration -->
+        <!-- Spring AOP (@Aspect, ProceedingJoinPoint) — NOT spring-boot -->
         <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-autoconfigure</artifactId>
+            <groupId>org.springframework</groupId>
+            <artifactId>spring-aop</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.aspectj</groupId>
+            <artifactId>aspectjweaver</artifactId>
         </dependency>
 
-        <!-- Spring AOP for @Aspect support -->
+        <!-- Logging (SLF4J API only) -->
         <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-aop</artifactId>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-api</artifactId>
         </dependency>
 
         <!-- Test -->
         <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-test</artifactId>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.assertj</groupId>
+            <artifactId>assertj-core</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework</groupId>
+            <artifactId>spring-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework</groupId>
+            <artifactId>spring-context</artifactId>
             <scope>test</scope>
         </dependency>
     </dependencies>

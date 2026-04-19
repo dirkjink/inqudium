@@ -132,6 +132,11 @@
                 <version>${project.version}</version>
                 <optional>true</optional>
             </dependency>
+            <dependency>
+                <groupId>eu.inqudium</groupId>
+                <artifactId>inqudium-spring</artifactId>
+                <version>${project.version}</version>
+            </dependency>
 
             <!-- Kotlin -->
             <dependency>

@@ -2,6 +2,7 @@ package eu.inqudium.spring.boot;
 
 import eu.inqudium.core.element.InqElement;
 import eu.inqudium.core.element.InqElementRegistry;
+import eu.inqudium.spring.InqShieldAspect;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
