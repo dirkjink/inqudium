@@ -16,10 +16,12 @@ import org.openjdk.jmh.infra.Blackhole;
 import org.openjdk.jmh.profile.GCProfiler;
 import org.openjdk.jmh.profile.MemPoolProfiler;
 import org.openjdk.jmh.profile.PausesProfiler;
+import org.openjdk.jmh.results.format.ResultFormatType;
 import org.openjdk.jmh.runner.Runner;
 import org.openjdk.jmh.runner.RunnerException;
 import org.openjdk.jmh.runner.options.Options;
 import org.openjdk.jmh.runner.options.OptionsBuilder;
+import org.openjdk.jmh.runner.options.TimeValue;
 
 import java.lang.reflect.Proxy;
 import java.util.concurrent.TimeUnit;
@@ -184,7 +186,15 @@ public class ProxyMultiThreadedMultiLayerBenchmark {
                 .addProfiler(GCProfiler.class)
                 .addProfiler(PausesProfiler.class)
                 .addProfiler(MemPoolProfiler.class)
+//                .warmupIterations(10)
+//                .warmupTime(TimeValue.seconds(5))
+//                .measurementIterations(20)
+//                .measurementTime(TimeValue.seconds(5))
+//                .forks(5)
                 .include(ProxyMultiThreadedMultiLayerBenchmark.class.getSimpleName())
+//                .include(ProxyMultiThreadedMultiLayerBenchmark.class.getSimpleName()+ "\\.framework_2Args$")
+                .resultFormat(ResultFormatType.JSON)
+                .result("2args-result.json")
                 .build();
         new Runner(opt).run();
     }
