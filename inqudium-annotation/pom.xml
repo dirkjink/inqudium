@@ -10,7 +10,7 @@
     </parent>
 
     <artifactId>inqudium-annotation</artifactId>
-    <name>Inqudium :: Annotations</name>
+    <name>Inqudium :: Annotation</name>
     <description>
         Resilience pipeline annotations for Inqudium.
         Zero runtime dependencies — service modules depend only on this
