@@ -25,9 +25,13 @@ import java.lang.annotation.Target;
 @Documented
 public @interface InqBulkhead {
 
-    /** The name of the bulkhead instance to resolve from the registry. */
+    /**
+     * The name of the bulkhead instance to resolve from the registry.
+     */
     String value();
 
-    /** @return the fallback method name, or empty string for no fallback */
+    /**
+     * @return the fallback method name, or empty string for no fallback
+     */
     String fallbackMethod() default "";
 }

@@ -11,14 +11,13 @@ import java.util.Objects;
  * data in a framework-agnostic form that can be used to build an
  * {@code InqPipeline} via registry lookup.</p>
  *
- * @param type           the element kind (e.g. {@link InqElementType#CIRCUIT_BREAKER})
- * @param name           the instance name from the annotation's {@code value()}
- *                       attribute (e.g. "paymentCb")
- * @param fallbackMethod the fallback method name, or empty string if not specified
+ * @param type             the element kind (e.g. {@link InqElementType#CIRCUIT_BREAKER})
+ * @param name             the instance name from the annotation's {@code value()}
+ *                         attribute (e.g. "paymentCb")
+ * @param fallbackMethod   the fallback method name, or empty string if not specified
  * @param declarationOrder the position in the annotation list (0-based), used for
  *                         {@code CUSTOM} ordering where declaration order determines
  *                         pipeline position
- *
  * @since 0.8.0
  */
 public record ScannedElement(

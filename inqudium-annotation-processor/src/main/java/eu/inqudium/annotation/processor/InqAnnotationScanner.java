@@ -29,11 +29,11 @@ import java.util.Map;
  * </ol>
  *
  * <pre>{@code
- * @InqCircuitBreaker("defaultCb")          // TYPE-level
- * @InqRetry("defaultRt")                   // TYPE-level
+ * @InqCircuitBreaker("defaultCb") // TYPE-level
+ * @InqRetry("defaultRt") // TYPE-level
  * public class PaymentService {
  *
- *     @InqCircuitBreaker("specialCb")       // overrides TYPE-level
+ *     @InqCircuitBreaker("specialCb") // overrides TYPE-level
  *     public Result placeOrder() { ... }
  *     // → [specialCb (CB), defaultRt (RT)]
  *

@@ -25,7 +25,9 @@ import java.lang.annotation.Target;
 @Documented
 public @interface InqRetry {
 
-    /** The name of the retry instance to resolve from the registry. */
+    /**
+     * The name of the retry instance to resolve from the registry.
+     */
     String value();
 
     /**

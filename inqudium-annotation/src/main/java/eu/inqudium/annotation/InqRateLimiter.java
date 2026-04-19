@@ -25,9 +25,13 @@ import java.lang.annotation.Target;
 @Documented
 public @interface InqRateLimiter {
 
-    /** The name of the rate limiter instance to resolve from the registry. */
+    /**
+     * The name of the rate limiter instance to resolve from the registry.
+     */
     String value();
 
-    /** @return the fallback method name, or empty string for no fallback */
+    /**
+     * @return the fallback method name, or empty string for no fallback
+     */
     String fallbackMethod() default "";
 }

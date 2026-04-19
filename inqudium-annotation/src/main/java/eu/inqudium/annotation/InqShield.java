@@ -49,13 +49,13 @@ import java.lang.annotation.Target;
  * <p>When placed on a class, applies to all public methods of that class.
  * Method-level {@code @InqShield} overrides the class-level ordering.</p>
  *
- * @since 0.8.0
  * @see InqCircuitBreaker
  * @see InqRetry
  * @see InqRateLimiter
  * @see InqBulkhead
  * @see InqTimeLimiter
  * @see InqTrafficShaper
+ * @since 0.8.0
  */
 @Retention(RetentionPolicy.RUNTIME)
 @Target({ElementType.METHOD, ElementType.TYPE})

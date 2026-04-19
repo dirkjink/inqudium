@@ -29,12 +29,15 @@ class InqAnnotationScannerTest {
     static class MethodLevelOnly {
         @InqCircuitBreaker("cb")
         @InqRetry("rt")
-        public void protectedMethod() {}
+        public void protectedMethod() {
+        }
 
-        public void unannotatedMethod() {}
+        public void unannotatedMethod() {
+        }
 
         @InqCircuitBreaker("cb")
-        public void singleAnnotation() {}
+        public void singleAnnotation() {
+        }
     }
 
     // --- TYPE-level only ---
@@ -42,9 +45,11 @@ class InqAnnotationScannerTest {
     @InqCircuitBreaker("typeCb")
     @InqRetry("typeRt")
     static class TypeLevelOnly {
-        public void inheritedMethod() {}
+        public void inheritedMethod() {
+        }
 
-        public void anotherMethod() {}
+        public void anotherMethod() {
+        }
     }
 
     // --- METHOD overrides TYPE ---
@@ -53,36 +58,43 @@ class InqAnnotationScannerTest {
     @InqRetry("defaultRt")
     static class MethodOverridesType {
         @InqCircuitBreaker("specialCb")
-        public void overriddenMethod() {}
+        public void overriddenMethod() {
+        }
 
-        public void inheritedMethod() {}
+        public void inheritedMethod() {
+        }
 
         @InqBulkhead("methodBh")
-        public void methodAddsNew() {}
+        public void methodAddsNew() {
+        }
     }
 
     // --- @InqShield ordering ---
 
     static class NoShield {
         @InqCircuitBreaker("cb")
-        public void defaultOrdering() {}
+        public void defaultOrdering() {
+        }
     }
 
     @InqShield(order = "RESILIENCE4J")
     static class TypeLevelShield {
         @InqCircuitBreaker("cb")
-        public void inheritsShield() {}
+        public void inheritsShield() {
+        }
 
         @InqShield(order = "CUSTOM")
         @InqCircuitBreaker("cb")
-        public void overridesShield() {}
+        public void overridesShield() {
+        }
     }
 
     static class MethodLevelShield {
         @InqShield(order = "RESILIENCE4J")
         @InqCircuitBreaker("cb")
         @InqRetry("rt")
-        public void withShield() {}
+        public void withShield() {
+        }
     }
 
     // --- Full pipeline ---
@@ -94,7 +106,8 @@ class InqAnnotationScannerTest {
         @InqRateLimiter("rl")
         @InqBulkhead("bh")
         @InqTrafficShaper("ts")
-        public void allElements() {}
+        public void allElements() {
+        }
     }
 
     // --- All six on method ---
@@ -106,7 +119,8 @@ class InqAnnotationScannerTest {
         @InqBulkhead("bh")
         @InqCircuitBreaker("cb")
         @InqRetry("rt")
-        public void sixElements() {}
+        public void sixElements() {
+        }
     }
 
     // --- Fallback ---
@@ -114,7 +128,8 @@ class InqAnnotationScannerTest {
     static class WithFallback {
         @InqCircuitBreaker(value = "cb", fallbackMethod = "onFailure")
         @InqRetry(value = "rt", fallbackMethod = "")
-        public void withFallback() {}
+        public void withFallback() {
+        }
     }
 
     // =========================================================================
