@@ -17,12 +17,13 @@ import java.util.concurrent.ConcurrentHashMap;
  * expensive unreflection step happens only once per method.</p>
  *
  * <h3>Instance-level scoping</h3>
- * <p>Each {@link DispatchExtension} holds its own {@code MethodHandleCache} instance,
- * scoping the cache to the extension's lifetime. When extensions are linked during
- * proxy chaining, the new extension instance may inherit the outer extension's cache
- * (to reuse already-resolved handles) or get a fresh one — this keeps cache sizes
- * proportional to the methods actually dispatched through each extension and avoids
- * a global singleton with unbounded growth.</p>
+ * <p>Each {@link DispatchExtension} (and other proxy-level consumers) holds its
+ * own {@code MethodHandleCache} instance, scoping the cache to the consumer's
+ * lifetime. When extensions are linked during proxy chaining, the new extension
+ * instance may inherit the outer extension's cache (to reuse already-resolved
+ * handles) or get a fresh one — this keeps cache sizes proportional to the
+ * methods actually dispatched and avoids a global singleton with unbounded
+ * growth.</p>
  *
  * <h3>Hot-path optimization: pre-built per-method invokers</h3>
  * <p>The original design dispatched through an arity-switch <em>on every call</em>
@@ -30,8 +31,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * That approach had two hidden costs on the hot path: the switch itself, and
  * the multiple {@code mh.invoke} call-sites inside a single method, which
  * caused the JIT to oscillate between specializations for methods of varying
- * arity (visible as the ±27.6 ns variance previously observed on the 5-arg
- * benchmark).</p>
+ * arity.</p>
  *
  * <p>This implementation moves the arity decision to <em>resolution time</em>:
  * {@link #resolveInvoker(Method)} returns a cached, per-method
@@ -144,10 +144,10 @@ public final class MethodHandleCache {
     /**
      * Returns a cached {@link MethodInvoker} for the given method.
      *
-     * <p>This is the primary entry point for dispatch extensions on the hot path.
-     * The returned invoker has its arity-specialization already chosen at build
-     * time — callers simply hand it a target and an argument array, with no
-     * runtime branching on arity.</p>
+     * <p>This is the primary entry point for dispatch extensions and proxy
+     * terminals on the hot path. The returned invoker has its arity-specialization
+     * already chosen at build time — callers simply hand it a target and an
+     * argument array, with no runtime branching on arity.</p>
      *
      * <p>For methods with ≤ 5 parameters, the invoker holds a direct
      * {@code mh.invoke(target, arg0, …)} call. For methods with 6+ parameters,
@@ -162,7 +162,7 @@ public final class MethodHandleCache {
      * @param method the reflected method (must not be {@code null})
      * @return a reusable, arity-specialized invoker for the method
      */
-    MethodInvoker resolveInvoker(Method method) {
+    public MethodInvoker resolveInvoker(Method method) {
         MethodInvoker invoker = invokerCache.get(method);
         if (invoker == null) {
             invoker = invokerCache.computeIfAbsent(method, this::buildInvoker);

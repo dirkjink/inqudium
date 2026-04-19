@@ -2,6 +2,7 @@ package eu.inqudium.imperative.core.pipeline;
 
 import eu.inqudium.core.pipeline.proxy.DispatchExtension;
 import eu.inqudium.core.pipeline.proxy.MethodHandleCache;
+import eu.inqudium.core.pipeline.proxy.MethodInvoker;
 
 import java.lang.reflect.Method;
 import java.util.concurrent.CompletionStage;
@@ -80,12 +81,27 @@ public class AsyncDispatchExtension implements DispatchExtension {
         return null;
     }
 
+    /**
+     * Builds the terminal async executor for a specific method invocation.
+     *
+     * <p>Resolves the pre-built, arity-specialized {@link MethodInvoker} once
+     * here — the returned lambda captures the invoker directly, so the hot
+     * path performs a single {@code invoker.invoke(target, args)} call with
+     * no arity switch and no duplicate map lookup.</p>
+     *
+     * <p>Validates that the returned value is a non-null {@link CompletionStage}
+     * (defensive, in case an implementation violates the contract guaranteed
+     * by {@link #canHandle}).</p>
+     */
     @SuppressWarnings("unchecked")
     private InternalAsyncExecutor<Void, Object> buildTerminal(Method method, Object[] args,
                                                               Object target) {
+        // Resolve the per-method invoker once — the lambda below captures the
+        // invoker itself. No per-call map lookup, no per-call arity switch.
+        MethodInvoker invoker = handleCache.resolveInvoker(method);
         return (chainId, callId, arg) -> {
             try {
-                Object result = handleCache.invoke(target, method, args);
+                Object result = invoker.invoke(target, args);
                 if (result == null) {
                     throw new IllegalStateException(
                             "Method " + method.getName() + " returned null, expected a CompletionStage. "
