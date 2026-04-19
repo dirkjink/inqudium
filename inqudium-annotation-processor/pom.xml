@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <groupId>eu.inqudium</groupId>
+        <artifactId>inqudium-parent</artifactId>
+        <version>${revision}</version>
+    </parent>
+
+    <artifactId>inqudium-annotation-processor</artifactId>
+    <name>Inqudium :: Annotation Processor</name>
+    <description>
+        Bridges Inqudium annotations to the core pipeline API.
+        Scans @InqCircuitBreaker, @InqRetry etc. from methods and classes,
+        resolves elements from a registry, and builds InqPipeline instances.
+    </description>
+
+    <dependencies>
+        <!-- Reads @InqCircuitBreaker, @InqRetry, @InqShield etc. -->
+        <dependency>
+            <groupId>eu.inqudium</groupId>
+            <artifactId>inqudium-annotation</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+
+        <!-- Uses InqElementType, InqElement, InqPipeline, PipelineOrdering -->
+        <dependency>
+            <groupId>eu.inqudium</groupId>
+            <artifactId>inqudium-core</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+
+        <!-- Test -->
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.assertj</groupId>
+            <artifactId>assertj-core</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+</project>

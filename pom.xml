@@ -42,6 +42,8 @@
         <module>inqudium-imperative</module>
         <module>inqudium-aspect</module>
         <module>inqudium-aspect-integration-tests</module>
+        <module>inqudium-annotation</module>
+        <module>inqudium-annotation-processor</module>
     </modules>
 
     <!-- ═══════════════════════════════════════════════════════ -->
