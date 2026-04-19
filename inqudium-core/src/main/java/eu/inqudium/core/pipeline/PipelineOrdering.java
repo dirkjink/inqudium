@@ -97,14 +97,55 @@ public interface PipelineOrdering {
      * <p>Types not present in the map fall back to
      * {@link InqElementType#defaultPipelineOrder()}.</p>
      *
+     * <p>Pipelines built with custom orderings are
+     * {@linkplain PipelineValidator validated} automatically at build time
+     * to detect common anti-patterns. Warnings are logged but do not
+     * prevent the pipeline from being created.</p>
+     *
+     * <p>Equivalent to {@code of(orders, true)}.</p>
+     *
      * @param orders the type-to-order mapping
+     * @return a custom ordering with build-time validation enabled
+     * @throws NullPointerException if orders is null
+     * @see #of(Map, boolean)
+     */
+    static PipelineOrdering of(Map<InqElementType, Integer> orders) {
+        return of(orders, true);
+    }
+
+    /**
+     * Creates a custom ordering from an explicit type-to-order mapping,
+     * with explicit control over build-time validation.
+     *
+     * <p>Types not present in the map fall back to
+     * {@link InqElementType#defaultPipelineOrder()}.</p>
+     *
+     * @param orders                the type-to-order mapping
+     * @param shouldValidateOnBuild whether {@link InqPipeline.Builder#build()}
+     *                              should run anti-pattern validation
      * @return a custom ordering
      * @throws NullPointerException if orders is null
      */
-    static PipelineOrdering of(Map<InqElementType, Integer> orders) {
+    static PipelineOrdering of(Map<InqElementType, Integer> orders,
+                                boolean shouldValidateOnBuild) {
         Objects.requireNonNull(orders, "Orders map must not be null");
         EnumMap<InqElementType, Integer> snapshot = new EnumMap<>(orders);
-        return type -> snapshot.getOrDefault(type, type.defaultPipelineOrder());
+        return new PipelineOrdering() {
+            @Override
+            public int orderFor(InqElementType type) {
+                return snapshot.getOrDefault(type, type.defaultPipelineOrder());
+            }
+
+            @Override
+            public boolean shouldValidateOnBuild() {
+                return shouldValidateOnBuild;
+            }
+
+            @Override
+            public String toString() {
+                return "PipelineOrdering.of(" + snapshot + ")";
+            }
+        };
     }
 
     // ======================== Custom profiles ========================
@@ -118,6 +159,21 @@ public interface PipelineOrdering {
      * @return the pipeline priority
      */
     int orderFor(InqElementType type);
+
+    /**
+     * Returns {@code true} if the pipeline should run anti-pattern
+     * validation automatically at build time.
+     *
+     * <p>Standard and Resilience4J orderings return {@code false} because
+     * their element order is well-defined and intentional.
+     * {@link #of(Map)} returns {@code true} because user-defined
+     * orderings are most likely to contain mistakes.</p>
+     *
+     * @return {@code true} if build-time validation is recommended
+     */
+    default boolean shouldValidateOnBuild() {
+        return false;
+    }
 
     // ======================== Internal ========================
 
@@ -136,7 +192,8 @@ public interface PipelineOrdering {
             r4j.put(InqElementType.RATE_LIMITER, 400);
             r4j.put(InqElementType.TIME_LIMITER, 500);
             r4j.put(InqElementType.BULKHEAD, 600);
-            RESILIENCE4J = of(r4j);
+            // Built-in profile — validation disabled (ordering is intentional)
+            RESILIENCE4J = of(r4j, false);
         }
 
         private Profiles() {
