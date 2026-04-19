@@ -5,9 +5,9 @@ import eu.inqudium.imperative.core.pipeline.AsyncJoinPointWrapper;
 
 import java.lang.reflect.Method;
 import java.util.List;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
-import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Abstract base class for AspectJ aspects that execute method calls through
@@ -57,75 +57,34 @@ public abstract class AbstractAsyncPipelineAspect {
 
     /**
      * Lazily initialized, immutable snapshot of the provider list returned by
-     * {@link #asyncLayerProviders()}. Captured once on first access and reused
-     * for all subsequent pipeline resolutions.
+     * {@link #asyncLayerProviders()}. Captured exactly once on first access via
+     * double-checked locking and reused for all subsequent pipeline resolutions.
      */
     private volatile List<AsyncAspectLayerProvider<Object>> cachedProviders;
-
-    // ======================== Constructors ========================
-
-    /**
-     * Creates an aspect with an explicit, immutable list of async providers.
-     *
-     * <p>This is the preferred constructor for most aspects. The provider list
-     * is captured directly — no lazy initialization, no
-     * {@code asyncLayerProviders()} call needed.</p>
-     *
-     * @param providers the ordered async layer providers for the pipeline
-     */
-    protected AbstractAsyncPipelineAspect(List<AsyncAspectLayerProvider<Object>> providers) {
-        this.cachedProviders = List.copyOf(providers);
-    }
-
-    /**
-     * Creates an aspect that resolves providers lazily via
-     * {@link #asyncLayerProviders()}.
-     *
-     * <p>Use this constructor when providers are not available at construction
-     * time — for example, when they depend on a DI container that is initialized
-     * after aspect instantiation. The provider list is resolved exactly once on
-     * first access using double-checked locking.</p>
-     *
-     * <p>Subclasses using this constructor <strong>must</strong> override
-     * {@link #asyncLayerProviders()}.</p>
-     */
-    protected AbstractAsyncPipelineAspect() {
-        // cachedProviders remains null → resolved lazily via asyncLayerProviders()
-    }
 
     /**
      * Returns the ordered list of async layer providers for this aspect.
      *
      * <p>Called <strong>exactly once</strong> during the lifetime of this aspect
      * instance — the result is captured in an immutable snapshot and reused for
-     * all pipeline resolutions.</p>
-     *
-     * <p>Not called when using the
-     * {@link #AbstractAsyncPipelineAspect(List)} constructor — the providers
-     * are captured directly.</p>
+     * all pipeline resolutions. The call happens inside a {@code synchronized(this)}
+     * block to guarantee single execution even when the implementation performs
+     * expensive DI lookups or reflection.</p>
      *
      * <p>Implementations may return a new list on each call (the framework
      * handles deduplication), but returning a pre-built, immutable list is
      * recommended for clarity.</p>
      *
      * @return the async layer providers, never {@code null}
-     * @throws UnsupportedOperationException if the no-arg constructor is used
-     *                                       without overriding this method
      */
-    protected List<AsyncAspectLayerProvider<Object>> asyncLayerProviders() {
-        throw new UnsupportedOperationException(
-                getClass().getSimpleName() + " uses the no-arg constructor but does not "
-                        + "override asyncLayerProviders(). Either pass providers via "
-                        + "super(providers) or override asyncLayerProviders().");
-    }
+    protected abstract List<AsyncAspectLayerProvider<Object>> asyncLayerProviders();
 
     /**
-     * Returns the cached provider snapshot, initializing it on first access
-     * via double-checked locking when the no-arg constructor was used.
+     * Returns the cached provider snapshot, initializing it on first access.
      *
-     * <p>When providers were passed via the
-     * {@link #AbstractAsyncPipelineAspect(List)} constructor, this method
-     * simply returns the pre-initialized snapshot without synchronization.</p>
+     * <p>Uses double-checked locking to guarantee that
+     * {@link #asyncLayerProviders()} is called exactly once, even under
+     * concurrent access. The fast path is a single volatile read.</p>
      */
     private List<AsyncAspectLayerProvider<Object>> providers() {
         List<AsyncAspectLayerProvider<Object>> snapshot = cachedProviders;
@@ -155,14 +114,15 @@ public abstract class AbstractAsyncPipelineAspect {
      * phase — are delivered through the returned {@link CompletionStage}, never
      * thrown directly. This provides a uniform error channel for callers.</p>
      *
-     * @param coreExecutor the join point execution (typically {@code pjp::proceed}),
-     *                     expected to return a {@link CompletionStage}
+     * @param coreExecutor the join point execution (typically
+     *                     {@code () -> (CompletionStage<Object>) pjp.proceed()}),
+     *                     typed to enforce {@link CompletionStage} return at compile time
      * @param method       the target method, used as cache key and for
      *                     {@code canHandle} filtering on first resolution
      * @return a {@link CompletionStage} carrying the result or failure
      */
     protected CompletionStage<Object> executeThroughAsync(
-            JoinPointExecutor<Object> coreExecutor, Method method) {
+            JoinPointExecutor<CompletionStage<Object>> coreExecutor, Method method) {
         return resolveAsyncPipeline(method).execute(coreExecutor);
     }
 
@@ -180,13 +140,10 @@ public abstract class AbstractAsyncPipelineAspect {
     /**
      * Resolves (or retrieves from cache) the async pipeline for the given method.
      *
-     * <p><strong>Trade-off note:</strong> Between the fast-path {@code get()} miss
-     * and the {@code computeIfAbsent}, another thread may have already populated
-     * the entry. In that case, {@code providers()} is called "unnecessarily" —
-     * but after first initialization it is merely a volatile read (~1ns), which
-     * is cheaper than restructuring to avoid it. Calling {@code providers()}
-     * outside of {@code computeIfAbsent} ensures no subclass code
-     * ({@link #asyncLayerProviders()}) ever runs inside a CHM bucket lock.</p>
+     * <p>Uses the cached provider snapshot from {@link #providers()}, which is
+     * resolved once per aspect lifetime. The snapshot is then passed into
+     * {@link ConcurrentHashMap#computeIfAbsent} — no subclass code runs inside
+     * the map's bucket lock.</p>
      */
     private AsyncResolvedPipeline resolveAsyncPipeline(Method method) {
         // Fast path: already cached — no locking, no provider access
@@ -215,35 +172,17 @@ public abstract class AbstractAsyncPipelineAspect {
      * <p>Like the hot path, all exceptions are delivered through the returned
      * {@link CompletionStage}, never thrown directly.</p>
      *
-     * @param coreExecutor the join point execution, expected to return a
-     *                     {@link CompletionStage}
+     * @param coreExecutor the join point execution, typed to enforce
+     *                     {@link CompletionStage} return at compile time
      * @return a {@link CompletionStage} carrying the result or failure
      */
     protected CompletionStage<Object> executeThroughAsync(
-            JoinPointExecutor<Object> coreExecutor) {
+            JoinPointExecutor<CompletionStage<Object>> coreExecutor) {
 
         try {
-            JoinPointExecutor<CompletionStage<Object>> typedExecutor = () -> {
-                Object result = coreExecutor.proceed();
-                if (result == null) {
-                    return CompletableFuture.completedFuture(null);
-                }
-                if (result instanceof CompletionStage<?> stage) {
-                    @SuppressWarnings("unchecked")
-                    CompletionStage<Object> typed = (CompletionStage<Object>) stage;
-                    return typed;
-                }
-                throw new IllegalStateException(
-                        "AsyncPipelineAspect expected the proxied method to return a "
-                                + "CompletionStage, but received: "
-                                + result.getClass().getName()
-                                + ". Ensure this aspect is only applied to methods returning "
-                                + "CompletionStage or CompletableFuture.");
-            };
-
             AsyncJoinPointWrapper<Object> chain = new AsyncAspectPipelineBuilder<Object>()
                     .addProviders(providers())
-                    .buildChain(typedExecutor);
+                    .buildChain(coreExecutor);
 
             return chain.proceed();
         } catch (Throwable e) {
