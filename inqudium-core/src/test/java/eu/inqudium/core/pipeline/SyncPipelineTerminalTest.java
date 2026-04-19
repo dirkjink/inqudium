@@ -35,9 +35,21 @@ class SyncPipelineTerminalTest {
     private static InqDecorator<Void, Object> shortCircuiting(
             String name, InqElementType type, Object fixedResult) {
         return new InqDecorator<>() {
-            @Override public String getName() { return name; }
-            @Override public InqElementType getElementType() { return type; }
-            @Override public InqEventPublisher getEventPublisher() { return null; }
+            @Override
+            public String getName() {
+                return name;
+            }
+
+            @Override
+            public InqElementType getElementType() {
+                return type;
+            }
+
+            @Override
+            public InqEventPublisher getEventPublisher() {
+                return null;
+            }
+
             @Override
             public Object execute(long chainId, long callId, Void arg,
                                   InternalExecutor<Void, Object> next) {
@@ -61,9 +73,20 @@ class SyncPipelineTerminalTest {
             this.trace = trace;
         }
 
-        @Override public String getName() { return name; }
-        @Override public InqElementType getElementType() { return type; }
-        @Override public InqEventPublisher getEventPublisher() { return null; }
+        @Override
+        public String getName() {
+            return name;
+        }
+
+        @Override
+        public InqElementType getElementType() {
+            return type;
+        }
+
+        @Override
+        public InqEventPublisher getEventPublisher() {
+            return null;
+        }
 
         @Override
         public Object execute(long chainId, long callId, Void arg,
@@ -81,9 +104,20 @@ class SyncPipelineTerminalTest {
      * A plain InqElement that does NOT implement InqDecorator.
      */
     static class NonDecoratorElement implements InqElement {
-        @Override public String getName() { return "plain"; }
-        @Override public InqElementType getElementType() { return InqElementType.BULKHEAD; }
-        @Override public InqEventPublisher getEventPublisher() { return null; }
+        @Override
+        public String getName() {
+            return "plain";
+        }
+
+        @Override
+        public InqElementType getElementType() {
+            return InqElementType.BULKHEAD;
+        }
+
+        @Override
+        public InqEventPublisher getEventPublisher() {
+            return null;
+        }
     }
 
     // =========================================================================

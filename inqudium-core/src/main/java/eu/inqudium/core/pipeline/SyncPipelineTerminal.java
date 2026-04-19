@@ -72,6 +72,25 @@ public final class SyncPipelineTerminal {
     }
 
     /**
+     * Casts an {@link InqElement} to {@link InqDecorator}, providing a
+     * descriptive error if the element does not implement the sync decorator.
+     */
+    private static InqDecorator<?, ?> asDecorator(InqElement element) {
+        if (element instanceof InqDecorator<?, ?> decorator) {
+            return decorator;
+        }
+        throw new ClassCastException(
+                element.getClass().getName() + " ('" + element.getName()
+                        + "', type=" + element.getElementType()
+                        + ") does not implement InqDecorator. "
+                        + "SyncPipelineTerminal requires all pipeline elements to "
+                        + "implement InqDecorator<A, R>. For async elements, use "
+                        + "AsyncPipelineTerminal instead.");
+    }
+
+    // ======================== Execution ========================
+
+    /**
      * Returns the underlying pipeline.
      *
      * @return the pipeline
@@ -80,7 +99,7 @@ public final class SyncPipelineTerminal {
         return pipeline;
     }
 
-    // ======================== Execution ========================
+    // ======================== Decoration ========================
 
     /**
      * Builds the decorator chain and executes it immediately.
@@ -96,8 +115,6 @@ public final class SyncPipelineTerminal {
     public <R> R execute(JoinPointExecutor<R> executor) throws Throwable {
         return decorateJoinPoint(executor).proceed();
     }
-
-    // ======================== Decoration ========================
 
     /**
      * Builds a decorator chain around the given {@link JoinPointExecutor}.
@@ -122,6 +139,8 @@ public final class SyncPipelineTerminal {
                 asDecorator(element).decorateJoinPoint(downstream));
     }
 
+    // ======================== Internal ========================
+
     /**
      * Builds a decorator chain and wraps it as a {@link Supplier}.
      *
@@ -144,24 +163,5 @@ public final class SyncPipelineTerminal {
                 throw new RuntimeException(t);
             }
         };
-    }
-
-    // ======================== Internal ========================
-
-    /**
-     * Casts an {@link InqElement} to {@link InqDecorator}, providing a
-     * descriptive error if the element does not implement the sync decorator.
-     */
-    private static InqDecorator<?, ?> asDecorator(InqElement element) {
-        if (element instanceof InqDecorator<?, ?> decorator) {
-            return decorator;
-        }
-        throw new ClassCastException(
-                element.getClass().getName() + " ('" + element.getName()
-                        + "', type=" + element.getElementType()
-                        + ") does not implement InqDecorator. "
-                        + "SyncPipelineTerminal requires all pipeline elements to "
-                        + "implement InqDecorator<A, R>. For async elements, use "
-                        + "AsyncPipelineTerminal instead.");
     }
 }

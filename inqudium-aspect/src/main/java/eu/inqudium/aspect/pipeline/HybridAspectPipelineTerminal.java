@@ -102,14 +102,36 @@ public final class HybridAspectPipelineTerminal {
         return new HybridAspectPipelineTerminal(pipeline);
     }
 
+    private static InqDecorator<?, ?> asDecorator(InqElement element) {
+        if (element instanceof InqDecorator<?, ?> d) return d;
+        throw new ClassCastException(
+                element.getClass().getName() + " ('" + element.getName()
+                        + "', type=" + element.getElementType()
+                        + ") does not implement InqDecorator. "
+                        + "HybridAspectPipelineTerminal requires all elements to implement "
+                        + "InqDecorator for sync methods.");
+    }
+
+    // ======================== AspectJ execution ========================
+
+    private static InqAsyncDecorator<?, ?> asAsyncDecorator(InqElement element) {
+        if (element instanceof InqAsyncDecorator<?, ?> d) return d;
+        throw new ClassCastException(
+                element.getClass().getName() + " ('" + element.getName()
+                        + "', type=" + element.getElementType()
+                        + ") does not implement InqAsyncDecorator. "
+                        + "HybridAspectPipelineTerminal requires all elements to implement "
+                        + "InqAsyncDecorator for async methods (returning CompletionStage).");
+    }
+
+    // ======================== Generic execution ========================
+
     /**
      * Returns the underlying pipeline.
      */
     public InqPipeline pipeline() {
         return pipeline;
     }
-
-    // ======================== AspectJ execution ========================
 
     /**
      * Executes the given {@link ProceedingJoinPoint} through the pipeline,
@@ -123,7 +145,7 @@ public final class HybridAspectPipelineTerminal {
      *
      * @param pjp the proceeding join point provided by AspectJ
      * @return the result — either a direct value (sync) or a
-     *         {@link CompletionStage} (async)
+     * {@link CompletionStage} (async)
      * @throws Throwable any exception from sync methods or pipeline elements
      */
     @SuppressWarnings("unchecked")
@@ -145,7 +167,7 @@ public final class HybridAspectPipelineTerminal {
         }
     }
 
-    // ======================== Generic execution ========================
+    // ======================== Internal: caching ========================
 
     /**
      * Executes a sync call through the pipeline (uncached).
@@ -177,8 +199,6 @@ public final class HybridAspectPipelineTerminal {
         }
     }
 
-    // ======================== Internal: caching ========================
-
     /**
      * Resolves the cached chain factory for the given method, building it
      * on first access.
@@ -203,6 +223,8 @@ public final class HybridAspectPipelineTerminal {
         }
     }
 
+    // ======================== Internal: casting ========================
+
     @SuppressWarnings("unchecked")
     private Function<JoinPointExecutor<Object>, JoinPointExecutor<Object>> buildSyncChainFactory() {
         return pipeline.chain(
@@ -220,28 +242,6 @@ public final class HybridAspectPipelineTerminal {
                 (accFn, element) -> executor ->
                         ((InqAsyncDecorator<Void, Object>) asAsyncDecorator(element))
                                 .decorateAsyncJoinPoint(accFn.apply(executor)));
-    }
-
-    // ======================== Internal: casting ========================
-
-    private static InqDecorator<?, ?> asDecorator(InqElement element) {
-        if (element instanceof InqDecorator<?, ?> d) return d;
-        throw new ClassCastException(
-                element.getClass().getName() + " ('" + element.getName()
-                        + "', type=" + element.getElementType()
-                        + ") does not implement InqDecorator. "
-                        + "HybridAspectPipelineTerminal requires all elements to implement "
-                        + "InqDecorator for sync methods.");
-    }
-
-    private static InqAsyncDecorator<?, ?> asAsyncDecorator(InqElement element) {
-        if (element instanceof InqAsyncDecorator<?, ?> d) return d;
-        throw new ClassCastException(
-                element.getClass().getName() + " ('" + element.getName()
-                        + "', type=" + element.getElementType()
-                        + ") does not implement InqAsyncDecorator. "
-                        + "HybridAspectPipelineTerminal requires all elements to implement "
-                        + "InqAsyncDecorator for async methods (returning CompletionStage).");
     }
 
     // ======================== Internal: cached chain holder ========================

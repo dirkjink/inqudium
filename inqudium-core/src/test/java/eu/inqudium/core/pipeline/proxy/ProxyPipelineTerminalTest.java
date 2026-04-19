@@ -1,12 +1,10 @@
 package eu.inqudium.core.pipeline.proxy;
 
-import eu.inqudium.core.element.InqElement;
 import eu.inqudium.core.element.InqElementType;
 import eu.inqudium.core.event.InqEventPublisher;
 import eu.inqudium.core.pipeline.InqDecorator;
 import eu.inqudium.core.pipeline.InqPipeline;
 import eu.inqudium.core.pipeline.InternalExecutor;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -30,6 +28,7 @@ class ProxyPipelineTerminalTest {
 
     interface GreetingService {
         String greet(String name);
+
         String farewell(String name);
     }
 
@@ -76,9 +75,20 @@ class ProxyPipelineTerminalTest {
             this.trace = trace;
         }
 
-        @Override public String getName() { return name; }
-        @Override public InqElementType getElementType() { return type; }
-        @Override public InqEventPublisher getEventPublisher() { return null; }
+        @Override
+        public String getName() {
+            return name;
+        }
+
+        @Override
+        public InqElementType getElementType() {
+            return type;
+        }
+
+        @Override
+        public InqEventPublisher getEventPublisher() {
+            return null;
+        }
 
         @Override
         public Object execute(long chainId, long callId, Void arg,
@@ -105,11 +115,24 @@ class ProxyPipelineTerminalTest {
             this.semaphore = new Semaphore(permits);
         }
 
-        int availablePermits() { return semaphore.availablePermits(); }
+        int availablePermits() {
+            return semaphore.availablePermits();
+        }
 
-        @Override public String getName() { return name; }
-        @Override public InqElementType getElementType() { return InqElementType.BULKHEAD; }
-        @Override public InqEventPublisher getEventPublisher() { return null; }
+        @Override
+        public String getName() {
+            return name;
+        }
+
+        @Override
+        public InqElementType getElementType() {
+            return InqElementType.BULKHEAD;
+        }
+
+        @Override
+        public InqEventPublisher getEventPublisher() {
+            return null;
+        }
 
         @Override
         public Object execute(long chainId, long callId, Void arg,
@@ -324,7 +347,7 @@ class ProxyPipelineTerminalTest {
             // Given — semaphore with 0 permits → always rejects
             SemaphoreDecorator bh = new SemaphoreDecorator("bh", 0);
             GreetingService proxy = ProxyPipelineTerminal.of(
-                    InqPipeline.builder().shield(bh).build())
+                            InqPipeline.builder().shield(bh).build())
                     .protect(GreetingService.class, new RealGreetingService());
 
             // When / Then
@@ -420,7 +443,7 @@ class ProxyPipelineTerminalTest {
             // Given — semaphore with 1 permit
             SemaphoreDecorator bh = new SemaphoreDecorator("bh", 1);
             GreetingService proxy = ProxyPipelineTerminal.of(
-                    InqPipeline.builder().shield(bh).build())
+                            InqPipeline.builder().shield(bh).build())
                     .protect(GreetingService.class, new RealGreetingService());
 
             var entered = new CountDownLatch(1);
@@ -431,18 +454,22 @@ class ProxyPipelineTerminalTest {
             executor.submit(() -> {
                 // Use proxy directly — the pipeline routes through the semaphore
                 GreetingService blockingProxy = ProxyPipelineTerminal.of(
-                        InqPipeline.builder().shield(bh).build())
+                                InqPipeline.builder().shield(bh).build())
                         .protect(GreetingService.class, new GreetingService() {
                             @Override
                             public String greet(String name) {
                                 entered.countDown();
                                 try {
                                     release.await(5, TimeUnit.SECONDS);
-                                } catch (InterruptedException ignored) {}
+                                } catch (InterruptedException ignored) {
+                                }
                                 return "blocking";
                             }
+
                             @Override
-                            public String farewell(String name) { return ""; }
+                            public String farewell(String name) {
+                                return "";
+                            }
                         });
                 blockingProxy.greet("block");
             });

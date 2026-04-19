@@ -28,6 +28,7 @@ class HybridProxyPipelineTerminalTest {
 
     interface OrderService {
         String placeOrder(String item);
+
         CompletionStage<String> placeOrderAsync(String item);
     }
 
@@ -63,9 +64,20 @@ class HybridProxyPipelineTerminalTest {
             this.trace = trace;
         }
 
-        @Override public String getName() { return name; }
-        @Override public InqElementType getElementType() { return type; }
-        @Override public InqEventPublisher getEventPublisher() { return null; }
+        @Override
+        public String getName() {
+            return name;
+        }
+
+        @Override
+        public InqElementType getElementType() {
+            return type;
+        }
+
+        @Override
+        public InqEventPublisher getEventPublisher() {
+            return null;
+        }
 
         // Sync path
         @Override
@@ -82,7 +94,7 @@ class HybridProxyPipelineTerminalTest {
         // Async path
         @Override
         public CompletionStage<Object> executeAsync(long chainId, long callId, Void arg,
-                                                     InternalAsyncExecutor<Void, Object> next) {
+                                                    InternalAsyncExecutor<Void, Object> next) {
             trace.add(name + ":async-enter");
             return next.executeAsync(chainId, callId, arg)
                     .whenComplete((r, e) -> trace.add(name + ":async-exit"));
@@ -106,11 +118,24 @@ class HybridProxyPipelineTerminalTest {
             this.trace = trace;
         }
 
-        int availablePermits() { return semaphore.availablePermits(); }
+        int availablePermits() {
+            return semaphore.availablePermits();
+        }
 
-        @Override public String getName() { return name; }
-        @Override public InqElementType getElementType() { return InqElementType.BULKHEAD; }
-        @Override public InqEventPublisher getEventPublisher() { return null; }
+        @Override
+        public String getName() {
+            return name;
+        }
+
+        @Override
+        public InqElementType getElementType() {
+            return InqElementType.BULKHEAD;
+        }
+
+        @Override
+        public InqEventPublisher getEventPublisher() {
+            return null;
+        }
 
         // Sync: acquire → call → release (in finally)
         @Override
@@ -129,7 +154,7 @@ class HybridProxyPipelineTerminalTest {
         // Async: acquire → call → release on stage completion
         @Override
         public CompletionStage<Object> executeAsync(long chainId, long callId, Void arg,
-                                                     InternalAsyncExecutor<Void, Object> next) {
+                                                    InternalAsyncExecutor<Void, Object> next) {
             if (!semaphore.tryAcquire()) throw new RuntimeException("full");
             trace.add(name + ":async-acquire");
             return next.executeAsync(chainId, callId, arg)
@@ -221,7 +246,7 @@ class HybridProxyPipelineTerminalTest {
             List<String> trace = new ArrayList<>();
             SemaphoreDualDecorator bh = new SemaphoreDualDecorator("BH", 1, trace);
             OrderService proxy = HybridProxyPipelineTerminal.of(
-                    InqPipeline.builder().shield(bh).build())
+                            InqPipeline.builder().shield(bh).build())
                     .protect(OrderService.class, new RealOrderService());
 
             // When — async call
@@ -239,7 +264,7 @@ class HybridProxyPipelineTerminalTest {
             List<String> trace = new ArrayList<>();
             SemaphoreDualDecorator bh = new SemaphoreDualDecorator("BH", 1, trace);
             OrderService proxy = HybridProxyPipelineTerminal.of(
-                    InqPipeline.builder().shield(bh).build())
+                            InqPipeline.builder().shield(bh).build())
                     .protect(OrderService.class, new RealOrderService());
 
             // When
@@ -257,20 +282,26 @@ class HybridProxyPipelineTerminalTest {
             SemaphoreDualDecorator bh = new SemaphoreDualDecorator("BH", 1, trace);
 
             OrderService failing = new OrderService() {
-                @Override public String placeOrder(String item) { return ""; }
-                @Override public CompletionStage<String> placeOrderAsync(String item) {
+                @Override
+                public String placeOrder(String item) {
+                    return "";
+                }
+
+                @Override
+                public CompletionStage<String> placeOrderAsync(String item) {
                     return CompletableFuture.failedFuture(new RuntimeException("async-fail"));
                 }
             };
 
             OrderService proxy = HybridProxyPipelineTerminal.of(
-                    InqPipeline.builder().shield(bh).build())
+                            InqPipeline.builder().shield(bh).build())
                     .protect(OrderService.class, failing);
 
             // When
             try {
                 proxy.placeOrderAsync("fail").toCompletableFuture().join();
-            } catch (CompletionException ignored) {}
+            } catch (CompletionException ignored) {
+            }
 
             // Then — permit released despite failure
             assertThat(bh.availablePermits()).isEqualTo(1);
@@ -329,10 +360,13 @@ class HybridProxyPipelineTerminalTest {
         void sync_exception_propagates_directly() {
             // Given
             OrderService failing = new OrderService() {
-                @Override public String placeOrder(String item) {
+                @Override
+                public String placeOrder(String item) {
                     throw new IllegalStateException("sync-error");
                 }
-                @Override public CompletionStage<String> placeOrderAsync(String item) {
+
+                @Override
+                public CompletionStage<String> placeOrderAsync(String item) {
                     return CompletableFuture.completedFuture("");
                 }
             };
@@ -349,8 +383,13 @@ class HybridProxyPipelineTerminalTest {
         void async_exception_delivered_via_stage() {
             // Given
             OrderService failing = new OrderService() {
-                @Override public String placeOrder(String item) { return ""; }
-                @Override public CompletionStage<String> placeOrderAsync(String item) {
+                @Override
+                public String placeOrder(String item) {
+                    return "";
+                }
+
+                @Override
+                public CompletionStage<String> placeOrderAsync(String item) {
                     return CompletableFuture.failedFuture(new RuntimeException("async-error"));
                 }
             };
@@ -458,9 +497,9 @@ class HybridProxyPipelineTerminalTest {
         void all_invocations_return_correct_results_after_caching() {
             // Given
             OrderService proxy = HybridProxyPipelineTerminal.of(
-                    InqPipeline.builder()
-                            .shield(new DualDecorator("BH", InqElementType.BULKHEAD, new ArrayList<>()))
-                            .build())
+                            InqPipeline.builder()
+                                    .shield(new DualDecorator("BH", InqElementType.BULKHEAD, new ArrayList<>()))
+                                    .build())
                     .protect(OrderService.class, new RealOrderService());
 
             // When / Then — first call (builds cache), second call (uses cache)

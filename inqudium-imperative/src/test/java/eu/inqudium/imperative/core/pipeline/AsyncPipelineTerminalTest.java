@@ -36,44 +36,25 @@ class AsyncPipelineTerminalTest {
     }
 
     /**
-     * InqAsyncDecorator that records "name:enter" on the sync start phase
-     * and "name:exit" when the downstream stage completes.
-     */
-    static class TracingAsyncDecorator implements InqAsyncDecorator<Void, Object> {
-
-        private final String name;
-        private final InqElementType type;
-        private final List<String> trace;
-
-        TracingAsyncDecorator(String name, InqElementType type, List<String> trace) {
-            this.name = name;
-            this.type = type;
-            this.trace = trace;
-        }
-
-        @Override public String getName() { return name; }
-        @Override public InqElementType getElementType() { return type; }
-        @Override public InqEventPublisher getEventPublisher() { return null; }
-
-        @Override
-        public CompletionStage<Object> executeAsync(
-                long chainId, long callId, Void arg,
-                InternalAsyncExecutor<Void, Object> next) {
-            trace.add(name + ":enter");
-            return next.executeAsync(chainId, callId, arg)
-                    .whenComplete((result, error) -> trace.add(name + ":exit"));
-        }
-    }
-
-    /**
      * InqAsyncDecorator that short-circuits with a fixed completed future.
      */
     private static InqAsyncDecorator<Void, Object> shortCircuiting(
             String name, InqElementType type, Object fixedResult) {
         return new InqAsyncDecorator<>() {
-            @Override public String getName() { return name; }
-            @Override public InqElementType getElementType() { return type; }
-            @Override public InqEventPublisher getEventPublisher() { return null; }
+            @Override
+            public String getName() {
+                return name;
+            }
+
+            @Override
+            public InqElementType getElementType() {
+                return type;
+            }
+
+            @Override
+            public InqEventPublisher getEventPublisher() {
+                return null;
+            }
 
             @Override
             public CompletionStage<Object> executeAsync(
@@ -90,9 +71,20 @@ class AsyncPipelineTerminalTest {
     private static InqAsyncDecorator<Void, Object> syncThrowing(
             String name, InqElementType type, RuntimeException exception) {
         return new InqAsyncDecorator<>() {
-            @Override public String getName() { return name; }
-            @Override public InqElementType getElementType() { return type; }
-            @Override public InqEventPublisher getEventPublisher() { return null; }
+            @Override
+            public String getName() {
+                return name;
+            }
+
+            @Override
+            public InqElementType getElementType() {
+                return type;
+            }
+
+            @Override
+            public InqEventPublisher getEventPublisher() {
+                return null;
+            }
 
             @Override
             public CompletionStage<Object> executeAsync(
@@ -104,19 +96,71 @@ class AsyncPipelineTerminalTest {
     }
 
     /**
-     * A plain InqElement that does NOT implement InqAsyncDecorator.
-     */
-    static class NonAsyncElement implements InqElement {
-        @Override public String getName() { return "plain"; }
-        @Override public InqElementType getElementType() { return InqElementType.BULKHEAD; }
-        @Override public InqEventPublisher getEventPublisher() { return null; }
-    }
-
-    /**
      * Convenience: creates an async executor that completes immediately.
      */
     private static <R> JoinPointExecutor<CompletionStage<R>> asyncExecutor(R value) {
         return () -> CompletableFuture.completedFuture(value);
+    }
+
+    /**
+     * InqAsyncDecorator that records "name:enter" on the sync start phase
+     * and "name:exit" when the downstream stage completes.
+     */
+    static class TracingAsyncDecorator implements InqAsyncDecorator<Void, Object> {
+
+        private final String name;
+        private final InqElementType type;
+        private final List<String> trace;
+
+        TracingAsyncDecorator(String name, InqElementType type, List<String> trace) {
+            this.name = name;
+            this.type = type;
+            this.trace = trace;
+        }
+
+        @Override
+        public String getName() {
+            return name;
+        }
+
+        @Override
+        public InqElementType getElementType() {
+            return type;
+        }
+
+        @Override
+        public InqEventPublisher getEventPublisher() {
+            return null;
+        }
+
+        @Override
+        public CompletionStage<Object> executeAsync(
+                long chainId, long callId, Void arg,
+                InternalAsyncExecutor<Void, Object> next) {
+            trace.add(name + ":enter");
+            return next.executeAsync(chainId, callId, arg)
+                    .whenComplete((result, error) -> trace.add(name + ":exit"));
+        }
+    }
+
+    /**
+     * A plain InqElement that does NOT implement InqAsyncDecorator.
+     */
+    static class NonAsyncElement implements InqElement {
+        @Override
+        public String getName() {
+            return "plain";
+        }
+
+        @Override
+        public InqElementType getElementType() {
+            return InqElementType.BULKHEAD;
+        }
+
+        @Override
+        public InqEventPublisher getEventPublisher() {
+            return null;
+        }
     }
 
     // =========================================================================

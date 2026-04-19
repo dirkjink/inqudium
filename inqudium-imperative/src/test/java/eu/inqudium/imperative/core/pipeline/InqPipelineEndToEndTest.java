@@ -225,8 +225,11 @@ class InqPipelineEndToEndTest {
 
             // When — call fails
             try {
-                terminal.execute(() -> { throw new RuntimeException("boom"); });
-            } catch (Throwable ignored) {}
+                terminal.execute(() -> {
+                    throw new RuntimeException("boom");
+                });
+            } catch (Throwable ignored) {
+            }
 
             // Then — permit still released
             assertThat(bh.getAvailablePermits()).isEqualTo(1);
@@ -251,7 +254,8 @@ class InqPipelineEndToEndTest {
                         release.await(5, TimeUnit.SECONDS);
                         return "blocking";
                     });
-                } catch (Throwable ignored) {}
+                } catch (Throwable ignored) {
+                }
             });
 
             entered.await(2, TimeUnit.SECONDS);
@@ -302,8 +306,11 @@ class InqPipelineEndToEndTest {
             // When — 3 failures through the pipeline
             for (int i = 0; i < 3; i++) {
                 try {
-                    terminal.execute(() -> { throw new IOException("fail"); });
-                } catch (Throwable ignored) {}
+                    terminal.execute(() -> {
+                        throw new IOException("fail");
+                    });
+                } catch (Throwable ignored) {
+                }
             }
 
             // Then
@@ -319,8 +326,11 @@ class InqPipelineEndToEndTest {
 
             for (int i = 0; i < 3; i++) {
                 try {
-                    terminal.execute(() -> { throw new IOException("fail"); });
-                } catch (Throwable ignored) {}
+                    terminal.execute(() -> {
+                        throw new IOException("fail");
+                    });
+                } catch (Throwable ignored) {
+                }
             }
             assertThat(cb.getState()).isEqualTo(CircuitState.OPEN);
 
@@ -343,8 +353,11 @@ class InqPipelineEndToEndTest {
 
             for (int i = 0; i < 3; i++) {
                 try {
-                    terminal.execute(() -> { throw new IOException("fail"); });
-                } catch (Throwable ignored) {}
+                    terminal.execute(() -> {
+                        throw new IOException("fail");
+                    });
+                } catch (Throwable ignored) {
+                }
             }
             assertThat(cb.getState()).isEqualTo(CircuitState.OPEN);
 
@@ -408,7 +421,8 @@ class InqPipelineEndToEndTest {
                         release.await(5, TimeUnit.SECONDS);
                         return "blocking";
                     });
-                } catch (Throwable ignored) {}
+                } catch (Throwable ignored) {
+                }
             });
 
             entered.await(2, TimeUnit.SECONDS);
@@ -435,8 +449,11 @@ class InqPipelineEndToEndTest {
             // When — 3 failures through the full pipeline
             for (int i = 0; i < 3; i++) {
                 try {
-                    terminal.execute(() -> { throw new IOException("fail"); });
-                } catch (Throwable ignored) {}
+                    terminal.execute(() -> {
+                        throw new IOException("fail");
+                    });
+                } catch (Throwable ignored) {
+                }
             }
 
             // Then — CB is OPEN, BH still has all 5 permits
@@ -464,8 +481,11 @@ class InqPipelineEndToEndTest {
             // Phase 2: Trip the circuit
             for (int i = 0; i < 3; i++) {
                 try {
-                    terminal.execute(() -> { throw new IOException("fail"); });
-                } catch (Throwable ignored) {}
+                    terminal.execute(() -> {
+                        throw new IOException("fail");
+                    });
+                } catch (Throwable ignored) {
+                }
             }
             assertThat(cb.getState()).isEqualTo(CircuitState.OPEN);
 

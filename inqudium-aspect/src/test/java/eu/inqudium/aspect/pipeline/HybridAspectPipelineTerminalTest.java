@@ -31,6 +31,50 @@ class HybridAspectPipelineTerminalTest {
     // =========================================================================
 
     /**
+     * Creates a PJP stub for a sync method (returns String).
+     */
+    private static ProceedingJoinPoint syncPjp(Object returnValue) throws NoSuchMethodException {
+        Method method = StubService.class.getMethod("syncMethod");
+        return new StubPjp(method, () -> returnValue);
+    }
+
+    // -------------------------------------------------------------------------
+    // ProceedingJoinPoint stubs (no Mockito)
+    // -------------------------------------------------------------------------
+
+    /**
+     * Creates a PJP stub for an async method (returns CompletionStage).
+     */
+    private static ProceedingJoinPoint asyncPjp(CompletionStage<?> stage) throws NoSuchMethodException {
+        Method method = StubService.class.getMethod("asyncMethod");
+        return new StubPjp(method, () -> stage);
+    }
+
+    /**
+     * Creates a PJP stub for a sync method that throws.
+     */
+    private static ProceedingJoinPoint syncPjpThrowing(Throwable exception) throws NoSuchMethodException {
+        Method method = StubService.class.getMethod("syncMethod");
+        return new StubPjp(method, () -> {
+            throw exception;
+        });
+    }
+
+    /**
+     * Stub service with sync and async methods for Method resolution.
+     */
+    interface StubService {
+        String syncMethod();
+
+        CompletionStage<String> asyncMethod();
+    }
+
+    @FunctionalInterface
+    interface ThrowingSupplier {
+        Object get() throws Throwable;
+    }
+
+    /**
      * Dual decorator: implements both sync and async interfaces.
      * Records separate traces for each path to verify correct dispatch.
      */
@@ -46,9 +90,20 @@ class HybridAspectPipelineTerminalTest {
             this.trace = trace;
         }
 
-        @Override public String getName() { return name; }
-        @Override public InqElementType getElementType() { return type; }
-        @Override public InqEventPublisher getEventPublisher() { return null; }
+        @Override
+        public String getName() {
+            return name;
+        }
+
+        @Override
+        public InqElementType getElementType() {
+            return type;
+        }
+
+        @Override
+        public InqEventPublisher getEventPublisher() {
+            return null;
+        }
 
         @Override
         public Object execute(long chainId, long callId, Void arg,
@@ -63,47 +118,11 @@ class HybridAspectPipelineTerminalTest {
 
         @Override
         public CompletionStage<Object> executeAsync(long chainId, long callId, Void arg,
-                                                     InternalAsyncExecutor<Void, Object> next) {
+                                                    InternalAsyncExecutor<Void, Object> next) {
             trace.add(name + ":async-enter");
             return next.executeAsync(chainId, callId, arg)
                     .whenComplete((r, e) -> trace.add(name + ":async-exit"));
         }
-    }
-
-    // -------------------------------------------------------------------------
-    // ProceedingJoinPoint stubs (no Mockito)
-    // -------------------------------------------------------------------------
-
-    /**
-     * Stub service with sync and async methods for Method resolution.
-     */
-    interface StubService {
-        String syncMethod();
-        CompletionStage<String> asyncMethod();
-    }
-
-    /**
-     * Creates a PJP stub for a sync method (returns String).
-     */
-    private static ProceedingJoinPoint syncPjp(Object returnValue) throws NoSuchMethodException {
-        Method method = StubService.class.getMethod("syncMethod");
-        return new StubPjp(method, () -> returnValue);
-    }
-
-    /**
-     * Creates a PJP stub for an async method (returns CompletionStage).
-     */
-    private static ProceedingJoinPoint asyncPjp(CompletionStage<?> stage) throws NoSuchMethodException {
-        Method method = StubService.class.getMethod("asyncMethod");
-        return new StubPjp(method, () -> stage);
-    }
-
-    /**
-     * Creates a PJP stub for a sync method that throws.
-     */
-    private static ProceedingJoinPoint syncPjpThrowing(Throwable exception) throws NoSuchMethodException {
-        Method method = StubService.class.getMethod("syncMethod");
-        return new StubPjp(method, () -> { throw exception; });
     }
 
     /**
@@ -130,16 +149,54 @@ class HybridAspectPipelineTerminalTest {
             return new StubMethodSignature(method);
         }
 
-        @Override public Object proceed(Object[] args) throws Throwable { return proceed(); }
-        @Override public void set$AroundClosure(org.aspectj.runtime.internal.AroundClosure arc) {}
-        @Override public String toShortString() { return "stub-pjp"; }
-        @Override public String toLongString() { return "stub-pjp"; }
-        @Override public Object getThis() { return null; }
-        @Override public Object getTarget() { return null; }
-        @Override public Object[] getArgs() { return new Object[0]; }
-        @Override public org.aspectj.lang.reflect.SourceLocation getSourceLocation() { return null; }
-        @Override public String getKind() { return "method-execution"; }
-        @Override public StaticPart getStaticPart() { return null; }
+        @Override
+        public Object proceed(Object[] args) throws Throwable {
+            return proceed();
+        }
+
+        @Override
+        public void set$AroundClosure(org.aspectj.runtime.internal.AroundClosure arc) {
+        }
+
+        @Override
+        public String toShortString() {
+            return "stub-pjp";
+        }
+
+        @Override
+        public String toLongString() {
+            return "stub-pjp";
+        }
+
+        @Override
+        public Object getThis() {
+            return null;
+        }
+
+        @Override
+        public Object getTarget() {
+            return null;
+        }
+
+        @Override
+        public Object[] getArgs() {
+            return new Object[0];
+        }
+
+        @Override
+        public org.aspectj.lang.reflect.SourceLocation getSourceLocation() {
+            return null;
+        }
+
+        @Override
+        public String getKind() {
+            return "method-execution";
+        }
+
+        @Override
+        public StaticPart getStaticPart() {
+            return null;
+        }
     }
 
     /**
@@ -147,26 +204,66 @@ class HybridAspectPipelineTerminalTest {
      */
     static class StubMethodSignature implements MethodSignature {
         private final Method method;
-        StubMethodSignature(Method method) { this.method = method; }
 
-        @Override public Method getMethod() { return method; }
-        @Override public Class getReturnType() { return method.getReturnType(); }
+        StubMethodSignature(Method method) {
+            this.method = method;
+        }
+
+        @Override
+        public Method getMethod() {
+            return method;
+        }
+
+        @Override
+        public Class getReturnType() {
+            return method.getReturnType();
+        }
 
         // Remaining MethodSignature methods — not used
-        @Override public Class[] getParameterTypes() { return method.getParameterTypes(); }
-        @Override public String[] getParameterNames() { return new String[0]; }
-        @Override public Class[] getExceptionTypes() { return new Class[0]; }
-        @Override public String getName() { return method.getName(); }
-        @Override public int getModifiers() { return method.getModifiers(); }
-        @Override public Class getDeclaringType() { return method.getDeclaringClass(); }
-        @Override public String getDeclaringTypeName() { return method.getDeclaringClass().getName(); }
-        @Override public String toShortString() { return method.getName(); }
-        @Override public String toLongString() { return method.toString(); }
-    }
+        @Override
+        public Class[] getParameterTypes() {
+            return method.getParameterTypes();
+        }
 
-    @FunctionalInterface
-    interface ThrowingSupplier {
-        Object get() throws Throwable;
+        @Override
+        public String[] getParameterNames() {
+            return new String[0];
+        }
+
+        @Override
+        public Class[] getExceptionTypes() {
+            return new Class[0];
+        }
+
+        @Override
+        public String getName() {
+            return method.getName();
+        }
+
+        @Override
+        public int getModifiers() {
+            return method.getModifiers();
+        }
+
+        @Override
+        public Class getDeclaringType() {
+            return method.getDeclaringClass();
+        }
+
+        @Override
+        public String getDeclaringTypeName() {
+            return method.getDeclaringClass().getName();
+        }
+
+        @Override
+        public String toShortString() {
+            return method.getName();
+        }
+
+        @Override
+        public String toLongString() {
+            return method.toString();
+        }
     }
 
     // =========================================================================

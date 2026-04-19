@@ -85,6 +85,25 @@ public final class AsyncPipelineTerminal {
     }
 
     /**
+     * Casts an {@link InqElement} to {@link InqAsyncDecorator}, providing a
+     * descriptive error if the element does not implement the async decorator.
+     */
+    private static InqAsyncDecorator<?, ?> asAsyncDecorator(InqElement element) {
+        if (element instanceof InqAsyncDecorator<?, ?> decorator) {
+            return decorator;
+        }
+        throw new ClassCastException(
+                element.getClass().getName() + " ('" + element.getName()
+                        + "', type=" + element.getElementType()
+                        + ") does not implement InqAsyncDecorator. "
+                        + "AsyncPipelineTerminal requires all pipeline elements to "
+                        + "implement InqAsyncDecorator<A, R>. For sync elements, use "
+                        + "SyncPipelineTerminal instead.");
+    }
+
+    // ======================== Execution ========================
+
+    /**
      * Returns the underlying pipeline.
      *
      * @return the pipeline
@@ -93,7 +112,7 @@ public final class AsyncPipelineTerminal {
         return pipeline;
     }
 
-    // ======================== Execution ========================
+    // ======================== Decoration ========================
 
     /**
      * Builds the async decorator chain and executes it immediately.
@@ -118,8 +137,6 @@ public final class AsyncPipelineTerminal {
         }
     }
 
-    // ======================== Decoration ========================
-
     /**
      * Builds an async decorator chain around the given {@link JoinPointExecutor}.
      *
@@ -143,6 +160,8 @@ public final class AsyncPipelineTerminal {
                 asAsyncDecorator(element).decorateAsyncJoinPoint(downstream));
     }
 
+    // ======================== Internal ========================
+
     /**
      * Builds an async decorator chain and wraps it as a {@link Supplier}.
      *
@@ -164,24 +183,5 @@ public final class AsyncPipelineTerminal {
                 return CompletableFuture.failedFuture(e);
             }
         };
-    }
-
-    // ======================== Internal ========================
-
-    /**
-     * Casts an {@link InqElement} to {@link InqAsyncDecorator}, providing a
-     * descriptive error if the element does not implement the async decorator.
-     */
-    private static InqAsyncDecorator<?, ?> asAsyncDecorator(InqElement element) {
-        if (element instanceof InqAsyncDecorator<?, ?> decorator) {
-            return decorator;
-        }
-        throw new ClassCastException(
-                element.getClass().getName() + " ('" + element.getName()
-                        + "', type=" + element.getElementType()
-                        + ") does not implement InqAsyncDecorator. "
-                        + "AsyncPipelineTerminal requires all pipeline elements to "
-                        + "implement InqAsyncDecorator<A, R>. For sync elements, use "
-                        + "SyncPipelineTerminal instead.");
     }
 }

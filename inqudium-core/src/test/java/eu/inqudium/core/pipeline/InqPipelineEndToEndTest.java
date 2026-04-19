@@ -62,11 +62,24 @@ class InqPipelineEndToEndTest {
             this.trace = trace;
         }
 
-        @Override public String getName() { return name; }
-        @Override public InqElementType getElementType() { return InqElementType.BULKHEAD; }
-        @Override public InqEventPublisher getEventPublisher() { return null; }
+        @Override
+        public String getName() {
+            return name;
+        }
 
-        int availablePermits() { return semaphore.availablePermits(); }
+        @Override
+        public InqElementType getElementType() {
+            return InqElementType.BULKHEAD;
+        }
+
+        @Override
+        public InqEventPublisher getEventPublisher() {
+            return null;
+        }
+
+        int availablePermits() {
+            return semaphore.availablePermits();
+        }
 
         @Override
         public Object execute(long chainId, long callId, Void arg,
@@ -96,25 +109,35 @@ class InqPipelineEndToEndTest {
      */
     static class SimpleCircuitBreaker implements InqDecorator<Void, Object> {
 
-        enum State { CLOSED, OPEN }
-
         private final String name;
         private final int failureThreshold;
         private final AtomicInteger failureCount = new AtomicInteger(0);
-        private volatile State state = State.CLOSED;
         private final List<String> trace;
-
+        private volatile State state = State.CLOSED;
         SimpleCircuitBreaker(String name, int failureThreshold, List<String> trace) {
             this.name = name;
             this.failureThreshold = failureThreshold;
             this.trace = trace;
         }
 
-        @Override public String getName() { return name; }
-        @Override public InqElementType getElementType() { return InqElementType.CIRCUIT_BREAKER; }
-        @Override public InqEventPublisher getEventPublisher() { return null; }
+        @Override
+        public String getName() {
+            return name;
+        }
 
-        State state() { return state; }
+        @Override
+        public InqElementType getElementType() {
+            return InqElementType.CIRCUIT_BREAKER;
+        }
+
+        @Override
+        public InqEventPublisher getEventPublisher() {
+            return null;
+        }
+
+        State state() {
+            return state;
+        }
 
         void reset() {
             state = State.CLOSED;
@@ -144,6 +167,8 @@ class InqPipelineEndToEndTest {
                 throw t;
             }
         }
+
+        enum State {CLOSED, OPEN}
     }
 
     // =========================================================================
@@ -275,8 +300,11 @@ class InqPipelineEndToEndTest {
 
             // When — call fails
             try {
-                terminal.execute(() -> { throw new RuntimeException("boom"); });
-            } catch (Throwable ignored) {}
+                terminal.execute(() -> {
+                    throw new RuntimeException("boom");
+                });
+            } catch (Throwable ignored) {
+            }
 
             // Then — permit still released
             assertThat(bh.availablePermits()).isEqualTo(1);
@@ -301,7 +329,8 @@ class InqPipelineEndToEndTest {
                         release.await(5, TimeUnit.SECONDS);
                         return "blocking";
                     });
-                } catch (Throwable ignored) {}
+                } catch (Throwable ignored) {
+                }
             });
 
             entered.await(2, TimeUnit.SECONDS);
@@ -357,8 +386,11 @@ class InqPipelineEndToEndTest {
             for (int i = 0; i < 3; i++) {
                 try {
                     int finalI = i;
-                    terminal.execute(() -> { throw new RuntimeException("fail-" + finalI); });
-                } catch (Throwable ignored) {}
+                    terminal.execute(() -> {
+                        throw new RuntimeException("fail-" + finalI);
+                    });
+                } catch (Throwable ignored) {
+                }
             }
 
             // Then — circuit is open
@@ -373,8 +405,11 @@ class InqPipelineEndToEndTest {
                     InqPipeline.builder().shield(cb).build());
 
             try {
-                terminal.execute(() -> { throw new RuntimeException("trip"); });
-            } catch (Throwable ignored) {}
+                terminal.execute(() -> {
+                    throw new RuntimeException("trip");
+                });
+            } catch (Throwable ignored) {
+            }
             assertThat(cb.state()).isEqualTo(SimpleCircuitBreaker.State.OPEN);
 
             // When / Then — next call is rejected
@@ -421,7 +456,8 @@ class InqPipelineEndToEndTest {
                         release.await(5, TimeUnit.SECONDS);
                         return "blocking";
                     });
-                } catch (Throwable ignored) {}
+                } catch (Throwable ignored) {
+                }
             });
 
             entered.await(2, TimeUnit.SECONDS);
@@ -429,7 +465,8 @@ class InqPipelineEndToEndTest {
             // When — BH rejects before CB sees the call
             try {
                 terminal.execute(() -> "rejected");
-            } catch (Throwable ignored) {}
+            } catch (Throwable ignored) {
+            }
 
             // Then — CB never saw the rejection, stays CLOSED
             assertThat(cb.state()).isEqualTo(SimpleCircuitBreaker.State.CLOSED);
@@ -451,8 +488,11 @@ class InqPipelineEndToEndTest {
             // When — 2 failures through the pipeline
             for (int i = 0; i < 2; i++) {
                 try {
-                    terminal.execute(() -> { throw new RuntimeException("fail"); });
-                } catch (Throwable ignored) {}
+                    terminal.execute(() -> {
+                        throw new RuntimeException("fail");
+                    });
+                } catch (Throwable ignored) {
+                }
             }
 
             // Then — CB is open, BH still has all 5 permits
@@ -506,7 +546,8 @@ class InqPipelineEndToEndTest {
                     trace.add("CORE:execute");
                     throw new RuntimeException("business error");
                 });
-            } catch (Throwable ignored) {}
+            } catch (Throwable ignored) {
+            }
 
             // Then
             assertThat(trace).containsExactly(

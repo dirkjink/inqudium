@@ -100,6 +100,39 @@ public final class HybridProxyPipelineTerminal {
         return new HybridProxyPipelineTerminal(pipeline);
     }
 
+    private static InqDecorator<?, ?> asDecorator(InqElement element) {
+        if (element instanceof InqDecorator<?, ?> d) return d;
+        throw new ClassCastException(
+                element.getClass().getName() + " ('" + element.getName()
+                        + "', type=" + element.getElementType()
+                        + ") does not implement InqDecorator. "
+                        + "HybridProxyPipelineTerminal requires all elements to implement "
+                        + "InqDecorator for sync methods.");
+    }
+
+    // ======================== Proxy creation ========================
+
+    private static InqAsyncDecorator<?, ?> asAsyncDecorator(InqElement element) {
+        if (element instanceof InqAsyncDecorator<?, ?> d) return d;
+        throw new ClassCastException(
+                element.getClass().getName() + " ('" + element.getName()
+                        + "', type=" + element.getElementType()
+                        + ") does not implement InqAsyncDecorator. "
+                        + "HybridProxyPipelineTerminal requires all elements to implement "
+                        + "InqAsyncDecorator for async methods (returning CompletionStage).");
+    }
+
+    // ======================== Generic execution ========================
+
+    private static Object invokeTarget(Method method, Object target, Object[] args)
+            throws Throwable {
+        try {
+            return method.invoke(target, args);
+        } catch (InvocationTargetException e) {
+            throw e.getCause();
+        }
+    }
+
     /**
      * Returns the underlying pipeline.
      */
@@ -107,7 +140,7 @@ public final class HybridProxyPipelineTerminal {
         return pipeline;
     }
 
-    // ======================== Proxy creation ========================
+    // ======================== Internal: dispatch ========================
 
     /**
      * Creates a JDK dynamic proxy that routes sync and async method calls
@@ -140,7 +173,7 @@ public final class HybridProxyPipelineTerminal {
                 (proxy, method, args) -> dispatch(proxy, method, args, target, summary));
     }
 
-    // ======================== Generic execution ========================
+    // ======================== Internal: caching ========================
 
     /**
      * Executes a sync call through the pipeline (uncached — builds chain per call).
@@ -175,8 +208,6 @@ public final class HybridProxyPipelineTerminal {
             return CompletableFuture.failedFuture(e);
         }
     }
-
-    // ======================== Internal: dispatch ========================
 
     /**
      * Dispatches a proxy method call using the cached chain factory.
@@ -215,8 +246,6 @@ public final class HybridProxyPipelineTerminal {
         }
     }
 
-    // ======================== Internal: caching ========================
-
     /**
      * Resolves the cached chain factory for the given method, building it
      * on first access. The return-type check and chain composition happen
@@ -229,6 +258,8 @@ public final class HybridProxyPipelineTerminal {
         }
         return chainCache.computeIfAbsent(method, this::buildCachedChain);
     }
+
+    // ======================== Internal: casting ========================
 
     /**
      * Builds a {@link CachedChain} for the given method: determines sync
@@ -267,37 +298,6 @@ public final class HybridProxyPipelineTerminal {
                 (accFn, element) -> executor ->
                         ((InqAsyncDecorator<Void, Object>) asAsyncDecorator(element))
                                 .decorateAsyncJoinPoint(accFn.apply(executor)));
-    }
-
-    // ======================== Internal: casting ========================
-
-    private static InqDecorator<?, ?> asDecorator(InqElement element) {
-        if (element instanceof InqDecorator<?, ?> d) return d;
-        throw new ClassCastException(
-                element.getClass().getName() + " ('" + element.getName()
-                        + "', type=" + element.getElementType()
-                        + ") does not implement InqDecorator. "
-                        + "HybridProxyPipelineTerminal requires all elements to implement "
-                        + "InqDecorator for sync methods.");
-    }
-
-    private static InqAsyncDecorator<?, ?> asAsyncDecorator(InqElement element) {
-        if (element instanceof InqAsyncDecorator<?, ?> d) return d;
-        throw new ClassCastException(
-                element.getClass().getName() + " ('" + element.getName()
-                        + "', type=" + element.getElementType()
-                        + ") does not implement InqAsyncDecorator. "
-                        + "HybridProxyPipelineTerminal requires all elements to implement "
-                        + "InqAsyncDecorator for async methods (returning CompletionStage).");
-    }
-
-    private static Object invokeTarget(Method method, Object target, Object[] args)
-            throws Throwable {
-        try {
-            return method.invoke(target, args);
-        } catch (InvocationTargetException e) {
-            throw e.getCause();
-        }
     }
 
     private String buildSummary(Class<?> interfaceType, Object target) {

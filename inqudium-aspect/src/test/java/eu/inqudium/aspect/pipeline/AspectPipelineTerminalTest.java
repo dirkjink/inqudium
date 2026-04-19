@@ -28,6 +28,34 @@ class AspectPipelineTerminalTest {
     // =========================================================================
 
     /**
+     * Creates a PJP stub that returns the given value on proceed().
+     */
+    private static ProceedingJoinPoint pjpReturning(Object value) {
+        return new StubProceedingJoinPoint(() -> value);
+    }
+
+    /**
+     * Creates a PJP stub that executes the given action on proceed().
+     */
+    private static ProceedingJoinPoint pjpAction(ThrowingSupplier<Object> action) {
+        return new StubProceedingJoinPoint(action);
+    }
+
+    /**
+     * Creates a PJP stub that throws the given exception on proceed().
+     */
+    private static ProceedingJoinPoint pjpThrowing(Throwable exception) {
+        return new StubProceedingJoinPoint(() -> {
+            throw exception;
+        });
+    }
+
+    @FunctionalInterface
+    interface ThrowingSupplier<T> {
+        T get() throws Throwable;
+    }
+
+    /**
      * InqDecorator stub that records enter/exit events in a trace list.
      */
     static class TracingDecorator implements InqDecorator<Void, Object> {
@@ -42,9 +70,20 @@ class AspectPipelineTerminalTest {
             this.trace = trace;
         }
 
-        @Override public String getName() { return name; }
-        @Override public InqElementType getElementType() { return type; }
-        @Override public InqEventPublisher getEventPublisher() { return null; }
+        @Override
+        public String getName() {
+            return name;
+        }
+
+        @Override
+        public InqElementType getElementType() {
+            return type;
+        }
+
+        @Override
+        public InqEventPublisher getEventPublisher() {
+            return null;
+        }
 
         @Override
         public Object execute(long chainId, long callId, Void arg,
@@ -75,43 +114,59 @@ class AspectPipelineTerminalTest {
             return action.get();
         }
 
-        @Override public Object proceed(Object[] args) throws Throwable { return proceed(); }
-        @Override public void set$AroundClosure(org.aspectj.runtime.internal.AroundClosure arc) {}
-        @Override public String toShortString() { return "stub-pjp"; }
-        @Override public String toLongString() { return "stub-pjp"; }
-        @Override public Object getThis() { return null; }
-        @Override public Object getTarget() { return null; }
-        @Override public Object[] getArgs() { return new Object[0]; }
-        @Override public Signature getSignature() { return null; }
-        @Override public org.aspectj.lang.reflect.SourceLocation getSourceLocation() { return null; }
-        @Override public String getKind() { return "method-execution"; }
-        @Override public StaticPart getStaticPart() { return null; }
-    }
+        @Override
+        public Object proceed(Object[] args) throws Throwable {
+            return proceed();
+        }
 
-    @FunctionalInterface
-    interface ThrowingSupplier<T> {
-        T get() throws Throwable;
-    }
+        @Override
+        public void set$AroundClosure(org.aspectj.runtime.internal.AroundClosure arc) {
+        }
 
-    /**
-     * Creates a PJP stub that returns the given value on proceed().
-     */
-    private static ProceedingJoinPoint pjpReturning(Object value) {
-        return new StubProceedingJoinPoint(() -> value);
-    }
+        @Override
+        public String toShortString() {
+            return "stub-pjp";
+        }
 
-    /**
-     * Creates a PJP stub that executes the given action on proceed().
-     */
-    private static ProceedingJoinPoint pjpAction(ThrowingSupplier<Object> action) {
-        return new StubProceedingJoinPoint(action);
-    }
+        @Override
+        public String toLongString() {
+            return "stub-pjp";
+        }
 
-    /**
-     * Creates a PJP stub that throws the given exception on proceed().
-     */
-    private static ProceedingJoinPoint pjpThrowing(Throwable exception) {
-        return new StubProceedingJoinPoint(() -> { throw exception; });
+        @Override
+        public Object getThis() {
+            return null;
+        }
+
+        @Override
+        public Object getTarget() {
+            return null;
+        }
+
+        @Override
+        public Object[] getArgs() {
+            return new Object[0];
+        }
+
+        @Override
+        public Signature getSignature() {
+            return null;
+        }
+
+        @Override
+        public org.aspectj.lang.reflect.SourceLocation getSourceLocation() {
+            return null;
+        }
+
+        @Override
+        public String getKind() {
+            return "method-execution";
+        }
+
+        @Override
+        public StaticPart getStaticPart() {
+            return null;
+        }
     }
 
     // =========================================================================
@@ -441,7 +496,8 @@ class AspectPipelineTerminalTest {
             AbstractPipelineAspect oldAspect = new AbstractPipelineAspect(List.of(
                     provider("BH", InqElementType.BULKHEAD, 400, trace1),
                     provider("CB", InqElementType.CIRCUIT_BREAKER, 500, trace1)
-            )) {};
+            )) {
+            };
             Object oldResult = oldAspect.execute(() -> {
                 trace1.add("CORE");
                 return "old-way";
@@ -472,8 +528,16 @@ class AspectPipelineTerminalTest {
         private AspectLayerProvider<Object> provider(
                 String name, InqElementType type, int order, List<String> trace) {
             return new AspectLayerProvider<>() {
-                @Override public String layerName() { return name; }
-                @Override public int order() { return order; }
+                @Override
+                public String layerName() {
+                    return name;
+                }
+
+                @Override
+                public int order() {
+                    return order;
+                }
+
                 @Override
                 public eu.inqudium.core.pipeline.LayerAction<Void, Object> layerAction() {
                     return (chainId, callId, arg, next) -> {

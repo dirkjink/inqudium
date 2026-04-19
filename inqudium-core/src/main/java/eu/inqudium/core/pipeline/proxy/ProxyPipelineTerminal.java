@@ -1,6 +1,5 @@
 package eu.inqudium.core.pipeline.proxy;
 
-import eu.inqudium.core.element.InqElement;
 import eu.inqudium.core.pipeline.InqPipeline;
 import eu.inqudium.core.pipeline.SyncPipelineTerminal;
 
@@ -87,6 +86,21 @@ public final class ProxyPipelineTerminal {
     }
 
     /**
+     * Invokes the target method, unwrapping {@link InvocationTargetException}
+     * so the caller sees the original exception type.
+     */
+    private static Object invokeTarget(
+            java.lang.reflect.Method method, Object target, Object[] args) throws Throwable {
+        try {
+            return method.invoke(target, args);
+        } catch (InvocationTargetException e) {
+            throw e.getCause();
+        }
+    }
+
+    // ======================== Proxy creation ========================
+
+    /**
      * Returns the underlying pipeline.
      *
      * @return the pipeline
@@ -95,7 +109,7 @@ public final class ProxyPipelineTerminal {
         return pipeline;
     }
 
-    // ======================== Proxy creation ========================
+    // ======================== Internal ========================
 
     /**
      * Creates a JDK dynamic proxy that routes all method calls through
@@ -160,21 +174,6 @@ public final class ProxyPipelineTerminal {
                     // All other methods: route through the pipeline
                     return syncTerminal.execute(() -> invokeTarget(method, target, args));
                 });
-    }
-
-    // ======================== Internal ========================
-
-    /**
-     * Invokes the target method, unwrapping {@link InvocationTargetException}
-     * so the caller sees the original exception type.
-     */
-    private static Object invokeTarget(
-            java.lang.reflect.Method method, Object target, Object[] args) throws Throwable {
-        try {
-            return method.invoke(target, args);
-        } catch (InvocationTargetException e) {
-            throw e.getCause();
-        }
     }
 
     /**
