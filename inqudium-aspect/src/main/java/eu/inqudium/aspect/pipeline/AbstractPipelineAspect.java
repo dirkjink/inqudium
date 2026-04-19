@@ -110,7 +110,7 @@ public abstract class AbstractPipelineAspect {
      *
      * @return the layer providers, never {@code null}
      * @throws UnsupportedOperationException if the no-arg constructor is used
-     *                                       without overriding this method
+     *         without overriding this method
      */
     protected List<AspectLayerProvider<Object>> layerProviders() {
         throw new UnsupportedOperationException(
@@ -158,19 +158,7 @@ public abstract class AbstractPipelineAspect {
      * @throws Throwable any exception from the delegate or from layer actions
      */
     protected Object executeAround(ProceedingJoinPoint pjp) throws Throwable {
-        if (!(pjp.getSignature() instanceof MethodSignature methodSignature)) {
-            throw new IllegalStateException(
-                    getClass().getSimpleName() + " received a non-method join point "
-                            + "(signature type: " + pjp.getSignature().getClass().getName()
-                            + "). Ensure the @Around pointcut only matches method executions.");
-        }
-        Method method = methodSignature.getMethod();
-        if (method == null) {
-            throw new IllegalStateException(
-                    getClass().getSimpleName() + " received a MethodSignature with a null "
-                            + "Method for join point: " + pjp.getSignature().toLongString()
-                            + ". This may indicate a synthetic or unresolvable method.");
-        }
+        Method method = ((MethodSignature) pjp.getSignature()).getMethod();
         return resolvePipeline(method).execute(pjp::proceed);
     }
 
@@ -193,15 +181,13 @@ public abstract class AbstractPipelineAspect {
      * Executes the given executor through a fresh pipeline built from all
      * providers (no method filtering, no caching).
      *
-     * <p><strong>Not suitable for hot paths</strong> — builds a fresh pipeline on
-     * every call. Prefer {@link #execute(JoinPointExecutor, Method)} for
-     * production use.</p>
+     * <p>Prefer {@link #execute(JoinPointExecutor, Method)} on hot paths.</p>
      *
      * @param coreExecutor the join point execution
      * @return the result of the pipeline execution
      * @throws Throwable any exception from the delegate or from layer actions
      */
-    protected Object execute(JoinPointExecutor<Object> coreExecutor) throws Throwable {
+    public Object execute(JoinPointExecutor<Object> coreExecutor) throws Throwable {
         return new AspectPipelineBuilder<Object>()
                 .addProviders(providers())
                 .buildChain(coreExecutor)
@@ -260,14 +246,6 @@ public abstract class AbstractPipelineAspect {
 
     /**
      * Resolves (or retrieves from cache) the pipeline for the given method.
-     *
-     * <p><strong>Trade-off note:</strong> Between the fast-path {@code get()} miss
-     * and the {@code computeIfAbsent}, another thread may have already populated
-     * the entry. In that case, {@code providers()} is called "unnecessarily" —
-     * but after first initialization it is merely a volatile read (~1ns), which
-     * is cheaper than restructuring to avoid it. Calling {@code providers()}
-     * outside of {@code computeIfAbsent} ensures no subclass code
-     * ({@link #layerProviders()}) ever runs inside a CHM bucket lock.</p>
      */
     private ResolvedPipeline resolvePipeline(Method method) {
         ResolvedPipeline pipeline = pipelineCache.get(method);
@@ -275,8 +253,16 @@ public abstract class AbstractPipelineAspect {
             return pipeline;
         }
 
-        List<AspectLayerProvider<Object>> providers = providers();
-        return pipelineCache.computeIfAbsent(
-                method, m -> ResolvedPipeline.resolve(providers, m));
+        return pipelineCache.computeIfAbsent(method, this::createPipeline);
+    }
+
+    /**
+     * Creates a new pipeline for the given method — called at most once per
+     * method via {@link ConcurrentHashMap#computeIfAbsent}. Extracted as a
+     * named method so that {@code this::createPipeline} produces a stable
+     * method reference without per-call lambda allocation.
+     */
+    private ResolvedPipeline createPipeline(Method method) {
+        return ResolvedPipeline.resolve(providers(), method);
     }
 }

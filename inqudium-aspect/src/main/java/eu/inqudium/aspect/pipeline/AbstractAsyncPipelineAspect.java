@@ -152,12 +152,17 @@ public abstract class AbstractAsyncPipelineAspect {
             return pipeline;
         }
 
-        // Slow path: use the cached provider snapshot (resolved once per
-        // aspect lifetime), then atomically populate the pipeline cache
-        List<AsyncAspectLayerProvider<Object>> providers = providers();
+        return pipelineCache.computeIfAbsent(method, this::createAsyncPipeline);
+    }
 
-        return pipelineCache.computeIfAbsent(
-                method, m -> AsyncResolvedPipeline.resolve(providers, m));
+    /**
+     * Creates a new async pipeline for the given method — called at most once
+     * per method via {@link ConcurrentHashMap#computeIfAbsent}. Extracted as a
+     * named method so that {@code this::createAsyncPipeline} produces a stable
+     * method reference without per-call lambda allocation.
+     */
+    private AsyncResolvedPipeline createAsyncPipeline(Method method) {
+        return AsyncResolvedPipeline.resolve(providers(), method);
     }
 
     // ======================== Non-cached convenience methods ========================
