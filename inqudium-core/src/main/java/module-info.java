@@ -9,16 +9,17 @@
  * <h2>Exported packages</h2>
  * <ul>
  *   <li>{@code eu.inqudium.core} — base interfaces ({@code InqElement}, {@code InqConfig}, {@code InqRegistry}, {@code InqClock})</li>
- *   <li>{@code eu.inqudium.core.circuitbreaker} — circuit breaker config, behavior contract, sliding window algorithms</li>
- *   <li>{@code eu.inqudium.core.retry} — retry config and behavior contract</li>
- *   <li>{@code eu.inqudium.core.retry.backoff} — backoff strategies (fixed, exponential, jitter)</li>
- *   <li>{@code eu.inqudium.core.ratelimiter} — rate limiter config, token bucket behavior</li>
- *   <li>{@code eu.inqudium.core.bulkhead} — bulkhead config, semaphore-based behavior</li>
- *   <li>{@code eu.inqudium.core.timelimiter} — time limiter config, timeout profile (RSS calculation)</li>
- *   <li>{@code eu.inqudium.core.cache} — cache config (placeholder for Phase 2)</li>
+ *   <li>{@code eu.inqudium.core.element.circuitbreaker} — circuit breaker config, behavior contract, sliding window algorithms</li>
+ *   <li>{@code eu.inqudium.core.element.retry} — retry config and behavior contract</li>
+ *   <li>{@code eu.inqudium.core.element.retry.strategy} — backoff strategies (fixed, exponential, jitter)</li>
+ *   <li>{@code eu.inqudium.core.element.ratelimiter} — rate limiter config, token bucket behavior</li>
+ *   <li>{@code eu.inqudium.core.element.bulkhead} — bulkhead config, semaphore-based behavior</li>
+ *   <li>{@code eu.inqudium.core.element.timelimiter} — time limiter config, timeout profile (RSS calculation)</li>
+ *   <li>{@code eu.inqudium.core.element.trafficshaper} — traffic shaper config, throttle and scheduling strategies</li>
+ *   <li>{@code eu.inqudium.core.element.fallback} — fallback config, data providers and result handling</li>
  *   <li>{@code eu.inqudium.core.event} — event system: publisher, consumer, exporter SPI</li>
  *   <li>{@code eu.inqudium.core.context} — context propagation SPI (capture/restore/enrich)</li>
- *   <li>{@code eu.inqudium.core.compatibility} — behavioral change flags for safe upgrades</li>
+ *   <li>{@code eu.inqudium.core.config.compatibility} — behavioral change flags for safe upgrades</li>
  *   <li>{@code eu.inqudium.core.exception} — exception hierarchy and cause-chain navigation</li>
  *   <li>{@code eu.inqudium.core.pipeline} — pipeline composition API and predefined orderings</li>
  * </ul>
