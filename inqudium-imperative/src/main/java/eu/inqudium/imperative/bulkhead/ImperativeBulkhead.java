@@ -123,8 +123,7 @@ public final class ImperativeBulkhead<A, R> implements Bulkhead<A, R> {
     /**
      * Core bulkhead logic as around-advice for the wrapper pipeline.
      *
-     * <p>This method replaces the previous {@code decorate(InqCall)} approach. The execution
-     * flow is:</p>
+     * <p>Execution flow:</p>
      * <ol>
      *   <li>Acquire a permit from the {@link BlockingBulkheadStrategy} (with configurable wait)</li>
      *   <li>On success: publish diagnostic acquire event, then delegate to {@code next}</li>
@@ -132,12 +131,14 @@ public final class ImperativeBulkhead<A, R> implements Bulkhead<A, R> {
      *   <li>Measure RTT and release the permit in a {@code finally} block</li>
      * </ol>
      *
-     * <p>The {@code chainId} and {@code callId} are converted to {@code String} for event
-     * correlation and exception context, preserving compatibility with the existing
-     * observability infrastructure.</p>
+     * <p>{@code chainId} and {@code callId} flow through events, exceptions, and the
+     * downstream chain as primitive {@code long} values (ADR-022). No boxing, no string
+     * conversion on the hot path.</p>
      *
-     * @param chainId  the chain identifier (converted to String for event correlation)
-     * @param callId   the call identifier (converted to String for exception context)
+     * @param chainId  identifies the wrapper chain; shared by all invocations
+     *                 passing through the same composed pipeline
+     * @param callId   identifies this particular invocation; unique within
+     *                 the chain, monotonically increasing from 1
      * @param argument the argument flowing through the chain (passed through unchanged)
      * @param next     the next step in the chain — the actual business logic
      * @return the result of the downstream chain execution
