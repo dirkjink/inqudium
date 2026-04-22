@@ -5,7 +5,7 @@
  *
  * <ul>
  *   <li>{@code InqElement} — base interface implemented by all resilience elements
- *       (circuit breakers, retries, rate limiters, bulkheads, time limiters, caches).</li>
+ *       (circuit breakers, retries, rate limiters, bulkheads, time limiters, traffic shapers).</li>
  *   <li>{@code InqElementType} — enum identifying the six element kinds. Used in events
  *       (ADR-003), exceptions (ADR-009), context propagation (ADR-011), and pipeline
  *       ordering (ADR-017).</li>
@@ -16,13 +16,6 @@
  *   <li>{@code InqClock} — functional interface for injectable time. Every time-dependent
  *       algorithm in core uses this instead of {@code Instant.now()}, ensuring deterministic
  *       testability (ADR-016).</li>
- *   <li>{@code InqCallIdGenerator} — functional interface for generating unique call
- *       identifiers. Override for deterministic tests, trace ID integration, or custom
- *       formats. Default: UUID.</li>
- *   <li>{@code InqCall} — context-carrying wrapper for pipeline calls. Carries the
- *       {@code callId} through the decoration chain without thread-local state.
- *       Used by element implementations in pipeline mode; standalone calls generate
- *       their own callId via {@code InqCallIdGenerator}.</li>
  * </ul>
  *
  * <h2>Design principles</h2>

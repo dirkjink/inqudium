@@ -18,11 +18,11 @@
  * RuntimeException
  * └── InqException (abstract)                                — this package
  *     ├── InqRuntimeException            (INQ-XX-000)        — this package (checked exception wrapper)
- *     ├── InqCallNotPermittedException   (INQ-CB-001)        — eu.inqudium.core.circuitbreaker
- *     ├── InqRequestNotPermittedException (INQ-RL-001)       — eu.inqudium.core.ratelimiter
- *     ├── InqBulkheadFullException       (INQ-BH-001)        — eu.inqudium.core.bulkhead
- *     ├── InqTimeLimitExceededException  (INQ-TL-001)        — eu.inqudium.core.timelimiter
- *     └── InqRetryExhaustedException     (INQ-RT-001)        — eu.inqudium.core.retry
+ *     ├── CircuitBreakerException        (INQ-CB-001)        — eu.inqudium.core.element.circuitbreaker
+ *     ├── RateLimiterException           (INQ-RL-001)        — eu.inqudium.core.element.ratelimiter
+ *     ├── InqBulkheadFullException       (INQ-BH-001)        — eu.inqudium.core.element.bulkhead
+ *     ├── TimeLimiterException           (INQ-TL-001)        — eu.inqudium.core.element.timelimiter
+ *     └── RetryException                 (INQ-RT-001)        — eu.inqudium.core.element.retry
  * </pre>
  *
  * <h2>Cause-chain navigation</h2>
