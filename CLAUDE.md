@@ -138,3 +138,9 @@ Lower order value = more outward layer in the pipeline. Error codes follow `INQ-
 ## When unsure
 
 Search the code first (`project_knowledge_search` has no equivalent here — use the filesystem and grep). The ADRs are a secondary reference. When the two disagree, the code wins.
+
+## Approach for new tasks
+
+- For smaller, manageable tasks, bug fixes can be started directly with the coding.
+- If the task becomes unexpectedly extensive, it can lead to architectural breaks; in that case, create a Markdown document explaining the possible solutions, favoring one solution and explaining why.
+- 
