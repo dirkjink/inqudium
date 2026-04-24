@@ -324,19 +324,33 @@ Und: Der Code wirft `RateLimiterException` (nicht `InqRequestNotPermittedExcepti
 
 ---
 
-### 2.4 ADR-020 — Bulkhead-Behavior-Contract vs. AbstractBulkhead
+### 2.4 ADR-020 — Bulkhead-Behavior-Contract vs. tatsächliche Strategie-Interfaces
 
-**ADR-020 definiert** ein Interface `BulkheadBehavior` mit einem reinen Acquire/Release-Entscheidungsmodell (`BulkheadResult.denied()`) — pures Counter-Logic ohne Blocking.
+**Status:** Überarbeitet im Branch `adr/fix-020-bulkhead` (2026-04-24). Die ADR dokumentiert jetzt:
+die paradigm-typed Spaltung `BulkheadStrategy` / `BlockingBulkheadStrategy` / `NonBlockingBulkheadStrategy`,
+`RejectionContext`/`RejectionReason`, alle drei Strategie-Familien (statisch, adaptiv mit `InqLimitAlgorithm`, CoDel),
+`release()` vs. `rollback()`, Over-release-Guards, Sync- und Async-Pfad von `ImperativeBulkhead`, korrigierte
+Wait-Mechanik-Tabelle, vollständige Event-Liste (inkl. CoDel- und LimitChanged-Trace-Events), beide Exception-Typen
+(`InqBulkheadFullException` INQ-BH-001 + `InqBulkheadInterruptedException` INQ-BH-002), und einen Verweis auf
+ADR-003 statt einer Wiederholung der Publisher-Mechanik.
 
-**Code realisiert** stattdessen:
+**Verbleibend:** Während der Überarbeitung wurde weitere Drift aufgedeckt, die in §2.7 aufgenommen ist.
 
-- `AbstractBulkhead` als Basisklasse (nicht als Behavior-Interface).
-- `tryAcquirePermit` / `releasePermit` — ähnlich, aber als abstrakte Methoden.
-- `BlockingBulkheadStrategy` — ein Interface, dessen Name („Blocking") direkt der ADR-Aussage „No blocking in the core algorithm — ever" widerspricht. Die imperative Implementation `SemaphoreBulkheadStrategy` nutzt tatsächlich `semaphore.tryAcquire(timeout, TimeUnit.MILLISECONDS)`.
+**Ursprünglicher Befund (vor der Überarbeitung):**
 
-Das Blocking passiert zwar im Paradigm-Modul (`inqudium-imperative`), nicht im Core, daher ist die Design-Regel formal eingehalten — aber die ADR-Wortwahl („`BulkheadBehavior`", „`BulkheadResult.denied()`") findet sich im Code so nicht.
+ADR-020 definierte ein Interface `BulkheadBehavior` mit einem reinen Acquire/Release-Entscheidungsmodell
+(`BulkheadResult.denied()`) — pures Counter-Logic ohne Blocking.
 
-**Empfehlung:** ADR-020 an die tatsächliche Typnamensgebung anpassen und die Zweiteilung `BulkheadBehavior` (core) + `BlockingBulkheadStrategy` (paradigm) dokumentieren.
+Code realisierte stattdessen:
+
+- `BulkheadStrategy` als Basis-Interface (die in der ursprünglichen Notiz erwähnte Klasse `AbstractBulkhead`
+  existiert gar nicht — Tippfehler in der Notiz).
+- Zwei abgeleitete Interfaces: `BlockingBulkheadStrategy` und `NonBlockingBulkheadStrategy`.
+- Der Name `BlockingBulkheadStrategy` widersprach direkt der ADR-Aussage „No blocking in the core algorithm — ever".
+  Die imperative Implementation `SemaphoreBulkheadStrategy` nutzt tatsächlich
+  `semaphore.tryAcquire(timeout, TimeUnit.NANOSECONDS)`. Die ADR ist jetzt umformuliert: das Core-Modul definiert
+  beide Verträge (Blocking + Non-Blocking) als bewusste paradigmatische Wahl; Blocking-Implementierungen leben in
+  Paradigm-Modulen.
 
 ---
 
@@ -493,7 +507,8 @@ ADR-023 spricht davon, dass der `InqCall`-Abstraction die `callId` trägt und di
 | **Hoch**  | ADR-003 (§2.6)       | Element-Event-Hierarchie gespalten: nur Bulkhead/Compatibility/ProviderError sind `InqEvent`; Retry/RateLimiter/TimeLimiter/TrafficShaper/Fallback nutzen ad-hoc Records |
 | Mittel    | ADR-016, ADR-005     | `InqClock` vs. `InqNanoTimeSource` — Dualität nicht dokumentiert |
 | Mittel    | ADR-019              | Parameter heißt `capacity`, nicht `bucketSize`; fehlende Strategie-Abstraktion; `RateLimiterException` vs. erwartete `InqRequestNotPermittedException` |
-| Mittel    | ADR-020              | Typnamensgebung (`BulkheadBehavior` vs. `AbstractBulkhead` + `BlockingBulkheadStrategy`) |
+| ~~Mittel~~ | ~~ADR-020 (§2.4)~~ | ~~Typnamensgebung (`BulkheadBehavior` vs. `BlockingBulkheadStrategy`)~~ — überarbeitet 2026-04-24 |
+| **Hoch**  | ADR-020 (§2.7)       | Substanzielle undokumentierte Drift: `RejectionContext`, adaptive Strategien (`InqLimitAlgorithm`, AIMD/Vegas), CoDel, drei Config-Schichten, `release`/`rollback`-Trennung, zwei zusätzliche Trace-Events, `InqBulkheadInterruptedException` (INQ-BH-002), Async-Pfad |
 | Niedrig   | `architecture.md`    | Widerspricht ADR-009 bei Exception-Namen (`InqCallRejectedException`, `InqConfigurationException`) |
 | Niedrig   | `module-info` + `package-info`s | Veraltete Paketpfade `eu.inqudium.core.circuitbreaker` statt `…element.circuitbreaker`; phantomhaftes Cache-Package; TRAFFIC_SHAPER und FALLBACK fehlen |
 | Niedrig   | ADR-023              | Argumentation basiert auf ADR-022-Modell, das im Code so nicht existiert |
