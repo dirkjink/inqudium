@@ -282,7 +282,19 @@ Das ist eine bewusste Trennung im Code (monotonic vs. wall-clock), aber keine ei
 
 ### 2.2 ADR-003 — Event-Publisher-Contract stark unterdokumentiert
 
-**ADR-003 Publisher-Contract:**
+**Status:** Überarbeitet im Branch `adr/fix-003-event-system` (2026-04-24). Die ADR dokumentiert jetzt:
+`InqSubscription`-Rückgabetyp, TTL-Overloads, `publishTrace`/`isTraceEnabled`, `close()`/`AutoCloseable`,
+`InqPublisherConfig` (soft/hard limit, expiry interval, traceEnabled), den `InqConsumerExpiryWatchdog`-Lebenszyklus
+(lazy gestartet auf Daemon-Virtual-Thread, `WeakReference` auf den Owner) sowie die `Open → Resolving → Frozen`-
+State-Machine von `InqEventExporterRegistry` inklusive Provider-Error-Replay. Das obsolete UUID-/`CallContext`-/
+`CallIdSupplier`-Modell wurde durch einen Verweis auf ADR-022 (`chainId` + `callId` als `long`) ersetzt.
+
+**Verbleibend:** Während der Überarbeitung wurde eine tiefere Inkonsistenz aufgedeckt — die Element-Event-Hierarchie
+ist gespalten. Siehe §2.6.
+
+**Ursprünglicher Befund (vor der Überarbeitung):**
+
+ADR-003 Publisher-Contract:
 
 ```java
 void publish(InqEvent event);
@@ -290,15 +302,13 @@ void onEvent(InqEventConsumer consumer);
 <E extends InqEvent> void onEvent(Class<E> eventType, Consumer<E> consumer);
 ```
 
-**Code hat zusätzlich:**
+Code hatte zusätzlich:
 
-- `publishTrace(Supplier<? extends InqEvent>)` + `isTraceEnabled()` — Trace-Event-Konzept, das ADR-020 zwar nutzt, ADR-003 aber nicht definiert.
+- `publishTrace(Supplier<? extends InqEvent>)` + `isTraceEnabled()`.
 - `onEvent(...)` gibt `InqSubscription` zurück statt `void`.
 - Vier zusätzliche TTL-Overloads: `onEvent(consumer, Duration ttl)`, `onEvent(Class, consumer, ttl)`.
 - `close()` via `AutoCloseable` + Hintergrund-Watchdog (`InqConsumerExpiryWatchdog`).
 - Soft/Hard-Consumer-Limits via `InqPublisherConfig`.
-
-**Empfehlung:** ADR-003 erweitern um: Trace-Publishing, Subscription-Handles, TTL-basierte Consumer, Lifecycle/`close()`, Consumer-Limits.
 
 ---
 
@@ -362,65 +372,51 @@ ADR-009 & Code:    InqCallNotPermittedException (CB)
 
 ---
 
-### 2.7 ADR-020 — Zusätzliche Drift, die §2.4 nicht erfasst hatte
+### 2.6 ADR-003 — Element-Event-Hierarchie ist gespalten
 
-**Aufgedeckt am 2026-04-24** während der Überarbeitung von ADR-020 (siehe §2.4). Die Punkte hier waren weder in §2.4
-noch sonst in dieser Sammlung dokumentiert. Die ADR-020-Überarbeitung adressiert sie alle.
+**Aufgedeckt am 2026-04-24** während der Überarbeitung von ADR-003 (siehe §2.2).
 
-**§2.7.a — `RejectionContext` / `RejectionReason` als zentrales Datenmodell.** Ein Record (`RejectionReason`-Enum,
-`limitAtDecision`, `activeCallsAtDecision`, `waitedNanos`, `sojournNanos`), erfasst innerhalb der Strategie-Decision-
-Logik (CAS-Loop bzw. Lock-Block). Löst das TOCTOU-Problem von Post-hoc-Snapshots. Wird durch alle Schichten
-durchgereicht (Strategy → Facade → `InqBulkheadFullException` → `BulkheadOnRejectEvent`). Kein einziger ADR-Eintrag
-bisher.
+**ADR-003 sagt** (auch in der überarbeiteten Form): Es gibt ein einheitliches Event-Framework. Jeder `InqEvent` fließt
+durch `InqEventPublisher`. Subklassen pro Element-Familie tragen `chainId`, `callId`, `elementName`, `elementType`,
+`timestamp`.
 
-**§2.7.b — Adaptive Strategien (`InqLimitAlgorithm` SPI).** Existiert mit zwei Implementierungen
-(`AimdLimitAlgorithm`, `VegasLimitAlgorithm`) plus eigenen Configs (`AimdLimitAlgorithmConfig`,
-`VegasLimitAlgorithmConfig`). Wird von `AdaptiveNonBlockingBulkheadStrategy` (core) und `AdaptiveBulkheadStrategy`
-(imperative) genutzt. Feedback via `onCallComplete(rttNanos, isSuccess)`; korrekte Reihenfolge gegenüber `release()`
-ist correctness-relevant; `completeAndRelease(rttNanos, isSuccess)` als sicherer Helfer. Komplett undokumentiert.
+**Code sagt:** Es gibt **zwei parallele Event-Pattern**, die nicht zusammen passen.
 
-**§2.7.c — CoDel-Lastabwurf.** `CoDelBulkheadStrategy` (imperative), eigene Config (`CoDelBulkheadStrategyConfig`),
-eigener Rejection-Grund (`CODEL_SOJOURN_EXCEEDED`), eigener Trace-Event (`BulkheadCodelRejectedTraceEvent`). Drop
-trotz verfügbarer Permits, wenn Sojourn-Zeit das Target-Delay über ein Intervall überschreitet. Komplett
-undokumentiert.
+| Element         | Event-Klasse                                  | `extends InqEvent`? | Trägt `chainId`/`callId`? | Fließt durch `InqEventPublisher`? |
+|-----------------|-----------------------------------------------|---------------------|---------------------------|-----------------------------------|
+| Bulkhead        | `BulkheadEvent` + 7 konkrete Subklassen       | ✓                   | ✓                         | ✓                                 |
+| —               | `InqCompatibilityEvent`                       | ✓                   | ✓ (synthetisch)           | ✓                                 |
+| —               | `InqProviderErrorEvent`                       | ✓                   | `-1`/`-1` (Sentinel)      | ✓                                 |
+| Retry           | `RetryEvent` (`record` + `Type`-Enum)         | **nein**            | nein (`String name`)      | **nein**                          |
+| Rate Limiter    | `RateLimiterEvent` (`record` + `Type`-Enum)   | **nein**            | nein                      | **nein**                          |
+| Time Limiter    | `TimeLimiterEvent` (`record` + `Type`-Enum)   | **nein**            | nein                      | **nein**                          |
+| Traffic Shaper  | `TrafficShaperEvent` (`record` + `Type`-Enum) | **nein**            | nein                      | **nein**                          |
+| Fallback        | `FallbackEvent` (`record` + `Type`-Enum)      | **nein**            | nein                      | **nein**                          |
+| Circuit Breaker | —                                             | —                   | —                         | — (emittiert keine Events)        |
 
-**§2.7.d — Drei Config-Schichten statt einer.**
+**Konsequenzen:**
 
-- `InqBulkheadConfig` (core, primary): `(general, common, maxConcurrentCalls, strategy, maxWaitDuration,
-  limitAlgorithm, eventConfig)` mit `inference()`-Hook.
-- `InqImperativeBulkheadConfig` (imperative wrapper): `(general, bulkhead)` mit eigenem `inference()`, das je nach
-  AIMD-/Vegas-Präsenz die Strategie wählt.
-- `eu.inqudium.core.element.bulkhead.dsl.BulkheadConfig`: `(name, maxConcurrentCalls, maxWaitDuration, inqConfig)` für
-  Annotation-/DSL-Verwendung.
+- Die in ADR-003 zentrale Cross-Element-Korrelation per `callId` funktioniert in der Praxis nur für Bulkhead +
+  Infrastruktur-Events.
+- `InqEventPublisher.publish(InqEvent)` lehnt die fünf Record-Events typsystem-bedingt ab — sie können nicht
+  durchgehen, selbst wenn ein Element wollte.
+- Konsumenten (Micrometer-Binder, JFR-Binder, custom Listener) sehen heute nur Bulkhead-Events. Retry-/Rate-Limiter-
+  /Time-Limiter-/Traffic-Shaper-/Fallback-Events sind über die Publisher-API unsichtbar.
+- Die Bezeichnung „unified event system" trifft heute nicht zu — sie beschreibt einen Soll-Zustand.
 
-ADR-020 zeigte einen einzelnen Record mit `InqCompatibility`-Feld. Es gibt **kein** `InqCompatibility`-Feld in einer
-der drei Konfigurationen.
+**Was zu klären ist (eigene PR-Reihe):**
 
-**§2.7.e — `release()` vs. `rollback()` als bewusst getrennte Methoden.** Mechanisch identisch (Decrement),
-semantisch unterschiedlich: `rollback()` gilt für den Fall, dass das Acquire-Telemetry-Event (Publisher) wirft und
-der Business-Call nie startet. Plus: alle Strategien haben Over-release-Guards (Semaphor mit Shadow-`AtomicInteger`
-oder CAS-Decrement-if-positive). ADR-020 sprach nur von `release()`.
+1. Sollen die fünf Record-Events auf `InqEvent`-Subklassen migriert werden? Wenn ja: wie wird `chainId`/`callId` in
+   den Aufrufpfad eingespeist (heute kennen die Records keine Pipeline-Kontext-Quelle)?
+2. Sollen die `Type`-Enums durch konkrete Subklassen pro Event-Art ersetzt werden (Symmetrie zur Bulkhead-Familie),
+   oder bleibt die kompaktere Record+Enum-Form pro Element erhalten?
+3. Sollen Circuit-Breaker-Events implementiert werden, oder ist Polling per `getState()`/`getMetrics()` das bewusste
+   Design? (Tendenz aus ADR-003: Tier-1-Polling reicht für Circuit-Breaker-Status; Tier-2-Events wären für
+   Transition-Diagnostik nützlich.)
 
-**§2.7.f — Zwei zusätzliche Trace-Events.** `BulkheadCodelRejectedTraceEvent` (CoDel-spezifisch, ergänzend zum
-`BulkheadOnRejectEvent`) und `BulkheadLimitChangedTraceEvent` (Adaptive-Limit-Änderungen). Beide TRACE-Kategorie,
-beide in der ADR-Tabelle gefehlt.
-
-**§2.7.g — `InqBulkheadInterruptedException` (INQ-BH-002).** Eigener Exception-Typ für den Fall, dass der
-Wait-Thread interrupted wird (kein Rejection-Decision erfolgt). Restored den Interrupt-Flag, trägt **kein**
-`RejectionContext`. Wird von `ImperativeBulkhead.execute` nach `InterruptedException` geworfen. Fehlte sowohl in
-ADR-009 als auch in ADR-020.
-
-**§2.7.h — `ImperativeBulkhead` ist Sync **und** Async.** Implementiert sowohl `InqDecorator` (sync `execute`) als
-auch `InqAsyncDecorator` (async `executeAsync`). Async-Pfad: synchroner Acquire (Backpressure), asynchroner Release
-via `whenComplete()` mit ADR-023-konformer Copy-over-Original-Semantik plus Fast-Path-Optimierung für bereits
-completed Futures. ADR-020 erwähnte den Async-Pfad nicht.
-
-**Ergänzungen für ADR-009 und ADR-021** (nicht in dieser PR adressiert, sollten aber in einer eigenen ADR-009-PR
-nachgezogen werden):
-
-- ADR-009 listet `InqBulkheadFullException` (INQ-BH-001), aber nicht `InqBulkheadInterruptedException` (INQ-BH-002).
-- ADR-009 sollte erwähnen, dass `InqBulkheadFullException.fillInStackTrace()` ein no-op ist (Performance-
-  Optimierung im Rejection-Pfad).
+**Behandlung in ADR-003:** ADR-003 beschreibt das Framework und listet keinen Element-Event-Katalog mehr (Abschnitt
+„Scope of this ADR"). Die hier dokumentierte Spaltung wird in dedizierten Element-ADRs adressiert, sobald die
+Migration geplant ist.
 
 ---
 
@@ -507,7 +503,8 @@ ADR-023 spricht davon, dass der `InqCall`-Abstraction die `callId` trägt und di
 | **Hoch**  | ADR-015              | Registry-Interface fehlen Template-Methoden (`addConfiguration`), `remove`, `clear`; zweites `InqElementRegistry` nicht dokumentiert |
 | **Hoch**  | ADR-010              | Synchroner Callable-Pfad, `vThread.interrupt()`, `cancelOnTimeout` — alle in ADR-10 explizit ausgeschlossen |
 | **Hoch**  | ADR-018              | `RetryConfig` Felder weichen massiv ab, Backoff-Decorator-Pattern nicht umgesetzt, vier zusätzliche Strategien nicht dokumentiert, zweiter DSL-RetryConfig-Record |
-| Mittel    | ADR-003              | Publisher-Contract unterbeschrieben: `publishTrace`, TTL, `InqSubscription`, `close`, Limits |
+| ~~Mittel~~ | ~~ADR-003 (§2.2)~~ | ~~Publisher-Contract unterbeschrieben: `publishTrace`, TTL, `InqSubscription`, `close`, Limits~~ — überarbeitet 2026-04-24 |
+| **Hoch**  | ADR-003 (§2.6)       | Element-Event-Hierarchie gespalten: nur Bulkhead/Compatibility/ProviderError sind `InqEvent`; Retry/RateLimiter/TimeLimiter/TrafficShaper/Fallback nutzen ad-hoc Records |
 | Mittel    | ADR-016, ADR-005     | `InqClock` vs. `InqNanoTimeSource` — Dualität nicht dokumentiert |
 | Mittel    | ADR-019              | Parameter heißt `capacity`, nicht `bucketSize`; fehlende Strategie-Abstraktion; `RateLimiterException` vs. erwartete `InqRequestNotPermittedException` |
 | ~~Mittel~~ | ~~ADR-020 (§2.4)~~ | ~~Typnamensgebung (`BulkheadBehavior` vs. `BlockingBulkheadStrategy`)~~ — überarbeitet 2026-04-24 |
