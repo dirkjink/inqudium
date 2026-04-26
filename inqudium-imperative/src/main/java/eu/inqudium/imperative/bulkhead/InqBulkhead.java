@@ -6,6 +6,8 @@ import eu.inqudium.config.snapshot.BulkheadSnapshot;
 import eu.inqudium.config.snapshot.GeneralSnapshot;
 import eu.inqudium.core.element.InqElementType;
 import eu.inqudium.core.event.InqEventPublisher;
+import eu.inqudium.core.time.InqClock;
+import eu.inqudium.core.time.InqNanoTimeSource;
 import eu.inqudium.imperative.lifecycle.ImperativeLifecyclePhasedComponent;
 import eu.inqudium.imperative.lifecycle.spi.ImperativePhase;
 
@@ -29,6 +31,8 @@ public final class InqBulkhead
         implements ImperativeBulkhead {
 
     private final InqEventPublisher componentEventPublisher;
+    private final InqClock clock;
+    private final InqNanoTimeSource nanoTimeSource;
 
     /**
      * @param live    the live container holding the bulkhead's snapshot. The component's name is
@@ -57,11 +61,29 @@ public final class InqBulkhead
                 general.clock());
         this.componentEventPublisher = general.componentPublisherFactory()
                 .create(live.snapshot().name(), InqElementType.BULKHEAD);
+        this.clock = general.clock();
+        this.nanoTimeSource = general.nanoTimeSource();
     }
 
     @Override
     public InqEventPublisher eventPublisher() {
         return componentEventPublisher;
+    }
+
+    /**
+     * @return the wall-clock source used for event timestamps. Package-friendly so
+     *         {@link BulkheadHotPhase} can read it; not part of the public API.
+     */
+    InqClock clock() {
+        return clock;
+    }
+
+    /**
+     * @return the monotonic time source used for wait-duration measurements. Package-friendly
+     *         so {@link BulkheadHotPhase} can read it; not part of the public API.
+     */
+    InqNanoTimeSource nanoTimeSource() {
+        return nanoTimeSource;
     }
 
     @Override
