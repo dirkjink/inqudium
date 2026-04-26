@@ -40,7 +40,7 @@
  * <h2>Module boundaries</h2>
  *
  * <p>{@code inqudium-config} depends only on {@code inqudium-core}. Paradigm modules
- * ({@code inqudium-imperative}, {@code inqudium-reactor}, {@code inqudium-rxjava3},
+ * ({@code inqudium-imperative}, {@code inqudium-reactive}, {@code inqudium-rxjava3},
  * {@code inqudium-kotlin}) depend on {@code inqudium-config} but never on each other. Format-adapter
  * modules ({@code inqudium-config-yaml}, ...) translate text into patches and feed them to the
  * runtime — they do not duplicate validation logic.
