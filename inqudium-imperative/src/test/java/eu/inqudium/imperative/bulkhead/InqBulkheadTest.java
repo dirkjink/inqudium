@@ -4,13 +4,16 @@ import eu.inqudium.config.live.LiveContainer;
 import eu.inqudium.config.lifecycle.LifecycleState;
 import eu.inqudium.config.patch.ComponentPatch;
 import eu.inqudium.config.snapshot.BulkheadSnapshot;
+import eu.inqudium.config.snapshot.GeneralSnapshot;
 import eu.inqudium.core.element.InqElementType;
 import eu.inqudium.core.element.bulkhead.InqBulkheadFullException;
 import eu.inqudium.core.event.InqEventExporterRegistry;
 import eu.inqudium.core.event.InqEventPublisher;
 import eu.inqudium.core.event.InqPublisherConfig;
+import eu.inqudium.core.log.LoggerFactory;
 import eu.inqudium.core.pipeline.InternalExecutor;
 import eu.inqudium.core.time.InqClock;
+import eu.inqudium.core.time.InqNanoTimeSource;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -54,7 +57,12 @@ class InqBulkheadTest {
     }
 
     private InqBulkhead newBulkhead(LiveContainer<BulkheadSnapshot> live) {
-        return new InqBulkhead(live, publisher, InqClock.system());
+        GeneralSnapshot general = new GeneralSnapshot(
+                InqClock.system(),
+                InqNanoTimeSource.system(),
+                publisher,
+                LoggerFactory.NO_OP_LOGGER_FACTORY);
+        return new InqBulkhead(live, general);
     }
 
     @Nested

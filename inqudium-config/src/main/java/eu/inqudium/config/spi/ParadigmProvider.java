@@ -1,5 +1,6 @@
 package eu.inqudium.config.spi;
 
+import eu.inqudium.config.dsl.BulkheadBuilderBase;
 import eu.inqudium.config.runtime.ParadigmContainer;
 import eu.inqudium.config.runtime.ParadigmTag;
 import eu.inqudium.config.snapshot.GeneralSnapshot;
@@ -26,6 +27,19 @@ public interface ParadigmProvider {
      * @return the tag identifying the paradigm this provider materializes.
      */
     ParadigmTag paradigm();
+
+    /**
+     * Create a paradigm-specific bulkhead builder for the named bulkhead. The DSL section invokes
+     * this on every {@code .bulkhead("name", ...)} call, hands the returned builder to the
+     * user's configurer (after casting to the paradigm-specific sub-interface), then extracts
+     * the resulting patch via {@link BulkheadBuilderBase#toPatch()}.
+     *
+     * @param name the bulkhead's name; non-null and non-blank.
+     * @return a paradigm-specific {@code BulkheadBuilderBase} instance. The concrete return type
+     *         implements the paradigm's bulkhead-builder sub-interface (e.g.
+     *         {@code ImperativeBulkheadBuilder}).
+     */
+    BulkheadBuilderBase<?> createBulkheadBuilder(String name);
 
     /**
      * Materialize a paradigm container from the given general snapshot and the patches the DSL

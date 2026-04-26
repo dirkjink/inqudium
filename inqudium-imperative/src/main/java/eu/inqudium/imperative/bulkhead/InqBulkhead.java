@@ -1,10 +1,10 @@
 package eu.inqudium.imperative.bulkhead;
 
 import eu.inqudium.config.live.LiveContainer;
+import eu.inqudium.config.runtime.ImperativeBulkhead;
 import eu.inqudium.config.snapshot.BulkheadSnapshot;
+import eu.inqudium.config.snapshot.GeneralSnapshot;
 import eu.inqudium.core.element.InqElementType;
-import eu.inqudium.core.event.InqEventPublisher;
-import eu.inqudium.core.time.InqClock;
 import eu.inqudium.imperative.lifecycle.ImperativeLifecyclePhasedComponent;
 import eu.inqudium.imperative.lifecycle.spi.ImperativePhase;
 
@@ -23,22 +23,27 @@ import eu.inqudium.imperative.lifecycle.spi.ImperativePhase;
  * {@code maxConcurrentCalls} changes, the hot phase re-tunes the underlying semaphore. Strategy
  * hot-swaps (semaphore → CoDel, etc.) require the veto chain and are deferred to phase&nbsp;2.
  */
-public final class InqBulkhead extends ImperativeLifecyclePhasedComponent<BulkheadSnapshot> {
+public final class InqBulkhead
+        extends ImperativeLifecyclePhasedComponent<BulkheadSnapshot>
+        implements ImperativeBulkhead {
 
     /**
-     * @param live           the live container holding the bulkhead's snapshot. The component's
-     *                       name is read from the snapshot.
-     * @param eventPublisher the runtime-scoped publisher. In phase&nbsp;1 the test wiring passes
-     *                       this in directly; phase&nbsp;1.7 will source it from
-     *                       {@code GeneralSnapshot} (see clarification 4 in REFACTORING.md).
-     * @param clock          the wall-clock source for event timestamps. Same sourcing note as
-     *                       {@code eventPublisher}.
+     * @param live    the live container holding the bulkhead's snapshot. The component's name is
+     *                read from the snapshot.
+     * @param general the runtime-level snapshot supplying clock and event publisher. The
+     *                separate {@code eventPublisher} and {@code clock} parameters from earlier
+     *                phases are gone — the {@link GeneralSnapshot} is the single truth source
+     *                per clarification&nbsp;4 in {@code REFACTORING.md}.
      */
     public InqBulkhead(
             LiveContainer<BulkheadSnapshot> live,
-            InqEventPublisher eventPublisher,
-            InqClock clock) {
-        super(live.snapshot().name(), InqElementType.BULKHEAD, live, eventPublisher, clock);
+            GeneralSnapshot general) {
+        super(
+                live.snapshot().name(),
+                InqElementType.BULKHEAD,
+                live,
+                general.eventPublisher(),
+                general.clock());
     }
 
     @Override
