@@ -5,6 +5,7 @@ import eu.inqudium.config.runtime.ComponentKey;
 import eu.inqudium.config.runtime.ImperativeBulkhead;
 import eu.inqudium.config.runtime.ImperativeTag;
 import eu.inqudium.config.runtime.InqRuntime;
+import eu.inqudium.config.snapshot.BulkheadEventConfig;
 import eu.inqudium.config.snapshot.BulkheadSnapshot;
 import eu.inqudium.config.validation.ApplyOutcome;
 import eu.inqudium.config.validation.BuildReport;
@@ -74,6 +75,49 @@ class RuntimeUpdateTest {
                 assertThat(snap.derivedFromPreset())
                         .as("preset label inherited per clarification 3 in REFACTORING.md")
                         .isEqualTo("balanced");
+            }
+        }
+
+        @Test
+        void preset_only_update_should_leave_events_untouched() {
+            // What is to be tested: that an update which only calls a preset does NOT silently
+            // overwrite the live snapshot's events configuration. The patch must not touch
+            // EVENTS unless the user explicitly calls events(...); untouched fields inherit
+            // from the current snapshot.
+            // Why successful: after the preset-only update, bulkhead.snapshot().events()
+            // returns the configuration that was set at initial build (allEnabled), not the
+            // disabled() default the builder constructor would have applied if EVENTS were
+            // touched implicitly.
+            // Why important: this is the exact bug that motivated removing the constructor's
+            // defaulting touch on EVENTS. A regression would silently disable per-call event
+            // observability whenever any preset-only update happened — the kind of bug that is
+            // both critical (events stop flowing) and easy to miss without a pinning test.
+
+            try (InqRuntime runtime = Inqudium.configure()
+                    .imperative(im -> im.bulkhead("inventory", b -> b
+                            .balanced()
+                            .events(BulkheadEventConfig.allEnabled())))
+                    .build()) {
+
+                // Sanity-check the initial state.
+                assertThat(runtime.imperative().bulkhead("inventory").snapshot().events())
+                        .as("initial snapshot carries the events configuration the user set")
+                        .isEqualTo(BulkheadEventConfig.allEnabled());
+
+                // When — preset-only update that does not call events(...)
+                runtime.update(u -> u.imperative(im -> im
+                        .bulkhead("inventory", b -> b.permissive())));
+
+                // Then — events stays at allEnabled, inherited from the live snapshot.
+                BulkheadSnapshot after =
+                        runtime.imperative().bulkhead("inventory").snapshot();
+                assertThat(after.events())
+                        .as("preset-only update inherits events from the live snapshot")
+                        .isEqualTo(BulkheadEventConfig.allEnabled());
+                assertThat(after.maxConcurrentCalls())
+                        .as("the preset's own fields are still applied")
+                        .isEqualTo(200);
+                assertThat(after.derivedFromPreset()).isEqualTo("permissive");
             }
         }
 

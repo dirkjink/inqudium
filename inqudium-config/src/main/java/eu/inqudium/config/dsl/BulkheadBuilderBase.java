@@ -78,11 +78,16 @@ public abstract class BulkheadBuilderBase<P extends ParadigmTag> implements Bulk
         }
         this.patch = new BulkheadPatch();
         this.patch.touchName(name);
-        // Events are opt-in (ADR-030). Touch the patch with the disabled default so the
-        // resulting snapshot always has a non-null events field even when neither the user
-        // nor a preset configured one. This keeps the BulkheadSnapshot compact-constructor
-        // invariant satisfied without forcing the user to supply a value.
-        this.patch.touchEvents(BulkheadEventConfig.disabled());
+        // Events are intentionally NOT touched here. Touching events with disabled() in the
+        // constructor was a defensive shortcut to keep the snapshot's non-null events
+        // invariant trivially satisfied — but it broke the update path: a runtime.update
+        // built through this builder would always overwrite the live snapshot's events with
+        // disabled(), even when the user only meant to patch maxConcurrentCalls. The correct
+        // semantics (analogous to TAGS and DERIVED_FROM_PRESET) is "untouched fields inherit
+        // from the base snapshot". The non-null invariant is satisfied by the system-default
+        // snapshot in ImperativeProvider, which sets events to BulkheadEventConfig.disabled()
+        // — so initial materialization still produces a valid snapshot, and updates correctly
+        // inherit the live value.
     }
 
     @Override

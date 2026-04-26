@@ -464,7 +464,58 @@ publisher paths (runtime-scoped and component) honour the chosen isolation polic
 tests using `new InqEventExporterRegistry()` continue to work; a migration note for downstream
 consumers is documented.
 
-### 2.9 Phase 2 acceptance criteria
+### 2.9 Bulkhead rollback-trace publishing on event-publish-during-acquire failure
+
+**Status:** open follow-up from step 1.9.
+
+The `BulkheadEventConfig.rollbackTrace` flag exists for parity with the pre-refactor
+`ImperativeBulkhead` and travels through the snapshot/patch/builder triad like the other event
+flags, but its publish path is **not** wired in `BulkheadHotPhase` — it covers the corner case
+where an event publish itself fails after `tryAcquire` has succeeded:
+
+```
+acquire permit                      // ok, permit held
+publish(BulkheadOnAcquireEvent)     // throws — listener / exporter blew up
+                                    // permit is still held!
+release permit                      // must roll back
+publish(BulkheadRollbackTraceEvent) // tell observers we rolled back ...
+                                    // ... but this publish could blow up too
+```
+
+What needs to happen:
+
+- Catch the publish failure inside `BulkheadHotPhase.execute` (specifically around the
+  `BulkheadOnAcquireEvent` publish — that is the only mid-acquire publish point).
+- Release the permit, since the business call never started.
+- Publish (or otherwise record) `BulkheadRollbackTraceEvent` if the flag is on. The
+  publish-during-rollback can itself fail — re-publishing risks the same failure mode that
+  triggered the rollback. Plausible designs:
+  1. **Best-effort republish, then swallow.** Try `publisher.publish(rollback)`; if it throws,
+     log via `LoggerFactory` and proceed. Simplest, but the rollback event may not reach
+     subscribers if the publisher is the source of the failure.
+  2. **Bypass the publisher entirely for rollback.** Log the rollback through the
+     `LoggerFactory` from `GeneralSnapshot` — guaranteed delivery to operational tooling, but
+     the event-bus path (and any exporters bound to it) is not informed.
+  3. **Hybrid.** Publish if possible; log the rollback fact independently regardless of
+     publish outcome. Belt-and-braces, but two records per rollback event clutters dashboards.
+
+Tests that the eventual implementation must pin:
+
+- An `onAcquire` subscriber that throws causes the permit to be released and (when
+  `rollbackTrace` is on) `BulkheadRollbackTraceEvent` to be observable on the same publisher.
+- The rollback path returns the original publish failure to the caller (the user's chain
+  never ran), so `bulkhead.execute` rethrows the publish exception or wraps it in a
+  framework-specific exception — the choice is part of this step's design work.
+- A subscriber that throws on the rollback event itself does not corrupt the bulkhead's
+  state — the permit was already released before the rollback publish was attempted.
+- The `rollbackTrace` flag is opt-in like the other flags; with it off, the failure path
+  releases the permit but does not publish.
+
+The decision on (1) / (2) / (3) plus the rethrow contract belongs to this step. The
+`BulkheadHotPhase` Javadoc references this REFACTORING.md item; nothing else in the codebase
+flags it.
+
+### 2.10 Phase 2 acceptance criteria
 
 - All phase 1 tests still pass.
 - Veto-chain, removal, dryRun, diagnose all green with their own test suites.

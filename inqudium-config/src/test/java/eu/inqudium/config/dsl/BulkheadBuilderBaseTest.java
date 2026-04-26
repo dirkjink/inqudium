@@ -245,17 +245,47 @@ class BulkheadBuilderBaseTest {
             // When
             b.balanced();
 
-            // Then — the EVENTS bit comes from the constructor's defaulting touch, not from
-            // the preset. The preset itself does not set customized=true, so a follow-up
-            // events(...) call would still work without violating preset-then-customize. The
-            // resulting snapshot keeps disabled() because the preset did not override.
+            // Then — the EVENTS bit is not in touchedFields(); applyTo inherits events from
+            // the base snapshot. systemDefault() carries disabled(), so the result inherits
+            // that.
+            assertThat(b.toPatch().isTouched(BulkheadField.EVENTS)).isFalse();
             BulkheadSnapshot result = b.toPatch().applyTo(systemDefault());
             assertThat(result.events()).isEqualTo(BulkheadEventConfig.disabled());
         }
 
         @Test
-        void should_default_events_to_disabled() {
-            // Given / When — no explicit events() call; constructor default applies
+        void should_inherit_events_from_the_base_snapshot_when_not_explicitly_set() {
+            // What is to be tested: clarification analogous to derivedFromPreset (clarification
+            // 3 in REFACTORING.md) — a patch that does not call events() inherits the events
+            // value from the base snapshot. This is the central correctness property of
+            // updates: a runtime.update that only patches maxConcurrentCalls must not silently
+            // overwrite the live snapshot's events.
+            // Why successful: applying an empty-of-events patch against a base with allEnabled()
+            // events produces a snapshot with allEnabled().
+            // Why important: this is the bug fix that motivated removing the constructor's
+            // defaulting touch on EVENTS — the previous version always overwrote events with
+            // disabled() on every patch.
+
+            // Given
+            TestBuilder b = new TestBuilder("x");
+            BulkheadSnapshot baseWithEnabledEvents = new BulkheadSnapshot(
+                    "x", 10, java.time.Duration.ofMillis(100),
+                    java.util.Set.of(), null, BulkheadEventConfig.allEnabled());
+
+            // When — only maxConcurrentCalls is patched
+            b.maxConcurrentCalls(20);
+            BulkheadSnapshot result = b.toPatch().applyTo(baseWithEnabledEvents);
+
+            // Then — events inherit from the base
+            assertThat(result.maxConcurrentCalls()).isEqualTo(20);
+            assertThat(result.events()).isEqualTo(BulkheadEventConfig.allEnabled());
+        }
+
+        @Test
+        void should_default_events_to_disabled_via_system_default_snapshot() {
+            // Given — fresh builder, no explicit events() call. The constructor does not
+            // touch EVENTS; the disabled() default lives on the system default snapshot the
+            // builder's patch is applied against.
             TestBuilder b = new TestBuilder("x");
             BulkheadSnapshot result = b.toPatch().applyTo(systemDefault());
 
@@ -432,13 +462,15 @@ class BulkheadBuilderBaseTest {
         void individual_setters_should_only_touch_their_own_field() {
             // What is to be tested: clarification 3 in REFACTORING.md — individual setters do
             // NOT touch derivedFromPreset, so a hot patch that only calls maxConcurrentCalls(15)
-            // inherits the previous preset label.
-            // Why successful: after one setter, only that field plus the constructor-touched
-            // NAME and EVENTS (the latter touched by the base class with the disabled() default
-            // so the snapshot's non-null events invariant holds — see ADR-030) appear in
-            // touchedFields().
+            // inherits the previous preset label. The same inherit-from-base rule applies to
+            // tags and events — the constructor only touches NAME, every other field is
+            // untouched until the user (or a preset) explicitly sets it.
+            // Why successful: after one setter, only NAME (constructor) and the explicitly-set
+            // field appear in touchedFields(). EVENTS, TAGS, DERIVED_FROM_PRESET stay
+            // untouched.
             // Why important: class-3 rules like BULKHEAD_PROTECTIVE_WITH_LONG_WAIT must
-            // continue to fire after hot updates.
+            // continue to fire after hot updates, and an update that only patches
+            // maxConcurrentCalls must not silently overwrite the live events configuration.
 
             // Given
             TestBuilder b = new TestBuilder("x");
@@ -449,8 +481,7 @@ class BulkheadBuilderBaseTest {
             // Then
             assertThat(b.toPatch().touchedFields()).containsExactlyInAnyOrder(
                     BulkheadField.NAME,
-                    BulkheadField.MAX_CONCURRENT_CALLS,
-                    BulkheadField.EVENTS);
+                    BulkheadField.MAX_CONCURRENT_CALLS);
         }
 
         @Test
@@ -461,15 +492,13 @@ class BulkheadBuilderBaseTest {
             // When
             b.balanced();
 
-            // Then — preset touches the three preset fields, NAME and EVENTS come from the
-            // constructor, TAGS stays untouched (analogous to the events decision: presets
-            // do not own application metadata).
+            // Then — preset touches the three preset fields plus NAME (constructor). EVENTS
+            // and TAGS stay untouched: presets do not own application metadata.
             assertThat(b.toPatch().touchedFields()).containsExactlyInAnyOrder(
                     BulkheadField.NAME,
                     BulkheadField.MAX_CONCURRENT_CALLS,
                     BulkheadField.MAX_WAIT_DURATION,
-                    BulkheadField.DERIVED_FROM_PRESET,
-                    BulkheadField.EVENTS);
+                    BulkheadField.DERIVED_FROM_PRESET);
         }
 
         @Test

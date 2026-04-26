@@ -48,9 +48,12 @@ import java.time.Instant;
  *
  * <p>The {@code rollbackTrace} flag exists in {@link BulkheadEventConfig} for parity with the
  * pre-refactor implementation but is not yet wired up here — the rollback path covers the case
- * where an event publish itself fails after acquire and the permit must be rolled back, which
- * is a corner case worth its own follow-up. When all flags are off (the default), the hot path
- * pays no event-publishing cost beyond a single {@code anyEnabled()} check.
+ * where an event publish itself fails after acquire and the permit must be rolled back. The
+ * design decision for that flow (rethrow vs. wrap, publish-vs-log on the rollback event) is
+ * tracked as a dedicated phase-2 work item in {@code REFACTORING.md} (step&nbsp;2.9: "Bulkhead
+ * rollback-trace publishing on event-publish-during-acquire failure"). When all flags are off
+ * (the default), the hot path pays no event-publishing cost beyond a single
+ * {@code anyEnabled()} check.
  *
  * <h2>Snapshot subscription (Phase&nbsp;1)</h2>
  *
