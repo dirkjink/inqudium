@@ -39,15 +39,31 @@ public interface InqRuntime extends AutoCloseable {
     Imperative imperative();
 
     /**
-     * @return the {@link BuildReport} produced at runtime build time. Carries every class-2
-     *         and class-3 validation finding raised during construction, the per-component
-     *         {@link eu.inqudium.config.validation.ApplyOutcome ApplyOutcome}s for the initial
-     *         materialization, and the build timestamp. Successful builds still produce a
-     *         report — it just has no findings and reports
-     *         {@link BuildReport#isSuccess() isSuccess() == true}. Failed builds do not produce
-     *         a runtime; the report travels in
+     * @return the {@link BuildReport} produced at the runtime's <em>initial</em> build time.
+     *
+     *         <p>Carries every class-2 and class-3 validation finding raised during
+     *         construction plus the build timestamp. Successful builds still produce a report
+     *         — it just has no findings and reports {@link BuildReport#isSuccess() isSuccess()
+     *         == true}. Failed builds do not produce a runtime; the report travels in
      *         {@link eu.inqudium.config.ConfigurationException#report
      *         ConfigurationException.report()} instead.
+     *
+     *         <p><strong>The returned reference is stable for the runtime's lifetime.</strong>
+     *         Subsequent {@link #update update} calls return their own fresh
+     *         {@code BuildReport} via the method's return value, but they do <em>not</em>
+     *         overwrite the build report exposed here. Two reasons:
+     *         <ul>
+     *           <li>The "initial build" is a distinct event with a stable historical value —
+     *               overwriting it would lose what the configuration was at startup, which is
+     *               often the answer support engineers need first.</li>
+     *           <li>No mutation, no race conditions: callers can read this accessor from any
+     *               thread without coordinating with concurrent updates.</li>
+     *         </ul>
+     *
+     *         <p>Callers wishing to observe per-update reports must capture them from
+     *         {@code runtime.update(...)} themselves. Phase&nbsp;2 may introduce a
+     *         {@code lastUpdateReport()} or similar accessor for the "latest mutation" case;
+     *         until then, the update-side report is only visible at the call site.
      */
     BuildReport lastBuildReport();
 

@@ -94,6 +94,67 @@ class BuildValidationTest {
     }
 
     @Nested
+    @DisplayName("lastBuildReport stability under update")
+    class LastBuildReportStability {
+
+        @Test
+        void should_keep_the_initial_build_report_after_runtime_update() {
+            // What is to be tested: that runtime.update(...) does NOT overwrite the report
+            // exposed by lastBuildReport(). The build report is a stable historical artifact —
+            // "what was the configuration at startup". Update returns its own fresh report via
+            // the method's return value; that report is the caller's responsibility to capture.
+            //
+            // Why successful: lastBuildReport() returns the same instance before and after the
+            // update, and the update's return value is a distinct BuildReport.
+            //
+            // Why important: tooling that reads lastBuildReport from any thread (operator
+            // dashboards, support diagnostics) must see a consistent value without coordinating
+            // with concurrent updates. Overwriting the field would also lose the original
+            // build's findings, which is often the first answer support engineers need.
+
+            try (InqRuntime runtime = Inqudium.configure()
+                    .imperative(im -> im.bulkhead("inventory", b -> b.balanced()))
+                    .build()) {
+
+                // Given
+                BuildReport beforeUpdate = runtime.lastBuildReport();
+
+                // When
+                BuildReport updateReport = runtime.update(u -> u.imperative(im -> im
+                        .bulkhead("inventory", b -> b.maxConcurrentCalls(99))));
+
+                // Then
+                BuildReport afterUpdate = runtime.lastBuildReport();
+                assertThat(afterUpdate)
+                        .as("lastBuildReport reference is stable across updates")
+                        .isSameAs(beforeUpdate);
+                assertThat(updateReport)
+                        .as("update returns a distinct, freshly-built report")
+                        .isNotSameAs(beforeUpdate);
+            }
+        }
+
+        @Test
+        void should_keep_the_initial_findings_set_after_runtime_update() {
+            // Companion to the identity test: the build report's finding list does not gain
+            // entries from updates. Update findings (when class-3 rules run on the update path
+            // in phase 2) will be on the update's return value, not appended here.
+
+            try (InqRuntime runtime = Inqudium.configure()
+                    .imperative(im -> im.bulkhead("inventory", b -> b.balanced()))
+                    .build()) {
+
+                int findingsBefore = runtime.lastBuildReport().findings().size();
+
+                runtime.update(u -> u.imperative(im -> im
+                        .bulkhead("addedLater", b -> b.protective())));
+
+                assertThat(runtime.lastBuildReport().findings()).hasSize(findingsBefore);
+            }
+        }
+    }
+
+    @Nested
     @DisplayName("strict mode")
     class StrictMode {
 
