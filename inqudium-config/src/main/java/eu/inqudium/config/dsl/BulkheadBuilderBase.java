@@ -2,6 +2,7 @@ package eu.inqudium.config.dsl;
 
 import eu.inqudium.config.patch.BulkheadPatch;
 import eu.inqudium.config.runtime.ParadigmTag;
+import eu.inqudium.config.snapshot.BulkheadEventConfig;
 
 import java.time.Duration;
 import java.util.Arrays;
@@ -77,6 +78,11 @@ public abstract class BulkheadBuilderBase<P extends ParadigmTag> implements Bulk
         }
         this.patch = new BulkheadPatch();
         this.patch.touchName(name);
+        // Events are opt-in (ADR-030). Touch the patch with the disabled default so the
+        // resulting snapshot always has a non-null events field even when neither the user
+        // nor a preset configured one. This keeps the BulkheadSnapshot compact-constructor
+        // invariant satisfied without forcing the user to supply a value.
+        this.patch.touchEvents(BulkheadEventConfig.disabled());
     }
 
     @Override
@@ -124,6 +130,14 @@ public abstract class BulkheadBuilderBase<P extends ParadigmTag> implements Bulk
             Objects.requireNonNull(tag, "tag element");
         }
         patch.touchTags(Set.copyOf(tags));
+        customized = true;
+        return this;
+    }
+
+    @Override
+    public BulkheadBuilder<P> events(BulkheadEventConfig value) {
+        Objects.requireNonNull(value, "events");
+        patch.touchEvents(value);
         customized = true;
         return this;
     }

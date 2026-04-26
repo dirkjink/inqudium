@@ -33,6 +33,7 @@ class BulkheadFieldTest {
                         "MAX_CONCURRENT_CALLS",
                         "MAX_WAIT_DURATION",
                         "TAGS",
-                        "DERIVED_FROM_PRESET");
+                        "DERIVED_FROM_PRESET",
+                        "EVENTS");
     }
 }

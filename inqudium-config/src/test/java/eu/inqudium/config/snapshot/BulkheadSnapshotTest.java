@@ -26,6 +26,7 @@ class BulkheadSnapshotTest {
         Duration maxWaitDuration = Duration.ofMillis(100);
         Set<String> tags = Set.of();
         String derivedFromPreset = null;
+        BulkheadEventConfig events = BulkheadEventConfig.disabled();
 
         TestBuilder with(Consumer<TestBuilder> mutator) {
             mutator.accept(this);
@@ -34,7 +35,7 @@ class BulkheadSnapshotTest {
 
         BulkheadSnapshot build() {
             return new BulkheadSnapshot(
-                    name, maxConcurrentCalls, maxWaitDuration, tags, derivedFromPreset);
+                    name, maxConcurrentCalls, maxWaitDuration, tags, derivedFromPreset, events);
         }
     }
 
@@ -54,7 +55,8 @@ class BulkheadSnapshotTest {
                     25,
                     Duration.ofMillis(500),
                     Set.of("payment", "critical"),
-                    "balanced");
+                    "balanced",
+                    BulkheadEventConfig.allEnabled());
 
             // Then
             assertThat(snapshot.name()).isEqualTo("inventory");
@@ -62,6 +64,7 @@ class BulkheadSnapshotTest {
             assertThat(snapshot.maxWaitDuration()).isEqualTo(Duration.ofMillis(500));
             assertThat(snapshot.tags()).containsExactlyInAnyOrder("payment", "critical");
             assertThat(snapshot.derivedFromPreset()).isEqualTo("balanced");
+            assertThat(snapshot.events()).isEqualTo(BulkheadEventConfig.allEnabled());
         }
 
         @Test

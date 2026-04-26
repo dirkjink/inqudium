@@ -26,5 +26,8 @@ public enum BulkheadField implements ComponentField {
     TAGS,
 
     /** The label of the preset the snapshot was derived from, or {@code null}. */
-    DERIVED_FROM_PRESET
+    DERIVED_FROM_PRESET,
+
+    /** The {@link BulkheadEventConfig} gating which per-call events are published. */
+    EVENTS
 }

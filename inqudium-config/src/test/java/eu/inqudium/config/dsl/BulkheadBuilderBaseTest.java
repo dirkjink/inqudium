@@ -2,6 +2,7 @@ package eu.inqudium.config.dsl;
 
 import eu.inqudium.config.patch.BulkheadPatch;
 import eu.inqudium.config.runtime.ImperativeTag;
+import eu.inqudium.config.snapshot.BulkheadEventConfig;
 import eu.inqudium.config.snapshot.BulkheadField;
 import eu.inqudium.config.snapshot.BulkheadSnapshot;
 import org.junit.jupiter.api.DisplayName;
@@ -43,7 +44,8 @@ class BulkheadBuilderBaseTest {
                 25,
                 Duration.ofMillis(100),
                 Set.of(),
-                null);
+                null,
+                BulkheadEventConfig.disabled());
     }
 
     @Nested
@@ -166,6 +168,17 @@ class BulkheadBuilderBaseTest {
                     .isThrownBy(() -> b.tags((Set<String>) null))
                     .withMessageContaining("tags");
         }
+
+        @Test
+        void should_reject_a_null_events_config() {
+            // Given
+            TestBuilder b = new TestBuilder("x");
+
+            // When / Then
+            assertThatNullPointerException()
+                    .isThrownBy(() -> b.events(null))
+                    .withMessageContaining("events");
+        }
     }
 
     @Nested
@@ -215,6 +228,52 @@ class BulkheadBuilderBaseTest {
             assertThat(result.maxConcurrentCalls()).isEqualTo(200);
             assertThat(result.maxWaitDuration()).isEqualTo(Duration.ofSeconds(5));
             assertThat(result.derivedFromPreset()).isEqualTo("permissive");
+        }
+
+        @Test
+        void presets_should_not_touch_events() {
+            // What is to be tested: that presets leave the events field untouched, just like
+            // tags. Why: per ADR-030 events are application metadata, not preset territory —
+            // a preset establishing observability defaults would be a hidden behavioural
+            // change at preset time.
+            // Why important: users reach for presets to set concurrency/wait baselines; an
+            // implicit events-on flag from a preset would surprise them.
+
+            // Given
+            TestBuilder b = new TestBuilder("x");
+
+            // When
+            b.balanced();
+
+            // Then — the EVENTS bit comes from the constructor's defaulting touch, not from
+            // the preset. The preset itself does not set customized=true, so a follow-up
+            // events(...) call would still work without violating preset-then-customize. The
+            // resulting snapshot keeps disabled() because the preset did not override.
+            BulkheadSnapshot result = b.toPatch().applyTo(systemDefault());
+            assertThat(result.events()).isEqualTo(BulkheadEventConfig.disabled());
+        }
+
+        @Test
+        void should_default_events_to_disabled() {
+            // Given / When — no explicit events() call; constructor default applies
+            TestBuilder b = new TestBuilder("x");
+            BulkheadSnapshot result = b.toPatch().applyTo(systemDefault());
+
+            // Then
+            assertThat(result.events()).isEqualTo(BulkheadEventConfig.disabled());
+        }
+
+        @Test
+        void events_setter_should_replace_the_default() {
+            // Given
+            TestBuilder b = new TestBuilder("x");
+
+            // When
+            b.events(BulkheadEventConfig.allEnabled());
+            BulkheadSnapshot result = b.toPatch().applyTo(systemDefault());
+
+            // Then
+            assertThat(result.events()).isEqualTo(BulkheadEventConfig.allEnabled());
         }
 
         @Test
@@ -307,6 +366,45 @@ class BulkheadBuilderBaseTest {
         }
 
         @Test
+        void events_call_should_engage_the_preset_then_customize_guard() {
+            // What is to be tested: that calling events(...) counts as customization just
+            // like the other individual setters. Calling a preset after events(...) must
+            // therefore throw.
+            // Why successful: the IllegalStateException carries the preset-ordering message
+            // even though the only customization was an events() call.
+            // Why important: the constructor's defaulting touch on EVENTS does not count as
+            // customization (it is internal scaffolding to satisfy the snapshot's non-null
+            // events invariant); only the user-facing setter does.
+
+            // Given
+            TestBuilder b = new TestBuilder("x");
+
+            // When
+            b.events(BulkheadEventConfig.allEnabled());
+
+            // Then
+            assertThatThrownBy(b::balanced)
+                    .isInstanceOf(IllegalStateException.class)
+                    .hasMessageContaining("Cannot apply a preset");
+        }
+
+        @Test
+        void preset_then_events_should_keep_both() {
+            // Given
+            TestBuilder b = new TestBuilder("x");
+
+            // When
+            b.balanced().events(BulkheadEventConfig.allEnabled());
+            BulkheadSnapshot result = b.toPatch().applyTo(systemDefault());
+
+            // Then — preset set the limits, events setter applied after the preset wins for
+            // the events field.
+            assertThat(result.maxConcurrentCalls()).isEqualTo(50);
+            assertThat(result.derivedFromPreset()).isEqualTo("balanced");
+            assertThat(result.events()).isEqualTo(BulkheadEventConfig.allEnabled());
+        }
+
+        @Test
         void should_allow_chaining_two_presets_with_the_last_one_winning() {
             // Multiple presets on the same builder is an unusual but not invalid sequence —
             // the customized flag is not set by presets, so the second preset's values overwrite
@@ -335,7 +433,10 @@ class BulkheadBuilderBaseTest {
             // What is to be tested: clarification 3 in REFACTORING.md — individual setters do
             // NOT touch derivedFromPreset, so a hot patch that only calls maxConcurrentCalls(15)
             // inherits the previous preset label.
-            // Why successful: after one setter, only that field is in touchedFields().
+            // Why successful: after one setter, only that field plus the constructor-touched
+            // NAME and EVENTS (the latter touched by the base class with the disabled() default
+            // so the snapshot's non-null events invariant holds — see ADR-030) appear in
+            // touchedFields().
             // Why important: class-3 rules like BULKHEAD_PROTECTIVE_WITH_LONG_WAIT must
             // continue to fire after hot updates.
 
@@ -348,7 +449,8 @@ class BulkheadBuilderBaseTest {
             // Then
             assertThat(b.toPatch().touchedFields()).containsExactlyInAnyOrder(
                     BulkheadField.NAME,
-                    BulkheadField.MAX_CONCURRENT_CALLS);
+                    BulkheadField.MAX_CONCURRENT_CALLS,
+                    BulkheadField.EVENTS);
         }
 
         @Test
@@ -359,12 +461,15 @@ class BulkheadBuilderBaseTest {
             // When
             b.balanced();
 
-            // Then
+            // Then — preset touches the three preset fields, NAME and EVENTS come from the
+            // constructor, TAGS stays untouched (analogous to the events decision: presets
+            // do not own application metadata).
             assertThat(b.toPatch().touchedFields()).containsExactlyInAnyOrder(
                     BulkheadField.NAME,
                     BulkheadField.MAX_CONCURRENT_CALLS,
                     BulkheadField.MAX_WAIT_DURATION,
-                    BulkheadField.DERIVED_FROM_PRESET);
+                    BulkheadField.DERIVED_FROM_PRESET,
+                    BulkheadField.EVENTS);
         }
 
         @Test

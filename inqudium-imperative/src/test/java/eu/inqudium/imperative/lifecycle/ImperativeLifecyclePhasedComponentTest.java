@@ -5,6 +5,7 @@ import eu.inqudium.config.lifecycle.ChangeRequestListener;
 import eu.inqudium.config.lifecycle.LifecycleState;
 import eu.inqudium.config.lifecycle.PostCommitInitializable;
 import eu.inqudium.config.live.LiveContainer;
+import eu.inqudium.config.snapshot.BulkheadEventConfig;
 import eu.inqudium.config.snapshot.BulkheadSnapshot;
 import eu.inqudium.core.element.InqElementType;
 import eu.inqudium.core.event.InqEventExporterRegistry;
@@ -43,7 +44,8 @@ class ImperativeLifecyclePhasedComponentTest {
      * canonical {@code BulkheadSnapshot} record rather than declaring their own permitted subtype.
      */
     private static BulkheadSnapshot defaultSnapshot() {
-        return new BulkheadSnapshot("test", 10, Duration.ZERO, Set.of(), null);
+        return new BulkheadSnapshot(
+                "test", 10, Duration.ZERO, Set.of(), null, BulkheadEventConfig.disabled());
     }
 
     /**

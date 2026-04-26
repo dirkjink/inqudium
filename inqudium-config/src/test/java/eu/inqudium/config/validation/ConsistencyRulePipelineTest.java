@@ -1,5 +1,6 @@
 package eu.inqudium.config.validation;
 
+import eu.inqudium.config.snapshot.BulkheadEventConfig;
 import eu.inqudium.config.snapshot.BulkheadSnapshot;
 import eu.inqudium.config.snapshot.ComponentSnapshot;
 import org.junit.jupiter.api.DisplayName;
@@ -20,7 +21,8 @@ import static org.assertj.core.api.Assertions.assertThatNullPointerException;
 class ConsistencyRulePipelineTest {
 
     private static BulkheadSnapshot bulkhead(String name, String preset) {
-        return new BulkheadSnapshot(name, 50, Duration.ofMillis(500), Set.of(), preset);
+        return new BulkheadSnapshot(
+                name, 50, Duration.ofMillis(500), Set.of(), preset, BulkheadEventConfig.disabled());
     }
 
     /**

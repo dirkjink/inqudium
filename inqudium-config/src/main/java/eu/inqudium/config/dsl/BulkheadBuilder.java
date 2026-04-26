@@ -1,6 +1,7 @@
 package eu.inqudium.config.dsl;
 
 import eu.inqudium.config.runtime.ParadigmTag;
+import eu.inqudium.config.snapshot.BulkheadEventConfig;
 
 import java.time.Duration;
 import java.util.Set;
@@ -64,6 +65,19 @@ public interface BulkheadBuilder<P extends ParadigmTag> {
      * @throws NullPointerException if {@code tags} or any element is null.
      */
     BulkheadBuilder<P> tags(Set<String> tags);
+
+    /**
+     * Replace the per-call event-gating configuration.
+     *
+     * <p>Events are opt-in. The default supplied by {@code BulkheadBuilderBase} is
+     * {@link BulkheadEventConfig#disabled() disabled()} so the hot path stays unweighted.
+     * Calling this method counts as customization and engages the preset-then-customize guard
+     * just like the other setters.
+     *
+     * @param value the new event configuration; non-null.
+     * @return this builder, for chaining.
+     */
+    BulkheadBuilder<P> events(BulkheadEventConfig value);
 
     /**
      * Apply the {@code protective} preset baseline (conservative limits, fail-fast, low

@@ -6,6 +6,7 @@ import eu.inqudium.config.patch.BulkheadPatch;
 import eu.inqudium.config.runtime.ImperativeTag;
 import eu.inqudium.config.runtime.ParadigmContainer;
 import eu.inqudium.config.runtime.ParadigmTag;
+import eu.inqudium.config.snapshot.BulkheadEventConfig;
 import eu.inqudium.config.snapshot.BulkheadSnapshot;
 import eu.inqudium.config.snapshot.GeneralSnapshot;
 import eu.inqudium.config.spi.ParadigmProvider;
@@ -49,7 +50,8 @@ public final class ImperativeProvider implements ParadigmProvider {
      *             apply, so the placeholder here is never observable.
      */
     private static BulkheadSnapshot defaultSnapshot(String name) {
-        return new BulkheadSnapshot(name, 50, Duration.ofMillis(500), Set.of(), null);
+        return new BulkheadSnapshot(
+                name, 50, Duration.ofMillis(500), Set.of(), null, BulkheadEventConfig.disabled());
     }
 
     @Override

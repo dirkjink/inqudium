@@ -1,6 +1,7 @@
 package eu.inqudium.config.live;
 
 import eu.inqudium.config.patch.ComponentPatch;
+import eu.inqudium.config.snapshot.BulkheadEventConfig;
 import eu.inqudium.config.snapshot.BulkheadSnapshot;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -27,7 +28,9 @@ class LiveContainerTest {
      * LiveContainer cares about the field's bulkhead semantics.
      */
     private static BulkheadSnapshot snapshot(int maxConcurrent) {
-        return new BulkheadSnapshot("c", maxConcurrent, Duration.ZERO, Set.of(), null);
+        return new BulkheadSnapshot(
+                "c", maxConcurrent, Duration.ZERO, Set.of(), null,
+                BulkheadEventConfig.disabled());
     }
 
     /**
@@ -36,7 +39,7 @@ class LiveContainerTest {
     private static ComponentPatch<BulkheadSnapshot> setValue(int newValue) {
         return base -> new BulkheadSnapshot(
                 base.name(), newValue, base.maxWaitDuration(),
-                base.tags(), base.derivedFromPreset());
+                base.tags(), base.derivedFromPreset(), base.events());
     }
 
     /**
@@ -46,7 +49,7 @@ class LiveContainerTest {
     private static ComponentPatch<BulkheadSnapshot> incrementBy(int delta) {
         return base -> new BulkheadSnapshot(
                 base.name(), base.maxConcurrentCalls() + delta, base.maxWaitDuration(),
-                base.tags(), base.derivedFromPreset());
+                base.tags(), base.derivedFromPreset(), base.events());
     }
 
     @Nested

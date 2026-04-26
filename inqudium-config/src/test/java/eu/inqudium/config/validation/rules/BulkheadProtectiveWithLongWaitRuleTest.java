@@ -1,5 +1,6 @@
 package eu.inqudium.config.validation.rules;
 
+import eu.inqudium.config.snapshot.BulkheadEventConfig;
 import eu.inqudium.config.snapshot.BulkheadSnapshot;
 import eu.inqudium.config.validation.Severity;
 import eu.inqudium.config.validation.ValidationFinding;
@@ -16,7 +17,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 class BulkheadProtectiveWithLongWaitRuleTest {
 
     private static BulkheadSnapshot bulkhead(int maxConcurrent, Duration wait, String preset) {
-        return new BulkheadSnapshot("inventory", maxConcurrent, wait, Set.of(), preset);
+        return new BulkheadSnapshot(
+                "inventory", maxConcurrent, wait, Set.of(), preset, BulkheadEventConfig.disabled());
     }
 
     private final BulkheadProtectiveWithLongWaitRule rule =

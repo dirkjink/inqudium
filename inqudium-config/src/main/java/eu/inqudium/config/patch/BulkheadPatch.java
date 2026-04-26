@@ -1,5 +1,6 @@
 package eu.inqudium.config.patch;
 
+import eu.inqudium.config.snapshot.BulkheadEventConfig;
 import eu.inqudium.config.snapshot.BulkheadField;
 import eu.inqudium.config.snapshot.BulkheadSnapshot;
 
@@ -35,6 +36,7 @@ public final class BulkheadPatch implements ComponentPatch<BulkheadSnapshot> {
     private Duration maxWaitDuration;
     private Set<String> tags;
     private String derivedFromPreset;
+    private BulkheadEventConfig events;
 
     /**
      * Mark {@link BulkheadField#NAME} as touched and record the new value.
@@ -91,6 +93,17 @@ public final class BulkheadPatch implements ComponentPatch<BulkheadSnapshot> {
     }
 
     /**
+     * Mark {@link BulkheadField#EVENTS} as touched and record the new value.
+     *
+     * @param value the new event-gating configuration; non-null is enforced by the snapshot's
+     *              compact constructor.
+     */
+    public void touchEvents(BulkheadEventConfig value) {
+        touched.add(BulkheadField.EVENTS);
+        this.events = value;
+    }
+
+    /**
      * @return an immutable view of the fields this patch will overwrite when applied. The
      *         {@link eu.inqudium.config.lifecycle.ChangeRequest ChangeRequest} that the
      *         phase-2 dispatcher will hand to listeners is built from this set plus the
@@ -120,6 +133,7 @@ public final class BulkheadPatch implements ComponentPatch<BulkheadSnapshot> {
                         ? maxWaitDuration : base.maxWaitDuration(),
                 touched.contains(BulkheadField.TAGS) ? tags : base.tags(),
                 touched.contains(BulkheadField.DERIVED_FROM_PRESET)
-                        ? derivedFromPreset : base.derivedFromPreset());
+                        ? derivedFromPreset : base.derivedFromPreset(),
+                touched.contains(BulkheadField.EVENTS) ? events : base.events());
     }
 }

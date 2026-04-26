@@ -1,5 +1,6 @@
 package eu.inqudium.config.patch;
 
+import eu.inqudium.config.snapshot.BulkheadEventConfig;
 import eu.inqudium.config.snapshot.BulkheadField;
 import eu.inqudium.config.snapshot.BulkheadSnapshot;
 import org.junit.jupiter.api.DisplayName;
@@ -21,7 +22,8 @@ class BulkheadPatchTest {
                 10,
                 Duration.ofMillis(100),
                 Set.of("payment"),
-                "balanced");
+                "balanced",
+                BulkheadEventConfig.disabled());
     }
 
     @Nested
@@ -207,6 +209,7 @@ class BulkheadPatchTest {
             patch.touchMaxWaitDuration(Duration.ofMillis(250));
             patch.touchTags(Set.of("a", "b"));
             patch.touchDerivedFromPreset("permissive");
+            patch.touchEvents(BulkheadEventConfig.allEnabled());
             BulkheadSnapshot result = patch.applyTo(base);
 
             // Then
@@ -215,6 +218,7 @@ class BulkheadPatchTest {
             assertThat(result.maxWaitDuration()).isEqualTo(Duration.ofMillis(250));
             assertThat(result.tags()).containsExactlyInAnyOrder("a", "b");
             assertThat(result.derivedFromPreset()).isEqualTo("permissive");
+            assertThat(result.events()).isEqualTo(BulkheadEventConfig.allEnabled());
             assertThat(patch.touchedFields())
                     .containsExactlyInAnyOrder(BulkheadField.values());
         }

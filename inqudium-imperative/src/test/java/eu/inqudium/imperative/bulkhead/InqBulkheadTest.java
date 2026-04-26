@@ -3,6 +3,7 @@ package eu.inqudium.imperative.bulkhead;
 import eu.inqudium.config.live.LiveContainer;
 import eu.inqudium.config.lifecycle.LifecycleState;
 import eu.inqudium.config.patch.ComponentPatch;
+import eu.inqudium.config.snapshot.BulkheadEventConfig;
 import eu.inqudium.config.snapshot.BulkheadSnapshot;
 import eu.inqudium.config.snapshot.GeneralSnapshot;
 import eu.inqudium.core.element.InqElementType;
@@ -49,7 +50,8 @@ class InqBulkheadTest {
     }
 
     private static BulkheadSnapshot snapshot(String name, int maxConcurrent, Duration maxWait) {
-        return new BulkheadSnapshot(name, maxConcurrent, maxWait, Set.of(), null);
+        return new BulkheadSnapshot(
+                name, maxConcurrent, maxWait, Set.of(), null, BulkheadEventConfig.disabled());
     }
 
     private static <A> InternalExecutor<A, A> identityExecutor() {
@@ -272,7 +274,8 @@ class InqBulkheadTest {
                             25,
                             base.maxWaitDuration(),
                             base.tags(),
-                            base.derivedFromPreset());
+                            base.derivedFromPreset(),
+                            base.events());
             live.apply(raiseLimit);
 
             // Then
@@ -294,7 +297,8 @@ class InqBulkheadTest {
                             3,
                             base.maxWaitDuration(),
                             base.tags(),
-                            base.derivedFromPreset());
+                            base.derivedFromPreset(),
+                            base.events());
             live.apply(lowerLimit);
 
             // Then — held permits are not revoked, but available pool shrinks
@@ -327,7 +331,8 @@ class InqBulkheadTest {
                             25,
                             base.maxWaitDuration(),
                             base.tags(),
-                            base.derivedFromPreset());
+                            base.derivedFromPreset(),
+                            base.events());
             live.apply(raiseLimit);
 
             // Then — bulkhead is still cold; available permits read the new snapshot directly

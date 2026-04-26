@@ -24,13 +24,17 @@ import java.util.Set;
  *                             ({@code "protective"}, {@code "balanced"}, {@code "permissive"}),
  *                             or {@code null} if the snapshot was assembled without a preset
  *                             baseline. When non-null, must be non-blank.
+ * @param events               per-event flags gating which bulkhead events the hot phase
+ *                             publishes (ADR-030). Non-null; defaults to
+ *                             {@link BulkheadEventConfig#disabled()} for opt-in semantics.
  */
 public record BulkheadSnapshot(
         String name,
         int maxConcurrentCalls,
         Duration maxWaitDuration,
         Set<String> tags,
-        String derivedFromPreset)
+        String derivedFromPreset,
+        BulkheadEventConfig events)
         implements ComponentSnapshot {
 
     public BulkheadSnapshot {
@@ -51,5 +55,6 @@ public record BulkheadSnapshot(
         if (derivedFromPreset != null && derivedFromPreset.isBlank()) {
             throw new IllegalArgumentException("derivedFromPreset must not be blank when set");
         }
+        Objects.requireNonNull(events, "events");
     }
 }

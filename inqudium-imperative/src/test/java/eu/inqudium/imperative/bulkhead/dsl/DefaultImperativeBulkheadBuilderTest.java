@@ -1,5 +1,6 @@
 package eu.inqudium.imperative.bulkhead.dsl;
 
+import eu.inqudium.config.snapshot.BulkheadEventConfig;
 import eu.inqudium.config.snapshot.BulkheadSnapshot;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -28,7 +29,8 @@ class DefaultImperativeBulkheadBuilderTest {
         DefaultImperativeBulkheadBuilder builder =
                 new DefaultImperativeBulkheadBuilder("inventory");
         BulkheadSnapshot systemDefault = new BulkheadSnapshot(
-                "default", 25, Duration.ofMillis(100), Set.of(), null);
+                "default", 25, Duration.ofMillis(100), Set.of(), null,
+                BulkheadEventConfig.disabled());
 
         // When
         builder.balanced().maxConcurrentCalls(75).tags("payment", "critical");
