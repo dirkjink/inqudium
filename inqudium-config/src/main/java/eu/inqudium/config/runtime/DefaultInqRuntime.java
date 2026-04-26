@@ -1,9 +1,12 @@
 package eu.inqudium.config.runtime;
 
+import eu.inqudium.config.dsl.DefaultInqudiumUpdateBuilder;
 import eu.inqudium.config.dsl.InqudiumUpdateBuilder;
 import eu.inqudium.config.patch.ComponentPatch;
 import eu.inqudium.config.snapshot.BulkheadSnapshot;
 import eu.inqudium.config.snapshot.GeneralSnapshot;
+import eu.inqudium.config.spi.ParadigmProvider;
+import eu.inqudium.config.spi.ParadigmSectionPatches;
 import eu.inqudium.config.validation.ApplyOutcome;
 import eu.inqudium.config.validation.BuildReport;
 import eu.inqudium.config.validation.DiagnosisReport;
@@ -34,14 +37,17 @@ public final class DefaultInqRuntime implements InqRuntime {
 
     private final GeneralSnapshot general;
     private final Map<ParadigmTag, ParadigmContainer<?>> containers;
+    private final Map<ParadigmTag, ParadigmProvider> providers;
     private final InqConfigView configView;
     private final AtomicBoolean closed = new AtomicBoolean(false);
 
     public DefaultInqRuntime(
             GeneralSnapshot general,
-            Map<ParadigmTag, ParadigmContainer<?>> containers) {
+            Map<ParadigmTag, ParadigmContainer<?>> containers,
+            Map<ParadigmTag, ParadigmProvider> providers) {
         this.general = Objects.requireNonNull(general, "general");
         this.containers = Map.copyOf(Objects.requireNonNull(containers, "containers"));
+        this.providers = Map.copyOf(Objects.requireNonNull(providers, "providers"));
         this.configView = new DefaultInqConfigView(this);
     }
 
@@ -72,17 +78,36 @@ public final class DefaultInqRuntime implements InqRuntime {
     @Override
     public BuildReport update(Consumer<InqudiumUpdateBuilder> updater) {
         ensureOpen();
-        // Phase 1.7-D wires this up via the update DSL pipeline.
-        throw new UnsupportedOperationException(
-                "runtime.update is wired in step 1.7-D; not yet available in this build.");
+        Objects.requireNonNull(updater, "updater");
+        DefaultInqudiumUpdateBuilder builder = new DefaultInqudiumUpdateBuilder(providers);
+        updater.accept(builder);
+        Map<String, ApplyOutcome> outcomes = new LinkedHashMap<>();
+        for (Map.Entry<ParadigmTag, ParadigmSectionPatches> e
+                : builder.toSectionPatches().entrySet()) {
+            ParadigmContainer<?> container = containers.get(e.getKey());
+            if (container == null) {
+                // The update builder already raised ParadigmUnavailableException for missing
+                // providers; reaching here without a container is a framework invariant
+                // violation.
+                throw new IllegalStateException(
+                        "no container registered for paradigm " + e.getKey());
+            }
+            outcomes.putAll(container.applyUpdate(general, e.getValue()));
+        }
+        return new BuildReport(Instant.now(), List.of(), List.of(), outcomes);
     }
 
     @Override
     public BuildReport apply(List<? extends ComponentPatch<?>> patches) {
         ensureOpen();
-        // Phase 1.7-D wires this up alongside update.
+        Objects.requireNonNull(patches, "patches");
+        // Direct-patch entry point used by format adapters (YAML, JSON, ...). Phase 1 ships
+        // the update-DSL path; the direct-list path needs a paradigm/component-type
+        // discriminator on each patch to route correctly, which we add together with the
+        // adapters in a later phase.
         throw new UnsupportedOperationException(
-                "runtime.apply is wired in step 1.7-D; not yet available in this build.");
+                "runtime.apply(patches) lands together with the format adapters; use "
+                        + "runtime.update(...) for now.");
     }
 
     @Override

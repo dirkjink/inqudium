@@ -96,7 +96,7 @@ public final class DefaultInqudiumBuilder implements InqudiumBuilder {
                     imperativeProvider.createContainer(general, patches));
         }
 
-        return new DefaultInqRuntime(general, containers);
+        return new DefaultInqRuntime(general, containers, providers);
     }
 
     /**

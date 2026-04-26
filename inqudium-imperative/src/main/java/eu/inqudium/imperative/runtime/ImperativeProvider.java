@@ -28,10 +28,14 @@ import java.util.Set;
  * <ul>
  *   <li>The paradigm tag, {@link ImperativeTag#INSTANCE},</li>
  *   <li>The {@link DefaultImperativeBulkheadBuilder} factory used by the DSL section, and</li>
- *   <li>The {@link DefaultImperative} container assembly that takes a paradigm-section's worth of
- *       {@link BulkheadPatch} instances plus the {@link GeneralSnapshot} and produces the live
- *       {@code InqBulkhead} components.</li>
+ *   <li>The {@link DefaultImperative} container assembly that takes a paradigm-section's worth
+ *       of {@link BulkheadPatch} instances plus the {@link GeneralSnapshot} and produces the
+ *       live {@code InqBulkhead} components.</li>
  * </ul>
+ *
+ * <p>Also exposes the package-private {@link #materializeBulkhead} helper that the
+ * {@link DefaultImperative#applyUpdate} path uses to build new components when an update
+ * introduces a previously-unknown name.
  */
 public final class ImperativeProvider implements ParadigmProvider {
 
@@ -61,14 +65,29 @@ public final class ImperativeProvider implements ParadigmProvider {
     @Override
     public ParadigmContainer<?> createContainer(
             GeneralSnapshot general, ParadigmSectionPatches patches) {
-        Map<String, InqBulkhead> bulkheads = new LinkedHashMap<>();
+        Map<String, DefaultImperative.Entry> entries = new LinkedHashMap<>();
         for (Map.Entry<String, BulkheadPatch> entry : patches.bulkheadPatches().entrySet()) {
-            String name = entry.getKey();
-            BulkheadPatch patch = entry.getValue();
-            BulkheadSnapshot initial = patch.applyTo(defaultSnapshot(name));
-            LiveContainer<BulkheadSnapshot> live = new LiveContainer<>(initial);
-            bulkheads.put(name, new InqBulkhead(live, general));
+            entries.put(entry.getKey(),
+                    materializeBulkhead(general, entry.getKey(), entry.getValue()));
         }
-        return new DefaultImperative(bulkheads);
+        return new DefaultImperative(this, entries);
+    }
+
+    /**
+     * Materialize a single bulkhead from a default snapshot + patch. Used both at initial
+     * container construction time (in {@link #createContainer}) and at runtime-update time
+     * (from {@link DefaultImperative#applyUpdate}) when a previously-unknown name appears.
+     *
+     * @param general the runtime-level snapshot supplying clock and event publisher.
+     * @param name    the bulkhead's name.
+     * @param patch   the patch describing the user's configuration.
+     * @return the live entry pairing the new bulkhead with its backing live container.
+     */
+    DefaultImperative.Entry materializeBulkhead(
+            GeneralSnapshot general, String name, BulkheadPatch patch) {
+        BulkheadSnapshot initial = patch.applyTo(defaultSnapshot(name));
+        LiveContainer<BulkheadSnapshot> live = new LiveContainer<>(initial);
+        InqBulkhead bulkhead = new InqBulkhead(live, general);
+        return new DefaultImperative.Entry(bulkhead, live);
     }
 }
