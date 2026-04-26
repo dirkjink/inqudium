@@ -9,9 +9,7 @@
  * paradigm module is referenced statically from {@code inqudium-config}.
  *
  * <p>If a paradigm is referenced in the DSL but no provider for it is on the classpath, the
- * runtime raises {@code ParadigmUnavailableException} with a message naming the missing module.
+ * runtime raises {@link eu.inqudium.config.runtime.ParadigmUnavailableException
+ * ParadigmUnavailableException} with a message naming the missing module.
  */
-// TODO(refactor 1.7): ParadigmUnavailableException is referenced in this package-info but does
-//   not exist yet. Create it together with the runtime container in step 1.7 and add the type
-//   to this package.
 package eu.inqudium.config.spi;
