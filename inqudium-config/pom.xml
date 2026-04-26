@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xmlns="http://maven.apache.org/POM/4.0.0"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>eu.inqudium</groupId>
+        <artifactId>inqudium-parent</artifactId>
+        <version>${revision}</version>
+    </parent>
+
+    <artifactId>inqudium-config</artifactId>
+
+    <name>Inqudium :: Config</name>
+    <description>Snapshot, patch, and runtime container types — the paradigm-agnostic configuration
+        framework shared by every paradigm module (ADR-025, ADR-026, ADR-027, ADR-028, ADR-029).
+    </description>
+
+    <dependencies>
+        <dependency>
+            <groupId>eu.inqudium</groupId>
+            <artifactId>inqudium-core</artifactId>
+        </dependency>
+    </dependencies>
+
+</project>
