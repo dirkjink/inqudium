@@ -1,13 +1,15 @@
 package eu.inqudium.config.live;
 
 import eu.inqudium.config.patch.ComponentPatch;
-import eu.inqudium.config.snapshot.ComponentSnapshot;
+import eu.inqudium.config.snapshot.BulkheadSnapshot;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.TimeUnit;
@@ -20,24 +22,31 @@ import static org.assertj.core.api.Assertions.assertThatNullPointerException;
 class LiveContainerTest {
 
     /**
-     * Test snapshot: a counter wrapped in a snapshot record.
+     * Build a BulkheadSnapshot used as a stand-in for a generic ComponentSnapshot. We exercise
+     * the container's CAS loop and dispatch through {@code maxConcurrentCalls}; nothing in
+     * LiveContainer cares about the field's bulkhead semantics.
      */
-    private record Counter(String name, int value) implements ComponentSnapshot {
+    private static BulkheadSnapshot snapshot(int maxConcurrent) {
+        return new BulkheadSnapshot("c", maxConcurrent, Duration.ZERO, Set.of(), null);
     }
 
     /**
-     * Patch that replaces the value with the given new value. The patch is intentionally simple —
-     * we exercise the container's CAS loop and dispatch, not the patch's own logic.
+     * Patch that replaces {@code maxConcurrentCalls} with the given value.
      */
-    private static ComponentPatch<Counter> setValue(int newValue) {
-        return base -> new Counter(base.name(), newValue);
+    private static ComponentPatch<BulkheadSnapshot> setValue(int newValue) {
+        return base -> new BulkheadSnapshot(
+                base.name(), newValue, base.maxWaitDuration(),
+                base.tags(), base.derivedFromPreset());
     }
 
     /**
-     * Patch that increments the value by the delta. Used to expose CAS retry under contention.
+     * Patch that increments {@code maxConcurrentCalls} by the delta. Used to expose CAS retry
+     * under contention.
      */
-    private static ComponentPatch<Counter> incrementBy(int delta) {
-        return base -> new Counter(base.name(), base.value() + delta);
+    private static ComponentPatch<BulkheadSnapshot> incrementBy(int delta) {
+        return base -> new BulkheadSnapshot(
+                base.name(), base.maxConcurrentCalls() + delta, base.maxWaitDuration(),
+                base.tags(), base.derivedFromPreset());
     }
 
     @Nested
@@ -48,17 +57,17 @@ class LiveContainerTest {
         void should_reject_a_null_initial_snapshot() {
             // Given / When / Then
             assertThatNullPointerException()
-                    .isThrownBy(() -> new LiveContainer<Counter>(null))
+                    .isThrownBy(() -> new LiveContainer<BulkheadSnapshot>(null))
                     .withMessageContaining("initial snapshot");
         }
 
         @Test
         void should_expose_the_initial_snapshot_via_snapshot() {
             // Given
-            Counter initial = new Counter("c", 7);
+            BulkheadSnapshot initial = snapshot(7);
 
             // When
-            LiveContainer<Counter> container = new LiveContainer<>(initial);
+            LiveContainer<BulkheadSnapshot> container = new LiveContainer<>(initial);
 
             // Then
             assertThat(container.snapshot()).isSameAs(initial);
@@ -72,20 +81,20 @@ class LiveContainerTest {
         @Test
         void should_replace_the_snapshot_atomically_in_the_uncontended_case() {
             // Given
-            LiveContainer<Counter> container = new LiveContainer<>(new Counter("c", 0));
+            LiveContainer<BulkheadSnapshot> container = new LiveContainer<>(snapshot(1));
 
             // When
-            Counter result = container.apply(setValue(42));
+            BulkheadSnapshot result = container.apply(setValue(42));
 
             // Then
-            assertThat(result.value()).isEqualTo(42);
-            assertThat(container.snapshot().value()).isEqualTo(42);
+            assertThat(result.maxConcurrentCalls()).isEqualTo(42);
+            assertThat(container.snapshot().maxConcurrentCalls()).isEqualTo(42);
         }
 
         @Test
         void should_reject_a_null_patch() {
             // Given
-            LiveContainer<Counter> container = new LiveContainer<>(new Counter("c", 0));
+            LiveContainer<BulkheadSnapshot> container = new LiveContainer<>(snapshot(1));
 
             // When / Then
             assertThatNullPointerException()
@@ -96,8 +105,8 @@ class LiveContainerTest {
         @Test
         void should_notify_every_subscriber_exactly_once_per_successful_apply() {
             // Given
-            LiveContainer<Counter> container = new LiveContainer<>(new Counter("c", 0));
-            List<Counter> received = new ArrayList<>();
+            LiveContainer<BulkheadSnapshot> container = new LiveContainer<>(snapshot(1));
+            List<BulkheadSnapshot> received = new ArrayList<>();
             container.subscribe(received::add);
 
             // When
@@ -106,13 +115,13 @@ class LiveContainerTest {
             container.apply(setValue(3));
 
             // Then
-            assertThat(received).extracting(Counter::value).containsExactly(1, 2, 3);
+            assertThat(received).extracting(BulkheadSnapshot::maxConcurrentCalls).containsExactly(1, 2, 3);
         }
 
         @Test
         void should_dispatch_to_subscribers_in_registration_order() {
             // Given
-            LiveContainer<Counter> container = new LiveContainer<>(new Counter("c", 0));
+            LiveContainer<BulkheadSnapshot> container = new LiveContainer<>(snapshot(1));
             List<String> order = new ArrayList<>();
             container.subscribe(s -> order.add("first"));
             container.subscribe(s -> order.add("second"));
@@ -131,8 +140,8 @@ class LiveContainerTest {
             // the freshly observed snapshot when its CAS loses to another thread, so that no
             // increment is lost.
             // How will the test case be deemed successful and why: after N threads each apply
-            // an "increment by 1" patch M times, the final value must equal N*M. If the CAS retry
-            // were missing, lost updates would produce a value strictly less than N*M.
+            // an "increment by 1" patch M times, the final value must equal initial + N*M. If the
+            // CAS retry were missing, lost updates would produce a value strictly less than that.
             // Why is it important to test this test case: lock-free atomic update is the load-
             // bearing property the LiveContainer promises; a regression here corrupts every live
             // configuration update under contention.
@@ -140,7 +149,7 @@ class LiveContainerTest {
             // Given
             int threads = 8;
             int incrementsPerThread = 500;
-            LiveContainer<Counter> container = new LiveContainer<>(new Counter("c", 0));
+            LiveContainer<BulkheadSnapshot> container = new LiveContainer<>(snapshot(1));
             CountDownLatch start = new CountDownLatch(1);
             CountDownLatch done = new CountDownLatch(threads);
 
@@ -163,7 +172,9 @@ class LiveContainerTest {
             assertThat(done.await(10, TimeUnit.SECONDS)).isTrue();
 
             // Then
-            assertThat(container.snapshot().value()).isEqualTo(threads * incrementsPerThread);
+            int initialValue = 1;
+            assertThat(container.snapshot().maxConcurrentCalls())
+                    .isEqualTo(initialValue + threads * incrementsPerThread);
         }
     }
 
@@ -174,7 +185,7 @@ class LiveContainerTest {
         @Test
         void should_reject_a_null_listener() {
             // Given
-            LiveContainer<Counter> container = new LiveContainer<>(new Counter("c", 0));
+            LiveContainer<BulkheadSnapshot> container = new LiveContainer<>(snapshot(1));
 
             // When / Then
             assertThatNullPointerException()
@@ -185,7 +196,7 @@ class LiveContainerTest {
         @Test
         void should_stop_notifying_a_listener_after_its_handle_is_closed() throws Exception {
             // Given
-            LiveContainer<Counter> container = new LiveContainer<>(new Counter("c", 0));
+            LiveContainer<BulkheadSnapshot> container = new LiveContainer<>(snapshot(1));
             AtomicInteger observed = new AtomicInteger();
             AutoCloseable handle = container.subscribe(s -> observed.incrementAndGet());
 
@@ -202,7 +213,7 @@ class LiveContainerTest {
         @Test
         void should_keep_other_subscribers_active_when_one_unsubscribes() throws Exception {
             // Given
-            LiveContainer<Counter> container = new LiveContainer<>(new Counter("c", 0));
+            LiveContainer<BulkheadSnapshot> container = new LiveContainer<>(snapshot(1));
             AtomicInteger first = new AtomicInteger();
             AtomicInteger second = new AtomicInteger();
             AutoCloseable firstHandle = container.subscribe(s -> first.incrementAndGet());
@@ -228,7 +239,7 @@ class LiveContainerTest {
             // contract so any future change is deliberate.
 
             // Given
-            LiveContainer<Counter> container = new LiveContainer<>(new Counter("c", 0));
+            LiveContainer<BulkheadSnapshot> container = new LiveContainer<>(snapshot(1));
             List<String> hits = new CopyOnWriteArrayList<>();
             container.subscribe(s -> hits.add("first"));
             container.subscribe(s -> {
@@ -246,7 +257,7 @@ class LiveContainerTest {
             }
             assertThat(hits).containsExactly("first");
             // The snapshot still committed before dispatch began.
-            assertThat(container.snapshot().value()).isEqualTo(1);
+            assertThat(container.snapshot().maxConcurrentCalls()).isEqualTo(1);
         }
     }
 }

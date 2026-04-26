@@ -5,7 +5,7 @@ import eu.inqudium.config.lifecycle.ChangeRequestListener;
 import eu.inqudium.config.lifecycle.LifecycleState;
 import eu.inqudium.config.lifecycle.PostCommitInitializable;
 import eu.inqudium.config.live.LiveContainer;
-import eu.inqudium.config.snapshot.ComponentSnapshot;
+import eu.inqudium.config.snapshot.BulkheadSnapshot;
 import eu.inqudium.core.element.InqElementType;
 import eu.inqudium.core.event.InqEventExporterRegistry;
 import eu.inqudium.core.event.InqEventPublisher;
@@ -20,7 +20,9 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
+import java.time.Duration;
 import java.time.Instant;
+import java.util.Set;
 import java.util.concurrent.BrokenBarrierException;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.CyclicBarrier;
@@ -36,9 +38,12 @@ import static org.assertj.core.api.Assertions.assertThatNullPointerException;
 class ImperativeLifecyclePhasedComponentTest {
 
     /**
-     * Test snapshot — a minimum implementation of ComponentSnapshot.
+     * Build a default {@link BulkheadSnapshot} used as a stand-in {@code ComponentSnapshot} for
+     * the test components. Now that {@code ComponentSnapshot} is sealed (step 1.4), tests use the
+     * canonical {@code BulkheadSnapshot} record rather than declaring their own permitted subtype.
      */
-    private record TestSnapshot(String name) implements ComponentSnapshot {
+    private static BulkheadSnapshot defaultSnapshot() {
+        return new BulkheadSnapshot("test", 10, Duration.ZERO, Set.of(), null);
     }
 
     /**
@@ -47,7 +52,7 @@ class ImperativeLifecyclePhasedComponentTest {
      * thread to finish constructing its hot candidate before any thread reaches the CAS.
      */
     private static final class TestComponent
-            extends ImperativeLifecyclePhasedComponent<TestSnapshot> {
+            extends ImperativeLifecyclePhasedComponent<BulkheadSnapshot> {
 
         final AtomicInteger hotPhaseConstructions = new AtomicInteger();
         final AtomicInteger afterCommitInvocations = new AtomicInteger();
@@ -61,7 +66,7 @@ class ImperativeLifecyclePhasedComponentTest {
             super(
                     "test",
                     InqElementType.BULKHEAD,
-                    new LiveContainer<>(new TestSnapshot("test")),
+                    new LiveContainer<>(defaultSnapshot()),
                     publisher,
                     InqClock.system());
             this.hotPhaseImplementsPostCommit = hotPhaseImplementsPostCommit;
@@ -140,10 +145,10 @@ class ImperativeLifecyclePhasedComponentTest {
         @Test
         void should_reject_a_null_name() {
             // Given / When / Then
-            assertThatNullPointerException().isThrownBy(() -> new ImperativeLifecyclePhasedComponent<TestSnapshot>(
+            assertThatNullPointerException().isThrownBy(() -> new ImperativeLifecyclePhasedComponent<BulkheadSnapshot>(
                     null,
                     InqElementType.BULKHEAD,
-                    new LiveContainer<>(new TestSnapshot("x")),
+                    new LiveContainer<>(defaultSnapshot()),
                     publisher,
                     InqClock.system()) {
                 @Override
@@ -156,10 +161,10 @@ class ImperativeLifecyclePhasedComponentTest {
         @Test
         void should_reject_a_null_element_type() {
             // Given / When / Then
-            assertThatNullPointerException().isThrownBy(() -> new ImperativeLifecyclePhasedComponent<TestSnapshot>(
+            assertThatNullPointerException().isThrownBy(() -> new ImperativeLifecyclePhasedComponent<BulkheadSnapshot>(
                     "n",
                     null,
-                    new LiveContainer<>(new TestSnapshot("x")),
+                    new LiveContainer<>(defaultSnapshot()),
                     publisher,
                     InqClock.system()) {
                 @Override
@@ -172,7 +177,7 @@ class ImperativeLifecyclePhasedComponentTest {
         @Test
         void should_reject_a_null_live_container() {
             // Given / When / Then
-            assertThatNullPointerException().isThrownBy(() -> new ImperativeLifecyclePhasedComponent<TestSnapshot>(
+            assertThatNullPointerException().isThrownBy(() -> new ImperativeLifecyclePhasedComponent<BulkheadSnapshot>(
                     "n",
                     InqElementType.BULKHEAD,
                     null,
@@ -188,10 +193,10 @@ class ImperativeLifecyclePhasedComponentTest {
         @Test
         void should_reject_a_null_event_publisher() {
             // Given / When / Then
-            assertThatNullPointerException().isThrownBy(() -> new ImperativeLifecyclePhasedComponent<TestSnapshot>(
+            assertThatNullPointerException().isThrownBy(() -> new ImperativeLifecyclePhasedComponent<BulkheadSnapshot>(
                     "n",
                     InqElementType.BULKHEAD,
-                    new LiveContainer<>(new TestSnapshot("x")),
+                    new LiveContainer<>(defaultSnapshot()),
                     null,
                     InqClock.system()) {
                 @Override
@@ -204,10 +209,10 @@ class ImperativeLifecyclePhasedComponentTest {
         @Test
         void should_reject_a_null_clock() {
             // Given / When / Then
-            assertThatNullPointerException().isThrownBy(() -> new ImperativeLifecyclePhasedComponent<TestSnapshot>(
+            assertThatNullPointerException().isThrownBy(() -> new ImperativeLifecyclePhasedComponent<BulkheadSnapshot>(
                     "n",
                     InqElementType.BULKHEAD,
-                    new LiveContainer<>(new TestSnapshot("x")),
+                    new LiveContainer<>(defaultSnapshot()),
                     publisher,
                     null) {
                 @Override
@@ -449,9 +454,9 @@ class ImperativeLifecyclePhasedComponentTest {
         void should_register_a_listener_in_registration_order() {
             // Given
             TestComponent component = new TestComponent(publisher, false, null);
-            ChangeRequestListener<TestSnapshot> first = req -> null;
-            ChangeRequestListener<TestSnapshot> second = req -> null;
-            ChangeRequestListener<TestSnapshot> third = req -> null;
+            ChangeRequestListener<BulkheadSnapshot> first = req -> null;
+            ChangeRequestListener<BulkheadSnapshot> second = req -> null;
+            ChangeRequestListener<BulkheadSnapshot> third = req -> null;
 
             // When
             component.onChangeRequest(first);
@@ -466,7 +471,7 @@ class ImperativeLifecyclePhasedComponentTest {
         void should_remove_a_listener_via_the_returned_auto_closeable() throws Exception {
             // Given
             TestComponent component = new TestComponent(publisher, false, null);
-            ChangeRequestListener<TestSnapshot> listener = req -> null;
+            ChangeRequestListener<BulkheadSnapshot> listener = req -> null;
             AutoCloseable handle = component.onChangeRequest(listener);
             assertThat(component.listeners()).containsExactly(listener);
 
@@ -481,8 +486,8 @@ class ImperativeLifecyclePhasedComponentTest {
         void should_keep_other_listeners_active_when_one_is_unregistered() throws Exception {
             // Given
             TestComponent component = new TestComponent(publisher, false, null);
-            ChangeRequestListener<TestSnapshot> first = req -> null;
-            ChangeRequestListener<TestSnapshot> second = req -> null;
+            ChangeRequestListener<BulkheadSnapshot> first = req -> null;
+            ChangeRequestListener<BulkheadSnapshot> second = req -> null;
             AutoCloseable firstHandle = component.onChangeRequest(first);
             component.onChangeRequest(second);
 
@@ -568,13 +573,13 @@ class ImperativeLifecyclePhasedComponentTest {
      * direct {@code Instant.now()} call.
      */
     private static final class ClockOverriddenComponent
-            extends ImperativeLifecyclePhasedComponent<TestSnapshot> {
+            extends ImperativeLifecyclePhasedComponent<BulkheadSnapshot> {
 
         ClockOverriddenComponent(InqEventPublisher publisher, InqClock clock) {
             super(
                     "test",
                     InqElementType.BULKHEAD,
-                    new LiveContainer<>(new TestSnapshot("test")),
+                    new LiveContainer<>(defaultSnapshot()),
                     publisher,
                     clock);
         }

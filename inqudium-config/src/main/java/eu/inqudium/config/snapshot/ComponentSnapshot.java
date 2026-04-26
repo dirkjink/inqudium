@@ -1,20 +1,20 @@
 package eu.inqudium.config.snapshot;
 
 /**
- * Marker for the immutable snapshot record of a single component.
+ * Sealed marker for the immutable snapshot record of a single component.
  *
- * <p>Every concrete snapshot ({@code BulkheadSnapshot}, {@code CircuitBreakerSnapshot}, ...) is a
+ * <p>Every concrete snapshot ({@link BulkheadSnapshot}, and — once added in later phases —
+ * {@code CircuitBreakerSnapshot}, {@code RetrySnapshot}, {@code TimeLimiterSnapshot}, ...) is a
  * {@code record} that implements this interface. Snapshots carry the full configuration state of
  * one component, are validated by their compact constructors (ADR-027 class&nbsp;2), and are
  * paradigm-agnostic — the {@code ParadigmTag} of a live component is carried by the handle and
  * the {@link eu.inqudium.config.live.LiveContainer LiveContainer}, not by the snapshot.
  *
- * <p>This interface will become {@code sealed} once the first concrete snapshot record exists in
- * step&nbsp;1.4. It is plain at this point only because Java refuses to compile a sealed type with
- * no permitted subtypes; switching it back to {@code sealed} is a follow-up edit, not a design
- * change.
+ * <p>The interface is sealed so that pattern matching across all snapshot kinds is checked for
+ * exhaustiveness by the compiler (ADR-026). New component types must be added to the
+ * {@code permits} clause as they are introduced.
  */
-public interface ComponentSnapshot {
+public sealed interface ComponentSnapshot permits BulkheadSnapshot {
 
     /**
      * @return the component's stable name, which together with its paradigm forms the lookup key
