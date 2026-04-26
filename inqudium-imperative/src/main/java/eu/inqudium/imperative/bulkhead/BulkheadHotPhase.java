@@ -67,6 +67,15 @@ final class BulkheadHotPhase implements ImperativePhase, HotPhaseMarker, PostCom
         strategy.adjustMaxConcurrent(latest.maxConcurrentCalls());
     }
 
+    // TODO(refactor 1.9): port the per-component bulkhead events that the old ImperativeBulkhead
+    //   publishes on its own InqEventPublisher: BulkheadOnAcquireEvent (after a successful permit
+    //   grant), BulkheadOnReleaseEvent (in the finally-release branch), BulkheadOnRejectEvent
+    //   (on the rejection path before throwing InqBulkheadFullException), BulkheadWaitTraceEvent
+    //   (around tryAcquire when wait > 0), and BulkheadRollbackTraceEvent (when an event publish
+    //   itself fails after acquire and the permit must be rolled back). Each is gated by
+    //   BulkheadEventConfig flags. The per-component publisher will be sourced from the
+    //   GeneralSnapshot publisher factory introduced in step 1.7; the gating config moves into
+    //   BulkheadSnapshot's observability sub-record.
     @Override
     public <A, R> R execute(
             long chainId, long callId, A argument, InternalExecutor<A, R> next) {

@@ -69,4 +69,12 @@ public final class InqBulkhead extends ImperativeLifecyclePhasedComponent<Bulkhe
         ImperativePhase p = currentPhase();
         return p instanceof BulkheadHotPhase hot ? hot.concurrentCalls() : 0;
     }
+
+    // TODO: an asynchronous variant of InqBulkhead — analogous to the old InqAsyncDecorator
+    //   contract (CompletionStage-based decorate methods, two-phase around-advice with the
+    //   release running on stage completion rather than in a synchronous finally) — has not yet
+    //   been designed in the new architecture. The phase for this work is undecided; it likely
+    //   warrants its own ADR because the cold/hot transition under deferred subscription is not
+    //   the same problem the synchronous form solves (the reactive paradigm's deferred CAS
+    //   pattern from ADR-029 is closer in spirit). Flagged here so the question is not lost.
 }
