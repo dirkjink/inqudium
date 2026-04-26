@@ -4,6 +4,7 @@ import eu.inqudium.config.event.ComponentBecameHotEvent;
 import eu.inqudium.config.lifecycle.ChangeRequestListener;
 import eu.inqudium.config.lifecycle.LifecycleAware;
 import eu.inqudium.config.lifecycle.LifecycleState;
+import eu.inqudium.config.lifecycle.ListenerRegistry;
 import eu.inqudium.config.lifecycle.PostCommitInitializable;
 import eu.inqudium.config.live.LiveContainer;
 import eu.inqudium.config.snapshot.ComponentSnapshot;
@@ -11,6 +12,8 @@ import eu.inqudium.core.element.InqElementType;
 import eu.inqudium.core.event.InqEventPublisher;
 import eu.inqudium.core.pipeline.InternalExecutor;
 import eu.inqudium.core.time.InqClock;
+import eu.inqudium.imperative.lifecycle.spi.HotPhaseMarker;
+import eu.inqudium.imperative.lifecycle.spi.ImperativePhase;
 
 import java.util.List;
 import java.util.Objects;
@@ -41,15 +44,18 @@ import java.util.concurrent.atomic.AtomicReference;
  * <h2>Subclassing contract</h2>
  *
  * <p>Subclasses implement {@link #createHotPhase()} to return their hot-phase instance. The hot
- * phase must implement {@link ImperativePhase} (the execute contract) and
+ * phase must implement {@link ImperativePhase} (the execute contract from the lifecycle SPI) and
  * {@link HotPhaseMarker} (so {@link #lifecycleState()} can detect it). It may optionally
  * implement {@link PostCommitInitializable} to receive a one-shot post-commit callback with the
  * component's {@link LiveContainer}.
  *
+ * <p>The {@link ListenerRegistry} interface is implemented so the phase-2 update dispatcher in
+ * {@code inqudium-config} can iterate listeners through a paradigm-agnostic reference.
+ *
  * @param <S> the component's snapshot type.
  */
 public abstract class ImperativeLifecyclePhasedComponent<S extends ComponentSnapshot>
-        implements LifecycleAware {
+        implements LifecycleAware, ListenerRegistry<S> {
 
     private final String name;
     private final InqElementType elementType;
@@ -138,26 +144,15 @@ public abstract class ImperativeLifecyclePhasedComponent<S extends ComponentSnap
         return phase.get().execute(chainId, callId, argument, next);
     }
 
-    /**
-     * Register a {@link ChangeRequestListener} that will be consulted before any hot-state update.
-     *
-     * <p>Listener invocation is wired up in phase&nbsp;2 of the configuration refactor; in
-     * phase&nbsp;1 the listener list is stored but never read. Registration order is preserved.
-     *
-     * @param listener the listener; non-null.
-     * @return an {@link AutoCloseable} that unregisters the listener on close.
-     */
+    @Override
     public final AutoCloseable onChangeRequest(ChangeRequestListener<S> listener) {
         Objects.requireNonNull(listener, "listener");
         listeners.add(listener);
         return () -> listeners.remove(listener);
     }
 
-    /**
-     * @return an immutable snapshot of the registered listeners, in registration order. Used by
-     *         the phase-2 dispatcher to drive the veto chain.
-     */
-    final List<ChangeRequestListener<S>> listeners() {
+    @Override
+    public final List<ChangeRequestListener<S>> listeners() {
         return List.copyOf(listeners);
     }
 
@@ -182,31 +177,6 @@ public abstract class ImperativeLifecyclePhasedComponent<S extends ComponentSnap
      */
     protected final ImperativePhase currentPhase() {
         return phase.get();
-    }
-
-    /**
-     * The internal phase contract. The cold phase delegates to a freshly constructed hot phase
-     * after a successful CAS; the hot phase runs the component-specific execute logic directly.
-     */
-    public interface ImperativePhase {
-
-        /**
-         * @param chainId  the chain identifier of the call.
-         * @param callId   the call identifier.
-         * @param argument the argument flowing through the chain.
-         * @param next     the next executor in the chain.
-         * @param <A>      the argument type.
-         * @param <R>      the return type.
-         * @return the value produced by the chain.
-         */
-        <A, R> R execute(long chainId, long callId, A argument, InternalExecutor<A, R> next);
-    }
-
-    /**
-     * Marker implemented by every hot phase so the base class can detect the hot state through
-     * {@code instanceof} without knowing concrete subtypes.
-     */
-    public interface HotPhaseMarker {
     }
 
     /**

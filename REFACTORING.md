@@ -41,6 +41,15 @@ document. They were resolved before phase 1 began and supersede any contradictin
    class-3 rules such as `BULKHEAD_PROTECTIVE_WITH_LONG_WAIT` continue to fire correctly after a hot
    update. No explicit `clearPreset()` setter is needed.
 
+4. **Reminder for step 1.7 — `eventPublisher` and `clock` come from `GeneralSnapshot`.** The
+   imperative lifecycle base class introduced in step 1.3 currently accepts both as separate
+   constructor parameters. When the runtime container is built in step 1.7 and components are
+   materialized through `Inqudium.configure()...build()`, the publisher and clock must be sourced
+   from the per-runtime `GeneralSnapshot` (clock, observability defaults) rather than passed in
+   independently — otherwise we end up with two truth sources for the same configuration. The
+   constructor signature stays as-is for testability; the wiring code in 1.7 must read both values
+   from the general snapshot and pass them along.
+
 ---
 
 ## Guiding principles

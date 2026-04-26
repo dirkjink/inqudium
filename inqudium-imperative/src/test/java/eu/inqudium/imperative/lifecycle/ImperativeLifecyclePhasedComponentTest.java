@@ -12,6 +12,8 @@ import eu.inqudium.core.event.InqEventPublisher;
 import eu.inqudium.core.event.InqPublisherConfig;
 import eu.inqudium.core.pipeline.InternalExecutor;
 import eu.inqudium.core.time.InqClock;
+import eu.inqudium.imperative.lifecycle.spi.HotPhaseMarker;
+import eu.inqudium.imperative.lifecycle.spi.ImperativePhase;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
