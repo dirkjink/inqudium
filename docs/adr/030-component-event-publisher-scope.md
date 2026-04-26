@@ -1,6 +1,6 @@
 # ADR-030: Component event publisher scope
 
-**Status:** Proposed
+**Status:** Accepted
 **Date:** 2026-04-26
 **Deciders:** Core team
 **Related:** ADR-003 (event publisher), ADR-025 (configuration architecture), ADR-026 (runtime
@@ -193,9 +193,23 @@ Once this ADR is accepted:
 3. `InqBulkhead` constructor builds its own publisher from the factory; a new field
    `private final InqEventPublisher componentEventPublisher` stores it. Add the
    `eventPublisher()` accessor on `ImperativeBulkhead`.
-4. `BulkheadHotPhase` reads `component.eventPublisher()` and publishes the four bulkhead
-   events at the documented points (acquire / release / reject / wait trace), gated by a new
-   `BulkheadEventConfig` field on `BulkheadSnapshot`.
+4. Introduce the gating record alongside the snapshot:
+
+   - New record `BulkheadEventConfig(boolean onAcquire, boolean onRelease, boolean onReject,
+     boolean waitTrace, boolean rollbackTrace)` in `eu.inqudium.config.snapshot`, with static
+     factories `disabled()` and `allEnabled()`.
+   - Add a non-null `BulkheadEventConfig events` field on `BulkheadSnapshot`, validated by the
+     compact constructor.
+   - Add `BulkheadField.EVENTS` and `BulkheadPatch.touchEvents(BulkheadEventConfig)`.
+   - Add `events(BulkheadEventConfig)` to `BulkheadBuilderBase` (a sub-builder form may be
+     added if it stays compact; the direct setter is sufficient on its own).
+   - Default in the builder: `BulkheadEventConfig.disabled()`. Events are opt-in so the hot
+     path stays unweighted unless the user asks for them. Presets do not touch `events` —
+     event configuration is application metadata, not preset territory (analogous to the tags
+     decision in step 1.5).
+
+   `BulkheadHotPhase` then reads `snapshot.events()` to decide whether to publish each event
+   at the documented call points.
 5. The lifecycle base class continues to publish `ComponentBecameHotEvent` on the
    runtime-scoped publisher; that path does not change.
 6. Tests cover: default factory equivalence to legacy behaviour, custom factory injection,

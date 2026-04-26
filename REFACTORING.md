@@ -427,7 +427,44 @@ Per ADR-026 and ADR-028:
 - `RuntimeComponentAddedEvent`, `RuntimeComponentRemovedEvent`, `RuntimeComponentPatchedEvent`, `ComponentBecameHotEvent`, `RuntimeComponentVetoedEvent` all published correctly.
 - These live on the `InqRuntime` event publisher (a single, runtime-scoped publisher), distinct from per-component publishers.
 
-### 2.8 Phase 2 acceptance criteria
+### 2.8 Per-runtime event registry isolation (ADR-required)
+
+**Status:** open question, warrants its own ADR before implementation.
+
+Phase 1.7 created `GeneralSnapshot.eventPublisher` using
+`InqEventPublisher.create(name, type)`, which binds to the **global default**
+`InqEventExporterRegistry` (`InqEventExporterRegistry.getDefault()`). Phase 1.9 ports
+per-component publishers via `ComponentEventPublisherFactory`, whose default factory similarly
+delegates to `InqEventPublisher.create(name, type)` and therefore also binds to the global
+default registry.
+
+Open question: should each `InqRuntime` instance have its own isolated
+`InqEventExporterRegistry`, instead of sharing one global default? Implications reach beyond
+the bulkhead:
+
+- **Multi-runtime isolation.** Two `InqRuntime` instances in the same JVM (tests,
+  multi-tenant) currently share exporter state. An isolated registry per runtime would let
+  each runtime have its own exporter set without leaking events across them.
+- **Migration cost for existing consumers.** Code that relies on the global registry to
+  capture events from anywhere (the entire pre-refactor codebase) would need adjustment, plus
+  a documented migration path for downstream applications.
+- **Default behaviour change.** Whatever the default, it changes the operational contract
+  for users who rely on global exporter binding today.
+- **Bridges the runtime-scoped publisher and the per-component factory.** A consistent answer
+  applies to both — the same registry-binding policy must hold for `GeneralSnapshot.eventPublisher`
+  and the publishers created via the factory.
+
+Out of scope for the configuration refactor as currently planned. Addressed in a dedicated ADR
+(call it ADR-031 or whatever number is current) followed by implementation work in this step.
+Until that ADR is accepted, both the runtime publisher and the per-component factory retain
+their global-default binding.
+
+The acceptance criteria for this step are: an ADR exists; its implementation has landed; both
+publisher paths (runtime-scoped and component) honour the chosen isolation policy; existing
+tests using `new InqEventExporterRegistry()` continue to work; a migration note for downstream
+consumers is documented.
+
+### 2.9 Phase 2 acceptance criteria
 
 - All phase 1 tests still pass.
 - Veto-chain, removal, dryRun, diagnose all green with their own test suites.
