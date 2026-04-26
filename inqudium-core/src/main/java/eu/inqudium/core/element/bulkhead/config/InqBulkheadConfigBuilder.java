@@ -12,6 +12,13 @@ import eu.inqudium.core.event.InqEventPublisher;
 import java.time.Duration;
 import java.util.Objects;
 
+/**
+ * @deprecated Replaced by {@link eu.inqudium.config.dsl.BulkheadBuilderBase} as part of the
+ *             configuration redesign (ADR-025). Retained because
+ *             {@link eu.inqudium.imperative.bulkhead.config.InqImperativeBulkheadConfigBuilder}
+ *             still extends it; both are removed in REFACTORING.md step 3.1.
+ */
+@Deprecated(forRemoval = true, since = "0.4.0")
 public abstract class InqBulkheadConfigBuilder
         <B extends InqBulkheadConfigBuilder<B, E>, E extends ConfigExtension<E>>
         extends ExtensionBuilder<E> {

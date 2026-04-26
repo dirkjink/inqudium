@@ -37,7 +37,16 @@ import eu.inqudium.imperative.core.pipeline.InqAsyncExecutor;
  * @param <A> the argument type flowing through the chain
  * @param <R> the return type flowing back through the chain
  * @since 0.4.0
+ *
+ * @deprecated Replaced by {@link eu.inqudium.imperative.bulkhead.InqBulkhead}, accessed
+ *             through {@code Inqudium.configure().imperative(im -> im.bulkhead("name", ...))}
+ *             per ADR-025 / ADR-029. Retained because
+ *             {@code eu.inqudium.imperative.circuitbreaker.CircuitBreaker} and the legacy
+ *             {@code Resilience} DSL still construct bulkheads via {@code Bulkhead.of(...)};
+ *             removed alongside the legacy bulkhead surface in REFACTORING.md step 3.1.
  */
+@Deprecated(forRemoval = true, since = "0.4.0")
+@SuppressWarnings("deprecation")
 public interface Bulkhead<A, R>
         extends InqDecorator<A, R>,
         InqExecutor<A, R>,

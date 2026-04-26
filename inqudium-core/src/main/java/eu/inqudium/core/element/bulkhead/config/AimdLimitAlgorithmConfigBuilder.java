@@ -5,6 +5,11 @@ import eu.inqudium.core.config.ExtensionBuilder;
 import java.time.Duration;
 import java.util.Objects;
 
+/**
+ * @deprecated Orphaned alongside {@link AimdLimitAlgorithmConfig} by REFACTORING.md step 1.10;
+ *             revisit when the strategy hot-swap DSL is settled in phase&nbsp;2 (step&nbsp;2.10).
+ */
+@Deprecated(forRemoval = true, since = "0.4.0")
 public class AimdLimitAlgorithmConfigBuilder extends ExtensionBuilder<AimdLimitAlgorithmConfig> {
     private int initialLimit;
     private int minLimit;

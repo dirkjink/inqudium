@@ -71,7 +71,15 @@ import java.util.concurrent.CompletionStage;
  * {@link BulkheadEventConfig}.</p>
  *
  * @since 0.4.0
+ *
+ * @deprecated Replaced by {@link InqBulkhead} as part of the configuration redesign
+ *             (ADR-025 / ADR-029). Retained because the legacy {@link Bulkhead} interface's
+ *             {@code Bulkhead.of(...)} static factory still constructs instances of this
+ *             class; removed alongside the legacy bulkhead surface in REFACTORING.md step
+ *             3.1.
  */
+@Deprecated(forRemoval = true, since = "0.4.0")
+@SuppressWarnings("deprecation")
 public final class ImperativeBulkhead<A, R> implements Bulkhead<A, R> {
 
     private final Logger logger;

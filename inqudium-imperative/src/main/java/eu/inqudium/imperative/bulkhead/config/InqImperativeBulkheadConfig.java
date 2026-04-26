@@ -16,6 +16,15 @@ import eu.inqudium.imperative.bulkhead.strategy.SemaphoreBulkheadStrategy;
 import java.time.Duration;
 import java.util.Optional;
 
+/**
+ * @deprecated Replaced by {@link eu.inqudium.config.snapshot.BulkheadSnapshot} as part of the
+ *             configuration redesign (ADR-025) and the bulkhead migration in step&nbsp;1.6.
+ *             Retained because {@code eu.inqudium.imperative.circuitbreaker.CircuitBreaker}
+ *             and the legacy {@code Resilience} DSL still reference it; removed alongside
+ *             those in REFACTORING.md step 3.1.
+ */
+@Deprecated(forRemoval = true, since = "0.4.0")
+@SuppressWarnings("deprecation")
 public record InqImperativeBulkheadConfig(
         GeneralConfig general,
         InqBulkheadConfig bulkhead

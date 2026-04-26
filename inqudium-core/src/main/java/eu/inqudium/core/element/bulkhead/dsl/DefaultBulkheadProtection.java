@@ -6,6 +6,14 @@ import eu.inqudium.core.element.bulkhead.config.InqBulkheadConfigBuilder;
 
 import java.time.Duration;
 
+/**
+ * @deprecated Replaced by {@link eu.inqudium.config.dsl.BulkheadBuilderBase} as part of the
+ *             configuration redesign (ADR-025). Retained because the legacy
+ *             {@code AsyncLayerAction} pipeline and the top-level {@code Resilience} DSL still
+ *             reference it; removed alongside the legacy bulkhead DSL in REFACTORING.md step 3.1.
+ */
+@Deprecated(forRemoval = true, since = "0.4.0")
+@SuppressWarnings("deprecation")
 public final class DefaultBulkheadProtection implements BulkheadNaming, BulkheadProtection {
 
     private final InqBulkheadConfigBuilder<?, ?> inqBuilder;
