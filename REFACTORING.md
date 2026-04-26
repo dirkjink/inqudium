@@ -515,7 +515,34 @@ The decision on (1) / (2) / (3) plus the rethrow contract belongs to this step. 
 `BulkheadHotPhase` Javadoc references this REFACTORING.md item; nothing else in the codebase
 flags it.
 
-### 2.10 Phase 2 acceptance criteria
+### 2.10 Orphaned bulkhead strategy/algorithm configs from step 1.10
+
+After step 1.10 deletes the old bulkhead config stack
+(`InqBulkheadConfig` and friends), several smaller config records lose
+all their incoming production references and become orphans. They are
+left in place by 1.10 to avoid pre-empting the strategy hot-swap design
+that phase 2 will need:
+
+- `eu.inqudium.core.element.bulkhead.config.AimdLimitAlgorithmConfig`
+- `eu.inqudium.core.element.bulkhead.config.AimdLimitAlgorithmConfigBuilder`
+- `eu.inqudium.core.element.bulkhead.config.VegasLimitAlgorithmConfig`
+- `eu.inqudium.core.element.bulkhead.config.VegasLimitAlgorithmConfigBuilder`
+- `eu.inqudium.imperative.bulkhead.config.CoDelBulkheadStrategyConfig`
+- `eu.inqudium.imperative.bulkhead.config.CoDelBulkheadStrategyConfigBuilder`
+
+Their corresponding strategy implementations
+(`AdaptiveBulkheadStrategy`, `CoDelBulkheadStrategy`,
+`AdaptiveNonBlockingBulkheadStrategy`) are kept too — they are the
+strategy framework, paradigm-internal, and will be reused once
+phase&nbsp;2's strategy hot-swap arrives.
+
+Revisit when the strategy hot-swap design settles the new strategy-config
+DSL — either reintroduce these records in the new shape (most likely as
+sub-records on `BulkheadSnapshot`, similar to how `BulkheadEventConfig`
+landed in step&nbsp;1.9) or delete them. No code-side TODO is left
+behind; the work item lives only here.
+
+### 2.11 Phase 2 acceptance criteria
 
 - All phase 1 tests still pass.
 - Veto-chain, removal, dryRun, diagnose all green with their own test suites.
