@@ -4,6 +4,8 @@ import eu.inqudium.config.patch.BulkheadPatch;
 import eu.inqudium.config.runtime.ParadigmTag;
 
 import java.time.Duration;
+import java.util.Arrays;
+import java.util.HashSet;
 import java.util.Objects;
 import java.util.Set;
 
@@ -65,6 +67,10 @@ public abstract class BulkheadBuilderBase<P extends ParadigmTag> implements Bulk
      *             to {@code applyTo}.
      */
     protected BulkheadBuilderBase(String name) {
+        // Class-1 validation (ADR-027): fail at the call site, not at applyTo time. The
+        // snapshot's compact constructor enforces the same invariants, but the exception's
+        // stack trace should point at the user's bulkhead("name", ...) call site, not at the
+        // later patch application.
         Objects.requireNonNull(name, "name");
         if (name.isBlank()) {
             throw new IllegalArgumentException("name must not be blank");
@@ -102,7 +108,11 @@ public abstract class BulkheadBuilderBase<P extends ParadigmTag> implements Bulk
         for (String tag : tags) {
             Objects.requireNonNull(tag, "tag element");
         }
-        patch.touchTags(Set.of(tags));
+        // Duplicates are silently deduped: a builder should be construction-friendly, and the
+        // resulting tag set is unordered, so duplicate values carry no semantic information.
+        // Throwing on duplicates would force users to defensively sanitize their inputs before
+        // calling the DSL, which is not what a fluent builder should ask of them.
+        patch.touchTags(new HashSet<>(Arrays.asList(tags)));
         customized = true;
         return this;
     }
