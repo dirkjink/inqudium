@@ -50,6 +50,14 @@ document. They were resolved before phase 1 began and supersede any contradictin
    constructor signature stays as-is for testability; the wiring code in 1.7 must read both values
    from the general snapshot and pass them along.
 
+5. **Reminder for step 2.1 — lift `touchedFields()` to `ComponentPatch<S>`.** Step 1.4 added
+   `touchedFields()` only on `BulkheadPatch`; the `ComponentPatch<S>` interface still exposes
+   only `applyTo(base)`. The phase-2.1 update dispatcher needs to drive the veto chain through a
+   typed but paradigm-agnostic `ComponentPatch<?>` reference and must therefore read touched
+   fields without knowing the concrete patch type. Add the `Set<? extends ComponentField>
+   touchedFields()` method to `ComponentPatch<S>` as part of the dispatcher work in 2.1, and have
+   each per-component patch (Bulkhead and the components migrated in phase&nbsp;3) implement it.
+
 ---
 
 ## Guiding principles
