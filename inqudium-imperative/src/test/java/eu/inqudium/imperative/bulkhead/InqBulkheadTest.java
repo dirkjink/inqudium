@@ -63,8 +63,82 @@ class InqBulkheadTest {
                 InqClock.system(),
                 InqNanoTimeSource.system(),
                 publisher,
+                InqEventPublisher::create,
                 LoggerFactory.NO_OP_LOGGER_FACTORY);
         return new InqBulkhead(live, general);
+    }
+
+    @Nested
+    @DisplayName("per-component publisher")
+    class PerComponentPublisher {
+
+        @Test
+        void should_provision_a_publisher_via_the_general_snapshot_factory() {
+            // What is to be tested: that InqBulkhead constructs its per-component publisher
+            // through GeneralSnapshot.componentPublisherFactory at instantiation time, with
+            // the bulkhead's name and InqElementType.BULKHEAD as identity.
+            // Why successful: the publisher returned by bulkhead.eventPublisher() is exactly
+            // the one our custom factory minted for ("inventory", BULKHEAD).
+            // Why important: this is the central ADR-030 contract — per-component publishers
+            // are sourced from the GeneralSnapshot factory, not shared with the runtime
+            // publisher.
+
+            // Given — a custom factory that returns a sentinel publisher and records the args
+            java.util.concurrent.atomic.AtomicReference<String> capturedName =
+                    new java.util.concurrent.atomic.AtomicReference<>();
+            java.util.concurrent.atomic.AtomicReference<InqElementType> capturedType =
+                    new java.util.concurrent.atomic.AtomicReference<>();
+            InqEventPublisher componentPub = InqEventPublisher.create(
+                    "inventory",
+                    InqElementType.BULKHEAD,
+                    new InqEventExporterRegistry(),
+                    InqPublisherConfig.defaultConfig());
+            try {
+                eu.inqudium.config.snapshot.ComponentEventPublisherFactory factory =
+                        (name, type) -> {
+                            capturedName.set(name);
+                            capturedType.set(type);
+                            return componentPub;
+                        };
+                GeneralSnapshot general = new GeneralSnapshot(
+                        InqClock.system(), InqNanoTimeSource.system(),
+                        publisher, factory, LoggerFactory.NO_OP_LOGGER_FACTORY);
+                LiveContainer<BulkheadSnapshot> live =
+                        new LiveContainer<>(snapshot("inventory", 5, Duration.ZERO));
+
+                // When
+                InqBulkhead bulkhead = new InqBulkhead(live, general);
+
+                // Then
+                assertThat(capturedName.get()).isEqualTo("inventory");
+                assertThat(capturedType.get()).isEqualTo(InqElementType.BULKHEAD);
+                assertThat(bulkhead.eventPublisher()).isSameAs(componentPub);
+            } finally {
+                try {
+                    componentPub.close();
+                } catch (Exception ignored) {
+                    // best effort
+                }
+            }
+        }
+
+        @Test
+        void runtime_publisher_should_remain_separate_from_component_publisher() {
+            // The two publishers serve distinct purposes (ADR-030): the runtime publisher
+            // carries lifecycle topology events (ComponentBecameHotEvent), the component
+            // publisher carries per-call traces. They must not be the same instance.
+
+            // Given
+            LiveContainer<BulkheadSnapshot> live =
+                    new LiveContainer<>(snapshot("inventory", 5, Duration.ZERO));
+            InqBulkhead bulkhead = newBulkhead(live);
+
+            // When / Then
+            assertThat(bulkhead.eventPublisher())
+                    .as("component publisher is the one minted by the factory, not the runtime "
+                            + "publisher passed to the lifecycle base")
+                    .isNotSameAs(publisher);
+        }
     }
 
     @Nested

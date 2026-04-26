@@ -3,6 +3,7 @@ package eu.inqudium.config.runtime;
 import eu.inqudium.config.lifecycle.LifecycleAware;
 import eu.inqudium.config.lifecycle.ListenerRegistry;
 import eu.inqudium.config.snapshot.BulkheadSnapshot;
+import eu.inqudium.core.event.InqEventPublisher;
 
 /**
  * Paradigm-agnostic read surface for a live bulkhead.
@@ -42,4 +43,13 @@ public interface BulkheadHandle<P extends ParadigmTag>
      * @return the number of permits currently held by in-flight calls. Zero when cold.
      */
     int concurrentCalls();
+
+    /**
+     * @return the per-component event publisher this bulkhead uses. Per ADR-030 every live
+     *         component owns its own publisher so subscribers can register directly against
+     *         this component's events without filtering by element name. The publisher's
+     *         identity (element name and element type) matches this handle's
+     *         {@link #name()} and the bulkhead element type.
+     */
+    InqEventPublisher eventPublisher();
 }

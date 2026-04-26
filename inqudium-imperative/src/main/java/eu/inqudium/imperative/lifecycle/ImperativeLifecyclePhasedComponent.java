@@ -157,9 +157,16 @@ public abstract class ImperativeLifecyclePhasedComponent<S extends ComponentSnap
     }
 
     /**
-     * @return the runtime-scoped event publisher passed in at construction time.
+     * @return the runtime-scoped event publisher passed in at construction time. This is the
+     *         publisher carrying lifecycle topology events
+     *         ({@link eu.inqudium.config.event.ComponentBecameHotEvent ComponentBecameHotEvent}
+     *         and the {@code RuntimeComponent*Event} family) — distinct from the per-component
+     *         publisher a concrete subclass exposes via its own
+     *         {@code eventPublisher()} method (see ADR-030). The naming
+     *         {@code runtimePublisher} avoids the clash with the public per-component accessor
+     *         declared on each component's handle interface.
      */
-    protected final InqEventPublisher eventPublisher() {
+    protected final InqEventPublisher runtimePublisher() {
         return eventPublisher;
     }
 

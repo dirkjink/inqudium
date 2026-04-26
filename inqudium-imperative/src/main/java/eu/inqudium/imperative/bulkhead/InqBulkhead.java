@@ -5,6 +5,7 @@ import eu.inqudium.config.runtime.ImperativeBulkhead;
 import eu.inqudium.config.snapshot.BulkheadSnapshot;
 import eu.inqudium.config.snapshot.GeneralSnapshot;
 import eu.inqudium.core.element.InqElementType;
+import eu.inqudium.core.event.InqEventPublisher;
 import eu.inqudium.imperative.lifecycle.ImperativeLifecyclePhasedComponent;
 import eu.inqudium.imperative.lifecycle.spi.ImperativePhase;
 
@@ -27,6 +28,8 @@ public final class InqBulkhead
         extends ImperativeLifecyclePhasedComponent<BulkheadSnapshot>
         implements ImperativeBulkhead {
 
+    private final InqEventPublisher componentEventPublisher;
+
     /**
      * @param live    the live container holding the bulkhead's snapshot. The component's name is
      *                read from the snapshot.
@@ -34,6 +37,14 @@ public final class InqBulkhead
      *                separate {@code eventPublisher} and {@code clock} parameters from earlier
      *                phases are gone — the {@link GeneralSnapshot} is the single truth source
      *                per clarification&nbsp;4 in {@code REFACTORING.md}.
+     *
+     *                <p>Per ADR-030, the per-call component publisher used to emit
+     *                {@code BulkheadOnAcquireEvent} et al. is built here from the snapshot's
+     *                {@code componentPublisherFactory}, with this bulkhead's name and
+     *                {@link InqElementType#BULKHEAD} as its identity. The lifecycle base class
+     *                still receives {@code general.eventPublisher()} (the runtime-scoped
+     *                publisher) for {@code ComponentBecameHotEvent} and other topology events
+     *                — they are intentionally on a different channel.
      */
     public InqBulkhead(
             LiveContainer<BulkheadSnapshot> live,
@@ -44,6 +55,13 @@ public final class InqBulkhead
                 live,
                 general.eventPublisher(),
                 general.clock());
+        this.componentEventPublisher = general.componentPublisherFactory()
+                .create(live.snapshot().name(), InqElementType.BULKHEAD);
+    }
+
+    @Override
+    public InqEventPublisher eventPublisher() {
+        return componentEventPublisher;
     }
 
     @Override

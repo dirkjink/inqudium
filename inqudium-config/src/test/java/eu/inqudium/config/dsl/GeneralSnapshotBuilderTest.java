@@ -1,5 +1,6 @@
 package eu.inqudium.config.dsl;
 
+import eu.inqudium.config.snapshot.ComponentEventPublisherFactory;
 import eu.inqudium.config.snapshot.GeneralSnapshot;
 import eu.inqudium.core.element.InqElementType;
 import eu.inqudium.core.event.InqEventExporterRegistry;
@@ -36,7 +37,43 @@ class GeneralSnapshotBuilderTest {
             assertThat(snapshot.clock()).isNotNull();
             assertThat(snapshot.nanoTimeSource()).isNotNull();
             assertThat(snapshot.eventPublisher()).isNotNull();
+            assertThat(snapshot.componentPublisherFactory()).isNotNull();
             assertThat(snapshot.loggerFactory()).isSameAs(LoggerFactory.NO_OP_LOGGER_FACTORY);
+        }
+
+        @Test
+        void default_component_publisher_factory_should_create_publisher_with_supplied_identity() {
+            // What is to be tested: that the default ComponentEventPublisherFactory passes the
+            // element name and type straight to InqEventPublisher.create — i.e. produces a
+            // publisher that carries the component's identity.
+            // Why successful: the publisher's elementName matches the name we hand the factory.
+            // Why important: ADR-030 specifies that per-component publishers carry the
+            // component's identity; this test pins the default-factory behaviour.
+
+            // Given
+            GeneralSnapshot snapshot = new GeneralSnapshotBuilder().build();
+
+            // When
+            InqEventPublisher pub = snapshot.componentPublisherFactory()
+                    .create("inventory", InqElementType.BULKHEAD);
+            try {
+                // Then — publish a sentinel event and confirm its elementName / elementType
+                var capturedName = new java.util.concurrent.atomic.AtomicReference<String>();
+                var capturedType = new java.util.concurrent.atomic.AtomicReference<InqElementType>();
+                pub.onEvent(eu.inqudium.core.event.InqEvent.class, e -> {
+                    capturedName.set(e.getElementName());
+                    capturedType.set(e.getElementType());
+                });
+                pub.publish(new SentinelComponentEvent("inventory", InqElementType.BULKHEAD));
+                assertThat(capturedName.get()).isEqualTo("inventory");
+                assertThat(capturedType.get()).isEqualTo(InqElementType.BULKHEAD);
+            } finally {
+                try {
+                    pub.close();
+                } catch (Exception ignored) {
+                    // best effort
+                }
+            }
         }
 
         @Test
@@ -90,6 +127,7 @@ class GeneralSnapshotBuilderTest {
                     "explicit", InqElementType.NO_ELEMENT,
                     new InqEventExporterRegistry(), InqPublisherConfig.defaultConfig());
             LoggerFactory lf = c -> eu.inqudium.core.log.Logger.NO_OP_LOGGER;
+            ComponentEventPublisherFactory cf = (n, t) -> pub;
 
             try {
                 // When
@@ -97,6 +135,7 @@ class GeneralSnapshotBuilderTest {
                         .clock(clock)
                         .nanoTimeSource(nano)
                         .eventPublisher(pub)
+                        .componentPublisherFactory(cf)
                         .loggerFactory(lf)
                         .build();
 
@@ -104,6 +143,7 @@ class GeneralSnapshotBuilderTest {
                 assertThat(snapshot.clock()).isSameAs(clock);
                 assertThat(snapshot.nanoTimeSource()).isSameAs(nano);
                 assertThat(snapshot.eventPublisher()).isSameAs(pub);
+                assertThat(snapshot.componentPublisherFactory()).isSameAs(cf);
                 assertThat(snapshot.loggerFactory()).isSameAs(lf);
             } finally {
                 try {
@@ -152,6 +192,13 @@ class GeneralSnapshotBuilderTest {
         }
 
         @Test
+        void should_reject_a_null_component_publisher_factory() {
+            assertThatNullPointerException()
+                    .isThrownBy(() -> new GeneralSnapshotBuilder().componentPublisherFactory(null))
+                    .withMessageContaining("componentPublisherFactory");
+        }
+
+        @Test
         void should_reject_a_null_logger_factory() {
             assertThatNullPointerException()
                     .isThrownBy(() -> new GeneralSnapshotBuilder().loggerFactory(null))
@@ -166,6 +213,14 @@ class GeneralSnapshotBuilderTest {
                     GeneralSnapshotBuilder.DEFAULT_RUNTIME_PUBLISHER_NAME,
                     InqElementType.NO_ELEMENT,
                     Instant.parse("2026-01-01T00:00:00Z"));
+        }
+    }
+
+    /** Component-side sentinel — used by the default-factory test to observe the name/type the
+     *  factory bakes into the publisher's published events. */
+    private static final class SentinelComponentEvent extends eu.inqudium.core.event.InqEvent {
+        SentinelComponentEvent(String name, InqElementType type) {
+            super(0L, 0L, name, type, Instant.parse("2026-01-01T00:00:00Z"));
         }
     }
 }

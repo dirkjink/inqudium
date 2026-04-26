@@ -22,26 +22,31 @@ import java.util.Objects;
  * until a concrete consumer needs them. The old {@code GeneralConfig} is deprecated in
  * step&nbsp;1.10, not earlier.
  *
- * @param clock           wall-clock source for event timestamps.
- * @param nanoTimeSource  monotonic time source for RTT measurements and deadlines.
- * @param eventPublisher  the runtime-scoped event publisher used for lifecycle topology events
- *                        ({@code ComponentBecameHotEvent}, {@code RuntimeComponentAddedEvent},
- *                        ...). Per-component publishers (carrying {@code BulkheadOnAcquireEvent}
- *                        etc., per ADR-003) are introduced together with the bulkhead-event
- *                        port in step&nbsp;1.9 — at that point this field becomes a
- *                        {@code PublisherFactory} or gains a sibling factory field.
- * @param loggerFactory   factory for component logging.
+ * @param clock                     wall-clock source for event timestamps.
+ * @param nanoTimeSource            monotonic time source for RTT measurements and deadlines.
+ * @param eventPublisher            the runtime-scoped event publisher used for lifecycle
+ *                                  topology events ({@code ComponentBecameHotEvent},
+ *                                  {@code RuntimeComponentAddedEvent}, ...). Per-call
+ *                                  component events flow through the per-component publishers
+ *                                  produced by {@code componentPublisherFactory}.
+ * @param componentPublisherFactory factory used at component-materialization time to provision
+ *                                  per-component {@link InqEventPublisher}s. Per ADR-030,
+ *                                  each live component owns its own publisher; this factory is
+ *                                  how the runtime hands them out.
+ * @param loggerFactory             factory for component logging.
  */
 public record GeneralSnapshot(
         InqClock clock,
         InqNanoTimeSource nanoTimeSource,
         InqEventPublisher eventPublisher,
+        ComponentEventPublisherFactory componentPublisherFactory,
         LoggerFactory loggerFactory) {
 
     public GeneralSnapshot {
         Objects.requireNonNull(clock, "clock");
         Objects.requireNonNull(nanoTimeSource, "nanoTimeSource");
         Objects.requireNonNull(eventPublisher, "eventPublisher");
+        Objects.requireNonNull(componentPublisherFactory, "componentPublisherFactory");
         Objects.requireNonNull(loggerFactory, "loggerFactory");
     }
 }

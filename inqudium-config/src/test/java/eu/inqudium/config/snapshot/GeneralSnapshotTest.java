@@ -19,6 +19,7 @@ import static org.assertj.core.api.Assertions.assertThatNullPointerException;
 class GeneralSnapshotTest {
 
     private InqEventPublisher publisher;
+    private final ComponentEventPublisherFactory factory = InqEventPublisher::create;
 
     @BeforeEach
     void setUp() {
@@ -42,12 +43,14 @@ class GeneralSnapshotTest {
         LoggerFactory loggerFactory = LoggerFactory.NO_OP_LOGGER_FACTORY;
 
         // When
-        GeneralSnapshot snapshot = new GeneralSnapshot(clock, nanoTimeSource, publisher, loggerFactory);
+        GeneralSnapshot snapshot = new GeneralSnapshot(
+                clock, nanoTimeSource, publisher, factory, loggerFactory);
 
         // Then
         assertThat(snapshot.clock()).isSameAs(clock);
         assertThat(snapshot.nanoTimeSource()).isSameAs(nanoTimeSource);
         assertThat(snapshot.eventPublisher()).isSameAs(publisher);
+        assertThat(snapshot.componentPublisherFactory()).isSameAs(factory);
         assertThat(snapshot.loggerFactory()).isSameAs(loggerFactory);
     }
 
@@ -56,7 +59,8 @@ class GeneralSnapshotTest {
         // Given / When / Then
         assertThatNullPointerException()
                 .isThrownBy(() -> new GeneralSnapshot(
-                        null, InqNanoTimeSource.system(), publisher, LoggerFactory.NO_OP_LOGGER_FACTORY))
+                        null, InqNanoTimeSource.system(), publisher, factory,
+                        LoggerFactory.NO_OP_LOGGER_FACTORY))
                 .withMessageContaining("clock");
     }
 
@@ -65,7 +69,8 @@ class GeneralSnapshotTest {
         // Given / When / Then
         assertThatNullPointerException()
                 .isThrownBy(() -> new GeneralSnapshot(
-                        InqClock.system(), null, publisher, LoggerFactory.NO_OP_LOGGER_FACTORY))
+                        InqClock.system(), null, publisher, factory,
+                        LoggerFactory.NO_OP_LOGGER_FACTORY))
                 .withMessageContaining("nanoTimeSource");
     }
 
@@ -74,9 +79,19 @@ class GeneralSnapshotTest {
         // Given / When / Then
         assertThatNullPointerException()
                 .isThrownBy(() -> new GeneralSnapshot(
-                        InqClock.system(), InqNanoTimeSource.system(), null,
+                        InqClock.system(), InqNanoTimeSource.system(), null, factory,
                         LoggerFactory.NO_OP_LOGGER_FACTORY))
                 .withMessageContaining("eventPublisher");
+    }
+
+    @Test
+    void should_reject_a_null_component_publisher_factory() {
+        // Given / When / Then
+        assertThatNullPointerException()
+                .isThrownBy(() -> new GeneralSnapshot(
+                        InqClock.system(), InqNanoTimeSource.system(), publisher, null,
+                        LoggerFactory.NO_OP_LOGGER_FACTORY))
+                .withMessageContaining("componentPublisherFactory");
     }
 
     @Test
@@ -84,7 +99,7 @@ class GeneralSnapshotTest {
         // Given / When / Then
         assertThatNullPointerException()
                 .isThrownBy(() -> new GeneralSnapshot(
-                        InqClock.system(), InqNanoTimeSource.system(), publisher, null))
+                        InqClock.system(), InqNanoTimeSource.system(), publisher, factory, null))
                 .withMessageContaining("loggerFactory");
     }
 }

@@ -1,5 +1,6 @@
 package eu.inqudium.config.dsl;
 
+import eu.inqudium.config.snapshot.ComponentEventPublisherFactory;
 import eu.inqudium.config.snapshot.GeneralSnapshot;
 import eu.inqudium.core.element.InqElementType;
 import eu.inqudium.core.event.InqEventPublisher;
@@ -30,6 +31,7 @@ public final class GeneralSnapshotBuilder {
     private InqClock clock;
     private InqNanoTimeSource nanoTimeSource;
     private InqEventPublisher eventPublisher;
+    private ComponentEventPublisherFactory componentPublisherFactory;
     private LoggerFactory loggerFactory;
 
     /**
@@ -74,6 +76,24 @@ public final class GeneralSnapshotBuilder {
     }
 
     /**
+     * Override the per-component publisher factory. Per ADR-030 every live component owns its
+     * own {@link InqEventPublisher}; the factory is what hands them out at component-
+     * materialization time. The default delegates to
+     * {@link InqEventPublisher#create(String, InqElementType)} which binds to the global
+     * default exporter registry — this matches the pre-refactor behaviour. Tests use a custom
+     * factory to capture per-component events into isolated registries.
+     *
+     * @param componentPublisherFactory the factory; non-null.
+     * @return this builder.
+     */
+    public GeneralSnapshotBuilder componentPublisherFactory(
+            ComponentEventPublisherFactory componentPublisherFactory) {
+        this.componentPublisherFactory =
+                Objects.requireNonNull(componentPublisherFactory, "componentPublisherFactory");
+        return this;
+    }
+
+    /**
      * Materialize the snapshot. Unset fields fall back to defaults: system clock, system
      * nano-time source, a {@code "inqudium-runtime"} publisher, and the no-op logger factory.
      *
@@ -85,7 +105,10 @@ public final class GeneralSnapshotBuilder {
         InqEventPublisher p = eventPublisher != null
                 ? eventPublisher
                 : InqEventPublisher.create(DEFAULT_RUNTIME_PUBLISHER_NAME, InqElementType.NO_ELEMENT);
+        ComponentEventPublisherFactory f = componentPublisherFactory != null
+                ? componentPublisherFactory
+                : InqEventPublisher::create;
         LoggerFactory l = loggerFactory != null ? loggerFactory : LoggerFactory.NO_OP_LOGGER_FACTORY;
-        return new GeneralSnapshot(c, n, p, l);
+        return new GeneralSnapshot(c, n, p, f, l);
     }
 }
