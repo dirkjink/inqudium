@@ -38,16 +38,19 @@ public final class DefaultInqRuntime implements InqRuntime {
     private final GeneralSnapshot general;
     private final Map<ParadigmTag, ParadigmContainer<?>> containers;
     private final Map<ParadigmTag, ParadigmProvider> providers;
+    private final BuildReport lastBuildReport;
     private final InqConfigView configView;
     private final AtomicBoolean closed = new AtomicBoolean(false);
 
     public DefaultInqRuntime(
             GeneralSnapshot general,
             Map<ParadigmTag, ParadigmContainer<?>> containers,
-            Map<ParadigmTag, ParadigmProvider> providers) {
+            Map<ParadigmTag, ParadigmProvider> providers,
+            BuildReport lastBuildReport) {
         this.general = Objects.requireNonNull(general, "general");
         this.containers = Map.copyOf(Objects.requireNonNull(containers, "containers"));
         this.providers = Map.copyOf(Objects.requireNonNull(providers, "providers"));
+        this.lastBuildReport = Objects.requireNonNull(lastBuildReport, "lastBuildReport");
         this.configView = new DefaultInqConfigView(this);
     }
 
@@ -73,6 +76,12 @@ public final class DefaultInqRuntime implements InqRuntime {
                             + "classpath.");
         }
         return (Imperative) container;
+    }
+
+    @Override
+    public BuildReport lastBuildReport() {
+        ensureOpen();
+        return lastBuildReport;
     }
 
     @Override

@@ -39,6 +39,19 @@ public interface InqRuntime extends AutoCloseable {
     Imperative imperative();
 
     /**
+     * @return the {@link BuildReport} produced at runtime build time. Carries every class-2
+     *         and class-3 validation finding raised during construction, the per-component
+     *         {@link eu.inqudium.config.validation.ApplyOutcome ApplyOutcome}s for the initial
+     *         materialization, and the build timestamp. Successful builds still produce a
+     *         report — it just has no findings and reports
+     *         {@link BuildReport#isSuccess() isSuccess() == true}. Failed builds do not produce
+     *         a runtime; the report travels in
+     *         {@link eu.inqudium.config.ConfigurationException#report
+     *         ConfigurationException.report()} instead.
+     */
+    BuildReport lastBuildReport();
+
+    /**
      * Apply a DSL-driven update against the running runtime.
      *
      * <p>Phase&nbsp;1 supports {@code add} (a {@code .bulkhead(name, ...)} call against an

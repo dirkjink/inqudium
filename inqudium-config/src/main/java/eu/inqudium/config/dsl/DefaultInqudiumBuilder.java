@@ -1,19 +1,28 @@
 package eu.inqudium.config.dsl;
 
+import eu.inqudium.config.ConfigurationException;
 import eu.inqudium.config.runtime.DefaultInqRuntime;
 import eu.inqudium.config.runtime.ImperativeTag;
 import eu.inqudium.config.runtime.InqRuntime;
 import eu.inqudium.config.runtime.ParadigmContainer;
 import eu.inqudium.config.runtime.ParadigmTag;
 import eu.inqudium.config.runtime.ParadigmUnavailableException;
+import eu.inqudium.config.snapshot.ComponentSnapshot;
 import eu.inqudium.config.snapshot.GeneralSnapshot;
 import eu.inqudium.config.spi.ParadigmProvider;
 import eu.inqudium.config.spi.ParadigmSectionPatches;
+import eu.inqudium.config.validation.BuildReport;
+import eu.inqudium.config.validation.ConsistencyRulePipeline;
+import eu.inqudium.config.validation.ValidationFinding;
+import eu.inqudium.config.validation.rules.BuiltInConsistencyRules;
 
+import java.time.Instant;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.ServiceLoader;
 import java.util.function.Consumer;
+import java.util.stream.Stream;
 
 /**
  * Default implementation of {@link InqudiumBuilder}.
@@ -71,8 +80,6 @@ public final class DefaultInqudiumBuilder implements InqudiumBuilder {
 
     @Override
     public InqudiumBuilder strict() {
-        // TODO(refactor 1.8): wire strict mode into the consistency-rule pipeline so warnings
-        //   elevate to errors during build.
         this.strict = true;
         return this;
     }
@@ -96,11 +103,30 @@ public final class DefaultInqudiumBuilder implements InqudiumBuilder {
                     imperativeProvider.createContainer(general, patches));
         }
 
-        return new DefaultInqRuntime(general, containers, providers);
+        // Class-3 validation: run every registered consistency rule against every materialized
+        // snapshot. Class-1 (DSL setters) and class-2 (snapshot compact constructors) have
+        // already fired by the time we get here; reaching this point means every snapshot is
+        // internally well-formed. Strict mode elevates warnings to errors before the
+        // success/failure decision so a configuration that would have produced only warnings in
+        // lenient mode aborts in strict mode.
+        Stream<? extends ComponentSnapshot> snapshots = containers.values().stream()
+                .flatMap(ParadigmContainer::snapshots);
+        List<ValidationFinding> findings =
+                ConsistencyRulePipeline.apply(snapshots, BuiltInConsistencyRules.all());
+        if (strict) {
+            findings = ConsistencyRulePipeline.elevateWarningsToErrors(findings);
+        }
+        BuildReport report = new BuildReport(
+                Instant.now(), findings, List.of(), Map.of());
+        if (!report.isSuccess()) {
+            throw new ConfigurationException(report);
+        }
+
+        return new DefaultInqRuntime(general, containers, providers, report);
     }
 
     /**
-     * @return whether {@link #strict()} was called. Exposed for phase&nbsp;1.8 wiring.
+     * @return whether {@link #strict()} was called. Exposed for tests and phase-2 wiring.
      */
     public boolean isStrict() {
         return strict;
