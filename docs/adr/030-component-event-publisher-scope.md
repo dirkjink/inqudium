@@ -4,30 +4,35 @@
 **Date:** 2026-04-26
 **Deciders:** Core team
 **Related:** ADR-003 (event publisher), ADR-025 (configuration architecture), ADR-026 (runtime
-container), ADR-029 (component lifecycle implementation pattern). Driver for refactor step 1.9.
+container), ADR-029 (component lifecycle implementation pattern).
 
 ## Context
 
-Phase 1.9 of the configuration refactor ports the bulkhead's per-call events
-({`BulkheadOnAcquireEvent`, `BulkheadOnReleaseEvent`, `BulkheadOnRejectEvent`,
-`BulkheadWaitTraceEvent`, `BulkheadRollbackTraceEvent`}, all gated by `BulkheadEventConfig`)
-into the new {`InqBulkhead`}/`BulkheadHotPhase`. The TODO comment above
-`BulkheadHotPhase#execute` flags the work and points at this ADR for the design decision.
+Every resilience component (bulkhead, circuit breaker, retry, time limiter, ...) emits per-call
+events — typically a small set of state-transition events plus optional traces, gated by a
+component-specific event-config record. The bulkhead is the first component refactored against
+the new configuration architecture, so it serves as the running example here, but the question
+this ADR settles is framework-wide: where do per-call component events go?
 
-The current state after step 1.7 is:
+The bulkhead's events are {`BulkheadOnAcquireEvent`, `BulkheadOnReleaseEvent`,
+`BulkheadOnRejectEvent`, `BulkheadWaitTraceEvent`, `BulkheadRollbackTraceEvent`}, gated by
+`BulkheadEventConfig`. Other components carry analogous event sets — `CircuitBreakerOnOpenEvent`,
+`RetryOnAttemptEvent`, etc. — that need the same channel decision.
 
-- `GeneralSnapshot` has one `InqEventPublisher` field — the **runtime-scoped publisher**,
-  created with element name `"inqudium-runtime"` and `InqElementType.NO_ELEMENT`.
-- The lifecycle base class (`ImperativeLifecyclePhasedComponent`) uses this publisher to emit
-  `ComponentBecameHotEvent` (a runtime-topology event per ADR-026 / ADR-028).
-- No per-component publisher exists yet. The bulkhead has no event channel of its own.
+Two channels exist in the configuration architecture:
 
-The pre-refactor `ImperativeBulkhead` followed ADR-003: each bulkhead instance owned a private
-`InqEventPublisher` created with `(name, InqElementType.BULKHEAD)`. The runtime-scoped publisher
-in `GeneralSnapshot` is a new addition introduced in step 1.7 and serves a different purpose
-(runtime topology, not per-call traces).
+- The **runtime-scoped publisher** carried on `GeneralSnapshot`. It is created with element
+  name `"inqudium-runtime"` and `InqElementType.NO_ELEMENT`, and is used by the lifecycle base
+  class (`ImperativeLifecyclePhasedComponent`) to emit topology events
+  (`ComponentBecameHotEvent` per ADR-026 / ADR-028).
+- A **per-component publisher** owned by each component instance, created with the component's
+  own `(name, type)` identity. ADR-003 already established this pattern: *"Each element
+  instance owns its own publisher."*
 
-To wire 1.9 events through, we have to decide: where do per-call bulkhead events go?
+The architectural question is whether per-call component events should flow through the
+runtime-scoped publisher (one channel for everything) or through a per-component publisher
+owned by the component instance (one channel per component). The answer is a framework-wide
+rule, not a bulkhead-only decision.
 
 ## Two options
 
@@ -54,12 +59,13 @@ runtime.general().eventPublisher().onEvent(BulkheadOnAcquireEvent.class, event -
 - Subscription granularity is coarse — every consumer sees every component's events and must
   filter. Filtering costs CPU on the publish path (the dispatcher iterates every consumer for
   every event).
-- Backpressure leaks across components. A high-traffic bulkhead's events delay every
-  consumer's view of every other component's events because dispatch is sequential
-  (per ADR-003: "Consumers and exporters are invoked sequentially on the calling thread").
-- Lifecycle is wrong. When a component is removed (phase 2), per-component subscriptions
-  cannot be cleaned up automatically — the runtime publisher does not know which subscribers
-  belonged to which component.
+- Backpressure leaks across components. A high-traffic component's events (e.g. a busy
+  bulkhead) delay every consumer's view of every other component's events because dispatch is
+  sequential (per ADR-003: "Consumers and exporters are invoked sequentially on the calling
+  thread").
+- Lifecycle is wrong. When a component is removed, per-component subscriptions cannot be
+  cleaned up automatically — the runtime publisher does not know which subscribers belonged
+  to which component.
 - Conflicts with ADR-003. The existing rule is *"Each element instance owns its own
   publisher"*; sharing the runtime publisher across components flips that on its head.
 
@@ -84,48 +90,52 @@ public interface ComponentEventPublisherFactory {
 }
 ```
 
-The bulkhead constructs its publisher via the factory:
+Each component constructs its publisher via the factory at materialization time. For the
+bulkhead, that looks like:
 
 ```java
-// In InqBulkhead constructor (phase 1.9)
+// In InqBulkhead constructor — the same shape applies to other component constructors
 this.eventPublisher = general.componentPublisherFactory().create(name, InqElementType.BULKHEAD);
 ```
 
 Subscribers reach a specific component's publisher through its handle:
 
 ```java
-// Subscriber side
+// Subscriber side — using a bulkhead as the example component
 ImperativeBulkhead inventory = runtime.imperative().bulkhead("inventory");
 inventory.eventPublisher().onEvent(BulkheadOnAcquireEvent.class, event -> { ... });
 ```
 
-(A new accessor `eventPublisher()` lands on the bulkhead handle as part of 1.9.)
+Every component handle exposes an `eventPublisher()` accessor for this purpose. The contract
+is paradigm-agnostic and component-type-agnostic.
 
 **Pros:**
-- Subscription granularity matches the user's mental model: subscribe to *this* bulkhead's
-  events, not "all events filtered down to this bulkhead". No per-event filter cost on the hot
-  path.
-- Backpressure isolated. A noisy bulkhead's consumers contend only with each other; quiet
-  bulkheads stay snappy regardless.
-- Lifecycle binding is automatic. When phase 2 introduces structural removal, the component
-  closes its publisher; subscribers are released; nothing leaks.
-- Consistent with ADR-003. The pre-refactor architecture already worked this way; the new
-  architecture preserves that property without a special case.
+- Subscription granularity matches the user's mental model: subscribe to *this* component's
+  events, not "all events filtered down to this component". No per-event filter cost on the
+  hot path.
+- Backpressure isolated. A noisy component's consumers contend only with each other; quiet
+  components stay snappy regardless.
+- Lifecycle binding is automatic. When structural removal lands, the component closes its
+  publisher; subscribers are released; nothing leaks.
+- Consistent with ADR-003. Per-element publishers are the established framework rule; this
+  decision preserves the rule rather than carving out an exception.
 - Continuity with `InqEventPublisher.create(name, type)` semantics. The publisher's own
-  identity (name, type) lines up with the events it carries — no synthetic
-  `"inqudium-runtime"` name behind events that conceptually belong to "inventory".
+  identity (name, type) lines up with the events it carries — events that conceptually belong
+  to a specific component (say, the `"inventory"` bulkhead) are not delivered behind a
+  synthetic `"inqudium-runtime"` name.
 
 **Cons:**
 - Cross-component dashboards have to subscribe to multiple publishers (one per component).
-  Mitigated by a thin helper on the runtime: a future `runtime.config().forEachBulkhead(c -> ...)`
-  iterator that subscribes to each. Out of scope for 1.9.
+  Mitigated by a thin helper on the runtime: a future iterator that walks every component of
+  a given type (e.g. every bulkhead) and subscribes to each.
 - The factory is one extra field on `GeneralSnapshot`. The default factory delegates to
   `InqEventPublisher.create(name, type)` so the common case (no test injection, no custom
   exporter wiring) requires zero code.
-- `runtime.close()` does not currently propagate to per-component publishers in phase 1
-  because phase 1 has no structural removal. The publishers stay alive until JVM shutdown.
-  This is a known phase-1 trade-off; phase 2's structural removal closes them as part of
-  component shutdown. Documented in 1.9; explicitly noted as "phase-2 responsibility".
+- `runtime.close()` does not currently propagate to per-component publishers because the
+  runtime does not yet support structural component removal. The publishers stay alive until
+  JVM shutdown. This is a temporary state — once structural removal exists, component
+  shutdown closes its publisher as part of the cascade, and the cleanup gap closes
+  automatically.
 
 ## Decision
 
@@ -133,41 +143,42 @@ inventory.eventPublisher().onEvent(BulkheadOnAcquireEvent.class, event -> { ... 
 component construct its own publisher at materialization time. The runtime-scoped publisher
 stays for topology events.
 
-The decision is driven primarily by ADR-003 continuity (per-element publishers were already the
-established pattern) and by the lifecycle correctness gain (component removal in phase 2
-closes only the affected component's publisher; subscribers are released cleanly without the
-runtime needing a registry of which subscribers belong to which component).
+The decision is driven primarily by ADR-003 continuity (per-element publishers are the
+established pattern) and by the lifecycle correctness gain: component removal closes only the
+affected component's publisher, releasing its subscribers cleanly without the runtime needing
+a registry of which subscribers belong to which component.
 
-The cross-component-dashboard cost is real but addressable — a paradigm-iterating helper on
+The cross-component-dashboard cost is real but addressable — a component-iterating helper on
 the runtime closes the gap with a few lines of code, and it can land when there is concrete
-demand. Until then, a dashboard that wants every bulkhead subscribes per-bulkhead in a loop
-over `runtime.imperative().bulkheadNames()`.
+demand. Until then, a dashboard that wants every component of a given type (e.g. every
+bulkhead) iterates the per-paradigm container's name list and subscribes to each.
 
 ## Consequences
 
 **Positive:**
 
-- ADR-003 stays the rule, not the exception. Per-component publishers continue across the
-  refactor without a special case for the new architecture.
+- ADR-003 stays the rule, not the exception. Per-component publishers are the framework-wide
+  pattern for per-call events.
 - Hot-path filtering cost removed. Subscribers see only the events they asked for; the
   dispatcher does not iterate over irrelevant consumers.
-- Backpressure isolated per component. A noisy `inventory` bulkhead's consumer pool does not
-  delay `payments` event delivery.
-- Phase-2 structural removal has an obvious cleanup path: closing the component's publisher.
-  No per-subscriber tracking at the runtime level.
+- Backpressure isolated per component. A noisy component's consumer pool (e.g. an
+  `inventory` bulkhead's) does not delay event delivery for any other component (e.g. a
+  `payments` retry).
+- Structural removal has an obvious cleanup path: closing the component's publisher. No
+  per-subscriber tracking at the runtime level.
 - Tests can inject a custom factory through `GeneralSnapshotBuilder.componentPublisherFactory(...)`
-  to capture per-component events into isolated registries — already the pattern lifecycle
-  tests use today for the runtime publisher.
+  to capture per-component events into isolated registries.
 
 **Negative:**
 
-- Cross-component subscribers must subscribe per-component. Mitigated by a future helper;
-  acceptable as a phase-1 cost.
+- Cross-component subscribers must subscribe per-component. Mitigated by a future helper on
+  the runtime; an acceptable cost.
 - `GeneralSnapshot` grows by one field. The default factory keeps the common case
   zero-ceremony; users opting out of the default pay the explicit-setter cost only when they
   want isolation.
-- Runtime close in phase 1 does not propagate to per-component publishers. Known trade-off,
-  documented; phase 2's structural removal closes them as part of component shutdown.
+- Until structural component removal exists, `runtime.close()` does not propagate to
+  per-component publishers — they stay alive until JVM shutdown. A temporary state, resolved
+  once component shutdown becomes part of the runtime cascade.
 
 **Neutral:**
 
@@ -178,43 +189,7 @@ over `runtime.imperative().bulkheadNames()`.
 - The factory's signature uses `(String name, InqElementType type)` to mirror the existing
   `InqEventPublisher.create(name, type)` form. Adding a third parameter (e.g. publisher
   config) later is a backwards-compatible interface change with default methods.
-- The bulkhead handle gains an `eventPublisher()` accessor in 1.9. Other paradigm bulkhead
-  handles (`ReactiveBulkhead`, etc.) get the same accessor when they land — the contract is
-  paradigm-agnostic.
+- Every component handle exposes an `eventPublisher()` accessor — bulkheads, circuit
+  breakers, retries, time limiters. Across paradigms (imperative, reactive, RxJava 3,
+  coroutines) the accessor carries the same contract; the publisher is paradigm-agnostic.
 
-## Phase-1 implementation outline (driven by step 1.9)
-
-Once this ADR is accepted:
-
-1. Add `ComponentEventPublisherFactory` interface in `eu.inqudium.config.snapshot` (next to
-   `GeneralSnapshot`).
-2. Add the factory field to `GeneralSnapshot` and `GeneralSnapshotBuilder`. Default delegates
-   to `InqEventPublisher.create(name, type)`.
-3. `InqBulkhead` constructor builds its own publisher from the factory; a new field
-   `private final InqEventPublisher componentEventPublisher` stores it. Add the
-   `eventPublisher()` accessor on `ImperativeBulkhead`.
-4. Introduce the gating record alongside the snapshot:
-
-   - New record `BulkheadEventConfig(boolean onAcquire, boolean onRelease, boolean onReject,
-     boolean waitTrace, boolean rollbackTrace)` in `eu.inqudium.config.snapshot`, with static
-     factories `disabled()` and `allEnabled()`.
-   - Add a non-null `BulkheadEventConfig events` field on `BulkheadSnapshot`, validated by the
-     compact constructor.
-   - Add `BulkheadField.EVENTS` and `BulkheadPatch.touchEvents(BulkheadEventConfig)`.
-   - Add `events(BulkheadEventConfig)` to `BulkheadBuilderBase` (a sub-builder form may be
-     added if it stays compact; the direct setter is sufficient on its own).
-   - Default in the builder: `BulkheadEventConfig.disabled()`. Events are opt-in so the hot
-     path stays unweighted unless the user asks for them. Presets do not touch `events` —
-     event configuration is application metadata, not preset territory (analogous to the tags
-     decision in step 1.5).
-
-   `BulkheadHotPhase` then reads `snapshot.events()` to decide whether to publish each event
-   at the documented call points.
-5. The lifecycle base class continues to publish `ComponentBecameHotEvent` on the
-   runtime-scoped publisher; that path does not change.
-6. Tests cover: default factory equivalence to legacy behaviour, custom factory injection,
-   per-component subscription via the handle, gating via `BulkheadEventConfig`, event payload
-   correctness for each of the four events.
-
-The runtime-`close` propagation to per-component publishers remains explicitly out of scope
-for phase 1 and is the responsibility of phase 2's structural-removal work item.
