@@ -34,6 +34,7 @@
     <modules>
         <module>inqudium-bom</module>
         <module>inqudium-core</module>
+        <module>inqudium-config</module>
         <module>inqudium-context-slf4j</module>
         <module>inqudium-kotlin</module>
         <module>inqudium-reactor</module>
@@ -103,6 +104,11 @@
             <dependency>
                 <groupId>eu.inqudium</groupId>
                 <artifactId>inqudium-core</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>eu.inqudium</groupId>
+                <artifactId>inqudium-config</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>

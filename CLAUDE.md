@@ -143,4 +143,16 @@ Search the code first (`project_knowledge_search` has no equivalent here — use
 
 - For smaller, manageable tasks, bug fixes can be started directly with the coding.
 - If the task becomes unexpectedly extensive, it can lead to architectural breaks; in that case, create a Markdown document explaining the possible solutions, favoring one solution and explaining why.
-- 
+
+## TODO discipline
+
+A TODO comment is a debt the next person to read the code has to service. Justified TODOs are expensive enough to defer, or unsolved enough that "the right answer" isn't clear yet. They are not a polite way to skip work.
+
+Before adding a TODO, check both gates:
+
+1. **Is the solution path clear?** If yes, the TODO does not document an open question — it documents a known fix that wasn't done. Do the fix.
+2. **Is the effort proportional?** If the fix is small (a few methods, a record, a Map type change), do it now. TODOs are for genuinely large detours that would derail the current task.
+
+If neither gate is met, the change is not a TODO. It is a known cleanup that belongs in the current commit or in an immediately-following one. Reviewer feedback in particular should not be funneled into TODO comments unless one of the two gates is genuinely met.
+
+When a TODO is genuinely warranted, it carries a phase tag (`TODO(1.9):`, `TODO(3.4):`) or a clear next-action description. "TODO: revisit" without specifics is not acceptable.

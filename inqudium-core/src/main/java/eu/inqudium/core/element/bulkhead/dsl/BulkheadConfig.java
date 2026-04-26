@@ -6,7 +6,13 @@ import java.time.Duration;
 
 /**
  * The immutable configuration for a Bulkhead instance.
+ *
+ * @deprecated Replaced by {@link eu.inqudium.config.snapshot.BulkheadSnapshot} as part of the
+ *             configuration redesign (ADR-025). Retained because the legacy DSL types
+ *             {@link BulkheadNaming} / {@link BulkheadProtection} / {@link DefaultBulkheadProtection}
+ *             still reference it; removed alongside them in REFACTORING.md step 3.1.
  */
+@Deprecated(forRemoval = true, since = "0.4.0")
 public record BulkheadConfig(
         String name,
         int maxConcurrentCalls,

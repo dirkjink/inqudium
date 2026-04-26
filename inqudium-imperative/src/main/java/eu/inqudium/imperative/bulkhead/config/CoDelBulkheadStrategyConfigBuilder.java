@@ -5,6 +5,13 @@ import eu.inqudium.core.config.ExtensionBuilder;
 import java.time.Duration;
 import java.util.Objects;
 
+/**
+ * @deprecated Orphaned alongside {@link CoDelBulkheadStrategyConfig} by REFACTORING.md
+ *             step 1.10; revisit when the strategy hot-swap DSL is settled in phase&nbsp;2
+ *             (step&nbsp;2.10).
+ */
+@Deprecated(forRemoval = true, since = "0.4.0")
+@SuppressWarnings("deprecation")
 public class CoDelBulkheadStrategyConfigBuilder extends ExtensionBuilder<CoDelBulkheadStrategyConfig> {
     private Duration targetDelay;
     private Duration interval;

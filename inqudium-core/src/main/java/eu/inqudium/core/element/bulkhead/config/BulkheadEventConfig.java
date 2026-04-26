@@ -45,7 +45,13 @@ import java.util.Set;
  * }</pre>
  *
  * @since 0.3.0
+ * @deprecated Replaced by {@link eu.inqudium.config.snapshot.BulkheadEventConfig} (the new
+ *             record in the configuration architecture, ADR-030, with the same simple name in
+ *             a different package). Retained because {@link InqBulkheadConfig} and
+ *             {@code CoDelBulkheadStrategy} still reference it; removed alongside the legacy
+ *             bulkhead surface in REFACTORING.md step 3.1.
  */
+@Deprecated(forRemoval = true, since = "0.4.0")
 public final class BulkheadEventConfig {
 
     private static final BulkheadEventConfig STANDARD = new BulkheadEventConfig(Collections.emptySet());

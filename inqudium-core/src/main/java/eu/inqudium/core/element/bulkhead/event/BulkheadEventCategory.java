@@ -1,7 +1,5 @@
 package eu.inqudium.core.element.bulkhead.event;
 
-import eu.inqudium.core.element.bulkhead.config.BulkheadEventConfig;
-
 /**
  * Categories of bulkhead events that can be independently enabled or disabled.
  *
@@ -13,11 +11,9 @@ import eu.inqudium.core.element.bulkhead.config.BulkheadEventConfig;
  * which have zero per-call overhead. Events are the Flight Recorder you enable
  * when something is wrong.
  *
- * <p>The {@linkplain BulkheadEventConfig#standard() standard configuration}
- * disables all per-call event categories. Only rejection events are enabled,
- * because rejections are exceptional and operationally relevant. Lifecycle
- * and trace events are enabled on demand via the
- * {@linkplain BulkheadEventConfig#diagnostic() diagnostic configuration}.
+ * <p>By default — see {@code eu.inqudium.config.snapshot.BulkheadEventConfig#disabled()} in
+ * the new configuration architecture (ADR-030) — all per-call event categories are off; the
+ * bulkhead pays no event-publishing cost on the hot path until the user opts in.
  *
  * <h2>Categories</h2>
  *
