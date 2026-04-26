@@ -7,6 +7,7 @@ import java.time.Duration;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.locks.ReentrantLock;
 
 /**
  * Static (fixed-limit) bulkhead strategy using a fair {@link Semaphore}.
@@ -29,9 +30,10 @@ import java.util.concurrent.atomic.AtomicInteger;
  */
 public final class SemaphoreBulkheadStrategy implements BlockingBulkheadStrategy {
 
-    private final Semaphore semaphore;
+    private final AdjustableSemaphore semaphore;
     private final AtomicInteger acquiredPermits;
-    private final int maxConcurrent;
+    private final ReentrantLock adjustLock = new ReentrantLock();
+    private volatile int maxConcurrent;
 
     public SemaphoreBulkheadStrategy(int maxConcurrentCalls) {
         if (maxConcurrentCalls < 0) {
@@ -39,8 +41,44 @@ public final class SemaphoreBulkheadStrategy implements BlockingBulkheadStrategy
                     "maxConcurrentCalls must be >= 0, got " + maxConcurrentCalls);
         }
         this.maxConcurrent = maxConcurrentCalls;
-        this.semaphore = new Semaphore(maxConcurrentCalls, true);
+        this.semaphore = new AdjustableSemaphore(maxConcurrentCalls, true);
         this.acquiredPermits = new AtomicInteger(0);
+    }
+
+    /**
+     * Adjust the configured concurrency limit in place, without disrupting permits already
+     * held by in-flight calls.
+     *
+     * <p>Increasing the limit releases the additional permits immediately. Decreasing the
+     * limit reduces the future capacity via {@link Semaphore}'s {@code reducePermits}: held
+     * permits are not revoked, but the available pool shrinks as in-flight calls release
+     * back through the narrower window.
+     *
+     * <p>This is the in-place adjustment Phase&nbsp;1 of the configuration refactor supports.
+     * Strategy-type changes (semaphore → CoDel, etc.) are Phase&nbsp;2 and require coordination
+     * with the veto chain to drain in-flight calls before swapping.
+     *
+     * @param newMaxConcurrent the new limit; must be {@code >= 0}.
+     * @throws IllegalArgumentException if {@code newMaxConcurrent} is negative.
+     */
+    public void adjustMaxConcurrent(int newMaxConcurrent) {
+        if (newMaxConcurrent < 0) {
+            throw new IllegalArgumentException(
+                    "newMaxConcurrent must be >= 0, got " + newMaxConcurrent);
+        }
+        adjustLock.lock();
+        try {
+            int oldMax = this.maxConcurrent;
+            int delta = newMaxConcurrent - oldMax;
+            if (delta > 0) {
+                semaphore.release(delta);
+            } else if (delta < 0) {
+                semaphore.reducePermitsExternal(-delta);
+            }
+            this.maxConcurrent = newMaxConcurrent;
+        } finally {
+            adjustLock.unlock();
+        }
     }
 
     /**
@@ -103,5 +141,21 @@ public final class SemaphoreBulkheadStrategy implements BlockingBulkheadStrategy
     @Override
     public int maxConcurrentCalls() {
         return maxConcurrent;
+    }
+
+    /**
+     * Subclass of {@link Semaphore} that exposes the protected {@code reducePermits} method
+     * so {@link #adjustMaxConcurrent} can shrink the pool. Held privately — application code
+     * never sees this type.
+     */
+    private static final class AdjustableSemaphore extends Semaphore {
+
+        AdjustableSemaphore(int permits, boolean fair) {
+            super(permits, fair);
+        }
+
+        void reducePermitsExternal(int reduction) {
+            reducePermits(reduction);
+        }
     }
 }
