@@ -1,5 +1,7 @@
 package eu.inqudium.config.validation;
 
+import eu.inqudium.config.runtime.ComponentKey;
+
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -21,13 +23,15 @@ import java.util.stream.Stream;
  * @param timestamp         the moment the report was finalized.
  * @param findings          class-2 and class-3 validation findings; never null.
  * @param vetoFindings      hot-state veto findings (phase&nbsp;2); never null.
- * @param componentOutcomes per-component apply outcome keyed by component name; never null.
+ * @param componentOutcomes per-component apply outcome keyed by {@link ComponentKey} — the
+ *                          {@code (name, paradigm)} tuple — so same-name components in different
+ *                          paradigms do not collide silently. Never null.
  */
 public record BuildReport(
         Instant timestamp,
         List<ValidationFinding> findings,
         List<VetoFinding> vetoFindings,
-        Map<String, ApplyOutcome> componentOutcomes) {
+        Map<ComponentKey, ApplyOutcome> componentOutcomes) {
 
     public BuildReport {
         Objects.requireNonNull(timestamp, "timestamp");

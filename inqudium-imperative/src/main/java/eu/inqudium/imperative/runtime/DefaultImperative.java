@@ -2,11 +2,13 @@ package eu.inqudium.imperative.runtime;
 
 import eu.inqudium.config.live.LiveContainer;
 import eu.inqudium.config.patch.BulkheadPatch;
+import eu.inqudium.config.runtime.ComponentKey;
 import eu.inqudium.config.runtime.Imperative;
 import eu.inqudium.config.runtime.ImperativeBulkhead;
 import eu.inqudium.config.runtime.ImperativeTag;
 import eu.inqudium.config.runtime.ParadigmTag;
 import eu.inqudium.config.snapshot.BulkheadSnapshot;
+import eu.inqudium.config.snapshot.ComponentSnapshot;
 import eu.inqudium.config.snapshot.GeneralSnapshot;
 import eu.inqudium.config.spi.ParadigmSectionPatches;
 import eu.inqudium.config.validation.ApplyOutcome;
@@ -19,6 +21,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.ReentrantLock;
+import java.util.stream.Stream;
 
 /**
  * Default implementation of the {@link Imperative} paradigm container.
@@ -95,11 +98,11 @@ public final class DefaultImperative implements Imperative {
     }
 
     @Override
-    public Map<String, ApplyOutcome> applyUpdate(
+    public Map<ComponentKey, ApplyOutcome> applyUpdate(
             GeneralSnapshot general, ParadigmSectionPatches patches) {
         Objects.requireNonNull(general, "general");
         Objects.requireNonNull(patches, "patches");
-        Map<String, ApplyOutcome> outcomes = new LinkedHashMap<>();
+        Map<ComponentKey, ApplyOutcome> outcomes = new LinkedHashMap<>();
         updateLock.lock();
         try {
             Map<String, Entry> current = bulkheads.get();
@@ -107,16 +110,17 @@ public final class DefaultImperative implements Imperative {
             for (Map.Entry<String, BulkheadPatch> e : patches.bulkheadPatches().entrySet()) {
                 String name = e.getKey();
                 BulkheadPatch patch = e.getValue();
+                ComponentKey key = new ComponentKey(name, ImperativeTag.INSTANCE);
                 Entry existing = next.get(name);
                 if (existing != null) {
                     BulkheadSnapshot before = existing.live().snapshot();
                     BulkheadSnapshot after = existing.live().apply(patch);
-                    outcomes.put(name,
+                    outcomes.put(key,
                             before.equals(after) ? ApplyOutcome.UNCHANGED : ApplyOutcome.PATCHED);
                 } else {
                     Entry created = provider.materializeBulkhead(general, name, patch);
                     next.put(name, created);
-                    outcomes.put(name, ApplyOutcome.ADDED);
+                    outcomes.put(key, ApplyOutcome.ADDED);
                 }
             }
             bulkheads.set(Map.copyOf(next));
@@ -124,5 +128,10 @@ public final class DefaultImperative implements Imperative {
             updateLock.unlock();
         }
         return outcomes;
+    }
+
+    @Override
+    public Stream<? extends ComponentSnapshot> snapshots() {
+        return bulkheads.get().values().stream().map(e -> e.live().snapshot());
     }
 }

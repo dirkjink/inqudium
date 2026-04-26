@@ -1,7 +1,9 @@
 package eu.inqudium.imperative.runtime;
 
 import eu.inqudium.config.Inqudium;
+import eu.inqudium.config.runtime.ComponentKey;
 import eu.inqudium.config.runtime.ImperativeBulkhead;
+import eu.inqudium.config.runtime.ImperativeTag;
 import eu.inqudium.config.runtime.InqRuntime;
 import eu.inqudium.config.snapshot.BulkheadSnapshot;
 import eu.inqudium.config.validation.ApplyOutcome;
@@ -46,7 +48,9 @@ class RuntimeUpdateTest {
                 // Then
                 assertThat(bh.snapshot().maxConcurrentCalls()).isEqualTo(40);
                 assertThat(report.componentOutcomes())
-                        .containsEntry("inventory", ApplyOutcome.PATCHED);
+                        .containsEntry(
+                                new ComponentKey("inventory", ImperativeTag.INSTANCE),
+                                ApplyOutcome.PATCHED);
                 assertThat(report.isSuccess()).isTrue();
             }
         }
@@ -90,7 +94,9 @@ class RuntimeUpdateTest {
                         .bulkhead("inventory", b -> b.maxConcurrentCalls(15))));
 
                 assertThat(report.componentOutcomes())
-                        .containsEntry("inventory", ApplyOutcome.UNCHANGED);
+                        .containsEntry(
+                                new ComponentKey("inventory", ImperativeTag.INSTANCE),
+                                ApplyOutcome.UNCHANGED);
             }
         }
     }
@@ -109,7 +115,9 @@ class RuntimeUpdateTest {
                         .bulkhead("payments", b -> b.protective())));
 
                 assertThat(report.componentOutcomes())
-                        .containsEntry("payments", ApplyOutcome.ADDED);
+                        .containsEntry(
+                                new ComponentKey("payments", ImperativeTag.INSTANCE),
+                                ApplyOutcome.ADDED);
                 assertThat(runtime.imperative().bulkheadNames())
                         .containsExactlyInAnyOrder("inventory", "payments");
 
@@ -160,8 +168,12 @@ class RuntimeUpdateTest {
                         .bulkhead("payments", b -> b.protective())));
 
                 assertThat(report.componentOutcomes())
-                        .containsEntry("inventory", ApplyOutcome.PATCHED)
-                        .containsEntry("payments", ApplyOutcome.ADDED);
+                        .containsEntry(
+                                new ComponentKey("inventory", ImperativeTag.INSTANCE),
+                                ApplyOutcome.PATCHED)
+                        .containsEntry(
+                                new ComponentKey("payments", ImperativeTag.INSTANCE),
+                                ApplyOutcome.ADDED);
                 assertThat(runtime.imperative().bulkhead("inventory").snapshot()
                         .maxConcurrentCalls()).isEqualTo(99);
                 assertThat(runtime.imperative().findBulkhead("payments")).isPresent();

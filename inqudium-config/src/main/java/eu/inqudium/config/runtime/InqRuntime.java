@@ -1,12 +1,10 @@
 package eu.inqudium.config.runtime;
 
 import eu.inqudium.config.dsl.InqudiumUpdateBuilder;
-import eu.inqudium.config.patch.ComponentPatch;
 import eu.inqudium.config.snapshot.GeneralSnapshot;
 import eu.inqudium.config.validation.BuildReport;
 import eu.inqudium.config.validation.DiagnosisReport;
 
-import java.util.List;
 import java.util.function.Consumer;
 
 /**
@@ -47,20 +45,17 @@ public interface InqRuntime extends AutoCloseable {
      * unknown name) and {@code patch} (the same call against a known name — only the touched
      * fields change). Structural removal and dry-run are deferred to phase&nbsp;2.
      *
+     * <p>The direct-patch entry point used by format adapters (YAML, JSON, ...) is intentionally
+     * absent in phase&nbsp;1. It needs a paradigm/component-type discriminator on each patch to
+     * route correctly across paradigms; that signature lands together with the format adapters
+     * in phase&nbsp;2 (likely as {@code apply(Map<ParadigmTag, List<ComponentPatch<?>>>)}).
+     * Until then, callers route through {@link #update}.
+     *
      * @param updater configures the update via the same DSL used at initial-config time.
      * @return a report describing per-component outcomes, validation findings, and any
      *         phase-2 vetoes.
      */
     BuildReport update(Consumer<InqudiumUpdateBuilder> updater);
-
-    /**
-     * Apply a list of pre-built patches directly. Used by format adapters (YAML, JSON) that
-     * translate text into patches and feed them in en bloc.
-     *
-     * @param patches the patches to apply, in order.
-     * @return a report describing the apply outcomes.
-     */
-    BuildReport apply(List<? extends ComponentPatch<?>> patches);
 
     /**
      * Validate an update without applying it. Stub in phase&nbsp;1; fully wired up in phase&nbsp;2

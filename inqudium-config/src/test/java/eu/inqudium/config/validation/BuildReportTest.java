@@ -1,5 +1,7 @@
 package eu.inqudium.config.validation;
 
+import eu.inqudium.config.runtime.ComponentKey;
+import eu.inqudium.config.runtime.ImperativeTag;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -48,19 +50,22 @@ class BuildReportTest {
             // Given
             List<ValidationFinding> mutableFindings = new ArrayList<>();
             mutableFindings.add(warning("R"));
-            Map<String, ApplyOutcome> mutableOutcomes = new HashMap<>();
-            mutableOutcomes.put("c", ApplyOutcome.PATCHED);
+            ComponentKey keyC = new ComponentKey("c", ImperativeTag.INSTANCE);
+            ComponentKey keyC2 = new ComponentKey("c2", ImperativeTag.INSTANCE);
+            Map<ComponentKey, ApplyOutcome> mutableOutcomes = new HashMap<>();
+            mutableOutcomes.put(keyC, ApplyOutcome.PATCHED);
 
             BuildReport report = new BuildReport(
                     Instant.now(), mutableFindings, List.of(), mutableOutcomes);
 
             // When
             mutableFindings.add(error("LATER"));
-            mutableOutcomes.put("c2", ApplyOutcome.ADDED);
+            mutableOutcomes.put(keyC2, ApplyOutcome.ADDED);
 
             // Then
             assertThat(report.findings()).hasSize(1);
-            assertThat(report.componentOutcomes()).containsOnly(Map.entry("c", ApplyOutcome.PATCHED));
+            assertThat(report.componentOutcomes())
+                    .containsOnly(Map.entry(keyC, ApplyOutcome.PATCHED));
         }
 
         @Test

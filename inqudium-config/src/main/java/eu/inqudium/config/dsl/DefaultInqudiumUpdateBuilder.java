@@ -19,9 +19,24 @@ import java.util.function.Consumer;
  * yields the accumulated per-paradigm patches that {@code runtime.update} dispatches to each
  * paradigm container's {@code applyUpdate} entry point.
  *
- * <p>Receives the providers from {@code DefaultInqRuntime} so the same {@code ParadigmProvider}
- * instances that built the runtime also build the update sections. This keeps a single source
- * of truth for paradigm-specific factories.
+ * <h2>Provider vs. container — two distinct concerns</h2>
+ *
+ * <p>The update builder accumulates <em>patches</em> and never owns or touches a live component.
+ * The split is deliberate:
+ *
+ * <ul>
+ *   <li>{@link ParadigmProvider} — paradigm-side DSL factory and materialization recipe. The
+ *       update builder holds the provider map so the same provider that built the runtime also
+ *       drives the update DSL — one source of truth for paradigm-specific factories. The
+ *       provider is stateless across calls.</li>
+ *   <li>{@link eu.inqudium.config.runtime.ParadigmContainer ParadigmContainer} — runtime-side
+ *       live registry of components. Owned by the {@code InqRuntime}; the update builder never
+ *       references it. {@code runtime.update} extracts patches from this builder and hands
+ *       them to the container's {@code applyUpdate} entry point separately.</li>
+ * </ul>
+ *
+ * <p>Keeping the builder provider-only (no container reference) means an update builder can be
+ * constructed and used for {@code dryRun} without any risk of accidental mutation through it.
  */
 public final class DefaultInqudiumUpdateBuilder implements InqudiumUpdateBuilder {
 

@@ -2,8 +2,8 @@ package eu.inqudium.config.runtime;
 
 import eu.inqudium.config.dsl.DefaultInqudiumUpdateBuilder;
 import eu.inqudium.config.dsl.InqudiumUpdateBuilder;
-import eu.inqudium.config.patch.ComponentPatch;
 import eu.inqudium.config.snapshot.BulkheadSnapshot;
+import eu.inqudium.config.snapshot.ComponentSnapshot;
 import eu.inqudium.config.snapshot.GeneralSnapshot;
 import eu.inqudium.config.spi.ParadigmProvider;
 import eu.inqudium.config.spi.ParadigmSectionPatches;
@@ -29,9 +29,9 @@ import java.util.stream.Stream;
  * a single {@link AtomicBoolean closed flag}: every accessor checks {@link #ensureOpen()} and
  * raises {@link IllegalStateException} after close. Closing is idempotent.
  *
- * <p>Phase&nbsp;1 stubs {@link #update}, {@link #apply}, {@link #dryRun}, and {@link #diagnose}
- * — the runtime is queryable but not mutable through these entry points. Step&nbsp;1.7-D wires
- * the update path; phases&nbsp;2 and beyond complete the rest.
+ * <p>Cross-paradigm views iterate {@link ParadigmContainer#snapshots()} on every container
+ * without branching on container type — adding a new paradigm in later phases is a pure
+ * implementation task in the new container; this class does not need to be touched.
  */
 public final class DefaultInqRuntime implements InqRuntime {
 
@@ -81,7 +81,7 @@ public final class DefaultInqRuntime implements InqRuntime {
         Objects.requireNonNull(updater, "updater");
         DefaultInqudiumUpdateBuilder builder = new DefaultInqudiumUpdateBuilder(providers);
         updater.accept(builder);
-        Map<String, ApplyOutcome> outcomes = new LinkedHashMap<>();
+        Map<ComponentKey, ApplyOutcome> outcomes = new LinkedHashMap<>();
         for (Map.Entry<ParadigmTag, ParadigmSectionPatches> e
                 : builder.toSectionPatches().entrySet()) {
             ParadigmContainer<?> container = containers.get(e.getKey());
@@ -95,19 +95,6 @@ public final class DefaultInqRuntime implements InqRuntime {
             outcomes.putAll(container.applyUpdate(general, e.getValue()));
         }
         return new BuildReport(Instant.now(), List.of(), List.of(), outcomes);
-    }
-
-    @Override
-    public BuildReport apply(List<? extends ComponentPatch<?>> patches) {
-        ensureOpen();
-        Objects.requireNonNull(patches, "patches");
-        // Direct-patch entry point used by format adapters (YAML, JSON, ...). Phase 1 ships
-        // the update-DSL path; the direct-list path needs a paradigm/component-type
-        // discriminator on each patch to route correctly, which we add together with the
-        // adapters in a later phase.
-        throw new UnsupportedOperationException(
-                "runtime.apply(patches) lands together with the format adapters; use "
-                        + "runtime.update(...) for now.");
     }
 
     @Override
@@ -136,36 +123,42 @@ public final class DefaultInqRuntime implements InqRuntime {
     }
 
     /**
-     * @return the per-paradigm container map, for the config view.
+     * @return a stream over every component snapshot across every paradigm. Iterates each
+     *         container's {@link ParadigmContainer#snapshots()} in declaration order. The view
+     *         is consistent at the moment of each element production but not transactionally
+     *         consistent across components.
      */
-    Map<ParadigmTag, ParadigmContainer<?>> containers() {
-        return containers;
+    Stream<ComponentSnapshot> allSnapshots() {
+        return containers.values().stream()
+                .flatMap(ParadigmContainer::snapshots)
+                .map(s -> s);
     }
 
     /**
-     * @return a stream over every bulkhead snapshot across every paradigm.
+     * @return a stream over every bulkhead snapshot across every paradigm. Built on top of
+     *         {@link #allSnapshots()} and filtered down to {@link BulkheadSnapshot}.
      */
     Stream<BulkheadSnapshot> bulkheadSnapshots() {
-        Stream<BulkheadSnapshot> result = Stream.empty();
-        ParadigmContainer<?> imperative = containers.get(ImperativeTag.INSTANCE);
-        if (imperative instanceof Imperative imp) {
-            result = Stream.concat(result,
-                    imp.bulkheadNames().stream()
-                            .map(imp::bulkhead)
-                            .map(BulkheadHandle::snapshot));
-        }
-        return result;
+        return allSnapshots()
+                .filter(BulkheadSnapshot.class::isInstance)
+                .map(BulkheadSnapshot.class::cast);
     }
 
     /**
-     * @return the bulkhead snapshot for the given (name, paradigm) tuple, if configured.
+     * @return the bulkhead snapshot for the given {@code (name, paradigm)} tuple, if configured.
+     *         Looks up the paradigm's container, then filters its snapshot stream by name and
+     *         {@link BulkheadSnapshot} type — no {@code instanceof} on the container itself.
      */
     Optional<BulkheadSnapshot> findBulkhead(String name, ParadigmTag paradigm) {
         ParadigmContainer<?> container = containers.get(paradigm);
-        if (container instanceof Imperative imp) {
-            return imp.findBulkhead(name).map(BulkheadHandle::snapshot);
+        if (container == null) {
+            return Optional.empty();
         }
-        return Optional.empty();
+        return container.snapshots()
+                .filter(s -> s.name().equals(name))
+                .filter(BulkheadSnapshot.class::isInstance)
+                .map(BulkheadSnapshot.class::cast)
+                .findFirst();
     }
 
     private void ensureOpen() {
@@ -199,8 +192,8 @@ public final class DefaultInqRuntime implements InqRuntime {
         }
 
         @Override
-        public Stream<eu.inqudium.config.snapshot.ComponentSnapshot> all() {
-            return runtime.bulkheadSnapshots().map(s -> s);
+        public Stream<ComponentSnapshot> all() {
+            return runtime.allSnapshots();
         }
 
         @Override
@@ -212,18 +205,5 @@ public final class DefaultInqRuntime implements InqRuntime {
         public Optional<BulkheadSnapshot> findBulkhead(String name, ParadigmTag paradigm) {
             return runtime.findBulkhead(name, paradigm);
         }
-    }
-
-    // Suppress IDE warnings on unused import; ApplyOutcome is referenced by the BuildReport
-    // shape in update/apply once 1.7-D wires them up.
-    @SuppressWarnings("unused")
-    private static final ApplyOutcome OUTCOME_PLACEHOLDER = ApplyOutcome.UNCHANGED;
-
-    /**
-     * Build a placeholder LinkedHashMap-backed component-outcomes container. Used by 1.7-D to
-     * collect per-component outcomes during update.
-     */
-    static Map<String, ApplyOutcome> emptyOutcomes() {
-        return new LinkedHashMap<>();
     }
 }
