@@ -27,6 +27,11 @@
             <artifactId>inqudium-aspect</artifactId>
             <scope>compile</scope>
         </dependency>
+        <dependency>
+            <groupId>eu.inqudium</groupId>
+            <artifactId>inqudium-core</artifactId>
+            <scope>compile</scope>
+        </dependency>
 
         <!-- ========================= -->
         <!--  AspectJ                  -->

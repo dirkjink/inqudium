@@ -43,11 +43,6 @@
             <artifactId>aspectjrt</artifactId>
             <scope>compile</scope>
         </dependency>
-        <dependency>
-            <groupId>org.aspectj</groupId>
-            <artifactId>aspectjweaver</artifactId>
-            <scope>compile</scope>
-        </dependency>
 
         <!-- ========================= -->
         <!--  Test                     -->

@@ -18,15 +18,10 @@
     </description>
 
     <dependencies>
-        <!-- Annotation scanning + PipelineFactory -->
+        <!-- Core types referenced by the auto-configuration class -->
         <dependency>
             <groupId>eu.inqudium</groupId>
-            <artifactId>inqudium-annotation</artifactId>
-            <scope>compile</scope>
-        </dependency>
-        <dependency>
-            <groupId>eu.inqudium</groupId>
-            <artifactId>inqudium-annotation-support</artifactId>
+            <artifactId>inqudium-core</artifactId>
             <scope>compile</scope>
         </dependency>
         <dependency>
@@ -35,12 +30,23 @@
             <scope>compile</scope>
         </dependency>
 
-        <!-- AsyncPipelineTerminal for hybrid sync/async dispatch -->
+        <!-- Spring Boot auto-configuration -->
         <dependency>
-            <groupId>eu.inqudium</groupId>
-            <artifactId>inqudium-imperative</artifactId>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-autoconfigure</artifactId>
             <scope>compile</scope>
-            <optional>true</optional>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework</groupId>
+            <artifactId>spring-context</artifactId>
+            <scope>compile</scope>
+        </dependency>
+
+        <!-- Logging (SLF4J API only) -->
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-api</artifactId>
+            <scope>provided</scope>
         </dependency>
         <dependency>
             <groupId>ch.qos.logback</groupId>
@@ -48,21 +54,34 @@
             <scope>provided</scope>
         </dependency>
 
-        <!-- Spring Boot auto-configuration -->
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-autoconfigure</artifactId>
-            <scope>compile</scope>
-        </dependency>
-
-        <!-- Spring AOP for @Aspect support -->
+        <!-- Spring AOP runtime — required for @Aspect activation, not at compile time -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-aspectj</artifactId>
-            <scope>compile</scope>
+            <scope>runtime</scope>
         </dependency>
 
         <!-- Test -->
+        <dependency>
+            <groupId>eu.inqudium</groupId>
+            <artifactId>inqudium-annotation</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>eu.inqudium</groupId>
+            <artifactId>inqudium-imperative</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework</groupId>
+            <artifactId>spring-beans</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-test</artifactId>
+            <scope>test</scope>
+        </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>
