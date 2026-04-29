@@ -365,7 +365,7 @@ public final class VegasLimitAlgorithm implements InqLimitAlgorithm {
     }
 
     /**
-     * <b>Performant</b> preset — prioritizes throughput over caution.
+     * <b>Permissive</b> preset — prioritizes throughput over caution.
      *
      * <p>Designed for downstream services with high, elastic capacity where
      * under-utilization is more costly than brief oversaturation (e.g., autoscaling
@@ -397,7 +397,7 @@ public final class VegasLimitAlgorithm implements InqLimitAlgorithm {
      *
      * @return a throughput-optimized Vegas algorithm
      */
-    public static VegasLimitAlgorithm performant() {
+    public static VegasLimitAlgorithm permissive() {
         return new VegasLimitAlgorithm(
                 100,                       // initialLimit: high starting point
                 10,                        // minLimit: substantial floor for elastic backends

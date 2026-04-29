@@ -691,7 +691,48 @@ This step makes the strategy pattern visible in user-facing documentation. Cover
 - Hot-swap preconditions: zero in-flight calls required for `STRATEGY` patches.
 - The `strategy` field in the configuration reference table.
 
-### 2.16 Function-wrapper and proxy-wrapper audit
+### 2.16 Restore algorithm presets in the strategy DSL
+
+The legacy `AimdLimitAlgorithm` and `VegasLimitAlgorithm` classes ship three named presets
+each — `protective()`, `balanced()`, `permissive()` — as static factory methods, with
+carefully-tuned parameter sets and documented trade-offs (slow growth vs. aggressive
+backoff, tolerant error detection, low utilization gate, etc.). The presets carry
+substantial operational knowledge: each one names a workload archetype and supplies the
+parameter values that were chosen against that archetype.
+
+The strategy DSL introduced in 2.10.C — `AimdAlgorithmBuilder` and `VegasAlgorithmBuilder`
+— exposes per-field setters but does not surface the presets. The `balanced` values
+survived as the sub-builders' default field values; `protective` and `permissive` did
+not make the migration. A user wanting a *protective adaptive bulkhead* through the DSL
+must read the legacy class's Javadoc and replicate the parameter values manually.
+
+This step restores symmetry. Both algorithm sub-builders gain `protective()`,
+`balanced()`, `permissive()` setters that produce the same parameter sets the legacy
+static factories produce. The existing per-field setters continue to work; calling a
+preset followed by a field setter refines the preset (preset-then-customize discipline,
+parallel to the top-level builder).
+
+The asymmetry to fix is also pedagogical: the top-level `BulkheadBuilder` has presets,
+the algorithm sub-builders should too. A user reading the user guide should not have to
+learn *"presets exist at one level but not the other"*.
+
+Coverage:
+
+- `AimdAlgorithmBuilder.protective()` / `.balanced()` / `.permissive()` with values
+  matching `AimdLimitAlgorithm.protective()` / `.balanced()` / `.permissive()` exactly.
+- `VegasAlgorithmBuilder.protective()` / `.balanced()` / `.permissive()` with values
+  matching `VegasLimitAlgorithm.protective()` / `.balanced()` / `.permissive()` exactly.
+- Preset-then-customize discipline applied: a preset followed by an individual setter
+  refines the preset; an individual setter followed by a preset throws
+  `IllegalStateException`. Same shape as the top-level builder's preset guard.
+- Tests pin each preset's resulting parameter values against the legacy class's static
+  factory method's values, so any future drift in either place is caught at build time.
+- User guide updated: the *Strategy defaults* table in the Strategies section gains
+  `protective` / `balanced` / `permissive` rows for the two algorithm sub-builders, with
+  the parameter values inline (parallel to how the top-level Presets table lists its
+  values).
+
+### 2.17 Function-wrapper and proxy-wrapper audit
 
 The core module exposes wrapper mechanisms that pre-date the snapshot/patch architecture:
 function wrappers and proxy wrappers used to apply resilience patterns to user code. These
@@ -705,7 +746,7 @@ wrappers must be checked against the current bulkhead architecture:
 - Are the wrappers covered by tests that exercise them through a complete bulkhead, not
   just a mock?
 
-### 2.17 AspectJ integration
+### 2.18 AspectJ integration
 
 The AspectJ integration module against the new bulkhead architecture.
 
@@ -716,7 +757,7 @@ The AspectJ integration module against the new bulkhead architecture.
 - Test suite (if it exists) runs green; if it doesn't exist or doesn't exercise the new
   architecture's surface, this is the moment to add it.
 
-### 2.18 Spring and Spring Boot integration
+### 2.19 Spring and Spring Boot integration
 
 The Spring integration module and the Spring Boot starter against the new architecture.
 
@@ -728,7 +769,7 @@ The Spring integration module and the Spring Boot starter against the new archit
   hot? Is shutdown coordinated with Spring's context shutdown?
 - Example application or integration tests demonstrating the typical usage pattern.
 
-### 2.19 Bulkhead integration test module
+### 2.20 Bulkhead integration test module
 
 A new module — `inqudium-bulkhead-integration-tests` — that exercises the bulkhead as a
 *complete stack* across all integration variants.
@@ -764,7 +805,7 @@ top-to-bottom.
 
 ### Phase 2 closure
 
-After 2.11 through 2.19 are complete and reviewed:
+After 2.11 through 2.20 are complete and reviewed:
 
 - `REFACTORING.md` is deleted. Its purpose is fulfilled.
 - `AUDIT_FINDINGS.md` is deleted alongside.

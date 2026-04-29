@@ -1,7 +1,7 @@
 # AUDIT_FINDINGS.md
 
 Findings from the bulkhead pattern completion audit (REFACTORING.md sub-steps
-2.12 through 2.17). Each entry describes a concrete observation made during the
+2.12 through 2.20). Each entry describes a concrete observation made during the
 audit, its priority, and a suggestion for where it should land — a later sub-step,
 TODO.md, IDEAS.md, an ADR update, or no action.
 
@@ -591,3 +591,196 @@ in den User-Guide; der existiert (`docs/user-guide/`).
 **Begründung der Priorität:**
 
 Bewusste Setzung. Würde sich erst ändern, wenn die Library Release-ready ist.
+
+---
+
+## Post-2.14 — `inqudium-core` declares SLF4J as a compile-scope dependency
+
+**Bereich:** 2.14.3 (cross-cutting, surfaced during the dead-code sweep)
+**Priorität:** wichtig
+**Vorschlag:** ADR-Audit-Refactor (das nächste REFACTORING.md). Architectural drift between documentation and actual dependencies.
+
+**Beobachtung:**
+
+`inqudium-core/pom.xml` declares `org.slf4j:slf4j-api` with `<scope>compile</scope>`
+and `ch.qos.logback:logback-classic` with `<scope>provided</scope>`. The relevant
+classes are `eu.inqudium.core.log.Slf4jLoggerFactory` and the `Slf4j*Action`
+helpers used by it.
+
+`CLAUDE.md` describes `inqudium-core` as carrying *"JDK-only dependencies"* and
+ADR-005 is frequently cited for that constraint. The current dependency
+declaration contradicts that statement: SLF4J is on the compile path, which means
+every consumer of `inqudium-core` transitively pulls in `slf4j-api` whether they
+want logging or not.
+
+Three plausible resolutions, in order of likelihood:
+
+1. **`inqudium-core` should be JDK-only (intent matches doc).** Then the SLF4J
+   compile dependency is a bug; `Slf4jLoggerFactory` and `Slf4j*Action` should
+   move to `inqudium-context-slf4j` (which is currently effectively empty — see
+   companion finding below). `inqudium-core` keeps only the `LoggerFactory`
+   abstraction it already exposes.
+
+2. **`inqudium-core` is allowed to carry SLF4J (doc is stale).** Then `CLAUDE.md`
+   and any related ADR text need updating. The compile-scope dependency would be
+   intentional and documented.
+
+3. **A middle path: `optional=true` or `<scope>provided</scope>`.** The classes
+   stay where they are, but consumers do not pull them in transitively. Less
+   architecturally pure than option 1, but smaller change.
+
+The architectural-statement version (option 1) is the one that fits the existing
+"JDK-only" framing: a resilience library that does not impose a logging framework
+on its consumers. The presence of an effectively-empty
+`inqudium-context-slf4j` module suggests this was the original intent.
+
+**Begründung der Priorität:**
+
+Documentation and module structure are out of sync. A consumer reading `CLAUDE.md`
+or ADR-005 builds a different mental model than what the build files produce.
+The fix is mechanical (move two-three classes between modules, adjust pom.xml
+scopes); the design decision (which option) is the question for the ADR audit.
+
+---
+
+## Post-2.14 — `inqudium-context-slf4j` is effectively empty
+
+**Bereich:** 2.14.2 (companion to the SLF4J-in-core finding)
+**Priorität:** nachrangig
+**Vorschlag:** ADR-Audit-Refactor — bundle with the SLF4J-in-core decision; the resolution of the two findings is coupled.
+
+**Beobachtung:**
+
+The `inqudium-context-slf4j` module exists in the multi-module build but contains
+no Java sources — only an SPI marker file. If this module is meant to be the
+home for the SLF4J bridge (the companion finding above suggests it is), then
+the actual bridge code (`Slf4jLoggerFactory`, `Slf4j*Action`) lives in the wrong
+place: in `inqudium-core` instead of here.
+
+Resolution paths track those of the SLF4J-in-core finding:
+
+- If `inqudium-core` is to become JDK-only, the bridge moves into this module
+  and the module gains its first real content. Consumers who want SLF4J wiring
+  add a dependency on `inqudium-context-slf4j` explicitly.
+- If `inqudium-core` is to keep SLF4J, this module is redundant and should be
+  deleted to match.
+
+Either resolution closes the gap; choosing between them is what the ADR audit
+must do.
+
+**Begründung der Priorität:**
+
+A module that contains nothing is either a stub waiting for content or a leftover
+that should be deleted. Either way it confuses readers of the build structure.
+Routed together with the SLF4J-in-core finding because the same decision settles
+both.
+
+---
+
+## Post-2.12 — Algorithm presets are missing from the DSL sub-builders
+
+**Bereich:** 2.12.2 (post-hoc; missed during the original 2.12 audit pass)
+**Priorität:** wichtig
+**Vorschlag:** Aufnahme in einen neuen Sub-Step **2.16** (Restore algorithm presets in the strategy DSL). The existing 2.16–2.19 sequence renumbers to 2.17–2.20.
+
+**Beobachtung:**
+
+The legacy `AimdLimitAlgorithm` and `VegasLimitAlgorithm` classes carry three named presets
+each as static factory methods:
+
+- `AimdLimitAlgorithm.protective()` / `.balanced()` / `.permissive()`
+- `VegasLimitAlgorithm.protective()` / `.balanced()` / `.permissive()`
+
+Each preset is a carefully-tuned parameter set with a documented operational archetype:
+*protective* prioritizes stability over throughput (initialLimit=20, slow windowed growth,
+aggressive 0.5 backoff, tolerant 15% error rate threshold, 5s smoothing); *balanced* is the
+production default; *permissive* tolerates higher error rates for non-critical or legacy
+services. The Javadoc on each preset includes a parameter table with deliberate values —
+this is substantive operational knowledge encoded in code.
+
+The new DSL sub-builders introduced in 2.10.C — `AimdAlgorithmBuilder` and
+`VegasAlgorithmBuilder` — expose per-field setters and a single `balanced`-derived default
+set, but **do not expose the three named presets**. A user who wants a *protective adaptive
+bulkhead* through the DSL must read the legacy class's Javadoc and replicate the parameter
+values manually:
+
+```java
+// What the user must write today:
+.bulkhead("payments", b -> b
+    .protective()
+    .adaptive(a -> a.aimd(x -> x
+        .initialLimit(20)
+        .minLimit(1)
+        .maxLimit(200)
+        .backoffRatio(0.5)
+        .smoothingTimeConstant(Duration.ofSeconds(5))
+        .errorRateThreshold(0.15)
+        .windowedIncrease(true)
+        .minUtilizationThreshold(0.5))))
+
+// What the user should be able to write:
+.bulkhead("payments", b -> b
+    .protective()
+    .adaptive(a -> a.aimd(x -> x.protective())))
+```
+
+The asymmetry compounds: the top-level `BulkheadBuilder` has `.protective()` /
+`.balanced()` / `.permissive()`. The algorithm sub-builders inside `.adaptive(...)` and
+`.adaptiveNonBlocking(...)` do not. A user reading the user guide encounters preset
+vocabulary at the top level but no preset vocabulary one level deeper, with no explanation
+for the asymmetry.
+
+`VegasAlgorithmBuilder.java` carries an explicit comment:
+*"Defaults match the `balanced` preset of the deprecated phase-1 `VegasLimitAlgorithmConfigBuilder`
+so that `.vegas(v -> {})` produces a usable algorithm out of the box."* — confirming that
+the *balanced* preset survived as the default, while *protective* and *permissive* did not
+make the migration. This is a Phase-1-migration omission, not a deliberate design choice.
+
+**Begründung der Priorität:**
+
+This is a functional regression of substantive operational knowledge. The presets are not
+cosmetic — they encode parameter tuning that a typical user has neither the expertise nor
+the time to redo manually. Without them, the adaptive strategies are technically reachable
+through the DSL but practically harder to use than they need to be, and the discoverability
+of *"protective vs. permissive"* archetypes is lost. Pattern-completeness in the sense of
+2.12 requires DSL parity with the legacy surface, not just functional reachability of the
+underlying strategies.
+
+---
+
+## Post-2.12 — Audit process: DSL-surface depth was not part of the 2.12 audit
+
+**Bereich:** Audit-process retrospective (no specific 2.12.x bucket)
+**Priorität:** nachrangig
+**Vorschlag:** keine Aktion. Recorded so the same blind spot does not recur on the next
+pattern's audit (Circuit Breaker). Should inform the audit checklist for that effort.
+
+**Beobachtung:**
+
+The 2.12 audit checked whether all four bulkhead strategies are *reachable* through the
+DSL — they are. It did not check whether the *depth* of the DSL surface (preset
+vocabulary, sub-config richness, parameter coverage) matches the depth of the legacy
+surface. The algorithm-preset omission (companion finding above) was therefore missed.
+
+The blind spot has a name: the audit treated the DSL as a binary gate (*"can the user
+construct each strategy?"*) rather than as a surface with depth (*"can the user construct
+each strategy at the same level of convenience the legacy API offered?"*). The first
+question has a yes/no answer; the second is a richer question that requires comparing the
+new DSL's setter inventory against the legacy class's Javadoc and static factory methods,
+sub-builder by sub-builder.
+
+For the next pattern audit (Circuit Breaker, when its own refactor reaches a similar
+maturity), the checklist should include explicitly:
+
+- For each named DSL building block, list every static factory method, named preset, and
+  Javadoc-documented archetype on the legacy counterpart.
+- Verify that the new DSL exposes each one. If a deliberate omission was made (e.g.,
+  *"this preset never made sense in retrospect"*), it must be documented in an ADR or in
+  REFACTORING.md, not silently dropped.
+- Run this check sub-builder by sub-builder, not just at the top level.
+
+**Begründung der Priorität:**
+
+Process retrospective, not a code defect. The fix is to remember the lesson next time. No
+action needed in the bulkhead refactor itself — the companion finding (the actual
+preset-restoration) handles the substantive work.

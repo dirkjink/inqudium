@@ -11,9 +11,18 @@ import java.util.Objects;
  * <p>Every setter validates its argument at the call site (ADR-027 class&nbsp;1) so the
  * exception's stack trace points at the offending DSL line rather than at the snapshot's
  * compact constructor. The defaults applied at construction time match the {@code balanced}
- * preset of the deprecated phase-1 {@code AimdLimitAlgorithmConfigBuilder}, so a user who
+ * preset of {@link eu.inqudium.core.element.bulkhead.algo.AimdLimitAlgorithm}, so a user who
  * calls {@code .aimd(a -> {})} without further customization gets a usable, production-ready
  * algorithm.
+ *
+ * <h2>Presets</h2>
+ *
+ * <p>Three named presets — {@link #protective()}, {@link #balanced()}, {@link #permissive()} —
+ * mirror the static factories on {@code AimdLimitAlgorithm} and produce the same parameter
+ * sets. They are baselines: call a preset first, then refine individual fields with the
+ * per-field setters. Calling a preset <em>after</em> an individual setter throws
+ * {@link IllegalStateException}, matching the discipline enforced by the top-level
+ * {@code BulkheadBuilder}.
  *
  * <p>Builders are not thread-safe — they are short-lived per DSL invocation, populated on a
  * single thread, and consumed once.
@@ -29,9 +38,72 @@ public final class AimdAlgorithmBuilder {
     private boolean windowedIncrease = true;
     private double minUtilizationThreshold = 0.6;
 
+    private boolean customized;
+
     AimdAlgorithmBuilder() {
         // Package-private — instantiated only by AdaptiveConfigBuilder /
         // AdaptiveNonBlockingConfigBuilder when the user calls .aimd(...).
+    }
+
+    /**
+     * Apply the {@code protective} baseline — slow growth, aggressive backoff, tolerant error
+     * detection. Must be called before any individual field setter.
+     *
+     * @return this builder, for chaining.
+     * @throws IllegalStateException if any field setter has already been called on this builder.
+     */
+    public AimdAlgorithmBuilder protective() {
+        guardPresetOrdering();
+        this.initialLimit = 20;
+        this.minLimit = 1;
+        this.maxLimit = 200;
+        this.backoffRatio = 0.5;
+        this.smoothingTimeConstant = Duration.ofSeconds(5);
+        this.errorRateThreshold = 0.15;
+        this.windowedIncrease = true;
+        this.minUtilizationThreshold = 0.5;
+        return this;
+    }
+
+    /**
+     * Apply the {@code balanced} baseline — the recommended production default. Equivalent to
+     * the values applied at construction time, so calling it on an otherwise untouched builder
+     * is a no-op (other than marking the builder as preset-applied for style).
+     *
+     * @return this builder, for chaining.
+     * @throws IllegalStateException if any field setter has already been called on this builder.
+     */
+    public AimdAlgorithmBuilder balanced() {
+        guardPresetOrdering();
+        this.initialLimit = 50;
+        this.minLimit = 5;
+        this.maxLimit = 500;
+        this.backoffRatio = 0.7;
+        this.smoothingTimeConstant = Duration.ofSeconds(2);
+        this.errorRateThreshold = 0.1;
+        this.windowedIncrease = true;
+        this.minUtilizationThreshold = 0.6;
+        return this;
+    }
+
+    /**
+     * Apply the {@code permissive} baseline — fast growth, gentle backoff, strict error
+     * detection. Must be called before any individual field setter.
+     *
+     * @return this builder, for chaining.
+     * @throws IllegalStateException if any field setter has already been called on this builder.
+     */
+    public AimdAlgorithmBuilder permissive() {
+        guardPresetOrdering();
+        this.initialLimit = 100;
+        this.minLimit = 10;
+        this.maxLimit = 1000;
+        this.backoffRatio = 0.85;
+        this.smoothingTimeConstant = Duration.ofSeconds(1);
+        this.errorRateThreshold = 0.05;
+        this.windowedIncrease = false;
+        this.minUtilizationThreshold = 0.75;
+        return this;
     }
 
     /**
@@ -45,6 +117,7 @@ public final class AimdAlgorithmBuilder {
                     "initialLimit must be positive, got: " + value);
         }
         this.initialLimit = value;
+        this.customized = true;
         return this;
     }
 
@@ -59,6 +132,7 @@ public final class AimdAlgorithmBuilder {
                     "minLimit must be positive, got: " + value);
         }
         this.minLimit = value;
+        this.customized = true;
         return this;
     }
 
@@ -73,6 +147,7 @@ public final class AimdAlgorithmBuilder {
                     "maxLimit must be positive, got: " + value);
         }
         this.maxLimit = value;
+        this.customized = true;
         return this;
     }
 
@@ -88,6 +163,7 @@ public final class AimdAlgorithmBuilder {
                     "backoffRatio must be in (0.0, 1.0], got: " + value);
         }
         this.backoffRatio = value;
+        this.customized = true;
         return this;
     }
 
@@ -103,6 +179,7 @@ public final class AimdAlgorithmBuilder {
                     "smoothingTimeConstant must be strictly positive, got: " + value);
         }
         this.smoothingTimeConstant = value;
+        this.customized = true;
         return this;
     }
 
@@ -117,6 +194,7 @@ public final class AimdAlgorithmBuilder {
                     "errorRateThreshold must be in [0.0, 1.0], got: " + value);
         }
         this.errorRateThreshold = value;
+        this.customized = true;
         return this;
     }
 
@@ -127,6 +205,7 @@ public final class AimdAlgorithmBuilder {
      */
     public AimdAlgorithmBuilder windowedIncrease(boolean value) {
         this.windowedIncrease = value;
+        this.customized = true;
         return this;
     }
 
@@ -141,6 +220,7 @@ public final class AimdAlgorithmBuilder {
                     "minUtilizationThreshold must be in [0.0, 1.0], got: " + value);
         }
         this.minUtilizationThreshold = value;
+        this.customized = true;
         return this;
     }
 
@@ -149,13 +229,21 @@ public final class AimdAlgorithmBuilder {
      * {@link AdaptiveConfigBuilder} or {@link AdaptiveNonBlockingConfigBuilder}; user code
      * does not call this method directly.
      *
-     * @return the AIMD algorithm config; defaults match the deprecated phase-1
-     *         {@code balanced} preset.
+     * @return the AIMD algorithm config; defaults match the {@code balanced} preset.
      */
     AimdLimitAlgorithmConfig build() {
         return new AimdLimitAlgorithmConfig(
                 initialLimit, minLimit, maxLimit, backoffRatio,
                 smoothingTimeConstant, errorRateThreshold,
                 windowedIncrease, minUtilizationThreshold);
+    }
+
+    private void guardPresetOrdering() {
+        if (customized) {
+            throw new IllegalStateException(
+                    "Cannot apply a preset after individual setters have been called. "
+                            + "Presets are baselines: call them first, then customize. "
+                            + "Example: .aimd(a -> a.protective().maxLimit(150))");
+        }
     }
 }

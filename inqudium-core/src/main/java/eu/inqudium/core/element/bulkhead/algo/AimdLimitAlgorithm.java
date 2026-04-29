@@ -344,7 +344,7 @@ public final class AimdLimitAlgorithm implements InqLimitAlgorithm {
     }
 
     /**
-     * <b>Performant</b> preset — prioritizes throughput over caution.
+     * <b>Permissive</b> preset — prioritizes throughput over caution.
      *
      * <p>Designed for downstream services with high, elastic capacity where
      * under-utilization is more costly than brief oversaturation (e.g., autoscaling
@@ -375,7 +375,7 @@ public final class AimdLimitAlgorithm implements InqLimitAlgorithm {
      *
      * @return a throughput-optimized AIMD algorithm
      */
-    public static AimdLimitAlgorithm performant() {
+    public static AimdLimitAlgorithm permissive() {
         return new AimdLimitAlgorithm(
                 100,                      // initialLimit: high starting point
                 10,                       // minLimit: substantial floor for elastic backends
