@@ -3,8 +3,8 @@ package eu.inqudium.imperative.runtime;
 import eu.inqudium.config.Inqudium;
 import eu.inqudium.config.lifecycle.ChangeDecision;
 import eu.inqudium.config.lifecycle.LifecycleState;
+import eu.inqudium.config.runtime.BulkheadHandle;
 import eu.inqudium.config.runtime.ComponentKey;
-import eu.inqudium.config.runtime.ImperativeBulkhead;
 import eu.inqudium.config.runtime.ImperativeTag;
 import eu.inqudium.config.runtime.InqRuntime;
 import eu.inqudium.config.validation.ApplyOutcome;
@@ -24,8 +24,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * Direct public-API tests for the listener-registration surface on
- * {@link eu.inqudium.config.runtime.BulkheadHandle BulkheadHandle} as exposed via
- * {@link ImperativeBulkhead}. The dispatcher unit tests in {@code UpdateDispatcherTest} pin the
+ * {@link BulkheadHandle} (specialised to {@link ImperativeTag} as the runtime returns it). The
+ * dispatcher unit tests in {@code UpdateDispatcherTest} pin the
  * routing semantics with synthetic handles; the runtime end-to-end tests in
  * {@code RuntimeUpdateTest} pin per-component outcomes including listener vetoes. This class
  * pins the registration handle's own contract — registration, unregistration via the returned
@@ -58,7 +58,7 @@ class BulkheadHandleListenerTest {
     }
 
     /** Pair of {@link InqRuntime} and an already-warmed bulkhead handle. */
-    private record HotBulkhead(InqRuntime runtime, ImperativeBulkhead bulkhead) {
+    private record HotBulkhead(InqRuntime runtime, BulkheadHandle<ImperativeTag> bulkhead) {
     }
 
     @Nested
@@ -76,7 +76,7 @@ class BulkheadHandleListenerTest {
             // would still pass.
 
             try (InqRuntime runtime = newHotBulkhead().runtime) {
-                ImperativeBulkhead bh = runtime.imperative().bulkhead("inventory");
+                BulkheadHandle<ImperativeTag> bh = runtime.imperative().bulkhead("inventory");
                 assertThat(bh.lifecycleState()).isEqualTo(LifecycleState.HOT);
                 AtomicInteger calls = new AtomicInteger();
                 bh.onChangeRequest(req -> {
@@ -98,7 +98,7 @@ class BulkheadHandleListenerTest {
         void should_block_a_patch_via_a_listener_veto_through_the_handle_API() {
             // Given
             try (InqRuntime runtime = newHotBulkhead().runtime) {
-                ImperativeBulkhead bh = runtime.imperative().bulkhead("inventory");
+                BulkheadHandle<ImperativeTag> bh = runtime.imperative().bulkhead("inventory");
                 bh.onChangeRequest(req -> ChangeDecision.veto("policy disallows"));
 
                 // When
@@ -126,7 +126,7 @@ class BulkheadHandleListenerTest {
         void should_stop_consulting_a_listener_after_close() throws Exception {
             // Given
             try (InqRuntime runtime = newHotBulkhead().runtime) {
-                ImperativeBulkhead bh = runtime.imperative().bulkhead("inventory");
+                BulkheadHandle<ImperativeTag> bh = runtime.imperative().bulkhead("inventory");
                 AtomicInteger calls = new AtomicInteger();
                 AutoCloseable handle = bh.onChangeRequest(req -> {
                     calls.incrementAndGet();
@@ -160,7 +160,7 @@ class BulkheadHandleListenerTest {
             // surprise at production teardown time.
 
             try (InqRuntime runtime = newHotBulkhead().runtime) {
-                ImperativeBulkhead bh = runtime.imperative().bulkhead("inventory");
+                BulkheadHandle<ImperativeTag> bh = runtime.imperative().bulkhead("inventory");
                 AutoCloseable handle = bh.onChangeRequest(req -> ChangeDecision.accept());
 
                 // When / Then — neither close throws.
@@ -185,7 +185,7 @@ class BulkheadHandleListenerTest {
             // silently drop the safety guard.
 
             try (InqRuntime runtime = newHotBulkhead().runtime) {
-                ImperativeBulkhead bh = runtime.imperative().bulkhead("inventory");
+                BulkheadHandle<ImperativeTag> bh = runtime.imperative().bulkhead("inventory");
                 AtomicInteger surviving = new AtomicInteger();
                 AutoCloseable goingAway = bh.onChangeRequest(req -> ChangeDecision.accept());
                 bh.onChangeRequest(req -> {
@@ -223,7 +223,7 @@ class BulkheadHandleListenerTest {
             // evaluated for every update, not just the first one after registration.
 
             try (InqRuntime runtime = newHotBulkhead().runtime) {
-                ImperativeBulkhead bh = runtime.imperative().bulkhead("inventory");
+                BulkheadHandle<ImperativeTag> bh = runtime.imperative().bulkhead("inventory");
                 AtomicInteger calls = new AtomicInteger();
                 bh.onChangeRequest(req -> {
                     calls.incrementAndGet();
@@ -262,7 +262,7 @@ class BulkheadHandleListenerTest {
             // ordering for the suffix).
 
             try (InqRuntime runtime = newHotBulkhead().runtime) {
-                ImperativeBulkhead bh = runtime.imperative().bulkhead("inventory");
+                BulkheadHandle<ImperativeTag> bh = runtime.imperative().bulkhead("inventory");
                 List<String> invocationOrder = new ArrayList<>();
                 bh.onChangeRequest(req -> {
                     invocationOrder.add("first");
@@ -295,7 +295,7 @@ class BulkheadHandleListenerTest {
             // handle API and the dispatcher share semantics.
 
             try (InqRuntime runtime = newHotBulkhead().runtime) {
-                ImperativeBulkhead bh = runtime.imperative().bulkhead("inventory");
+                BulkheadHandle<ImperativeTag> bh = runtime.imperative().bulkhead("inventory");
                 AtomicInteger second = new AtomicInteger();
                 bh.onChangeRequest(req -> ChangeDecision.veto("first says no"));
                 bh.onChangeRequest(req -> {

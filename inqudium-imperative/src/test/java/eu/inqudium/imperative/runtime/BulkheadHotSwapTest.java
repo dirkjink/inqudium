@@ -3,7 +3,6 @@ package eu.inqudium.imperative.runtime;
 import eu.inqudium.config.Inqudium;
 import eu.inqudium.config.lifecycle.ChangeDecision;
 import eu.inqudium.config.runtime.ComponentKey;
-import eu.inqudium.config.runtime.ImperativeBulkhead;
 import eu.inqudium.config.runtime.ImperativeTag;
 import eu.inqudium.config.runtime.InqRuntime;
 import eu.inqudium.config.snapshot.AdaptiveStrategyConfig;

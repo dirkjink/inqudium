@@ -1,7 +1,6 @@
 package eu.inqudium.imperative.runtime;
 
 import eu.inqudium.config.Inqudium;
-import eu.inqudium.config.runtime.ImperativeBulkhead;
 import eu.inqudium.config.runtime.InqRuntime;
 import eu.inqudium.config.validation.DiagnosisReport;
 import eu.inqudium.config.validation.DiagnosticFinding;

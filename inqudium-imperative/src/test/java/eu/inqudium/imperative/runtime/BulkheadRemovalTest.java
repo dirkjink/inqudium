@@ -7,7 +7,6 @@ import eu.inqudium.config.lifecycle.ChangeRequest;
 import eu.inqudium.config.lifecycle.ChangeRequestListener;
 import eu.inqudium.config.runtime.ComponentKey;
 import eu.inqudium.config.runtime.ComponentRemovedException;
-import eu.inqudium.config.runtime.ImperativeBulkhead;
 import eu.inqudium.config.runtime.ImperativeTag;
 import eu.inqudium.config.runtime.InqRuntime;
 import eu.inqudium.config.snapshot.BulkheadSnapshot;

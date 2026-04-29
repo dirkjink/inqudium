@@ -6,10 +6,10 @@ import eu.inqudium.config.event.RuntimeComponentRemovedEvent;
 import eu.inqudium.config.event.RuntimeComponentVetoedEvent;
 import eu.inqudium.config.live.LiveContainer;
 import eu.inqudium.config.patch.BulkheadPatch;
+import eu.inqudium.config.runtime.BulkheadHandle;
 import eu.inqudium.config.runtime.ComponentKey;
 import eu.inqudium.config.runtime.DispatchResult;
 import eu.inqudium.config.runtime.Imperative;
-import eu.inqudium.config.runtime.ImperativeBulkhead;
 import eu.inqudium.config.runtime.ImperativeTag;
 import eu.inqudium.config.runtime.ParadigmApplyResult;
 import eu.inqudium.config.runtime.ParadigmTag;
@@ -110,7 +110,7 @@ public final class DefaultImperative implements Imperative {
     }
 
     @Override
-    public ImperativeBulkhead bulkhead(String name) {
+    public BulkheadHandle<ImperativeTag> bulkhead(String name) {
         Map<String, Entry> snapshot = bulkheads.get();
         Entry e = snapshot.get(name);
         if (e == null) {
@@ -121,7 +121,7 @@ public final class DefaultImperative implements Imperative {
     }
 
     @Override
-    public Optional<ImperativeBulkhead> findBulkhead(String name) {
+    public Optional<BulkheadHandle<ImperativeTag>> findBulkhead(String name) {
         Entry e = bulkheads.get().get(name);
         return e != null ? Optional.of(e.bulkhead()) : Optional.empty();
     }

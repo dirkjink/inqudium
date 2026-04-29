@@ -1,7 +1,7 @@
 package eu.inqudium.imperative.runtime;
 
 import eu.inqudium.config.Inqudium;
-import eu.inqudium.config.runtime.ImperativeBulkhead;
+import eu.inqudium.config.runtime.BulkheadHandle;
 import eu.inqudium.config.runtime.ImperativeTag;
 import eu.inqudium.config.runtime.InqRuntime;
 import eu.inqudium.config.snapshot.BulkheadSnapshot;
@@ -39,7 +39,7 @@ class InqudiumConfigureTest {
                     .build()) {
 
                 // Then
-                ImperativeBulkhead bh = runtime.imperative().bulkhead("inventory");
+                BulkheadHandle<ImperativeTag> bh = runtime.imperative().bulkhead("inventory");
                 BulkheadSnapshot snapshot = bh.snapshot();
                 assertThat(snapshot.name()).isEqualTo("inventory");
                 assertThat(snapshot.maxConcurrentCalls()).isEqualTo(15);
@@ -111,7 +111,7 @@ class InqudiumConfigureTest {
                     .imperative(im -> im.bulkhead("a", b -> b.balanced()))
                     .build()) {
                 // When / Then
-                Optional<ImperativeBulkhead> handle = runtime.imperative().findBulkhead("a");
+                Optional<BulkheadHandle<ImperativeTag>> handle = runtime.imperative().findBulkhead("a");
                 assertThat(handle).isPresent();
                 assertThat(handle.get().name()).isEqualTo("a");
             }

@@ -9,7 +9,6 @@ import eu.inqudium.config.lifecycle.ChangeDecision;
 import eu.inqudium.config.lifecycle.ChangeRequest;
 import eu.inqudium.config.lifecycle.ChangeRequestListener;
 import eu.inqudium.config.lifecycle.ComponentField;
-import eu.inqudium.config.runtime.ImperativeBulkhead;
 import eu.inqudium.config.runtime.InqRuntime;
 import eu.inqudium.config.snapshot.BulkheadField;
 import eu.inqudium.config.snapshot.BulkheadSnapshot;
