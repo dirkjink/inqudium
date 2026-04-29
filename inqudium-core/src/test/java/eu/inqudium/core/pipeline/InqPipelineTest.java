@@ -43,17 +43,17 @@ class InqPipelineTest {
         }
 
         @Override
-        public String getName() {
+        public String name() {
             return name;
         }
 
         @Override
-        public InqElementType getElementType() {
+        public InqElementType elementType() {
             return type;
         }
 
         @Override
-        public InqEventPublisher getEventPublisher() {
+        public InqEventPublisher eventPublisher() {
             return null;
         }
 
@@ -80,17 +80,17 @@ class InqPipelineTest {
         }
 
         @Override
-        public String getName() {
+        public String name() {
             return name;
         }
 
         @Override
-        public InqElementType getElementType() {
+        public InqElementType elementType() {
             return type;
         }
 
         @Override
-        public InqEventPublisher getEventPublisher() {
+        public InqEventPublisher eventPublisher() {
             return null;
         }
 
@@ -220,7 +220,7 @@ class InqPipelineTest {
 
             // Then — sorted by standard order: TL(100) → RL(300) → CB(500) → RT(600)
             assertThat(pipeline.elements())
-                    .extracting(InqElement::getName)
+                    .extracting(InqElement::name)
                     .containsExactly("tl", "rl", "cb", "rt");
         }
 
@@ -241,7 +241,7 @@ class InqPipelineTest {
 
             // Then — ADR-017 canonical: TL → TS → RL → BH → CB → RT
             assertThat(pipeline.elements())
-                    .extracting(InqElement::getName)
+                    .extracting(InqElement::name)
                     .containsExactly("tl", "ts", "rl", "bh", "cb", "rt");
         }
 
@@ -259,7 +259,7 @@ class InqPipelineTest {
 
             // Then — stable sort preserves registration order
             assertThat(pipeline.elements())
-                    .extracting(InqElement::getName)
+                    .extracting(InqElement::name)
                     .containsExactly("cb-primary", "cb-secondary");
         }
     }
@@ -284,7 +284,7 @@ class InqPipelineTest {
 
             // Then — R4J: RT(100) → CB(200) → TL(500) → BH(600)
             assertThat(pipeline.elements())
-                    .extracting(InqElement::getName)
+                    .extracting(InqElement::name)
                     .containsExactly("rt", "cb", "tl", "bh");
         }
     }
@@ -314,7 +314,7 @@ class InqPipelineTest {
 
             // Then — RT(10) → BH(20) → CB(500, default)
             assertThat(pipeline.elements())
-                    .extracting(InqElement::getName)
+                    .extracting(InqElement::name)
                     .containsExactly("rt", "bh", "cb");
         }
     }
@@ -339,8 +339,8 @@ class InqPipelineTest {
 
             // When — fold, recording the order
             pipeline.chain("seed", (acc, element) -> {
-                foldOrder.add(element.getName());
-                return acc + "→" + element.getName();
+                foldOrder.add(element.name());
+                return acc + "→" + element.name();
             });
 
             // Then — innermost first: RT → CB → TL
@@ -358,7 +358,7 @@ class InqPipelineTest {
 
             // When — fold elements into a nesting representation
             String chain = pipeline.chain("core", (acc, element) ->
-                    element.getName() + "(" + acc + ")");
+                    element.name() + "(" + acc + ")");
 
             // Then — outermost wraps all: tl(cb(rt(core)))
             assertThat(chain).isEqualTo("tl(cb(rt(core)))");
@@ -371,7 +371,7 @@ class InqPipelineTest {
 
             // When
             String result = pipeline.chain("passthrough", (acc, element) ->
-                    element.getName() + "(" + acc + ")");
+                    element.name() + "(" + acc + ")");
 
             // Then
             assertThat(result).isEqualTo("passthrough");
@@ -386,7 +386,7 @@ class InqPipelineTest {
 
             // When
             String result = pipeline.chain("core", (acc, element) ->
-                    element.getName() + "(" + acc + ")");
+                    element.name() + "(" + acc + ")");
 
             // Then
             assertThat(result).isEqualTo("cb(core)");

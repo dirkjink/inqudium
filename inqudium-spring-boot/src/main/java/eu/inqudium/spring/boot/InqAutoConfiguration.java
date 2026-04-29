@@ -19,7 +19,7 @@ import java.util.List;
  *   <li><strong>Discovers</strong> all {@link InqElement} beans in the
  *       application context (CircuitBreaker, Retry, Bulkhead, etc.)</li>
  *   <li><strong>Registers</strong> them in an {@link InqElementRegistry}
- *       using {@link InqElement#getName()} as the lookup key</li>
+ *       using {@link InqElement#name()} as the lookup key</li>
  *   <li><strong>Creates</strong> an {@link InqShieldAspect} that intercepts
  *       methods annotated with {@code @InqCircuitBreaker}, {@code @InqRetry},
  *       etc. and routes them through the pipeline</li>
@@ -34,12 +34,12 @@ import java.util.List;
  *
  *     @Bean
  *     public CircuitBreaker paymentCb() {
- *         return CircuitBreaker.of(config);  // getName() returns "paymentCb"
+ *         return CircuitBreaker.of(config);  // name() returns "paymentCb"
  *     }
  *
  *     @Bean
  *     public Retry paymentRetry() {
- *         return Retry.of(config);  // getName() returns "paymentRetry"
+ *         return Retry.of(config);  // name() returns "paymentRetry"
  *     }
  * }
  * }</pre>
@@ -79,7 +79,7 @@ public class InqAutoConfiguration {
     /**
      * Discovers all {@link InqElement} beans and registers them by name.
      *
-     * <p>Each element's {@link InqElement#getName()} is used as the
+     * <p>Each element's {@link InqElement#name()} is used as the
      * registry key. If two elements share the same name, an
      * {@link IllegalStateException} is thrown at startup to prevent
      * ambiguous configurations from reaching production.</p>
@@ -97,10 +97,10 @@ public class InqAutoConfiguration {
         InqElementRegistry registry = InqElementRegistry.create();
 
         for (InqElement element : elements) {
-            InqElement previous = registry.register(element.getName(), element);
+            InqElement previous = registry.register(element.name(), element);
             if (previous != null) {
                 throw new IllegalStateException(
-                        "Duplicate InqElement name '" + element.getName()
+                        "Duplicate InqElement name '" + element.name()
                                 + "': bean of type " + previous.getClass().getName()
                                 + " is already registered, but a second bean of type "
                                 + element.getClass().getName()

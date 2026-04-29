@@ -42,17 +42,17 @@ class AsyncPipelineTerminalTest {
             String name, InqElementType type, Object fixedResult) {
         return new InqAsyncDecorator<>() {
             @Override
-            public String getName() {
+            public String name() {
                 return name;
             }
 
             @Override
-            public InqElementType getElementType() {
+            public InqElementType elementType() {
                 return type;
             }
 
             @Override
-            public InqEventPublisher getEventPublisher() {
+            public InqEventPublisher eventPublisher() {
                 return null;
             }
 
@@ -72,17 +72,17 @@ class AsyncPipelineTerminalTest {
             String name, InqElementType type, RuntimeException exception) {
         return new InqAsyncDecorator<>() {
             @Override
-            public String getName() {
+            public String name() {
                 return name;
             }
 
             @Override
-            public InqElementType getElementType() {
+            public InqElementType elementType() {
                 return type;
             }
 
             @Override
-            public InqEventPublisher getEventPublisher() {
+            public InqEventPublisher eventPublisher() {
                 return null;
             }
 
@@ -119,17 +119,17 @@ class AsyncPipelineTerminalTest {
         }
 
         @Override
-        public String getName() {
+        public String name() {
             return name;
         }
 
         @Override
-        public InqElementType getElementType() {
+        public InqElementType elementType() {
             return type;
         }
 
         @Override
-        public InqEventPublisher getEventPublisher() {
+        public InqEventPublisher eventPublisher() {
             return null;
         }
 
@@ -148,17 +148,17 @@ class AsyncPipelineTerminalTest {
      */
     static class NonAsyncElement implements InqElement {
         @Override
-        public String getName() {
+        public String name() {
             return "plain";
         }
 
         @Override
-        public InqElementType getElementType() {
+        public InqElementType elementType() {
             return InqElementType.BULKHEAD;
         }
 
         @Override
-        public InqEventPublisher getEventPublisher() {
+        public InqEventPublisher eventPublisher() {
             return null;
         }
     }

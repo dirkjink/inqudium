@@ -149,7 +149,7 @@ class InqPipelineEndToEndTest {
             // Then
             assertThat(result).isEqualTo("success");
             assertThat(pipeline.elements())
-                    .extracting(InqElement::getName)
+                    .extracting(InqElement::name)
                     .containsExactly("bh", "cb");
         }
 
@@ -172,7 +172,7 @@ class InqPipelineEndToEndTest {
             // Then — CB before BH
             assertThat(result).isEqualTo("success");
             assertThat(pipeline.elements())
-                    .extracting(InqElement::getName)
+                    .extracting(InqElement::name)
                     .containsExactly("cb", "bh");
         }
 
@@ -187,7 +187,7 @@ class InqPipelineEndToEndTest {
 
             // Then
             assertThat(pipeline.elements())
-                    .extracting(InqElement::getElementType)
+                    .extracting(InqElement::elementType)
                     .containsExactly(InqElementType.BULKHEAD, InqElementType.CIRCUIT_BREAKER);
         }
     }
@@ -553,7 +553,7 @@ class InqPipelineEndToEndTest {
 
             // When
             String nesting = pipeline.chain("core",
-                    (acc, element) -> element.getName() + "(" + acc + ")");
+                    (acc, element) -> element.name() + "(" + acc + ")");
 
             // Then — outermost wraps all: bh(cb(core))
             assertThat(nesting).isEqualTo("bh(cb(core))");

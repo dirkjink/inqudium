@@ -195,17 +195,17 @@ public class ImperativeCircuitBreaker<A, R> implements CircuitBreaker<A, R> {
     // ======================== InqElement identity ========================
 
     @Override
-    public String getName() {
+    public String name() {
         return name;
     }
 
     @Override
-    public InqElementType getElementType() {
+    public InqElementType elementType() {
         return InqElementType.CIRCUIT_BREAKER;
     }
 
     @Override
-    public InqEventPublisher getEventPublisher() {
+    public InqEventPublisher eventPublisher() {
         return eventPublisher;
     }
 

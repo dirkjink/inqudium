@@ -112,7 +112,7 @@ public final class SyncPipelineTerminal {
         for (int i = 0; i < size; i++) {
             InqElement element = elements.get(i);
             acts[i] = (LayerAction<Void, Object>) asDecorator(element);
-            names.add(element.getElementType().name() + "(" + element.getName() + ")");
+            names.add(element.elementType().name() + "(" + element.name() + ")");
         }
         this.actions = acts;
         this.pipelineState = ResolvedPipelineState.create(Collections.unmodifiableList(names));
@@ -144,8 +144,8 @@ public final class SyncPipelineTerminal {
             return decorator;
         }
         throw new ClassCastException(
-                element.getClass().getName() + " ('" + element.getName()
-                        + "', type=" + element.getElementType()
+                element.getClass().getName() + " ('" + element.name()
+                        + "', type=" + element.elementType()
                         + ") does not implement InqDecorator. "
                         + "SyncPipelineTerminal requires all pipeline elements to "
                         + "implement InqDecorator<A, R>. For async elements, use "

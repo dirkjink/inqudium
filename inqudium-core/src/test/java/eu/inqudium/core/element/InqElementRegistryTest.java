@@ -40,17 +40,17 @@ class InqElementRegistryTest {
         }
 
         @Override
-        public String getName() {
+        public String name() {
             return name;
         }
 
         @Override
-        public InqElementType getElementType() {
+        public InqElementType elementType() {
             return type;
         }
 
         @Override
-        public InqEventPublisher getEventPublisher() {
+        public InqEventPublisher eventPublisher() {
             return null;
         }
 
@@ -67,17 +67,17 @@ class InqElementRegistryTest {
      */
     static class OtherElement implements InqElement {
         @Override
-        public String getName() {
+        public String name() {
             return "other";
         }
 
         @Override
-        public InqElementType getElementType() {
+        public InqElementType elementType() {
             return InqElementType.BULKHEAD;
         }
 
         @Override
-        public InqEventPublisher getEventPublisher() {
+        public InqEventPublisher eventPublisher() {
             return null;
         }
     }
@@ -241,7 +241,7 @@ class InqElementRegistryTest {
             StubElement element = registry.get("cb", StubElement.class);
 
             // Then
-            assertThat(element.getName()).isEqualTo("cb");
+            assertThat(element.name()).isEqualTo("cb");
         }
 
         @Test

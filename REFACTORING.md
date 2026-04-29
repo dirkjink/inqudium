@@ -589,9 +589,11 @@ A higher-level verification than 2.11. Where 2.11 checks the Phase 2 acceptance 
 - Documentation status: README mentions the bulkhead, code samples reflect the current API,
   migration guide exists for users moving from the previous architecture.
 
-**Status:** Implemented. Findings recorded in `AUDIT_FINDINGS.md`. Routing of findings
-into subsequent sub-steps, `TODO.md`, the upcoming ADR audit, or "no action" was decided
-at review time and is reflected in the sub-step bodies below.
+**Status:** Implemented. The audit produced 23 findings, originally recorded in
+`AUDIT_FINDINGS.md`. Routing into subsequent sub-steps, `TODO.md`, the upcoming ADR audit,
+or "no action" has been decided. The findings file itself has been deleted: each finding
+now lives at its routed destination (resolved in 2.13-2.16 commits, absorbed into 2.20
+test coverage, captured as a `TODO.md` entry, or resolved by ADR-033's design).
 
 ### 2.13 BulkheadHotPhase: missing onCallComplete and adjacent execute-path fixes
 
@@ -746,6 +748,21 @@ wrappers must be checked against the current bulkhead architecture:
 - Are the wrappers covered by tests that exercise them through a complete bulkhead, not
   just a mock?
 
+---
+
+**ADR-033 implementation interjection.** The 2.17 audit surfaced a structural gap
+(audit finding 2.17.2): `InqBulkhead` does not implement `InqElement` or `InqDecorator`,
+which means the aspect-pipeline integration cannot accept it. ADR-033 specifies the
+resolution. Implementation runs in a parallel document, `REFACTORING_DECORATOR_BRIDGE.md`,
+with its own three-stage plan (1: `InqElement` rename to record-style accessors,
+2: phase parameterization plus `InqBulkhead<A, R>` plus sync pipeline contracts,
+3: `BulkheadHandle` consolidation plus `ImperativeBulkhead` interface deletion). All three
+stages must complete green before sub-step 2.18 starts — 2.18 depends on
+`InqBulkhead` being a fully-fledged `InqDecorator`. The decorator-bridge document is
+deleted alongside this `REFACTORING.md` at the end of the bulkhead refactor.
+
+---
+
 ### 2.18 AspectJ integration
 
 The AspectJ integration module against the new bulkhead architecture.
@@ -794,10 +811,57 @@ Coverage:
 
 Audit findings absorbed into this step's test coverage:
 
-- Race between `markRemoved` and `onSnapshotChange` during hot-swap (concurrency test
-  under load).
-- Strategy construction failure on the cold-to-hot transition and on hot-swap (negative
-  tests with a synthetically-failing strategy provider).
+- **Race between `markRemoved` and `onSnapshotChange` during hot-swap** (was finding 2.12.3).
+  A snapshot patch arrives concurrently with structural removal of the bulkhead. Possible
+  outcomes: removal wins (snapshot-change handler exits early), snapshot-change wins (its
+  side effects complete before removal proceeds), or interleaving with no torn state. Today
+  the live container's atomicity guarantees the third case in principle, but no test pins
+  it under load. Test shape: a multi-threaded scenario with one thread driving snapshot
+  patches while another marks the bulkhead removed; assertions verify no exception escapes,
+  no orphaned subscriptions, no stale strategy references.
+
+- **Strategy construction failure during the cold-to-hot transition** (was finding 2.12.4).
+  A snapshot whose strategy materialization throws — for instance, an adaptive strategy
+  with an algorithm config that fails its own invariant during construction. The
+  `BulkheadHotPhase` constructor should propagate the exception cleanly without leaving the
+  component in an inconsistent state. Test shape: a synthetic `BulkheadStrategyConfig`
+  variant that throws from its strategy factory; verify the cold-to-hot CAS aborts, the
+  phase reference remains on `ColdPhase`, and a subsequent execute call retries the
+  transition (or raises a deterministic error, depending on the policy ADR-029 settles).
+
+- **`closeStrategy(...)`-throw path on hot-swap with a misbehaving `AutoCloseable`**
+  (was finding 2.12.4). When the running strategy implements `AutoCloseable` and its
+  `close()` throws during a strategy hot-swap, the swap must complete (the new strategy
+  takes over, the old one's exception is logged and isolated). Test shape: a synthetic
+  strategy whose `close()` throws; trigger a hot-swap; assert the new strategy is active
+  on the next execute, the exception is logged at WARN, and no execute call observes the
+  failure.
+
+- **Wrapper compatibility across cold-to-hot transition, strategy hot-swap, and structural
+  removal** (was finding 2.17.3). Today the wrappers are structurally compatible with the
+  lifecycle — `bh.execute(...)` reads the phase reference per call and observes transitions
+  immediately — but no test pins this for the wrapper layer specifically. Test shape: three
+  scenarios, each constructing a real `InqBulkhead` via `Inqudium.configure()` and wrapping
+  it via the standard pipeline contracts (`InqDecorator`, `InqExecutor`, `InqAsyncDecorator`).
+  Scenario A: a wrapper fired before the first execute (cold) transitions cleanly to hot on
+  first call. Scenario B: a wrapper held across a strategy hot-swap reflects the new
+  strategy on subsequent calls. Scenario C: a wrapper invoked after `markRemoved()` raises
+  `ComponentRemovedException`.
+
+- **Wrapper and proxy tests run against real bulkheads, not synthetic `LayerAction`s**
+  (was finding 2.17.4). Until ADR-033 (decorator bridge) lands, the wrapper and proxy test
+  classes use synthetic `LayerAction`/`AsyncLayerAction` lambdas because real bulkheads
+  cannot satisfy the `InqDecorator` type bound. After ADR-033 implementation
+  (decorator-bridge stages 1-3), the test gap can close. Test shape: at least one test per
+  wrapper family (`SupplierWrapper`, `FunctionWrapper`, `RunnableWrapper`,
+  `JoinPointWrapper`, plus async counterparts) and per proxy-construction path
+  (`InqProxyFactory`, `ProxyPipelineTerminal`, `HybridProxyPipelineTerminal`,
+  `InqAsyncProxyFactory`) constructs a `Inqudium.configure()`-built `InqBulkhead` and
+  exercises the wrapper or proxy end-to-end.
+
+The five scenarios above plus the four happy-path coverage points named earlier define the
+minimum scope of this sub-step. Additional tests for documentation purposes (the
+"tutorial-style" naming mentioned below) are encouraged but optional.
 
 Tests are structured for readability: each test class addresses one variant, each test
 method describes one user scenario. The naming should feel like a tutorial when read
@@ -808,7 +872,10 @@ top-to-bottom.
 After 2.11 through 2.20 are complete and reviewed:
 
 - `REFACTORING.md` is deleted. Its purpose is fulfilled.
-- `AUDIT_FINDINGS.md` is deleted alongside.
+- `REFACTORING_DECORATOR_BRIDGE.md` is deleted alongside (the ADR-033 implementation
+  document — see the cross-reference between sub-step 2.17 and 2.18).
+- `AUDIT_FINDINGS.md` is already gone — its findings have been routed to their respective
+  destinations (TODO.md, sub-step 2.20 above, ADR-033) before this Phase 2 closure point.
 - The imperative bulkhead is officially complete as a resilience pattern.
 - The next document to be created — when work begins — is a new `REFACTORING.md` for the
   ADR audit (a separate, dedicated effort), and after that, separate `REFACTORING.md`

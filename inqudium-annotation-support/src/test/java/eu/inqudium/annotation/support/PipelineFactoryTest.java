@@ -54,17 +54,17 @@ class PipelineFactoryTest {
         }
 
         @Override
-        public String getName() {
+        public String name() {
             return name;
         }
 
         @Override
-        public InqElementType getElementType() {
+        public InqElementType elementType() {
             return type;
         }
 
         @Override
-        public InqEventPublisher getEventPublisher() {
+        public InqEventPublisher eventPublisher() {
             return null;
         }
     }
@@ -143,7 +143,7 @@ class PipelineFactoryTest {
             // Then
             assertThat(pipeline.depth()).isEqualTo(2);
             assertThat(pipeline.elements())
-                    .extracting(InqElement::getName)
+                    .extracting(InqElement::name)
                     .containsExactlyInAnyOrder("paymentCb", "paymentRetry");
         }
 
@@ -178,7 +178,7 @@ class PipelineFactoryTest {
 
             // Then
             assertThat(pipeline.depth()).isEqualTo(1);
-            assertThat(pipeline.elements().getFirst().getName()).isEqualTo("paymentCb");
+            assertThat(pipeline.elements().getFirst().name()).isEqualTo("paymentCb");
         }
 
         @Test
@@ -192,7 +192,7 @@ class PipelineFactoryTest {
             // Then — both present
             assertThat(pipeline.depth()).isEqualTo(2);
             assertThat(pipeline.elements())
-                    .extracting(InqElement::getName)
+                    .extracting(InqElement::name)
                     .containsExactlyInAnyOrder("paymentCb", "paymentRetry");
         }
 
@@ -207,7 +207,7 @@ class PipelineFactoryTest {
             // Then — standard order: TL(100) → CB(500) → RT(600)
             assertThat(pipeline.depth()).isEqualTo(3);
             assertThat(pipeline.elements())
-                    .extracting(InqElement::getName)
+                    .extracting(InqElement::name)
                     .containsExactly("globalTl", "paymentCb", "paymentRetry");
         }
     }
@@ -230,7 +230,7 @@ class PipelineFactoryTest {
 
             // Then — standard: CB(500) → RT(600)
             assertThat(pipeline.elements())
-                    .extracting(InqElement::getName)
+                    .extracting(InqElement::name)
                     .containsExactly("paymentCb", "paymentRetry");
         }
 
@@ -244,7 +244,7 @@ class PipelineFactoryTest {
 
             // Then — R4J: RT(100) → CB(200) → BH(600)
             assertThat(pipeline.elements())
-                    .extracting(InqElement::getName)
+                    .extracting(InqElement::name)
                     .containsExactly("paymentRetry", "paymentCb", "paymentBh");
         }
 
@@ -258,7 +258,7 @@ class PipelineFactoryTest {
 
             // Then — declaration order: RT first, CB second
             assertThat(pipeline.elements())
-                    .extracting(InqElement::getName)
+                    .extracting(InqElement::name)
                     .containsExactly("paymentRetry", "paymentCb");
         }
     }
@@ -343,9 +343,9 @@ class PipelineFactoryTest {
             // Then — identical to create(method, registry)
             InqPipeline direct = PipelineFactory.create(method, registry);
             assertThat(pipeline.elements())
-                    .extracting(InqElement::getName)
+                    .extracting(InqElement::name)
                     .containsExactlyElementsOf(
-                            direct.elements().stream().map(InqElement::getName).toList());
+                            direct.elements().stream().map(InqElement::name).toList());
         }
 
         @Test

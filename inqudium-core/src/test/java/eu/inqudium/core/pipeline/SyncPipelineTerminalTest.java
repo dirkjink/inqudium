@@ -37,17 +37,17 @@ class SyncPipelineTerminalTest {
             String name, InqElementType type, Object fixedResult) {
         return new InqDecorator<>() {
             @Override
-            public String getName() {
+            public String name() {
                 return name;
             }
 
             @Override
-            public InqElementType getElementType() {
+            public InqElementType elementType() {
                 return type;
             }
 
             @Override
-            public InqEventPublisher getEventPublisher() {
+            public InqEventPublisher eventPublisher() {
                 return null;
             }
 
@@ -75,17 +75,17 @@ class SyncPipelineTerminalTest {
         }
 
         @Override
-        public String getName() {
+        public String name() {
             return name;
         }
 
         @Override
-        public InqElementType getElementType() {
+        public InqElementType elementType() {
             return type;
         }
 
         @Override
-        public InqEventPublisher getEventPublisher() {
+        public InqEventPublisher eventPublisher() {
             return null;
         }
 
@@ -106,17 +106,17 @@ class SyncPipelineTerminalTest {
      */
     static class NonDecoratorElement implements InqElement {
         @Override
-        public String getName() {
+        public String name() {
             return "plain";
         }
 
         @Override
-        public InqElementType getElementType() {
+        public InqElementType elementType() {
             return InqElementType.BULKHEAD;
         }
 
         @Override
-        public InqEventPublisher getEventPublisher() {
+        public InqEventPublisher eventPublisher() {
             return null;
         }
     }

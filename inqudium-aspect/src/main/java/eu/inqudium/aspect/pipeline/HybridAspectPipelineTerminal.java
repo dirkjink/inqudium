@@ -156,7 +156,7 @@ public final class HybridAspectPipelineTerminal {
             InqAsyncDecorator<Void, Object> asyncDec =
                     (InqAsyncDecorator<Void, Object>) asAsyncDecorator(element);
             asyncActs[i] = asyncDec::executeAsync;
-            names.add(element.getElementType().name() + "(" + element.getName() + ")");
+            names.add(element.elementType().name() + "(" + element.name() + ")");
         }
         this.syncActions = syncActs;
         this.asyncActions = asyncActs;
@@ -186,8 +186,8 @@ public final class HybridAspectPipelineTerminal {
     private static InqDecorator<?, ?> asDecorator(InqElement element) {
         if (element instanceof InqDecorator<?, ?> d) return d;
         throw new ClassCastException(
-                element.getClass().getName() + " ('" + element.getName()
-                        + "', type=" + element.getElementType()
+                element.getClass().getName() + " ('" + element.name()
+                        + "', type=" + element.elementType()
                         + ") does not implement InqDecorator. "
                         + "HybridAspectPipelineTerminal requires all elements to implement "
                         + "InqDecorator for sync methods.");
@@ -196,8 +196,8 @@ public final class HybridAspectPipelineTerminal {
     private static InqAsyncDecorator<?, ?> asAsyncDecorator(InqElement element) {
         if (element instanceof InqAsyncDecorator<?, ?> d) return d;
         throw new ClassCastException(
-                element.getClass().getName() + " ('" + element.getName()
-                        + "', type=" + element.getElementType()
+                element.getClass().getName() + " ('" + element.name()
+                        + "', type=" + element.elementType()
                         + ") does not implement InqAsyncDecorator. "
                         + "HybridAspectPipelineTerminal requires all elements to implement "
                         + "InqAsyncDecorator for async methods (returning CompletionStage).");
