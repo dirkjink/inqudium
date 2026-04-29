@@ -241,10 +241,10 @@ public final class InqPipeline {
                 .append("]\n");
 
         for (InqElement element : elements) {
-            InqElementType type = element.getElementType();
+            InqElementType type = element.elementType();
             sb.append("  ")
                     .append(String.format("%-18s", type))
-                    .append('"').append(element.getName()).append('"')
+                    .append('"').append(element.name()).append('"')
                     .append("  (order=").append(ordering.orderFor(type)).append(")")
                     .append('\n');
         }
@@ -379,7 +379,7 @@ public final class InqPipeline {
 
             List<InqElement> sorted = new ArrayList<>(elements);
             sorted.sort(Comparator.comparingInt(
-                    e -> effectiveOrdering.orderFor(e.getElementType())));
+                    e -> effectiveOrdering.orderFor(e.elementType())));
 
             return new InqPipeline(sorted, effectiveOrdering);
         }

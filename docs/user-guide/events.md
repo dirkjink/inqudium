@@ -10,7 +10,7 @@ correlation.
 var cb = CircuitBreaker.of("paymentService", config);
 
 // Subscribe to specific events
-cb.getEventPublisher()
+cb.eventPublisher()
   .onEvent(CircuitBreakerOnStateTransitionEvent.class, event -> {
       log.info("Circuit breaker {} changed state: {} -> {}",
           event.getElementName(),
@@ -19,7 +19,7 @@ cb.getEventPublisher()
   });
 
 // Subscribe to all events
-cb.getEventPublisher()
+cb.eventPublisher()
   .onEvent(event -> metrics.increment("inqudium.events." + event.getClass().getSimpleName()));
 ```
 

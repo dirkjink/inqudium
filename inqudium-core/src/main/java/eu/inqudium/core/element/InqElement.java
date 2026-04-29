@@ -21,14 +21,14 @@ public interface InqElement {
      *
      * @return the instance name, e.g. "paymentService"
      */
-    String getName();
+    String name();
 
     /**
      * Returns the element type.
      *
      * @return the element kind
      */
-    InqElementType getElementType();
+    InqElementType elementType();
 
     /**
      * Returns the event publisher for this element instance.
@@ -38,5 +38,5 @@ public interface InqElement {
      *
      * @return the per-instance event publisher
      */
-    InqEventPublisher getEventPublisher();
+    InqEventPublisher eventPublisher();
 }

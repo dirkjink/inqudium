@@ -303,12 +303,12 @@ public final class ImperativeBulkhead<A, R> implements Bulkhead<A, R> {
     }
 
     @Override
-    public String getName() {
+    public String name() {
         return name;
     }
 
     @Override
-    public InqEventPublisher getEventPublisher() {
+    public InqEventPublisher eventPublisher() {
         return eventPublisher;
     }
 
