@@ -41,7 +41,6 @@
         <dependency>
             <groupId>io.github.resilience4j</groupId>
             <artifactId>resilience4j-bulkhead</artifactId>
-            <version>2.4.0</version>
             <scope>test</scope>
         </dependency>
 
@@ -49,20 +48,17 @@
         <dependency>
             <groupId>dev.failsafe</groupId>
             <artifactId>failsafe</artifactId>
-            <version>3.3.2</version>
             <scope>test</scope>
         </dependency>
         <dependency>
             <groupId>org.slf4j</groupId>
             <artifactId>slf4j-nop</artifactId>
-            <version>2.0.16</version>
             <scope>test</scope>
         </dependency>
         <!-- Resilience4j Micrometer integration (production metrics binding) -->
         <dependency>
             <groupId>io.github.resilience4j</groupId>
             <artifactId>resilience4j-micrometer</artifactId>
-            <version>2.4.0</version>
             <scope>test</scope>
         </dependency>
 
@@ -70,7 +66,6 @@
         <dependency>
             <groupId>io.micrometer</groupId>
             <artifactId>micrometer-core</artifactId>
-            <version>1.14.5</version>
             <scope>test</scope>
         </dependency>
     </dependencies>

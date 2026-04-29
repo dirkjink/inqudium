@@ -17,10 +17,6 @@
         weaves the @Around advice from inqudium-aspect into target classes.
     </description>
 
-    <properties>
-        <aspectj.version>1.9.22.1</aspectj.version>
-    </properties>
-
     <dependencies>
 
         <!-- ========================= -->
@@ -29,7 +25,6 @@
         <dependency>
             <groupId>eu.inqudium</groupId>
             <artifactId>inqudium-aspect</artifactId>
-            <version>${project.version}</version>
             <scope>compile</scope>
         </dependency>
 
@@ -39,7 +34,6 @@
         <dependency>
             <groupId>org.aspectj</groupId>
             <artifactId>aspectjrt</artifactId>
-            <version>${aspectj.version}</version>
             <scope>compile</scope>
         </dependency>
 

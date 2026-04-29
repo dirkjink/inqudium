@@ -22,19 +22,16 @@
         <dependency>
             <groupId>eu.inqudium</groupId>
             <artifactId>inqudium-annotation</artifactId>
-            <version>${project.version}</version>
             <scope>compile</scope>
         </dependency>
         <dependency>
             <groupId>eu.inqudium</groupId>
             <artifactId>inqudium-annotation-support</artifactId>
-            <version>${project.version}</version>
             <scope>compile</scope>
         </dependency>
         <dependency>
             <groupId>eu.inqudium</groupId>
             <artifactId>inqudium-spring</artifactId>
-            <version>${project.version}</version>
             <scope>compile</scope>
         </dependency>
 
@@ -42,7 +39,6 @@
         <dependency>
             <groupId>eu.inqudium</groupId>
             <artifactId>inqudium-imperative</artifactId>
-            <version>${project.version}</version>
             <scope>compile</scope>
             <optional>true</optional>
         </dependency>

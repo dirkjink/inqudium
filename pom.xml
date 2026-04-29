@@ -88,6 +88,11 @@
         <spring-boot.version>4.0.5</spring-boot.version>
         <aspectj.version>1.9.25.1</aspectj.version>
 
+        <!-- Benchmarks / interop comparisons (test scope only) -->
+        <resilience4j.version>2.4.0</resilience4j.version>
+        <failsafe.version>3.3.2</failsafe.version>
+        <micrometer.version>1.14.5</micrometer.version>
+
         <!-- Plugin versions -->
         <maven-compiler-plugin.version>3.14.0</maven-compiler-plugin.version>
         <maven-surefire-plugin.version>3.5.2</maven-surefire-plugin.version>
@@ -201,6 +206,12 @@
                 <version>${logback.version}</version>
                 <scope>compile</scope>
             </dependency>
+            <dependency>
+                <groupId>org.slf4j</groupId>
+                <artifactId>slf4j-nop</artifactId>
+                <version>${slf4j.version}</version>
+                <scope>test</scope>
+            </dependency>
 
             <!-- Spring Boot -->
             <dependency>
@@ -219,6 +230,12 @@
             <dependency>
                 <groupId>org.aspectj</groupId>
                 <artifactId>aspectjweaver</artifactId>
+                <version>${aspectj.version}</version>
+                <scope>compile</scope>
+            </dependency>
+            <dependency>
+                <groupId>org.aspectj</groupId>
+                <artifactId>aspectjrt</artifactId>
                 <version>${aspectj.version}</version>
                 <scope>compile</scope>
             </dependency>
@@ -250,6 +267,32 @@
                 <artifactId>jmh-generator-annprocess</artifactId>
                 <version>${jmh.version}</version>
                 <scope>provided</scope>
+            </dependency>
+
+            <!-- Interop / benchmark comparisons (test scope only) -->
+            <dependency>
+                <groupId>io.github.resilience4j</groupId>
+                <artifactId>resilience4j-bulkhead</artifactId>
+                <version>${resilience4j.version}</version>
+                <scope>test</scope>
+            </dependency>
+            <dependency>
+                <groupId>io.github.resilience4j</groupId>
+                <artifactId>resilience4j-micrometer</artifactId>
+                <version>${resilience4j.version}</version>
+                <scope>test</scope>
+            </dependency>
+            <dependency>
+                <groupId>dev.failsafe</groupId>
+                <artifactId>failsafe</artifactId>
+                <version>${failsafe.version}</version>
+                <scope>test</scope>
+            </dependency>
+            <dependency>
+                <groupId>io.micrometer</groupId>
+                <artifactId>micrometer-core</artifactId>
+                <version>${micrometer.version}</version>
+                <scope>test</scope>
             </dependency>
         </dependencies>
     </dependencyManagement>
