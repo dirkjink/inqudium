@@ -13,91 +13,6 @@ the file is deleted along with REFACTORING.md at the end of the bulkhead refacto
 
 ---
 
-## 2.12.1 — `BulkheadHotPhase` does not feed adaptive algorithms (`onCallComplete` missing)
-
-**Bereich:** 2.12.1
-**Priorität:** kritisch
-**Vorschlag:** Aufnahme in 2.13 (Core-Modul-Sweep) oder eigener Sub-Step vor 2.17 — vor dem Integration-Test-Modul muss das gefixt sein, sonst pinnen die Tests den Defekt.
-
-**Beobachtung:**
-
-`BulkheadHotPhase.execute(...)` (Zeilen 371–381) ruft im `finally`-Block ausschließlich
-`strategy.release()`, gefolgt von einem optionalen `BulkheadOnReleaseEvent`-Publish.
-Es gibt weder einen `nanoTimeSource.now()`-Sample am Anfang von `next.execute(...)`
-noch einen RTT-berechnenden Sample am Ende, und es gibt keinen Aufruf von
-`strategy.onCallComplete(rttNanos, isSuccess)` vor `release()`.
-
-ADR-020, Abschnitt „Adaptive — Feedback ordering matters" (Zeilen 249–258), ist hier
-explizit: „The reactive/imperative facade must call `onCallComplete(rttNanos, isSuccess)`
-*before* `release()` so the in-flight count passed to the algorithm still includes
-the completing call. … Forgetting `onCallComplete` entirely silently degrades the
-adaptive strategy to a static limiter."
-
-Konsequenz: Eine durch die neue Architektur instanziierte `InqBulkhead` mit
-`AdaptiveBulkheadStrategy` oder `AdaptiveNonBlockingBulkheadStrategy` läuft
-permanent auf dem konfigurierten Initial-Limit des Algorithmus. AIMD erhöht nie,
-Vegas reagiert nie auf RTT-Trends, der Error-Rate-Threshold feuert nie. Der
-Algorithmus existiert, wird vom `BulkheadStrategyFactory` korrekt verdrahtet,
-und ist von außen sichtbar — verhält sich aber als statischer Limiter.
-
-Die Legacy-`ImperativeBulkhead.releaseAndReport(...)` (Zeilen 405–443) macht es
-korrekt: misst RTT, ruft `onCallComplete` vor `release`, fängt Algorithm-Fehler
-und loggt sie. Diese Logik wurde beim Übergang auf `BulkheadHotPhase` nicht
-mitgenommen.
-
-Die Strategie-Materialisierungs-Tests
-(`BulkheadHotPhaseStrategyMaterializationTest.should_serve_calls_with_an_adaptive_strategy_running_AIMD`
-und Geschwister) verifizieren nur, dass eine adaptive Strategy einen Call
-serviert — sie verifizieren nicht, dass der Algorithmus Feedback erhält. Daher
-fällt der Defekt in keinem bestehenden Test auf.
-
-**Begründung der Priorität:**
-
-Zwei der vier Strategies sind im neuen Code-Pfad funktional unbenutzbar — der
-Adaptive-Aspekt fehlt vollständig. Das ist die schwerste Form von Drift: das
-Pattern existiert nominell vollständig, aber zwei seiner Implementations laufen
-nicht so, wie ihr Name suggeriert.
-
----
-
-## 2.12.1 — `InqBulkheadFullException` always constructed with optimization disabled
-
-**Bereich:** 2.12.1
-**Priorität:** wichtig
-**Vorschlag:** Aufnahme in 2.13 oder dedizierten Fix-Step. Verdrahtung über `general()`-Snapshot wie bei der Legacy-Klasse.
-
-**Beobachtung:**
-
-`BulkheadHotPhase.execute(...)` Zeile 344–345:
-
-```java
-throw new InqBulkheadFullException(
-        chainId, callId, component.name(), rejection, false);
-```
-
-Das letzte Argument ist hartkodiert `false`. Die Legacy-`ImperativeBulkhead` an
-gleicher Stelle: `config.general().enableExceptionOptimization()`.
-
-ADR-020 Zeile 491–495: „Overrides `fillInStackTrace()` to a no-op. A bulkhead
-rejection is a flow-control signal, not a programming error; `RejectionContext`
-already carries the diagnostic data, and stack-trace generation dominates the
-rejection path's cost under high rejection rates."
-
-Die Optimierung ist daher ein dokumentiertes Performance-Feature für den
-Reject-Pfad. Im neuen Code ist sie permanent ausgeschaltet — jede Rejection
-zahlt die volle Stack-Trace-Generierung.
-
-Gleiches Symptom bei `InqBulkheadInterruptedException` Zeile 329 (auch dort
-`false`).
-
-**Begründung der Priorität:**
-
-Performance-Regression auf einem dokumentiert hot pfad (ADR-020 nennt das
-explizit als Reject-Pfad-Kostendominanz). Funktional korrekt; nur teurer als
-spezifiziert.
-
----
-
 ## 2.12.1 — ADR-020 „Configuration" und „Registry" Sektionen beschreiben pre-Phase-1-Architektur
 
 **Bereich:** 2.12.1
@@ -222,98 +137,6 @@ Verstärkt die in TODO.md dokumentierte Lücke um einen sichtbar wichtigeren
 Fall. Gleicher Code-Pfad, gleiche Lösung — daher kein eigenständiges Finding,
 nur Erweiterung des Beispiels.
 
----
-
-## 2.12.2 — Adaptive-Strategien sind ohne `onCallComplete`-Fix faktisch nicht live-tunable
-
-**Bereich:** 2.12.2
-**Priorität:** kritisch (Folge-Finding zu 2.12.1 / `onCallComplete` missing)
-**Vorschlag:** Fix dieses Finding ist Voraussetzung für jede Aussage über Adaptive-Strategy-Vollständigkeit. Aufnahme in selben Sub-Step wie das `onCallComplete`-Fix.
-
-**Beobachtung:**
-
-Wenn `onCallComplete` nicht aufgerufen wird (siehe 2.12.1, kritisches Finding),
-hängt der Algorithmus auf seinem Initial-Limit fest. Live-Tuning auf
-Algorithmen-Parameter (AIMD `errorRateThreshold`, Vegas `alpha/beta`,
-`smoothingTimeConstant`) hätte daher selbst dann keinen Effekt, wenn der
-strategyChanged-Mechanismus aus dem TODO-Eintrag gefixt wäre. Die Algorithmen
-laufen aktuell als geschriebene Records, die nie ihren `update()`-Hook sehen.
-
-**Begründung der Priorität:**
-
-Ist konzeptuell ein Folge-Finding — sobald `onCallComplete` korrekt verdrahtet
-ist, verschwindet dieses Finding mit. Dokumentiert hier nur, damit beim Review
-der Zusammenhang explizit ist.
-
----
-
-## 2.12.2 — `SemaphoreBulkheadStrategy.adjustMaxConcurrent` Javadoc nennt veraltete Phase-Begriffe
-
-**Bereich:** 2.12.2
-**Priorität:** nachrangig
-**Vorschlag:** Aufnahme in 2.13 (Core-Modul-Sweep) — kleiner Javadoc-Fix.
-
-**Beobachtung:**
-
-Zeilen 56–60 von `SemaphoreBulkheadStrategy.java`:
-
-```
-This is the in-place adjustment Phase 1 of the configuration refactor supports.
-Strategy-type changes (semaphore → CoDel, etc.) are Phase 2 and require
-coordination with the veto chain to drain in-flight calls before swapping.
-```
-
-Phase 2 ist abgeschlossen; die Phase-Referenz ist überholt. Außerdem ist die
-Aussage „require drain" jetzt unzutreffend — ADR-032 entschied sich gegen
-Drainage zugunsten des atomaren Veto-Modells.
-
-**Begründung der Priorität:**
-
-Reine Doku-Hygiene, keine funktionale Auswirkung. Trifft sich gut mit dem
-generellen Phase-Verweis-Cleanup aus 2.11.
-
----
-
-## 2.12.3 — Cold-Phase-Accessoren liefern für Adaptive Strategies irreführenden Wert
-
-**Bereich:** 2.12.3
-**Priorität:** wichtig
-**Vorschlag:** Diskussion beim Review — entweder dokumentieren als bewusste Discontinuity, oder Cold-Phase-Accessoren so anpassen, dass sie für Adaptive den Algorithmen-Initial-Limit aus der Sub-Config lesen.
-
-**Beobachtung:**
-
-`InqBulkhead.availablePermits()` und `concurrentCalls()` (Zeilen 118–135) lesen
-im Cold-Zustand vom Snapshot:
-
-```java
-return p instanceof BulkheadHotPhase hot
-        ? hot.availablePermits()
-        : snapshot().maxConcurrentCalls();
-```
-
-Für `SemaphoreStrategyConfig` ist das korrekt: das Snapshot-Feld ist tatsächlich
-das Limit, das die Strategy beim Hot-Werden bekommt. Für `CoDelStrategyConfig`
-ist es ebenfalls korrekt (CoDel nimmt `snapshot.maxConcurrentCalls()` als
-Pin-Limit). Für `AdaptiveStrategyConfig` und `AdaptiveNonBlockingStrategyConfig`
-ist es **inkorrekt**: `BulkheadStrategyFactory` ignoriert
-`snapshot.maxConcurrentCalls()` für die Adaptive-Pfade vollständig (siehe
-Factory Zeilen 80–83 + Konstruktor-Aufrufe Zeilen 69 / 72) und konstruiert die
-Strategy ausschließlich aus den Algorithmus-Sub-Config-Werten (`initialLimit`,
-`minLimit`, `maxLimit`).
-
-Konsequenz: Cold-availability sagt z.B. 50 (Snapshot-Default oder
-User-`maxConcurrentCalls(50)`-Setter), Hot-availability nach erstem Call sagt
-20 (AIMD `initialLimit`). Reading-Discontinuity beim Warm-up, nirgends
-dokumentiert, kein Test pinnt das Verhalten in beide Richtungen.
-
-**Begründung der Priorität:**
-
-Beobachtbarkeit-API liefert zwei verschiedene Zahlen für „dasselbe" Limit, je
-nachdem ob der Bulkhead bereits einen Call gesehen hat. Operator wundert sich.
-Kein funktionaler Bug (die Zahlen sind beide isoliert korrekt — sie sind nur
-nicht dasselbe).
-
----
 
 ## 2.12.3 — Race zwischen `markRemoved` und `onSnapshotChange` während Hot-Swap nicht getestet
 
@@ -480,80 +303,6 @@ Saubere Veto-Chain-Semantik ist wichtig für Operator-vertrauen. Fehlende
 Spec ist eine Lücke; aktuelles Verhalten kann gut sein, ist nur nicht
 festgeschrieben.
 
----
-
-## 2.12.5 — `docs/user-guide/bulkhead/bulkhead.md` dokumentiert weder Strategy-DSL noch `strategy`-Feld
-
-**Bereich:** 2.12.5
-**Priorität:** wichtig
-**Vorschlag:** Aufnahme in 2.13 (Core-Modul-Sweep) — eigentlich genauer ein „User-Guide-Sweep". Eventuell eigener Sub-Step zwischen 2.13 und 2.14, falls die Doku-Arbeit nicht in 2.13 reinpasst.
-
-**Beobachtung:**
-
-Der Bulkhead-User-Guide (`docs/user-guide/bulkhead/bulkhead.md`) wurde
-offensichtlich für die neue Architektur aktualisiert (verwendet
-`Inqudium.configure().imperative(...).bulkhead(...)`-Form, Presets,
-`BulkheadEventConfig`). Aber die Strategy-DSL aus ADR-032 (`semaphore()`,
-`codel(...)`, `adaptive(...)`, `adaptiveNonBlocking(...)`) wird **nirgends
-erwähnt**. Die Configuration-Reference-Tabelle (Zeilen 113–119) listet `name`,
-`maxConcurrentCalls`, `maxWaitDuration`, `tags`, `events` — kein `strategy`-Feld.
-
-Konsequenz: User, der nur die Doku liest, hat keine Möglichkeit zu erfahren,
-dass CoDel, Adaptive oder AdaptiveNonBlocking als Wahl existieren. Das gesamte
-Strategy-Pattern ist undokumentiert.
-
-Außerdem fehlen:
-- Live-Tunability-Regeln (welches Feld kann zur Laufzeit geändert werden,
-  welches nicht — die Veto-Mechanik ist relevant für Operator).
-- Hot-Swap-Voraussetzungen (zero in-flight für `STRATEGY`-Patches).
-- Adaptive-Algorithmen-Wahl (AIMD vs. Vegas).
-- Erwähnung der Asymmetrie zwischen `maxConcurrentCalls`-Tuning auf
-  Semaphore (geht) und auf nicht-Semaphore (vetoed).
-
-**Begründung der Priorität:**
-
-User-Guide ist die User-Eintritts-Doku. Eine vollständige Strategy-Pattern-
-Implementation, die in der User-Doku unsichtbar ist, ist im Sinne der
-„Pattern-Vollständigkeit"-Frage von 2.12 nicht wirklich vollständig.
-
----
-
-## 2.12.5 — `BulkheadHotPhase`-Klassen-Javadoc nennt veraltete Strategy-Hardcodierung
-
-**Bereich:** 2.12.5
-**Priorität:** nachrangig
-**Vorschlag:** Aufnahme in 2.13 (Core-Modul-Sweep) — kleiner Javadoc-Fix.
-
-**Beobachtung:**
-
-`BulkheadHotPhase.java` Zeile 41:
-
-```
-Carries the actual permit-management state — a {@link SemaphoreBulkheadStrategy}
-constructed from the snapshot at cold-to-hot transition time.
-```
-
-Stand vor 2.10.B. Aktuell konstruiert `BulkheadStrategyFactory` eine von vier
-möglichen Strategies. Der Klassen-Javadoc sollte das reflektieren.
-
-Zeile 86 hat ein ähnliches Problem:
-
-```
-then propagates {@code maxConcurrentCalls} to the strategy via
-{@link SemaphoreBulkheadStrategy#adjustMaxConcurrent}.
-```
-
-Das ist nur einer von drei möglichen Pfaden in `onSnapshotChange` (die anderen
-sind Strategy-Hot-Swap und no-op-für-non-Semaphore).
-
-**Begründung der Priorität:**
-
-Klein, kosmetisch, aber ein Class-Level-Javadoc, der „carries a Semaphore"
-behauptet während der Konstruktor in Wahrheit die Factory anruft, ist eine
-unmittelbare Quelle für Verwirrung beim ersten Lesen.
-
----
-
 ## 2.12.5 — Migration-Guide existiert nicht
 
 **Bereich:** 2.12.5
@@ -675,78 +424,6 @@ that should be deleted. Either way it confuses readers of the build structure.
 Routed together with the SLF4J-in-core finding because the same decision settles
 both.
 
----
-
-## Post-2.12 — Algorithm presets are missing from the DSL sub-builders
-
-**Bereich:** 2.12.2 (post-hoc; missed during the original 2.12 audit pass)
-**Priorität:** wichtig
-**Vorschlag:** Aufnahme in einen neuen Sub-Step **2.16** (Restore algorithm presets in the strategy DSL). The existing 2.16–2.19 sequence renumbers to 2.17–2.20.
-
-**Beobachtung:**
-
-The legacy `AimdLimitAlgorithm` and `VegasLimitAlgorithm` classes carry three named presets
-each as static factory methods:
-
-- `AimdLimitAlgorithm.protective()` / `.balanced()` / `.permissive()`
-- `VegasLimitAlgorithm.protective()` / `.balanced()` / `.permissive()`
-
-Each preset is a carefully-tuned parameter set with a documented operational archetype:
-*protective* prioritizes stability over throughput (initialLimit=20, slow windowed growth,
-aggressive 0.5 backoff, tolerant 15% error rate threshold, 5s smoothing); *balanced* is the
-production default; *permissive* tolerates higher error rates for non-critical or legacy
-services. The Javadoc on each preset includes a parameter table with deliberate values —
-this is substantive operational knowledge encoded in code.
-
-The new DSL sub-builders introduced in 2.10.C — `AimdAlgorithmBuilder` and
-`VegasAlgorithmBuilder` — expose per-field setters and a single `balanced`-derived default
-set, but **do not expose the three named presets**. A user who wants a *protective adaptive
-bulkhead* through the DSL must read the legacy class's Javadoc and replicate the parameter
-values manually:
-
-```java
-// What the user must write today:
-.bulkhead("payments", b -> b
-    .protective()
-    .adaptive(a -> a.aimd(x -> x
-        .initialLimit(20)
-        .minLimit(1)
-        .maxLimit(200)
-        .backoffRatio(0.5)
-        .smoothingTimeConstant(Duration.ofSeconds(5))
-        .errorRateThreshold(0.15)
-        .windowedIncrease(true)
-        .minUtilizationThreshold(0.5))))
-
-// What the user should be able to write:
-.bulkhead("payments", b -> b
-    .protective()
-    .adaptive(a -> a.aimd(x -> x.protective())))
-```
-
-The asymmetry compounds: the top-level `BulkheadBuilder` has `.protective()` /
-`.balanced()` / `.permissive()`. The algorithm sub-builders inside `.adaptive(...)` and
-`.adaptiveNonBlocking(...)` do not. A user reading the user guide encounters preset
-vocabulary at the top level but no preset vocabulary one level deeper, with no explanation
-for the asymmetry.
-
-`VegasAlgorithmBuilder.java` carries an explicit comment:
-*"Defaults match the `balanced` preset of the deprecated phase-1 `VegasLimitAlgorithmConfigBuilder`
-so that `.vegas(v -> {})` produces a usable algorithm out of the box."* — confirming that
-the *balanced* preset survived as the default, while *protective* and *permissive* did not
-make the migration. This is a Phase-1-migration omission, not a deliberate design choice.
-
-**Begründung der Priorität:**
-
-This is a functional regression of substantive operational knowledge. The presets are not
-cosmetic — they encode parameter tuning that a typical user has neither the expertise nor
-the time to redo manually. Without them, the adaptive strategies are technically reachable
-through the DSL but practically harder to use than they need to be, and the discoverability
-of *"protective vs. permissive"* archetypes is lost. Pattern-completeness in the sense of
-2.12 requires DSL parity with the legacy surface, not just functional reachability of the
-underlying strategies.
-
----
 
 ## Post-2.12 — Audit process: DSL-surface depth was not part of the 2.12 audit
 
@@ -785,172 +462,6 @@ Process retrospective, not a code defect. The fix is to remember the lesson next
 action needed in the bulkhead refactor itself — the companion finding (the actual
 preset-restoration) handles the substantive work.
 
----
-
-## 2.17.1 — Inventory: which Function/Proxy wrappers exist in core + imperative
-
-**Bereich:** 2.17.1
-**Priorität:** info (Bestandsaufnahme, kein Defekt für sich)
-**Vorschlag:** Bleibt im Bericht, kein eigener Folge-Step. Dient als Referenz für 2.18 / 2.20.
-
-**Beobachtung:**
-
-Die Wrapper-Mechanismen sind nicht „Pre-Phase-1-Legacy" — sie wurden im Lauf des Refactors
-neu implementiert und leben in der Pipeline-Schicht des Core- und des Imperative-Moduls.
-
-Synchron, in `inqudium-core/src/main/java/eu/inqudium/core/pipeline/`:
-
-| Klasse                  | Aufgabe                                                                                     |
-|-------------------------|---------------------------------------------------------------------------------------------|
-| `LayerAction`           | Funktionales Interface — `execute(chainId, callId, argument, next)`, das around-advice.     |
-| `InqDecorator`          | `extends InqElement, LayerAction<A,R>` — markiert Element-konforme Around-Advice-Quellen.   |
-| `BaseWrapper`/`AbstractBaseWrapper` | Generische Wrapper-Basis, hält `LayerAction` als Feld.                          |
-| `RunnableWrapper`/`SupplierWrapper`/`CallableWrapper`/`FunctionWrapper`/`JoinPointWrapper` | Konkrete Wrapper. |
-| `SyncPipelineTerminal`  | Liste von `InqDecorator`s als Pipeline; `decorateXxx(...)` und `execute(JoinPointExecutor)`. |
-| `proxy/ProxyWrapper` + `AbstractProxyWrapper` | JDK-Proxy-Invocation-Handler, dispatch über `DispatchExtension[]`.   |
-| `proxy/InqProxyFactory` | User-Facing Single-Layer-Proxy-Factory (`of(name, LayerAction).protect(iface, target)`).    |
-| `proxy/ProxyPipelineTerminal` | Pipeline-basiert — wrappt jede Methode durch eine `SyncPipelineTerminal`-Pipeline.     |
-
-Asynchron, in `inqudium-imperative/src/main/java/eu/inqudium/imperative/core/pipeline/`:
-
-| Klasse                          | Aufgabe                                                                |
-|---------------------------------|------------------------------------------------------------------------|
-| `AsyncLayerAction`              | `executeAsync(chainId, callId, argument, nextStage) → CompletionStage`.|
-| `InqAsyncDecorator`             | Async-Pendant zu `InqDecorator`.                                       |
-| `AsyncBaseWrapper`              | Generische Async-Wrapper-Basis.                                        |
-| `AsyncRunnable/Supplier/Callable/Function/JoinPointWrapper` | Async-Konkretisierungen.                   |
-| `AsyncPipelineTerminal`         | Async-Pendant zu `SyncPipelineTerminal`.                               |
-| `InqAsyncProxyFactory`          | User-Facing Dual-Action-Proxy-Factory (sync + async).                  |
-| `HybridProxyPipelineTerminal`   | Pipeline-Proxy mit Auto-Routing nach Method-Return-Typ.                |
-
-Tests (`WrapperPipelineTest`, `SyncPipelineTerminalTest`, `JoinPointWrapperDynamicProxyTest`,
-`InqProxyFactorySyncTest`, `ProxyPipelineTerminalTest`, `ProxyChainBypassTest`,
-`ProxyChainCompositionTest`, `MethodHandleDispatchTest`, `ProxyObjectMethodsTest`,
-`ProxyCreationValidationTest`, `AsyncWrapperPipelineTest`, `AsyncPipelineTerminalTest`,
-`HybridProxyPipelineTerminalTest`, `InqProxyFactoryAsyncTest`, `ProxyWrapperTest`,
-`AsyncDispatchExtensionTypeSafetyTest`, `AbstractBaseWrapperInnerTypeSafetyTest`,
-`FinalWrapperHierarchyTest`) testen das Wrapper-/Proxy-Verhalten umfassend — aber
-ausschließlich gegen synthetische `LayerAction`/`AsyncLayerAction`-Lambdas. Kein Test
-verkettet ein reales `InqBulkhead` mit dieser Maschinerie.
-
-**Begründung der Priorität:**
-
-Die Inventarisierung selbst ist kein Defekt; sie ist die Grundlage für die nachfolgenden
-Befunde. Ohne sie lassen sich Drift-Aussagen nicht festnageln.
-
----
-
-## 2.17.2 — `InqBulkhead` implementiert weder `InqElement` noch `InqDecorator`
-
-**Bereich:** 2.17.2
-**Priorität:** kritisch
-**Vorschlag:** Eigener Sub-Step zwischen 2.17 und 2.18 (oder Bestandteil von 2.18, falls die
-Reparatur dort natürlich anfällt). Routing ist Review-Entscheidung, nicht jetzt.
-
-**Beobachtung:**
-
-`InqDecorator<A,R>` (`inqudium-core/.../pipeline/InqDecorator.java:53`) ist definiert als:
-
-```java
-public interface InqDecorator<A, R> extends InqElement, LayerAction<A, R> { … }
-```
-
-Die Legacy-`Bulkhead`-Schnittstelle erfüllt diesen Vertrag (`inqudium-imperative/.../bulkhead/Bulkhead.java:53` —
-`extends InqDecorator<A, R>, …`), und die deprecated `ImperativeBulkhead<A, R>` implementiert sie.
-
-Die neue `InqBulkhead` (`inqudium-imperative/.../bulkhead/InqBulkhead.java:37-39`) hingegen:
-
-```java
-public final class InqBulkhead
-        extends ImperativeLifecyclePhasedComponent<BulkheadSnapshot>
-        implements ImperativeBulkhead { … }
-```
-
-`ImperativeLifecyclePhasedComponent`
-(`inqudium-imperative/.../lifecycle/ImperativeLifecyclePhasedComponent.java:61-62`) deklariert:
-
-```java
-public abstract class ImperativeLifecyclePhasedComponent<S extends ComponentSnapshot>
-        implements LifecycleAware, ListenerRegistry<S>, InternalMutabilityCheck<S> { … }
-```
-
-Weder `InqElement` (das `getName()`, `getElementType()`, `getEventPublisher()` fordert) noch
-`LayerAction` noch `InqDecorator` werden implementiert. `InqBulkhead` hat zwar die korrekte
-Methodensignatur — `public final <A,R> R execute(long chainId, long callId, A argument,
-InternalExecutor<A,R> next)` (geerbt aus dem Lifecycle-Base-Class, Zeilen 244–251) — aber
-strukturell typgleich ist sie nur, kein Interface bestätigt es.
-
-Folge:
-
-1. APIs, die einen `InqDecorator`-Bound erwarten, lehnen `InqBulkhead` ab. Konkretes Beispiel
-   außerhalb des 2.17-Scopes, aber als Drift-Indikator zentral:
-   `inqudium-aspect/.../pipeline/ElementLayerProvider.java:92` —
-   `<E extends InqElement & InqDecorator<Void, Object>> ElementLayerProvider(E element, int order)`.
-   Mit `new ElementLayerProvider(inqBulkhead, 100)` beschwert sich der Compiler („type
-   parameter `E` is not within bound").
-2. Im Core- und Imperative-Modul gibt es keinen alternativen, idiomatischen Weg, ein
-   `InqBulkhead` an eine `LayerAction`-empfangende API zu reichen. Der einzig funktionierende
-   Pfad ist die Methoden-Referenz `bulkhead::execute`, die syntaktisch ein
-   `LayerAction<A,R>` erzeugt — aber nirgends dokumentiert oder durch eine Helper-Methode
-   abgedeckt ist.
-3. Das deprecated `ImperativeBulkhead<A,R>` ist die einzige Klasse im Repo, die heute mit
-   `InqDecorator`-Bound-APIs benutzbar ist. Die Aspekt-Javadoc-Beispiele
-   (`inqudium-aspect/.../ElementLayerProvider.java:36-65`) zeigen genau das: `new
-   ImperativeBulkhead<>(cfg, strategy)`. Mit dem Lösch-Trigger der Legacy-Klasse fällt diese
-   Brücke ersatzlos weg, sofern `InqBulkhead` bis dahin den `InqDecorator`-Vertrag nicht
-   übernimmt — oder die Aspekt-Schicht von `InqDecorator` auf `LayerAction` umgestellt wird.
-
-**Begründung der Priorität:**
-
-Es ist ein struktureller Bruch zwischen dem Element-Beitrag von Phase 1 (`InqBulkhead`) und
-der Wrapper-/Proxy-/Aspekt-Plumbing, die seit Phase 0 auf `InqDecorator` codiert ist. Die
-Aspekt-Integration (2.18) trifft genau auf diese Wand. Solange kein Sub-Step ihn schließt —
-entweder durch Implementierung von `InqElement`/`LayerAction` auf
-`ImperativeLifecyclePhasedComponent` oder durch Aufweichen der `ElementLayerProvider`-Bound
-auf `LayerAction` — können neue Bulkheads nicht via Aspekt geschützt werden, was ein
-Kernfeature des bisherigen Aspekt-Moduls ist. „Kritisch", weil ohne diese Reparatur 2.18
-nicht abgeschlossen werden kann.
-
----
-
-## 2.17.2 — Kein Helper konvertiert `InqBulkhead` in eine `LayerAction`
-
-**Bereich:** 2.17.2
-**Priorität:** wichtig
-**Vorschlag:** Aufnahme in den 2.17.2-Folge-Sub-Step (zusammen mit dem `InqDecorator`-Bruch),
-falls dieser kommt; alternativ Aufnahme in 2.20 als dokumentierter Usage-Pattern in den
-Integrations-Tests.
-
-**Beobachtung:**
-
-In `inqudium-core` und `inqudium-imperative` existiert kein Helper, keine Factory, kein
-Adapter, der ein `InqBulkhead` (oder allgemeiner: eine
-`ImperativeLifecyclePhasedComponent`-Subklasse) in eine `LayerAction<A,R>` verpackt. Der
-einzige Pfad ist die strukturelle Methoden-Referenz `bulkhead::execute`. Das funktioniert,
-weil die Methodensignatur passt — ist aber:
-
-- nirgends dokumentiert (keine Javadoc auf `InqBulkhead.execute(...)` weist darauf hin),
-- nirgends in einem Beispiel oder Test gezeigt,
-- nicht typsicher in Bezug auf den `InqDecorator`-Vertrag (siehe Vorbefund — Methoden-Referenz
-  bringt nur `LayerAction`-Typ, keinen `InqElement`-Anteil).
-
-Konkret: Will man `bulkhead::execute` an `InqProxyFactory.of(name, LayerAction)`
-(`inqudium-core/.../pipeline/proxy/InqProxyFactory.java`) übergeben, muss man den Namen
-separat aus `bulkhead` herauslesen — `InqBulkhead` selbst hat aber kein `getName()` (das
-gehörte zu `InqElement`). Stattdessen erbt es ein `name()` aus
-`ImperativeLifecyclePhasedComponent`. Die API-Asymmetrie macht den Adapter-Code für den
-Endnutzer holprig.
-
-**Begründung der Priorität:**
-
-Funktional umgehbar, aber das Fehlen eines geprüften, dokumentierten Bridge-Idioms ist die
-Drift-Wurzel: Solange es keine kanonische Antwort auf „wie reiche ich ein `InqBulkhead` an
-einen Wrapper" gibt, kann jede Integrations-Schicht (Aspekt, Spring, Annotation) sich eine
-eigene Lösung ausdenken — oder, wie heute, gar keine Brücke schlagen und faktisch nur mit
-der Legacy-API funktionieren.
-
----
-
 ## 2.17.3 — Lifecycle-Kompatibilität strukturell intakt, aber nicht test-bewiesen
 
 **Bereich:** 2.17.3
@@ -963,30 +474,21 @@ explizit drei Szenarien:
 
 **Beobachtung:**
 
-Strukturell sind die Wrapper mit der neuen Architektur kompatibel — vorausgesetzt, der
-Bulkhead wird über die `bulkhead::execute`-Methodenreferenz in eine `LayerAction` gehoben:
+Strukturell sind die Wrapper mit der neuen Architektur kompatibel. Nach ADR-033 implementiert
+`InqBulkhead<A, R>` direkt `InqDecorator<A, R>` — die Brücke zwischen Lifecycle-Komponente und
+Pipeline-Schicht ist Vertrag, kein Methoden-Referenz-Trick.
 
-- **Cold→Hot:** Jeder Wrapper-Aufruf landet in `ImperativeLifecyclePhasedComponent.execute(...)`
-  (Zeilen 244–251), das `phase.get()` jedes Mal frisch liest.
-  `ColdPhase.execute(...)` (Zeilen 300–322) führt den CAS auf den Hot-Phase-Container durch
-  und delegiert. Der Wrapper merkt nichts vom Übergang — aus seiner Sicht ist es ein
-  gewöhnlicher `next.execute(...)`-Call.
-- **Strategy-Hot-Swap:** `BulkheadHotPhase.strategy` ist `volatile`
-  (`BulkheadHotPhase.java:105`). `BulkheadHotPhase.execute(...)` ruft `tryAcquire(...)` auf,
-  das `strategy` re-liest (Zeilen 176–187). Eine via Snapshot-Patch ausgetauschte Strategy
-  wird beim nächsten Wrapper-Aufruf aktiv. Wrapper cachen keine Strategy-Referenz, sondern
-  eine `LayerAction` — und diese ist (per Methodenreferenz) auf das Bulkhead-Objekt gebunden,
-  nicht auf eine Phase oder Strategy.
-- **Removal:** `ImperativeLifecyclePhasedComponent.execute(...)` (Zeile 247–248) prüft auf
-  `RemovedPhase` und wirft `ComponentRemovedException`. Auch hier: pro Aufruf, kein Caching
-  beim Wrapper.
+Die drei Lifecycle-Szenarien sind im Code korrekt aufgesetzt:
 
-Der einzige Weg, in dem ein Wrapper „blind" für Lifecycle-Übergänge wäre, ist ein
-selbst-konstruierter `LayerAction`, der eine `BulkheadStrategy` direkt schließt:
-`(c, k, a, n) -> { strategy.acquire(...); … }`. Eine Suche danach in `inqudium-core` und
-`inqudium-imperative` Production-Code ergibt nichts; alle `LayerAction`-Lambda-Erzeugung
-außerhalb von Tests wäre einzig in `DefaultBulkheadProtection` (deprecated DSL) zu erwarten,
-ist aber dort auch nicht vorhanden.
+- **Cold→Hot:** Jeder Wrapper-Aufruf landet in `ImperativeLifecyclePhasedComponent.execute(...)`,
+  das `phase.get()` jedes Mal frisch liest. `ColdPhase.execute(...)` führt den CAS auf den
+  Hot-Phase-Container durch und delegiert. Der Wrapper merkt nichts vom Übergang — aus seiner
+  Sicht ist es ein gewöhnlicher `next.execute(...)`-Call.
+- **Strategy-Hot-Swap:** `BulkheadHotPhase.strategy` ist `volatile`. `BulkheadHotPhase.execute(...)`
+  ruft `tryAcquire(...)` auf, das `strategy` re-liest. Eine via Snapshot-Patch ausgetauschte
+  Strategy wird beim nächsten Wrapper-Aufruf aktiv.
+- **Removal:** `ImperativeLifecyclePhasedComponent.execute(...)` prüft auf `RemovedPhase` und
+  wirft `ComponentRemovedException`. Pro Aufruf, kein Caching beim Wrapper.
 
 Das Problem: kein Test pinnt diese Eigenschaften für die Wrapper-Schicht fest.
 
@@ -1004,12 +506,10 @@ einen `LayerAction` aus einem konkreten `BulkheadHotPhase` extrahiert statt aus 
 
 **Begründung der Priorität:**
 
-Die Lifecycle-Kompatibilität ist heute korrekt — aber eine implizite Korrektheit, die auf
-Java-Methodenreferenz-Semantik beruht, ist genau das, was im Stress falsch wird, wenn jemand
-einen Adapter „optimiert". Die Test-Lücke ist die Form, in der die korrekte Eigenschaft als
-nicht-load-bearing wahrgenommen wird, bis sie es gewesen wäre. „Wichtig" statt „kritisch",
-weil heute keine Code-Änderung nötig ist; aber 2.20 muss die Eigenschaften ans Test-Netz
-nageln.
+Die Lifecycle-Kompatibilität ist heute korrekt. Die Test-Lücke ist die Form, in der die
+korrekte Eigenschaft als nicht-load-bearing wahrgenommen wird, bis sie es gewesen wäre.
+„Wichtig" statt „kritisch", weil heute keine Code-Änderung nötig ist; aber 2.20 muss die
+Eigenschaften ans Test-Netz nageln.
 
 ---
 
@@ -1051,41 +551,6 @@ Integrations-Test-Modul, das den Stack als Ganzes verifiziert.
 
 Das Findings-Catalog-Item als solches ist nur ein Coverage-Befund, keine sofortige
 Code-Drift. Die Priorität „wichtig" ergibt sich daraus, dass diese Lücke der Grund ist, warum
-die anderen 2.17-Findings (insb. 2.17.2 und 2.17.3) bisher unauffällig waren: ohne
+das verwandte 2.17.3-Finding (Lifecycle-Kompatibilität) bisher unauffällig war: ohne
 End-to-End-Test schlägt der Drift nicht an.
 
----
-
-## 2.17 — Empfehlungen für nachfolgende Sub-Steps
-
-**Bereich:** 2.17 (Empfehlungs-Synopse)
-**Priorität:** info
-**Vorschlag:** Review-Diskussion direkt nach Abschluss von 2.17.
-
-Die 2.17-Findings legen folgende Routing-Hypothesen nahe — finale Zuteilung in der
-Review-Session:
-
-1. **Neuer Sub-Step zwischen 2.17 und 2.18: `InqDecorator`-/`LayerAction`-Brücke für
-   `InqBulkhead`.** Entweder `ImperativeLifecyclePhasedComponent` implementiert `InqElement` +
-   `LayerAction` (dann erfüllt jede Lifecycle-aware Komponente den Vertrag automatisch), oder
-   `ElementLayerProvider` bekommt einen zweiten Constructor mit `LayerAction`-Bound
-   (entkoppelt Aspect-Schicht von `InqDecorator`). Erste Variante ist invasiver, zweite
-   geringeres Blast-Radius — Trade-off ist Review-Entscheidung.
-
-2. **2.18 (AspectJ-Integration) muss explizit prüfen, ob `ElementLayerProvider` mit
-   `InqBulkhead` instanziierbar ist** — heute nicht der Fall. Falls Sub-Step 1 nicht zuerst
-   gemacht wird, bricht 2.18 strukturell.
-
-3. **2.20 (Integration-Test-Modul) absorbiert die Test-Coverage-Befunde** —
-   Wrapper-über-Lifecycle, Wrapper-über-Hot-Swap, Wrapper-nach-Removal. Drei dedizierte
-   Test-Klassen, die die Behauptungen aus 2.17.3 festschrauben.
-
-4. **Keine triviale Doku-Korrektur direkt in 2.17 erledigt** — die Javadoc-Beispiele in
-   `ElementLayerProvider` und `PipelineOrdering` zeigen `new ImperativeBulkhead<>(...)`, also
-   die deprecated Klasse. Eine Korrektur ist sinnvoll, aber erst nachdem Sub-Step 1
-   entschieden ist (sonst zeigt das Beispiel etwas Nicht-Compile-Bares).
-
-5. **Async-Lücke** (`InqBulkhead` ohne async-Variante, `TODO` an `InqBulkhead.java:178-184`):
-   bereits in 2.12.1-Findings („`InqBulkhead` hat keine asynchrone Variante") vermerkt. 2.17
-   bestätigt es als Wrapper-seitiges Symptom (`AsyncSupplierWrapper` & Co. haben keine
-   produktionsseitige Bulkhead-Quelle), fügt aber kein neues Action-Item hinzu.

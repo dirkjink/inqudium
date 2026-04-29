@@ -746,6 +746,22 @@ wrappers must be checked against the current bulkhead architecture:
 - Are the wrappers covered by tests that exercise them through a complete bulkhead, not
   just a mock?
 
+---
+
+**ADR-033 implementation interjection.** The 2.17 audit surfaced a structural gap
+(audit finding 2.17.2): `InqBulkhead` does not implement `InqElement` or `InqDecorator`,
+which means the aspect-pipeline integration cannot accept it. ADR-033 specifies the
+resolution. Implementation runs in a parallel document, `REFACTORING_DECORATOR_BRIDGE.md`,
+with its own three-stage plan (1: `InqElement` rename to record-style accessors,
+2: phase parameterization plus `InqBulkhead<A, R>` plus sync pipeline contracts,
+3: `BulkheadHandle` consolidation plus `ImperativeBulkhead` interface deletion). All three
+stages must complete green before sub-step 2.18 starts — 2.18 depends on
+`InqBulkhead` being a fully-fledged `InqDecorator`. The decorator-bridge document is
+deleted alongside this `REFACTORING.md` and `AUDIT_FINDINGS.md` at the end of the bulkhead
+refactor.
+
+---
+
 ### 2.18 AspectJ integration
 
 The AspectJ integration module against the new bulkhead architecture.

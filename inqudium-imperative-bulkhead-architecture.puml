@@ -1,0 +1,236 @@
+@startuml inqudium-imperative-bulkhead-architecture
+
+!pragma layout smetana
+
+title Inqudium — Imperative Bulkhead Architecture (post-2.16, pre-decorator-bridge)
+
+skinparam class {
+    BackgroundColor<<config>> #E8F4F8
+    BackgroundColor<<lifecycle>> #FFF4E0
+    BackgroundColor<<imperative>> #E8F8E8
+    BackgroundColor<<pipeline>> #FCE4EC
+    BackgroundColor<<legacy>> #F0F0F0
+    BorderColor<<gap>> #D32F2F
+    BorderThickness<<gap>> 3
+}
+
+package "inqudium-config" <<config>> {
+
+    interface "LifecycleAware" as LifecycleAware <<config>> {
+        +markRemoved(): void
+        +isRemoved(): boolean
+    }
+
+    interface "ListenerRegistry<S>" as ListenerRegistry <<config>> {
+        +onChangeRequest(listener): AutoCloseable
+        +listeners(): List
+    }
+
+    interface "InternalMutabilityCheck<S>" as InternalMutabilityCheck <<config>> {
+        +evaluate(request): ChangeDecision
+    }
+
+    interface "BulkheadHandle<P>" as BulkheadHandle <<config>> {
+        +name(): String
+        +snapshot(): BulkheadSnapshot
+        +availablePermits(): int
+        +concurrentCalls(): int
+        +eventPublisher(): InqEventPublisher
+    }
+
+    interface "ImperativeBulkhead" as ImperativeBulkheadInterface <<config>> {
+        +execute(chainId, callId, arg, next): R
+    }
+
+    BulkheadHandle --|> LifecycleAware
+    BulkheadHandle --|> ListenerRegistry
+    BulkheadHandle --|> InternalMutabilityCheck
+
+    ImperativeBulkheadInterface --|> BulkheadHandle
+
+    class "BulkheadSnapshot" as BulkheadSnapshot <<config>> {
+        +name: String
+        +maxConcurrentCalls: int
+        +maxWaitDuration: Duration
+        +tags: Set<String>
+        +events: BulkheadEventConfig
+        +strategy: BulkheadStrategyConfig
+    }
+
+    class "LiveContainer<S>" as LiveContainer <<config>> {
+        +snapshot(): S
+        +subscribe(listener): AutoCloseable
+        +apply(patch): void
+    }
+
+    LiveContainer ..> BulkheadSnapshot : holds
+}
+
+package "inqudium-imperative" <<imperative>> {
+
+    abstract class "ImperativeLifecyclePhasedComponent<S>" as ImpLifecyclePhasedComponent <<lifecycle>> {
+        #phase: AtomicReference<ImperativePhase>
+        +name(): String
+        +execute(chainId, callId, arg, next): R
+        #createHotPhase(): ImperativePhase
+        +eventPublisher(): InqEventPublisher
+    }
+
+    ImpLifecyclePhasedComponent ..|> LifecycleAware
+    ImpLifecyclePhasedComponent ..|> ListenerRegistry
+    ImpLifecyclePhasedComponent ..|> InternalMutabilityCheck
+
+    interface "ImperativePhase" as ImperativePhase <<lifecycle>> {
+        +execute(chainId, callId, arg, next): R
+    }
+
+    class "ColdPhase" as ColdPhase <<lifecycle>> {
+        ' inner class — triggers cold→hot transition
+    }
+
+    class "RemovedPhase" as RemovedPhase <<lifecycle>> {
+        ' sentinel — throws ComponentRemovedException
+    }
+
+    ColdPhase ..|> ImperativePhase
+    RemovedPhase ..|> ImperativePhase
+    ImpLifecyclePhasedComponent +.. ColdPhase
+    ImpLifecyclePhasedComponent +.. RemovedPhase
+
+    class "InqBulkhead" as InqBulkhead <<imperative>> {
+        +availablePermits(): int
+        +concurrentCalls(): int
+        #createHotPhase(): ImperativePhase
+        ' note: name() inherited, NOT getName()
+    }
+
+    InqBulkhead --|> ImpLifecyclePhasedComponent
+    InqBulkhead ..|> ImperativeBulkheadInterface
+
+    class "BulkheadHotPhase" as BulkheadHotPhase <<imperative>> {
+        -strategy: volatile BulkheadStrategy
+        -subscription: volatile AutoCloseable
+        +execute(...): R
+        +afterCommit(live): void
+        +onSnapshotChange(s): void
+    }
+
+    BulkheadHotPhase ..|> ImperativePhase
+    BulkheadHotPhase --> InqBulkhead : back-ref
+    BulkheadHotPhase o--> "1" "BulkheadStrategy" : volatile
+
+    InqBulkhead ..> BulkheadHotPhase : creates on first execute
+    InqBulkhead --> LiveContainer : reads snapshot
+
+    class "BulkheadStrategyFactory" as StrategyFactory <<imperative>> {
+        +{static} create(snapshot, general): BulkheadStrategy
+    }
+
+    interface "BulkheadStrategy" as BulkheadStrategy <<imperative>> {
+        +tryAcquire(...): boolean
+        +release(): void
+        +onCallComplete(rtt, success): void
+    }
+
+    BulkheadHotPhase ..> StrategyFactory : uses
+    StrategyFactory ..> BulkheadStrategy : creates
+}
+
+package "inqudium-core / pipeline" <<pipeline>> {
+
+    interface "InqElement" as InqElement <<pipeline>> {
+        +getName(): String
+        +getElementType(): InqElementType
+        +getEventPublisher(): InqEventPublisher
+    }
+
+    interface "LayerAction<A,R>" as LayerAction <<pipeline>> {
+        +execute(chainId, callId, arg, next): R
+    }
+
+    interface "InqDecorator<A,R>" as InqDecorator <<pipeline>> {
+        +decorateRunnable(...): Runnable
+        +decorateSupplier(...): Supplier<R>
+        +decorateCallable(...): Callable<R>
+        +decorateFunction(...): Function<A,R>
+    }
+
+    InqDecorator --|> InqElement
+    InqDecorator --|> LayerAction
+
+    class "RunnableWrapper" as RunnableWrapper <<pipeline>>
+    class "SupplierWrapper" as SupplierWrapper <<pipeline>>
+    class "FunctionWrapper" as FunctionWrapper <<pipeline>>
+    class "InqProxyFactory" as InqProxyFactory <<pipeline>> {
+        +{static} of(name, layerAction): T
+    }
+    class "SyncPipelineTerminal" as SyncPipelineTerminal <<pipeline>>
+
+    RunnableWrapper ..> InqDecorator : consumes
+    SupplierWrapper ..> InqDecorator : consumes
+    FunctionWrapper ..> InqDecorator : consumes
+    SyncPipelineTerminal ..> InqDecorator : consumes
+    InqProxyFactory ..> LayerAction : consumes
+}
+
+package "inqudium-aspect" {
+
+    class "ElementLayerProvider<E>" as ElementLayerProvider <<pipeline>> {
+        '<E extends InqElement & InqDecorator<Void, Object>>
+        +<<constructor>>(element: E, order: int)
+    }
+
+    ElementLayerProvider ..> InqElement : "type bound"
+    ElementLayerProvider ..> InqDecorator : "type bound"
+}
+
+package "inqudium-imperative (legacy, deprecated)" <<legacy>> {
+
+    interface "Bulkhead<A,R>" as LegacyBulkhead <<legacy>> {
+        ' implements full InqDecorator contract
+    }
+
+    class "ImperativeBulkhead<A,R>\n(legacy class — to be deleted)" as LegacyImperativeBulkheadClass <<legacy>> {
+    }
+
+    LegacyBulkhead --|> InqDecorator
+    LegacyImperativeBulkheadClass ..|> LegacyBulkhead
+
+    note right of LegacyImperativeBulkheadClass
+      Currently the ONLY way
+      bulkheads work with
+      ElementLayerProvider, etc.
+      Deprecated, scheduled
+      for deletion.
+    end note
+}
+
+' =================== THE GAP ===================
+note as GapNote <<gap>>
+  <b>The structural gap (audit finding 2.17.2):</b>
+
+  <b>InqBulkhead</b>  is NOT  <b>InqElement</b>
+  <b>InqBulkhead</b>  is NOT  <b>LayerAction</b>
+  <b>InqBulkhead</b>  is NOT  <b>InqDecorator</b>
+
+  •  <b>execute(...)</b> signature matches LayerAction
+     structurally — but no interface declares it.
+  •  <b>name()</b> method exists, but the InqElement
+     contract demands <b>getName()</b>.
+  •  <b>eventPublisher()</b> exists, but contract
+     demands <b>getEventPublisher()</b>.
+  •  No <b>getElementType()</b>.
+
+  Consequence: ElementLayerProvider, RunnableWrapper,
+  SupplierWrapper, FunctionWrapper, InqProxyFactory,
+  SyncPipelineTerminal — none accept InqBulkhead.
+
+  The legacy ImperativeBulkhead class is the only
+  bridge today. It is deprecated for deletion.
+end note
+
+InqBulkhead .[#D32F2F,thickness=3].> InqDecorator : <<does NOT implement>>
+InqBulkhead .. GapNote
+GapNote .. InqDecorator
+
+@enduml
