@@ -60,7 +60,7 @@ class BulkheadEventPublishingTest {
                 name, type, new InqEventExporterRegistry(), InqPublisherConfig.defaultConfig());
     }
 
-    private InqBulkhead newBulkhead(LiveContainer<BulkheadSnapshot> live) {
+    private InqBulkhead<String, String> newBulkhead(LiveContainer<BulkheadSnapshot> live) {
         GeneralSnapshot general = new GeneralSnapshot(
                 InqClock.system(),
                 InqNanoTimeSource.system(),
@@ -68,10 +68,10 @@ class BulkheadEventPublishingTest {
                 (n, t) -> componentPublisher,
                 LoggerFactory.NO_OP_LOGGER_FACTORY,
                 true);
-        return new InqBulkhead(live, general);
+        return new InqBulkhead<>(live, general);
     }
 
-    private InqBulkhead newBulkheadWithFixedClock(
+    private InqBulkhead<String, String> newBulkheadWithFixedClock(
             LiveContainer<BulkheadSnapshot> live, Instant fixedTime, AtomicLong nanos) {
         GeneralSnapshot general = new GeneralSnapshot(
                 () -> fixedTime,
@@ -80,7 +80,7 @@ class BulkheadEventPublishingTest {
                 (n, t) -> componentPublisher,
                 LoggerFactory.NO_OP_LOGGER_FACTORY,
                 true);
-        return new InqBulkhead(live, general);
+        return new InqBulkhead<>(live, general);
     }
 
     private static BulkheadSnapshot snapshot(BulkheadEventConfig events, Duration maxWait) {
@@ -112,7 +112,7 @@ class BulkheadEventPublishingTest {
 
             LiveContainer<BulkheadSnapshot> live =
                     new LiveContainer<>(snapshot(BulkheadEventConfig.disabled(), Duration.ZERO));
-            InqBulkhead bulkhead = newBulkhead(live);
+            InqBulkhead<String, String> bulkhead = newBulkhead(live);
 
             // When — happy path
             bulkhead.execute(1L, 1L, "x", identity());
@@ -136,7 +136,7 @@ class BulkheadEventPublishingTest {
                     true, false, false, false, false);
             LiveContainer<BulkheadSnapshot> live =
                     new LiveContainer<>(snapshot(events, Duration.ZERO));
-            InqBulkhead bulkhead = newBulkhead(live);
+            InqBulkhead<String, String> bulkhead = newBulkhead(live);
 
             // When
             bulkhead.execute(7L, 11L, "x", identity());
@@ -160,7 +160,7 @@ class BulkheadEventPublishingTest {
                     false, true, true, true, true);
             LiveContainer<BulkheadSnapshot> live =
                     new LiveContainer<>(snapshot(events, Duration.ZERO));
-            InqBulkhead bulkhead = newBulkhead(live);
+            InqBulkhead<String, String> bulkhead = newBulkhead(live);
 
             // When
             bulkhead.execute(1L, 1L, "x", identity());
@@ -184,7 +184,7 @@ class BulkheadEventPublishingTest {
                     false, true, false, false, false);
             LiveContainer<BulkheadSnapshot> live =
                     new LiveContainer<>(snapshot(events, Duration.ZERO));
-            InqBulkhead bulkhead = newBulkhead(live);
+            InqBulkhead<String, String> bulkhead = newBulkhead(live);
 
             // When
             bulkhead.execute(2L, 3L, "x", identity());
@@ -209,7 +209,7 @@ class BulkheadEventPublishingTest {
                     false, true, false, false, false);
             LiveContainer<BulkheadSnapshot> live =
                     new LiveContainer<>(snapshot(events, Duration.ZERO));
-            InqBulkhead bulkhead = newBulkhead(live);
+            InqBulkhead<String, String> bulkhead = newBulkhead(live);
 
             InternalExecutor<String, String> failing = (chainId, callId, arg) -> {
                 throw new RuntimeException("boom");
@@ -235,7 +235,7 @@ class BulkheadEventPublishingTest {
                     new BulkheadSnapshot("inventory", 1, Duration.ZERO, Set.of(), null, events,
                             new SemaphoreStrategyConfig());
             LiveContainer<BulkheadSnapshot> live = new LiveContainer<>(snap);
-            InqBulkhead bulkhead = newBulkhead(live);
+            InqBulkhead<String, String> bulkhead = newBulkhead(live);
 
             List<BulkheadOnRejectEvent> captured = new CopyOnWriteArrayList<>();
             componentPublisher.onEvent(BulkheadOnRejectEvent.class, captured::add);
@@ -285,7 +285,7 @@ class BulkheadEventPublishingTest {
                     false, false, false, true, false);
             LiveContainer<BulkheadSnapshot> live =
                     new LiveContainer<>(snapshot(events, Duration.ZERO));
-            InqBulkhead bulkhead = newBulkheadWithFixedClock(
+            InqBulkhead<String, String> bulkhead = newBulkheadWithFixedClock(
                     live, Instant.parse("2026-04-26T12:00:00Z"), nanos);
 
             List<BulkheadWaitTraceEvent> captured = new CopyOnWriteArrayList<>();
@@ -316,7 +316,7 @@ class BulkheadEventPublishingTest {
                     (n, t) -> componentPublisher,
                     LoggerFactory.NO_OP_LOGGER_FACTORY,
                     true);
-            InqBulkhead timed = new InqBulkhead(live, general);
+            InqBulkhead<String, String> timed = new InqBulkhead<>(live, general);
 
             timed.execute(1L, 1L, "x", identity());
 
@@ -338,7 +338,7 @@ class BulkheadEventPublishingTest {
                     new BulkheadSnapshot("inventory", 1, Duration.ZERO, Set.of(), null, events,
                             new SemaphoreStrategyConfig());
             LiveContainer<BulkheadSnapshot> live = new LiveContainer<>(snap);
-            InqBulkhead bulkhead = newBulkhead(live);
+            InqBulkhead<String, String> bulkhead = newBulkhead(live);
 
             List<BulkheadWaitTraceEvent> captured = new CopyOnWriteArrayList<>();
             componentPublisher.onEvent(BulkheadWaitTraceEvent.class, captured::add);
@@ -388,7 +388,7 @@ class BulkheadEventPublishingTest {
 
             LiveContainer<BulkheadSnapshot> live =
                     new LiveContainer<>(snapshot(BulkheadEventConfig.allEnabled(), Duration.ZERO));
-            InqBulkhead bulkhead = newBulkhead(live);
+            InqBulkhead<String, String> bulkhead = newBulkhead(live);
 
             // When
             bulkhead.execute(1L, 1L, "x", identity());

@@ -13,6 +13,8 @@ import eu.inqudium.config.snapshot.SemaphoreStrategyConfig;
 import eu.inqudium.config.snapshot.VegasLimitAlgorithmConfig;
 import eu.inqudium.core.element.InqElementType;
 import eu.inqudium.core.event.InqEventPublisher;
+import eu.inqudium.core.pipeline.InqDecorator;
+import eu.inqudium.core.pipeline.InqExecutor;
 import eu.inqudium.core.time.InqClock;
 import eu.inqudium.core.time.InqNanoTimeSource;
 import eu.inqudium.imperative.lifecycle.ImperativeLifecyclePhasedComponent;
@@ -33,10 +35,24 @@ import eu.inqudium.imperative.lifecycle.spi.ImperativePhase;
  * {@code maxConcurrentCalls} change re-tunes the underlying semaphore on the running strategy,
  * and a strategy-config change triggers an atomic strategy swap on the hot phase (after the
  * mutability check has accepted, per ADR-032).
+ *
+ * <p>Pipeline contracts (ADR-033). The class implements both {@link InqExecutor} (one-shot
+ * execution) and {@link InqDecorator} (deferred wrapper construction) directly: their default
+ * methods all reduce to the inherited {@link LayerAction#execute LayerAction.execute(...)} which
+ * the lifecycle base class fulfils via {@link ImperativeLifecyclePhasedComponent#execute}. The
+ * generic {@code <A, R>} parameters propagate from {@code LayerAction} through the lifecycle
+ * base into the phase reference. The async pipeline contracts ({@code InqAsyncExecutor},
+ * {@code InqAsyncDecorator}) are intentionally not implemented here — a separate ADR designs
+ * the asynchronous bulkhead variant.
+ *
+ * @param <A> the call argument type; reduces to {@code Object} for components served via the
+ *            runtime registry.
+ * @param <R> the call return type; reduces to {@code Object} for components served via the
+ *            runtime registry.
  */
-public final class InqBulkhead
-        extends ImperativeLifecyclePhasedComponent<BulkheadSnapshot>
-        implements ImperativeBulkhead {
+public final class InqBulkhead<A, R>
+        extends ImperativeLifecyclePhasedComponent<BulkheadSnapshot, A, R>
+        implements ImperativeBulkhead, InqExecutor<A, R>, InqDecorator<A, R> {
 
     private final InqEventPublisher componentEventPublisher;
     private final InqClock clock;
@@ -107,12 +123,12 @@ public final class InqBulkhead
     }
 
     @Override
-    protected ImperativePhase createHotPhase() {
+    protected ImperativePhase<A, R> createHotPhase() {
         // Read the current snapshot at the moment of transition so the hot phase is built from
         // the freshest configuration. Side-effect-free per ADR-029 — no event publishes, no
         // subscription registrations. Subscriptions happen in BulkheadHotPhase#afterCommit
         // after the CAS commits.
-        return new BulkheadHotPhase(this, snapshot());
+        return new BulkheadHotPhase<>(this, snapshot());
     }
 
     /**
@@ -129,8 +145,8 @@ public final class InqBulkhead
      */
     public int availablePermits() {
         ensureNotRemoved();
-        ImperativePhase p = currentPhase();
-        if (p instanceof BulkheadHotPhase hot) {
+        ImperativePhase<A, R> p = currentPhase();
+        if (p instanceof BulkheadHotPhase<?, ?> hot) {
             return hot.availablePermits();
         }
         return coldPhaseLimit(snapshot());
@@ -144,8 +160,8 @@ public final class InqBulkhead
      */
     public int concurrentCalls() {
         ensureNotRemoved();
-        ImperativePhase p = currentPhase();
-        return p instanceof BulkheadHotPhase hot ? hot.concurrentCalls() : 0;
+        ImperativePhase<A, R> p = currentPhase();
+        return p instanceof BulkheadHotPhase<?, ?> hot ? hot.concurrentCalls() : 0;
     }
 
     /**

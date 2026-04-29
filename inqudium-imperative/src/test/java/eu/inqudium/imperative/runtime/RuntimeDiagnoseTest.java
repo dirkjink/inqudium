@@ -8,6 +8,7 @@ import eu.inqudium.config.validation.DiagnosticFinding;
 import eu.inqudium.config.validation.Severity;
 import eu.inqudium.config.validation.rules.MultipleBulkheadsNoAggregateLimitRule;
 import eu.inqudium.core.pipeline.InternalExecutor;
+import eu.inqudium.imperative.bulkhead.InqBulkhead;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -98,7 +99,9 @@ class RuntimeDiagnoseTest {
                             .bulkhead("inventory", b -> b.balanced().maxConcurrentCalls(15)))
                     .build()) {
 
-                ImperativeBulkhead bh = runtime.imperative().bulkhead("inventory");
+                @SuppressWarnings("unchecked")
+                InqBulkhead<String, String> bh =
+                        (InqBulkhead<String, String>) runtime.imperative().bulkhead("inventory");
                 bh.execute(1L, 1L, "warm", IDENTITY);
 
                 int permitsBefore = bh.availablePermits();

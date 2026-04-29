@@ -71,9 +71,9 @@ class BulkheadHotPhaseFeedbackTest {
                 BulkheadEventConfig.disabled(), strategy);
     }
 
-    private static InqBulkhead newBulkhead(BulkheadStrategyConfig strategy, int max) {
+    private static InqBulkhead<String, String> newBulkhead(BulkheadStrategyConfig strategy, int max) {
         LiveContainer<BulkheadSnapshot> live = new LiveContainer<>(snapshotOf(strategy, max));
-        return new InqBulkhead(live, defaultGeneral());
+        return new InqBulkhead<>(live, defaultGeneral());
     }
 
     @Nested
@@ -97,7 +97,7 @@ class BulkheadHotPhaseFeedbackTest {
             LimitAlgorithm aimd = new AimdLimitAlgorithmConfig(
                     1, 1, 100, 0.5,
                     Duration.ofMillis(1), 0.5, false, 1.0);
-            InqBulkhead bh = newBulkhead(new AdaptiveStrategyConfig(aimd), 1);
+            InqBulkhead<String, String> bh = newBulkhead(new AdaptiveStrategyConfig(aimd), 1);
 
             // When
             bh.execute(1L, 1L, "x", IDENTITY);
@@ -119,7 +119,7 @@ class BulkheadHotPhaseFeedbackTest {
             LimitAlgorithm aimd = new AimdLimitAlgorithmConfig(
                     1, 1, 100, 0.5,
                     Duration.ofMillis(1), 0.5, false, 1.0);
-            InqBulkhead bh = newBulkhead(new AdaptiveNonBlockingStrategyConfig(aimd), 1);
+            InqBulkhead<String, String> bh = newBulkhead(new AdaptiveNonBlockingStrategyConfig(aimd), 1);
 
             // When
             bh.execute(1L, 1L, "x", IDENTITY);
@@ -138,7 +138,7 @@ class BulkheadHotPhaseFeedbackTest {
             // confirms a semaphore bulkhead's permit pool is unchanged after calls run.
 
             // Given
-            InqBulkhead bh = newBulkhead(new SemaphoreStrategyConfig(), 7);
+            InqBulkhead<String, String> bh = newBulkhead(new SemaphoreStrategyConfig(), 7);
 
             // When
             for (int i = 0; i < 10; i++) {
@@ -169,9 +169,9 @@ class BulkheadHotPhaseFeedbackTest {
             // Given
             LiveContainer<BulkheadSnapshot> live = new LiveContainer<>(
                     snapshotOf(new SemaphoreStrategyConfig(), 1));
-            InqBulkhead bh = new InqBulkhead(live, defaultGeneral());
+            InqBulkhead<String, String> bh = new InqBulkhead<>(live, defaultGeneral());
             RecordingStrategy stub = new RecordingStrategy();
-            BulkheadHotPhase phase = new BulkheadHotPhase(bh, stub);
+            BulkheadHotPhase<String, String> phase = new BulkheadHotPhase<>(bh, stub);
 
             // When — drive the hot phase directly with the stub strategy
             phase.execute(1L, 1L, "x", IDENTITY);
@@ -190,9 +190,9 @@ class BulkheadHotPhaseFeedbackTest {
             // Given
             LiveContainer<BulkheadSnapshot> live = new LiveContainer<>(
                     snapshotOf(new SemaphoreStrategyConfig(), 1));
-            InqBulkhead bh = new InqBulkhead(live, defaultGeneral());
+            InqBulkhead<String, String> bh = new InqBulkhead<>(live, defaultGeneral());
             RecordingStrategy stub = new RecordingStrategy();
-            BulkheadHotPhase phase = new BulkheadHotPhase(bh, stub);
+            BulkheadHotPhase<String, String> phase = new BulkheadHotPhase<>(bh, stub);
             InternalExecutor<String, String> failing = (chainId, callId, arg) -> {
                 throw new RuntimeException("boom");
             };
@@ -228,9 +228,9 @@ class BulkheadHotPhaseFeedbackTest {
             // Given
             LiveContainer<BulkheadSnapshot> live = new LiveContainer<>(
                     snapshotOf(new SemaphoreStrategyConfig(), 1));
-            InqBulkhead bh = new InqBulkhead(live, defaultGeneral());
+            InqBulkhead<String, String> bh = new InqBulkhead<>(live, defaultGeneral());
             ThrowingStrategy stub = new ThrowingStrategy();
-            BulkheadHotPhase phase = new BulkheadHotPhase(bh, stub);
+            BulkheadHotPhase<String, String> phase = new BulkheadHotPhase<>(bh, stub);
 
             // When
             String result = phase.execute(1L, 1L, "x", IDENTITY);
@@ -309,7 +309,7 @@ class BulkheadHotPhaseFeedbackTest {
                     "feedback", 1, Duration.ofSeconds(5), Set.of(), null,
                     BulkheadEventConfig.disabled(), new SemaphoreStrategyConfig());
             LiveContainer<BulkheadSnapshot> live = new LiveContainer<>(snap);
-            InqBulkhead bh = new InqBulkhead(live, generalWithOptimization(true));
+            InqBulkhead<String, String> bh = new InqBulkhead<>(live, generalWithOptimization(true));
             HoldingExecutor holder = new HoldingExecutor();
             Thread first = Thread.startVirtualThread(
                     () -> bh.execute(1L, 1L, "first", holder));
@@ -351,7 +351,7 @@ class BulkheadHotPhaseFeedbackTest {
                     "feedback", 1, Duration.ZERO, Set.of(), null,
                     BulkheadEventConfig.disabled(), new SemaphoreStrategyConfig());
             LiveContainer<BulkheadSnapshot> live = new LiveContainer<>(snap);
-            InqBulkhead bh = new InqBulkhead(live, general);
+            InqBulkhead<String, String> bh = new InqBulkhead<>(live, general);
             HoldingExecutor holder = new HoldingExecutor();
             Thread first = Thread.startVirtualThread(
                     () -> bh.execute(1L, 1L, "first", holder));
@@ -375,7 +375,7 @@ class BulkheadHotPhaseFeedbackTest {
         @Test
         void semaphore_cold_should_report_snapshot_maxConcurrentCalls() {
             // Given
-            InqBulkhead bh = newBulkhead(new SemaphoreStrategyConfig(), 13);
+            InqBulkhead<String, String> bh = newBulkhead(new SemaphoreStrategyConfig(), 13);
 
             // When / Then — never warmed; cold accessor honours the snapshot
             assertThat(bh.availablePermits()).isEqualTo(13);
@@ -395,7 +395,7 @@ class BulkheadHotPhaseFeedbackTest {
             LimitAlgorithm aimd = new AimdLimitAlgorithmConfig(
                     20, 1, 100, 0.5,
                     Duration.ofSeconds(1), 0.5, true, 0.0);
-            InqBulkhead bh = newBulkhead(new AdaptiveStrategyConfig(aimd), 50);
+            InqBulkhead<String, String> bh = newBulkhead(new AdaptiveStrategyConfig(aimd), 50);
 
             // When / Then
             assertThat(bh.availablePermits())
@@ -410,7 +410,7 @@ class BulkheadHotPhaseFeedbackTest {
                     8, 1, 100,
                     Duration.ofSeconds(1), Duration.ofSeconds(2), Duration.ofSeconds(3),
                     0.05, 0.0);
-            InqBulkhead bh = newBulkhead(new AdaptiveStrategyConfig(vegas), 50);
+            InqBulkhead<String, String> bh = newBulkhead(new AdaptiveStrategyConfig(vegas), 50);
 
             // When / Then
             assertThat(bh.availablePermits()).isEqualTo(8);
@@ -422,7 +422,7 @@ class BulkheadHotPhaseFeedbackTest {
             LimitAlgorithm aimd = new AimdLimitAlgorithmConfig(
                     11, 1, 100, 0.5,
                     Duration.ofSeconds(1), 0.5, true, 0.0);
-            InqBulkhead bh = newBulkhead(new AdaptiveNonBlockingStrategyConfig(aimd), 50);
+            InqBulkhead<String, String> bh = newBulkhead(new AdaptiveNonBlockingStrategyConfig(aimd), 50);
 
             // When / Then
             assertThat(bh.availablePermits()).isEqualTo(11);
@@ -435,7 +435,7 @@ class BulkheadHotPhaseFeedbackTest {
                     9, 1, 100,
                     Duration.ofSeconds(1), Duration.ofSeconds(2), Duration.ofSeconds(3),
                     0.05, 0.0);
-            InqBulkhead bh = newBulkhead(new AdaptiveNonBlockingStrategyConfig(vegas), 50);
+            InqBulkhead<String, String> bh = newBulkhead(new AdaptiveNonBlockingStrategyConfig(vegas), 50);
 
             // When / Then
             assertThat(bh.availablePermits()).isEqualTo(9);

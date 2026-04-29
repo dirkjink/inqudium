@@ -12,6 +12,7 @@ import eu.inqudium.config.snapshot.BulkheadSnapshot;
 import eu.inqudium.config.validation.ApplyOutcome;
 import eu.inqudium.config.validation.BuildReport;
 import eu.inqudium.core.pipeline.InternalExecutor;
+import eu.inqudium.imperative.bulkhead.InqBulkhead;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -43,7 +44,9 @@ class RuntimeUpdateTest {
                             b -> b.balanced().maxConcurrentCalls(15)))
                     .build()) {
 
-                ImperativeBulkhead bh = runtime.imperative().bulkhead("inventory");
+                @SuppressWarnings("unchecked")
+                InqBulkhead<String, String> bh =
+                        (InqBulkhead<String, String>) runtime.imperative().bulkhead("inventory");
                 assertThat(bh.snapshot().maxConcurrentCalls()).isEqualTo(15);
 
                 // When
@@ -275,7 +278,9 @@ class RuntimeUpdateTest {
                             b -> b.balanced().maxConcurrentCalls(15)))
                     .build()) {
 
-                ImperativeBulkhead bh = runtime.imperative().bulkhead("inventory");
+                @SuppressWarnings("unchecked")
+                InqBulkhead<String, String> bh =
+                        (InqBulkhead<String, String>) runtime.imperative().bulkhead("inventory");
                 assertThat(bh.lifecycleState())
                         .as("the bulkhead is cold before the first execute")
                         .isEqualTo(LifecycleState.COLD);
@@ -318,7 +323,9 @@ class RuntimeUpdateTest {
                             b -> b.balanced().maxConcurrentCalls(15)))
                     .build()) {
 
-                ImperativeBulkhead bh = runtime.imperative().bulkhead("inventory");
+                @SuppressWarnings("unchecked")
+                InqBulkhead<String, String> bh =
+                        (InqBulkhead<String, String>) runtime.imperative().bulkhead("inventory");
                 InternalExecutor<String, String> identity =
                         (chainId, callId, argument) -> argument;
                 bh.execute(1L, 1L, "warm", identity);
@@ -357,8 +364,12 @@ class RuntimeUpdateTest {
                             .bulkhead("b", b -> b.balanced().maxConcurrentCalls(20)))
                     .build()) {
 
-                ImperativeBulkhead bhA = runtime.imperative().bulkhead("a");
-                ImperativeBulkhead bhB = runtime.imperative().bulkhead("b");
+                @SuppressWarnings("unchecked")
+                InqBulkhead<String, String> bhA =
+                        (InqBulkhead<String, String>) runtime.imperative().bulkhead("a");
+                @SuppressWarnings("unchecked")
+                InqBulkhead<String, String> bhB =
+                        (InqBulkhead<String, String>) runtime.imperative().bulkhead("b");
                 InternalExecutor<String, String> identity =
                         (chainId, callId, argument) -> argument;
                 bhA.execute(1L, 1L, "warm", identity);
@@ -411,7 +422,9 @@ class RuntimeUpdateTest {
                             b -> b.balanced().maxConcurrentCalls(15)))
                     .build()) {
 
-                ImperativeBulkhead bh = runtime.imperative().bulkhead("inventory");
+                @SuppressWarnings("unchecked")
+                InqBulkhead<String, String> bh =
+                        (InqBulkhead<String, String>) runtime.imperative().bulkhead("inventory");
                 InternalExecutor<String, String> identity =
                         (chainId, callId, argument) -> argument;
                 bh.execute(1L, 1L, "warm", identity);

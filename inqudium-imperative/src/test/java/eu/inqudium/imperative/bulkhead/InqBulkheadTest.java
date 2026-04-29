@@ -60,7 +60,7 @@ class InqBulkheadTest {
         return (chainId, callId, argument) -> argument;
     }
 
-    private InqBulkhead newBulkhead(LiveContainer<BulkheadSnapshot> live) {
+    private InqBulkhead<String, String> newBulkhead(LiveContainer<BulkheadSnapshot> live) {
         GeneralSnapshot general = new GeneralSnapshot(
                 InqClock.system(),
                 InqNanoTimeSource.system(),
@@ -68,7 +68,7 @@ class InqBulkheadTest {
                 InqEventPublisher::create,
                 LoggerFactory.NO_OP_LOGGER_FACTORY,
                 true);
-        return new InqBulkhead(live, general);
+        return new InqBulkhead<>(live, general);
     }
 
     @Nested
@@ -110,8 +110,10 @@ class InqBulkheadTest {
                 LiveContainer<BulkheadSnapshot> live =
                         new LiveContainer<>(snapshot("inventory", 5, Duration.ZERO));
 
-                // When
-                InqBulkhead bulkhead = new InqBulkhead(live, general);
+                // When — the publisher-factory contract does not depend on the call's <A, R>,
+                // so the variable is wildcard-typed and diamond inference settles the
+                // constructor's binding from the target.
+                InqBulkhead<?, ?> bulkhead = new InqBulkhead<>(live, general);
 
                 // Then
                 assertThat(capturedName.get()).isEqualTo("inventory");
@@ -135,7 +137,7 @@ class InqBulkheadTest {
             // Given
             LiveContainer<BulkheadSnapshot> live =
                     new LiveContainer<>(snapshot("inventory", 5, Duration.ZERO));
-            InqBulkhead bulkhead = newBulkhead(live);
+            InqBulkhead<String, String> bulkhead = newBulkhead(live);
 
             // When / Then
             assertThat(bulkhead.eventPublisher())
@@ -154,7 +156,7 @@ class InqBulkheadTest {
             // Given
             LiveContainer<BulkheadSnapshot> live =
                     new LiveContainer<>(snapshot("inventory", 10, Duration.ofMillis(100)));
-            InqBulkhead bulkhead = newBulkhead(live);
+            InqBulkhead<String, String> bulkhead = newBulkhead(live);
 
             // When / Then
             assertThat(bulkhead.lifecycleState()).isEqualTo(LifecycleState.COLD);
@@ -171,7 +173,7 @@ class InqBulkheadTest {
             // Given
             LiveContainer<BulkheadSnapshot> live =
                     new LiveContainer<>(snapshot("inventory", 25, Duration.ofMillis(100)));
-            InqBulkhead bulkhead = newBulkhead(live);
+            InqBulkhead<String, String> bulkhead = newBulkhead(live);
 
             // When / Then
             assertThat(bulkhead.availablePermits()).isEqualTo(25);
@@ -183,7 +185,7 @@ class InqBulkheadTest {
             // Given
             LiveContainer<BulkheadSnapshot> live =
                     new LiveContainer<>(snapshot("payments", 5, Duration.ZERO));
-            InqBulkhead bulkhead = newBulkhead(live);
+            InqBulkhead<String, String> bulkhead = newBulkhead(live);
 
             // When / Then
             assertThat(bulkhead.name()).isEqualTo("payments");
@@ -199,7 +201,7 @@ class InqBulkheadTest {
             // Given
             LiveContainer<BulkheadSnapshot> live =
                     new LiveContainer<>(snapshot("inventory", 10, Duration.ofMillis(100)));
-            InqBulkhead bulkhead = newBulkhead(live);
+            InqBulkhead<String, String> bulkhead = newBulkhead(live);
 
             // When
             String result = bulkhead.execute(1L, 1L, "input", identityExecutor());
@@ -214,7 +216,7 @@ class InqBulkheadTest {
             // Given
             LiveContainer<BulkheadSnapshot> live =
                     new LiveContainer<>(snapshot("inventory", 5, Duration.ofMillis(100)));
-            InqBulkhead bulkhead = newBulkhead(live);
+            InqBulkhead<String, String> bulkhead = newBulkhead(live);
 
             // When — first execute transitions; second reads from the now-hot strategy
             bulkhead.execute(1L, 1L, "x", identityExecutor());
@@ -234,7 +236,7 @@ class InqBulkheadTest {
             // Given
             LiveContainer<BulkheadSnapshot> live =
                     new LiveContainer<>(snapshot("x", 3, Duration.ofMillis(100)));
-            InqBulkhead bulkhead = newBulkhead(live);
+            InqBulkhead<String, String> bulkhead = newBulkhead(live);
             AtomicReference<Integer> midFlightPermits = new AtomicReference<>();
             InternalExecutor<String, String> next = (chainId, callId, arg) -> {
                 midFlightPermits.set(bulkhead.availablePermits());
@@ -265,7 +267,7 @@ class InqBulkheadTest {
             // Given
             LiveContainer<BulkheadSnapshot> live =
                     new LiveContainer<>(snapshot("x", 2, Duration.ofMillis(100)));
-            InqBulkhead bulkhead = newBulkhead(live);
+            InqBulkhead<String, String> bulkhead = newBulkhead(live);
             InternalExecutor<String, String> next = (chainId, callId, arg) -> {
                 throw new RuntimeException("downstream failure");
             };
@@ -291,7 +293,7 @@ class InqBulkheadTest {
             // Given — single-permit fail-fast bulkhead
             LiveContainer<BulkheadSnapshot> live =
                     new LiveContainer<>(snapshot("x", 1, Duration.ZERO));
-            InqBulkhead bulkhead = newBulkhead(live);
+            InqBulkhead<String, String> bulkhead = newBulkhead(live);
             CountDownLatch holdPermit = new CountDownLatch(1);
             CountDownLatch firstAcquired = new CountDownLatch(1);
             InternalExecutor<String, String> blocking = (chainId, callId, arg) -> {
@@ -340,7 +342,7 @@ class InqBulkheadTest {
             // Given
             LiveContainer<BulkheadSnapshot> live =
                     new LiveContainer<>(snapshot("x", 10, Duration.ofMillis(100)));
-            InqBulkhead bulkhead = newBulkhead(live);
+            InqBulkhead<String, String> bulkhead = newBulkhead(live);
             // Transition to hot first, otherwise the strategy doesn't exist yet.
             bulkhead.execute(1L, 1L, "warm", identityExecutor());
             assertThat(bulkhead.availablePermits()).isEqualTo(10);
@@ -359,7 +361,7 @@ class InqBulkheadTest {
             // Given
             LiveContainer<BulkheadSnapshot> live =
                     new LiveContainer<>(snapshot("x", 10, Duration.ofMillis(100)));
-            InqBulkhead bulkhead = newBulkhead(live);
+            InqBulkhead<String, String> bulkhead = newBulkhead(live);
             bulkhead.execute(1L, 1L, "warm", identityExecutor());
 
             // When
@@ -387,7 +389,7 @@ class InqBulkheadTest {
             // Given
             LiveContainer<BulkheadSnapshot> live =
                     new LiveContainer<>(snapshot("x", 10, Duration.ofMillis(100)));
-            InqBulkhead bulkhead = newBulkhead(live);
+            InqBulkhead<String, String> bulkhead = newBulkhead(live);
             assertThat(bulkhead.lifecycleState()).isEqualTo(LifecycleState.COLD);
 
             // When — update before any execute

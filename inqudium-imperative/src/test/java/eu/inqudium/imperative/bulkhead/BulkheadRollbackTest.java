@@ -52,7 +52,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 @DisplayName("BulkheadHotPhase publish-failure rollback")
 class BulkheadRollbackTest {
 
-    private InqBulkhead newBulkhead(BulkheadEventConfig events, ScriptedPublisher publisher) {
+    private InqBulkhead<String, String> newBulkhead(BulkheadEventConfig events, ScriptedPublisher publisher) {
         BulkheadSnapshot snap = new BulkheadSnapshot(
                 "inventory", 5, Duration.ZERO, Set.of(), null, events,
                 new SemaphoreStrategyConfig());
@@ -64,7 +64,7 @@ class BulkheadRollbackTest {
                 (n, t) -> publisher,                // component publisher factory — return the fake
                 LoggerFactory.NO_OP_LOGGER_FACTORY,
                 true);
-        return new InqBulkhead(live, general);
+        return new InqBulkhead<>(live, general);
     }
 
     private static <A> InternalExecutor<A, A> identity() {
@@ -104,7 +104,7 @@ class BulkheadRollbackTest {
             RuntimeException publisherFailure = new RuntimeException("publisher blew up");
             ScriptedPublisher publisher = new ScriptedPublisher()
                     .throwOn(BulkheadOnAcquireEvent.class, publisherFailure);
-            InqBulkhead bulkhead = newBulkhead(events, publisher);
+            InqBulkhead<String, String> bulkhead = newBulkhead(events, publisher);
 
             AtomicInteger lambdaCalls = new AtomicInteger();
 
@@ -156,7 +156,7 @@ class BulkheadRollbackTest {
             RuntimeException publisherFailure = new RuntimeException("publisher blew up");
             ScriptedPublisher publisher = new ScriptedPublisher()
                     .throwOn(BulkheadOnAcquireEvent.class, publisherFailure);
-            InqBulkhead bulkhead = newBulkhead(events, publisher);
+            InqBulkhead<String, String> bulkhead = newBulkhead(events, publisher);
 
             assertThatThrownBy(() -> bulkhead.execute(1L, 1L, "x", identity()))
                     .isInstanceOf(BulkheadEventPublishFailureException.class)
@@ -192,7 +192,7 @@ class BulkheadRollbackTest {
             ScriptedPublisher publisher = new ScriptedPublisher()
                     .throwOn(BulkheadWaitTraceEvent.class,
                             new RuntimeException("waitTrace publisher failed"));
-            InqBulkhead bulkhead = newBulkhead(events, publisher);
+            InqBulkhead<String, String> bulkhead = newBulkhead(events, publisher);
 
             assertThatThrownBy(() -> bulkhead.execute(2L, 3L, "x", identity()))
                     .isInstanceOf(BulkheadEventPublishFailureException.class)
@@ -228,7 +228,7 @@ class BulkheadRollbackTest {
             ScriptedPublisher publisher = new ScriptedPublisher()
                     .throwOn(BulkheadOnAcquireEvent.class, primary)
                     .throwOn(BulkheadRollbackTraceEvent.class, secondary);
-            InqBulkhead bulkhead = newBulkhead(events, publisher);
+            InqBulkhead<String, String> bulkhead = newBulkhead(events, publisher);
 
             assertThatThrownBy(() -> bulkhead.execute(1L, 1L, "x", identity()))
                     .isInstanceOf(BulkheadEventPublishFailureException.class)
@@ -258,7 +258,7 @@ class BulkheadRollbackTest {
             BulkheadEventConfig events = new BulkheadEventConfig(
                     true, true, false, true, /* rollbackTrace */ true);
             ScriptedPublisher publisher = new ScriptedPublisher();
-            InqBulkhead bulkhead = newBulkhead(events, publisher);
+            InqBulkhead<String, String> bulkhead = newBulkhead(events, publisher);
 
             AtomicInteger calls = new AtomicInteger();
             String result = bulkhead.execute(1L, 1L, "x", trackingIdentity(calls));
