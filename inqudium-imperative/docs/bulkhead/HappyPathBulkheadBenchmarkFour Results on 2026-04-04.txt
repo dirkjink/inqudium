@@ -1,0 +1,580 @@
+HappyPathBulkheadBenchmarkFour Results on 2026-04-03:
+
+Benchmark                                                                                                           Mode  Cnt       Score       Error   Units
+HappyPathBulkheadBenchmarkFour.baselineNoBulkhead                                                                  thrpt   15   30568,840 ± 16686,818  ops/ms
+HappyPathBulkheadBenchmarkFour.baselineNoBulkhead:gc.alloc.rate                                                    thrpt   15    1008,528 ±   551,479  MB/sec
+HappyPathBulkheadBenchmarkFour.baselineNoBulkhead:gc.alloc.rate.norm                                               thrpt   15      34,672 ±     0,004    B/op
+HappyPathBulkheadBenchmarkFour.baselineNoBulkhead:gc.count                                                         thrpt   15      87,000              counts
+HappyPathBulkheadBenchmarkFour.baselineNoBulkhead:gc.time                                                          thrpt   15      75,000                  ms
+HappyPathBulkheadBenchmarkFour.baselineNoBulkhead:mempool.CodeHeap 'non-nmethods'.used                             thrpt   15    3083,500                 KiB
+HappyPathBulkheadBenchmarkFour.baselineNoBulkhead:mempool.CodeHeap 'non-profiled nmethods'.used                    thrpt   15     463,875                 KiB
+HappyPathBulkheadBenchmarkFour.baselineNoBulkhead:mempool.CodeHeap 'profiled nmethods'.used                        thrpt   15    2376,000                 KiB
+HappyPathBulkheadBenchmarkFour.baselineNoBulkhead:mempool.Compressed Class Space.used                              thrpt   15     684,641                 KiB
+HappyPathBulkheadBenchmarkFour.baselineNoBulkhead:mempool.G1 Eden Space.used                                       thrpt   15  184320,000                 KiB
+HappyPathBulkheadBenchmarkFour.baselineNoBulkhead:mempool.G1 Old Gen.used                                          thrpt   15    6160,227                 KiB
+HappyPathBulkheadBenchmarkFour.baselineNoBulkhead:mempool.G1 Survivor Space.used                                   thrpt   15    4888,211                 KiB
+HappyPathBulkheadBenchmarkFour.baselineNoBulkhead:mempool.Metaspace.used                                           thrpt   15    5987,922                 KiB
+HappyPathBulkheadBenchmarkFour.baselineNoBulkhead:mempool.total.codeheap.used                                      thrpt   15    5787,000                 KiB
+HappyPathBulkheadBenchmarkFour.baselineNoBulkhead:mempool.total.used                                               thrpt   15  201969,766                 KiB
+HappyPathBulkheadBenchmarkFour.baselineNoBulkhead:pauses                                                           thrpt   39     629,326                  ms
+HappyPathBulkheadBenchmarkFour.baselineNoBulkhead:pauses.avg                                                       thrpt           16,137                  ms
+HappyPathBulkheadBenchmarkFour.baselineNoBulkhead:pauses.count                                                     thrpt           39,000                   #
+HappyPathBulkheadBenchmarkFour.baselineNoBulkhead:pauses.p0.00                                                     thrpt           15,761                  ms
+HappyPathBulkheadBenchmarkFour.baselineNoBulkhead:pauses.p0.50                                                     thrpt           15,876                  ms
+HappyPathBulkheadBenchmarkFour.baselineNoBulkhead:pauses.p0.90                                                     thrpt           17,170                  ms
+HappyPathBulkheadBenchmarkFour.baselineNoBulkhead:pauses.p0.95                                                     thrpt           17,629                  ms
+HappyPathBulkheadBenchmarkFour.baselineNoBulkhead:pauses.p0.99                                                     thrpt           18,678                  ms
+HappyPathBulkheadBenchmarkFour.baselineNoBulkhead:pauses.p0.999                                                    thrpt           18,678                  ms
+HappyPathBulkheadBenchmarkFour.baselineNoBulkhead:pauses.p0.9999                                                   thrpt           18,678                  ms
+HappyPathBulkheadBenchmarkFour.baselineNoBulkhead:pauses.p1.00                                                     thrpt           18,678                  ms
+HappyPathBulkheadBenchmarkFour.measureContentionFailsafe                                                           thrpt   15     366,968 ±    89,870  ops/ms
+HappyPathBulkheadBenchmarkFour.measureContentionFailsafe:gc.alloc.rate                                             thrpt   15     740,813 ±   194,114  MB/sec
+HappyPathBulkheadBenchmarkFour.measureContentionFailsafe:gc.alloc.rate.norm                                        thrpt   15    2114,203 ±    57,632    B/op
+HappyPathBulkheadBenchmarkFour.measureContentionFailsafe:gc.count                                                  thrpt   15      38,000              counts
+HappyPathBulkheadBenchmarkFour.measureContentionFailsafe:gc.time                                                   thrpt   15     463,000                  ms
+HappyPathBulkheadBenchmarkFour.measureContentionFailsafe:mempool.CodeHeap 'non-nmethods'.used                      thrpt   15    3092,000                 KiB
+HappyPathBulkheadBenchmarkFour.measureContentionFailsafe:mempool.CodeHeap 'non-profiled nmethods'.used             thrpt   15    1220,500                 KiB
+HappyPathBulkheadBenchmarkFour.measureContentionFailsafe:mempool.CodeHeap 'profiled nmethods'.used                 thrpt   15    3500,625                 KiB
+HappyPathBulkheadBenchmarkFour.measureContentionFailsafe:mempool.Compressed Class Space.used                       thrpt   15     873,039                 KiB
+HappyPathBulkheadBenchmarkFour.measureContentionFailsafe:mempool.G1 Eden Space.used                                thrpt   15  532480,000                 KiB
+HappyPathBulkheadBenchmarkFour.measureContentionFailsafe:mempool.G1 Old Gen.used                                   thrpt   15  160112,977                 KiB
+HappyPathBulkheadBenchmarkFour.measureContentionFailsafe:mempool.G1 Survivor Space.used                            thrpt   15   51200,000                 KiB
+HappyPathBulkheadBenchmarkFour.measureContentionFailsafe:mempool.Metaspace.used                                    thrpt   15    6958,867                 KiB
+HappyPathBulkheadBenchmarkFour.measureContentionFailsafe:mempool.total.codeheap.used                               thrpt   15    7649,625                 KiB
+HappyPathBulkheadBenchmarkFour.measureContentionFailsafe:mempool.total.used                                        thrpt   15  736048,602                 KiB
+HappyPathBulkheadBenchmarkFour.measureContentionFailsafe:pauses                                                    thrpt   85    1268,564                  ms
+HappyPathBulkheadBenchmarkFour.measureContentionFailsafe:pauses.avg                                                thrpt           14,924                  ms
+HappyPathBulkheadBenchmarkFour.measureContentionFailsafe:pauses.count                                              thrpt           85,000                   #
+HappyPathBulkheadBenchmarkFour.measureContentionFailsafe:pauses.p0.00                                              thrpt            4,686                  ms
+HappyPathBulkheadBenchmarkFour.measureContentionFailsafe:pauses.p0.50                                              thrpt           15,745                  ms
+HappyPathBulkheadBenchmarkFour.measureContentionFailsafe:pauses.p0.90                                              thrpt           16,217                  ms
+HappyPathBulkheadBenchmarkFour.measureContentionFailsafe:pauses.p0.95                                              thrpt           53,687                  ms
+HappyPathBulkheadBenchmarkFour.measureContentionFailsafe:pauses.p0.99                                              thrpt           68,420                  ms
+HappyPathBulkheadBenchmarkFour.measureContentionFailsafe:pauses.p0.999                                             thrpt           68,420                  ms
+HappyPathBulkheadBenchmarkFour.measureContentionFailsafe:pauses.p0.9999                                            thrpt           68,420                  ms
+HappyPathBulkheadBenchmarkFour.measureContentionFailsafe:pauses.p1.00                                              thrpt           68,420                  ms
+HappyPathBulkheadBenchmarkFour.measureContentionInqudium                                                           thrpt   15     224,892 ±     6,991  ops/ms
+HappyPathBulkheadBenchmarkFour.measureContentionInqudium:gc.alloc.rate                                             thrpt   15      66,755 ±    14,758  MB/sec
+HappyPathBulkheadBenchmarkFour.measureContentionInqudium:gc.alloc.rate.norm                                        thrpt   15     109,960 ±     3,959    B/op
+HappyPathBulkheadBenchmarkFour.measureContentionInqudium:gc.count                                                  thrpt   15       7,000              counts
+HappyPathBulkheadBenchmarkFour.measureContentionInqudium:gc.time                                                   thrpt   15      15,000                  ms
+HappyPathBulkheadBenchmarkFour.measureContentionInqudium:mempool.CodeHeap 'non-nmethods'.used                      thrpt   15    2018,750                 KiB
+HappyPathBulkheadBenchmarkFour.measureContentionInqudium:mempool.CodeHeap 'non-profiled nmethods'.used             thrpt   15     680,625                 KiB
+HappyPathBulkheadBenchmarkFour.measureContentionInqudium:mempool.CodeHeap 'profiled nmethods'.used                 thrpt   15    2884,000                 KiB
+HappyPathBulkheadBenchmarkFour.measureContentionInqudium:mempool.Compressed Class Space.used                       thrpt   15     710,305                 KiB
+HappyPathBulkheadBenchmarkFour.measureContentionInqudium:mempool.G1 Eden Space.used                                thrpt   15  147456,000                 KiB
+HappyPathBulkheadBenchmarkFour.measureContentionInqudium:mempool.G1 Old Gen.used                                   thrpt   15    1173,930                 KiB
+HappyPathBulkheadBenchmarkFour.measureContentionInqudium:mempool.G1 Survivor Space.used                            thrpt   15    4953,688                 KiB
+HappyPathBulkheadBenchmarkFour.measureContentionInqudium:mempool.Metaspace.used                                    thrpt   15    6249,953                 KiB
+HappyPathBulkheadBenchmarkFour.measureContentionInqudium:mempool.total.codeheap.used                               thrpt   15    5504,625                 KiB
+HappyPathBulkheadBenchmarkFour.measureContentionInqudium:mempool.total.used                                        thrpt   15  166044,242                 KiB
+HappyPathBulkheadBenchmarkFour.measureContentionInqudium:pauses                                                    thrpt    4      14,152                  ms
+HappyPathBulkheadBenchmarkFour.measureContentionInqudium:pauses.avg                                                thrpt            3,538                  ms
+HappyPathBulkheadBenchmarkFour.measureContentionInqudium:pauses.count                                              thrpt            4,000                   #
+HappyPathBulkheadBenchmarkFour.measureContentionInqudium:pauses.p0.00                                              thrpt            2,798                  ms
+HappyPathBulkheadBenchmarkFour.measureContentionInqudium:pauses.p0.50                                              thrpt            3,506                  ms
+HappyPathBulkheadBenchmarkFour.measureContentionInqudium:pauses.p0.90                                              thrpt            4,342                  ms
+HappyPathBulkheadBenchmarkFour.measureContentionInqudium:pauses.p0.95                                              thrpt            4,342                  ms
+HappyPathBulkheadBenchmarkFour.measureContentionInqudium:pauses.p0.99                                              thrpt            4,342                  ms
+HappyPathBulkheadBenchmarkFour.measureContentionInqudium:pauses.p0.999                                             thrpt            4,342                  ms
+HappyPathBulkheadBenchmarkFour.measureContentionInqudium:pauses.p0.9999                                            thrpt            4,342                  ms
+HappyPathBulkheadBenchmarkFour.measureContentionInqudium:pauses.p1.00                                              thrpt            4,342                  ms
+HappyPathBulkheadBenchmarkFour.measureContentionInqudiumOptimized                                                  thrpt   15     218,020 ±     5,325  ops/ms
+HappyPathBulkheadBenchmarkFour.measureContentionInqudiumOptimized:gc.alloc.rate                                    thrpt   15      46,212 ±    14,953  MB/sec
+HappyPathBulkheadBenchmarkFour.measureContentionInqudiumOptimized:gc.alloc.rate.norm                               thrpt   15      70,328 ±     7,675    B/op
+HappyPathBulkheadBenchmarkFour.measureContentionInqudiumOptimized:gc.count                                         thrpt   15       5,000              counts
+HappyPathBulkheadBenchmarkFour.measureContentionInqudiumOptimized:gc.time                                          thrpt   15      11,000                  ms
+HappyPathBulkheadBenchmarkFour.measureContentionInqudiumOptimized:mempool.CodeHeap 'non-nmethods'.used             thrpt   15    2529,375                 KiB
+HappyPathBulkheadBenchmarkFour.measureContentionInqudiumOptimized:mempool.CodeHeap 'non-profiled nmethods'.used    thrpt   15     681,750                 KiB
+HappyPathBulkheadBenchmarkFour.measureContentionInqudiumOptimized:mempool.CodeHeap 'profiled nmethods'.used        thrpt   15    2819,125                 KiB
+HappyPathBulkheadBenchmarkFour.measureContentionInqudiumOptimized:mempool.Compressed Class Space.used              thrpt   15     717,758                 KiB
+HappyPathBulkheadBenchmarkFour.measureContentionInqudiumOptimized:mempool.G1 Eden Space.used                       thrpt   15  147456,000                 KiB
+HappyPathBulkheadBenchmarkFour.measureContentionInqudiumOptimized:mempool.G1 Old Gen.used                          thrpt   15    1173,930                 KiB
+HappyPathBulkheadBenchmarkFour.measureContentionInqudiumOptimized:mempool.G1 Survivor Space.used                   thrpt   15    4945,250                 KiB
+HappyPathBulkheadBenchmarkFour.measureContentionInqudiumOptimized:mempool.Metaspace.used                           thrpt   15    6243,141                 KiB
+HappyPathBulkheadBenchmarkFour.measureContentionInqudiumOptimized:mempool.total.codeheap.used                      thrpt   15    5924,875                 KiB
+HappyPathBulkheadBenchmarkFour.measureContentionInqudiumOptimized:mempool.total.used                               thrpt   15  165876,117                 KiB
+HappyPathBulkheadBenchmarkFour.measureContentionInqudiumOptimized:pauses                                           thrpt    3      14,070                  ms
+HappyPathBulkheadBenchmarkFour.measureContentionInqudiumOptimized:pauses.avg                                       thrpt            4,690                  ms
+HappyPathBulkheadBenchmarkFour.measureContentionInqudiumOptimized:pauses.count                                     thrpt            3,000                   #
+HappyPathBulkheadBenchmarkFour.measureContentionInqudiumOptimized:pauses.p0.00                                     thrpt            2,961                  ms
+HappyPathBulkheadBenchmarkFour.measureContentionInqudiumOptimized:pauses.p0.50                                     thrpt            5,169                  ms
+HappyPathBulkheadBenchmarkFour.measureContentionInqudiumOptimized:pauses.p0.90                                     thrpt            5,939                  ms
+HappyPathBulkheadBenchmarkFour.measureContentionInqudiumOptimized:pauses.p0.95                                     thrpt            5,939                  ms
+HappyPathBulkheadBenchmarkFour.measureContentionInqudiumOptimized:pauses.p0.99                                     thrpt            5,939                  ms
+HappyPathBulkheadBenchmarkFour.measureContentionInqudiumOptimized:pauses.p0.999                                    thrpt            5,939                  ms
+HappyPathBulkheadBenchmarkFour.measureContentionInqudiumOptimized:pauses.p0.9999                                   thrpt            5,939                  ms
+HappyPathBulkheadBenchmarkFour.measureContentionInqudiumOptimized:pauses.p1.00                                     thrpt            5,939                  ms
+HappyPathBulkheadBenchmarkFour.measureContentionResilience4j                                                       thrpt   15     222,912 ±    13,462  ops/ms
+HappyPathBulkheadBenchmarkFour.measureContentionResilience4j:gc.alloc.rate                                         thrpt   15      85,191 ±    36,156  MB/sec
+HappyPathBulkheadBenchmarkFour.measureContentionResilience4j:gc.alloc.rate.norm                                    thrpt   15      79,554 ±    21,350    B/op
+HappyPathBulkheadBenchmarkFour.measureContentionResilience4j:gc.count                                              thrpt   15      10,000              counts
+HappyPathBulkheadBenchmarkFour.measureContentionResilience4j:gc.time                                               thrpt   15      21,000                  ms
+HappyPathBulkheadBenchmarkFour.measureContentionResilience4j:mempool.CodeHeap 'non-nmethods'.used                  thrpt   15    1979,750                 KiB
+HappyPathBulkheadBenchmarkFour.measureContentionResilience4j:mempool.CodeHeap 'non-profiled nmethods'.used         thrpt   15     643,250                 KiB
+HappyPathBulkheadBenchmarkFour.measureContentionResilience4j:mempool.CodeHeap 'profiled nmethods'.used             thrpt   15    2846,125                 KiB
+HappyPathBulkheadBenchmarkFour.measureContentionResilience4j:mempool.Compressed Class Space.used                   thrpt   15     718,742                 KiB
+HappyPathBulkheadBenchmarkFour.measureContentionResilience4j:mempool.G1 Eden Space.used                            thrpt   15  147456,000                 KiB
+HappyPathBulkheadBenchmarkFour.measureContentionResilience4j:mempool.G1 Old Gen.used                               thrpt   15    1173,930                 KiB
+HappyPathBulkheadBenchmarkFour.measureContentionResilience4j:mempool.G1 Survivor Space.used                        thrpt   15    4942,500                 KiB
+HappyPathBulkheadBenchmarkFour.measureContentionResilience4j:mempool.Metaspace.used                                thrpt   15    6224,992                 KiB
+HappyPathBulkheadBenchmarkFour.measureContentionResilience4j:mempool.total.codeheap.used                           thrpt   15    5425,875                 KiB
+HappyPathBulkheadBenchmarkFour.measureContentionResilience4j:mempool.total.used                                    thrpt   15  165834,211                 KiB
+HappyPathBulkheadBenchmarkFour.measureContentionResilience4j:pauses                                                thrpt    9      44,855                  ms
+HappyPathBulkheadBenchmarkFour.measureContentionResilience4j:pauses.avg                                            thrpt            4,984                  ms
+HappyPathBulkheadBenchmarkFour.measureContentionResilience4j:pauses.count                                          thrpt            9,000                   #
+HappyPathBulkheadBenchmarkFour.measureContentionResilience4j:pauses.p0.00                                          thrpt            3,187                  ms
+HappyPathBulkheadBenchmarkFour.measureContentionResilience4j:pauses.p0.50                                          thrpt            3,850                  ms
+HappyPathBulkheadBenchmarkFour.measureContentionResilience4j:pauses.p0.90                                          thrpt           15,483                  ms
+HappyPathBulkheadBenchmarkFour.measureContentionResilience4j:pauses.p0.95                                          thrpt           15,483                  ms
+HappyPathBulkheadBenchmarkFour.measureContentionResilience4j:pauses.p0.99                                          thrpt           15,483                  ms
+HappyPathBulkheadBenchmarkFour.measureContentionResilience4j:pauses.p0.999                                         thrpt           15,483                  ms
+HappyPathBulkheadBenchmarkFour.measureContentionResilience4j:pauses.p0.9999                                        thrpt           15,483                  ms
+HappyPathBulkheadBenchmarkFour.measureContentionResilience4j:pauses.p1.00                                          thrpt           15,483                  ms
+HappyPathBulkheadBenchmarkFour.measureContentionSemaphore                                                          thrpt   15     227,926 ±     9,559  ops/ms
+HappyPathBulkheadBenchmarkFour.measureContentionSemaphore:gc.alloc.rate                                            thrpt   15      51,704 ±    11,092  MB/sec
+HappyPathBulkheadBenchmarkFour.measureContentionSemaphore:gc.alloc.rate.norm                                       thrpt   15      39,914 ±     1,654    B/op
+HappyPathBulkheadBenchmarkFour.measureContentionSemaphore:gc.count                                                 thrpt   15       6,000              counts
+HappyPathBulkheadBenchmarkFour.measureContentionSemaphore:gc.time                                                  thrpt   15      13,000                  ms
+HappyPathBulkheadBenchmarkFour.measureContentionSemaphore:mempool.CodeHeap 'non-nmethods'.used                     thrpt   15    2520,125                 KiB
+HappyPathBulkheadBenchmarkFour.measureContentionSemaphore:mempool.CodeHeap 'non-profiled nmethods'.used            thrpt   15     605,000                 KiB
+HappyPathBulkheadBenchmarkFour.measureContentionSemaphore:mempool.CodeHeap 'profiled nmethods'.used                thrpt   15    2656,875                 KiB
+HappyPathBulkheadBenchmarkFour.measureContentionSemaphore:mempool.Compressed Class Space.used                      thrpt   15     685,375                 KiB
+HappyPathBulkheadBenchmarkFour.measureContentionSemaphore:mempool.G1 Eden Space.used                               thrpt   15  147456,000                 KiB
+HappyPathBulkheadBenchmarkFour.measureContentionSemaphore:mempool.G1 Old Gen.used                                  thrpt   15    1173,930                 KiB
+HappyPathBulkheadBenchmarkFour.measureContentionSemaphore:mempool.G1 Survivor Space.used                           thrpt   15    4829,961                 KiB
+HappyPathBulkheadBenchmarkFour.measureContentionSemaphore:mempool.Metaspace.used                                   thrpt   15    6077,367                 KiB
+HappyPathBulkheadBenchmarkFour.measureContentionSemaphore:mempool.total.codeheap.used                              thrpt   15    5748,500                 KiB
+HappyPathBulkheadBenchmarkFour.measureContentionSemaphore:mempool.total.used                                       thrpt   15  165850,477                 KiB
+HappyPathBulkheadBenchmarkFour.measureContentionSemaphore:pauses                                                   thrpt            3,297                  ms
+HappyPathBulkheadBenchmarkFour.measureContentionSemaphore:pauses.avg                                               thrpt            3,297                  ms
+HappyPathBulkheadBenchmarkFour.measureContentionSemaphore:pauses.count                                             thrpt            1,000                   #
+HappyPathBulkheadBenchmarkFour.measureContentionSemaphore:pauses.p0.00                                             thrpt            3,297                  ms
+HappyPathBulkheadBenchmarkFour.measureContentionSemaphore:pauses.p0.50                                             thrpt            3,297                  ms
+HappyPathBulkheadBenchmarkFour.measureContentionSemaphore:pauses.p0.90                                             thrpt            3,297                  ms
+HappyPathBulkheadBenchmarkFour.measureContentionSemaphore:pauses.p0.95                                             thrpt            3,297                  ms
+HappyPathBulkheadBenchmarkFour.measureContentionSemaphore:pauses.p0.99                                             thrpt            3,297                  ms
+HappyPathBulkheadBenchmarkFour.measureContentionSemaphore:pauses.p0.999                                            thrpt            3,297                  ms
+HappyPathBulkheadBenchmarkFour.measureContentionSemaphore:pauses.p0.9999                                           thrpt            3,297                  ms
+HappyPathBulkheadBenchmarkFour.measureContentionSemaphore:pauses.p1.00                                             thrpt            3,297                  ms
+HappyPathBulkheadBenchmarkFour.measurePureOverheadFailsafe                                                         thrpt   15     971,485 ±   136,050  ops/ms
+HappyPathBulkheadBenchmarkFour.measurePureOverheadFailsafe:gc.alloc.rate                                           thrpt   15    1288,562 ±   180,622  MB/sec
+HappyPathBulkheadBenchmarkFour.measurePureOverheadFailsafe:gc.alloc.rate.norm                                      thrpt   15    1393,035 ±     0,728    B/op
+HappyPathBulkheadBenchmarkFour.measurePureOverheadFailsafe:gc.count                                                thrpt   15      80,000              counts
+HappyPathBulkheadBenchmarkFour.measurePureOverheadFailsafe:gc.time                                                 thrpt   15      60,000                  ms
+HappyPathBulkheadBenchmarkFour.measurePureOverheadFailsafe:mempool.CodeHeap 'non-nmethods'.used                    thrpt   15    1965,500                 KiB
+HappyPathBulkheadBenchmarkFour.measurePureOverheadFailsafe:mempool.CodeHeap 'non-profiled nmethods'.used           thrpt   15     978,625                 KiB
+HappyPathBulkheadBenchmarkFour.measurePureOverheadFailsafe:mempool.CodeHeap 'profiled nmethods'.used               thrpt   15    3050,875                 KiB
+HappyPathBulkheadBenchmarkFour.measurePureOverheadFailsafe:mempool.Compressed Class Space.used                     thrpt   15     753,313                 KiB
+HappyPathBulkheadBenchmarkFour.measurePureOverheadFailsafe:mempool.G1 Eden Space.used                              thrpt   15  268288,000                 KiB
+HappyPathBulkheadBenchmarkFour.measurePureOverheadFailsafe:mempool.G1 Old Gen.used                                 thrpt   15    6852,336                 KiB
+HappyPathBulkheadBenchmarkFour.measurePureOverheadFailsafe:mempool.G1 Survivor Space.used                          thrpt   15     163,641                 KiB
+HappyPathBulkheadBenchmarkFour.measurePureOverheadFailsafe:mempool.Metaspace.used                                  thrpt   15    6416,281                 KiB
+HappyPathBulkheadBenchmarkFour.measurePureOverheadFailsafe:mempool.total.codeheap.used                             thrpt   15    5918,875                 KiB
+HappyPathBulkheadBenchmarkFour.measurePureOverheadFailsafe:mempool.total.used                                      thrpt   15  288135,266                 KiB
+HappyPathBulkheadBenchmarkFour.measurePureOverheadFailsafe:pauses                                                  thrpt              NaN                  ms
+HappyPathBulkheadBenchmarkFour.measurePureOverheadFailsafe:pauses.avg                                              thrpt              NaN                  ms
+HappyPathBulkheadBenchmarkFour.measurePureOverheadFailsafe:pauses.count                                            thrpt              ≈ 0                   #
+HappyPathBulkheadBenchmarkFour.measurePureOverheadFailsafe:pauses.p0.00                                            thrpt              NaN                  ms
+HappyPathBulkheadBenchmarkFour.measurePureOverheadFailsafe:pauses.p0.50                                            thrpt              NaN                  ms
+HappyPathBulkheadBenchmarkFour.measurePureOverheadFailsafe:pauses.p0.90                                            thrpt              NaN                  ms
+HappyPathBulkheadBenchmarkFour.measurePureOverheadFailsafe:pauses.p0.95                                            thrpt              NaN                  ms
+HappyPathBulkheadBenchmarkFour.measurePureOverheadFailsafe:pauses.p0.99                                            thrpt              NaN                  ms
+HappyPathBulkheadBenchmarkFour.measurePureOverheadFailsafe:pauses.p0.999                                           thrpt              NaN                  ms
+HappyPathBulkheadBenchmarkFour.measurePureOverheadFailsafe:pauses.p0.9999                                          thrpt              NaN                  ms
+HappyPathBulkheadBenchmarkFour.measurePureOverheadFailsafe:pauses.p1.00                                            thrpt              NaN                  ms
+HappyPathBulkheadBenchmarkFour.measurePureOverheadInqudium                                                         thrpt   15    6191,118 ±  1367,900  ops/ms
+HappyPathBulkheadBenchmarkFour.measurePureOverheadInqudium:gc.alloc.rate                                           thrpt   15     770,636 ±   170,417  MB/sec
+HappyPathBulkheadBenchmarkFour.measurePureOverheadInqudium:gc.alloc.rate.norm                                      thrpt   15     130,691 ±     0,009    B/op
+HappyPathBulkheadBenchmarkFour.measurePureOverheadInqudium:gc.count                                                thrpt   15      80,000              counts
+HappyPathBulkheadBenchmarkFour.measurePureOverheadInqudium:gc.time                                                 thrpt   15      39,000                  ms
+HappyPathBulkheadBenchmarkFour.measurePureOverheadInqudium:mempool.CodeHeap 'non-nmethods'.used                    thrpt   15    2529,750                 KiB
+HappyPathBulkheadBenchmarkFour.measurePureOverheadInqudium:mempool.CodeHeap 'non-profiled nmethods'.used           thrpt   15     586,000                 KiB
+HappyPathBulkheadBenchmarkFour.measurePureOverheadInqudium:mempool.CodeHeap 'profiled nmethods'.used               thrpt   15    2594,375                 KiB
+HappyPathBulkheadBenchmarkFour.measurePureOverheadInqudium:mempool.Compressed Class Space.used                     thrpt   15     696,367                 KiB
+HappyPathBulkheadBenchmarkFour.measurePureOverheadInqudium:mempool.G1 Eden Space.used                              thrpt   15  151552,000                 KiB
+HappyPathBulkheadBenchmarkFour.measurePureOverheadInqudium:mempool.G1 Old Gen.used                                 thrpt   15    6378,117                 KiB
+HappyPathBulkheadBenchmarkFour.measurePureOverheadInqudium:mempool.G1 Survivor Space.used                          thrpt   15    4811,680                 KiB
+HappyPathBulkheadBenchmarkFour.measurePureOverheadInqudium:mempool.Metaspace.used                                  thrpt   15    6113,617                 KiB
+HappyPathBulkheadBenchmarkFour.measurePureOverheadInqudium:mempool.total.codeheap.used                             thrpt   15    5623,000                 KiB
+HappyPathBulkheadBenchmarkFour.measurePureOverheadInqudium:mempool.total.used                                      thrpt   15  173822,141                 KiB
+HappyPathBulkheadBenchmarkFour.measurePureOverheadInqudium:pauses                                                  thrpt              NaN                  ms
+HappyPathBulkheadBenchmarkFour.measurePureOverheadInqudium:pauses.avg                                              thrpt              NaN                  ms
+HappyPathBulkheadBenchmarkFour.measurePureOverheadInqudium:pauses.count                                            thrpt              ≈ 0                   #
+HappyPathBulkheadBenchmarkFour.measurePureOverheadInqudium:pauses.p0.00                                            thrpt              NaN                  ms
+HappyPathBulkheadBenchmarkFour.measurePureOverheadInqudium:pauses.p0.50                                            thrpt              NaN                  ms
+HappyPathBulkheadBenchmarkFour.measurePureOverheadInqudium:pauses.p0.90                                            thrpt              NaN                  ms
+HappyPathBulkheadBenchmarkFour.measurePureOverheadInqudium:pauses.p0.95                                            thrpt              NaN                  ms
+HappyPathBulkheadBenchmarkFour.measurePureOverheadInqudium:pauses.p0.99                                            thrpt              NaN                  ms
+HappyPathBulkheadBenchmarkFour.measurePureOverheadInqudium:pauses.p0.999                                           thrpt              NaN                  ms
+HappyPathBulkheadBenchmarkFour.measurePureOverheadInqudium:pauses.p0.9999                                          thrpt              NaN                  ms
+HappyPathBulkheadBenchmarkFour.measurePureOverheadInqudium:pauses.p1.00                                            thrpt              NaN                  ms
+HappyPathBulkheadBenchmarkFour.measurePureOverheadInqudiumOptimized                                                thrpt   15    7381,486 ±  2286,583  ops/ms
+HappyPathBulkheadBenchmarkFour.measurePureOverheadInqudiumOptimized:gc.alloc.rate                                  thrpt   15     412,506 ±   127,785  MB/sec
+HappyPathBulkheadBenchmarkFour.measurePureOverheadInqudiumOptimized:gc.alloc.rate.norm                             thrpt   15      58,683 ±     0,005    B/op
+HappyPathBulkheadBenchmarkFour.measurePureOverheadInqudiumOptimized:gc.count                                       thrpt   15      44,000              counts
+HappyPathBulkheadBenchmarkFour.measurePureOverheadInqudiumOptimized:gc.time                                        thrpt   15      41,000                  ms
+HappyPathBulkheadBenchmarkFour.measurePureOverheadInqudiumOptimized:mempool.CodeHeap 'non-nmethods'.used           thrpt   15    1965,125                 KiB
+HappyPathBulkheadBenchmarkFour.measurePureOverheadInqudiumOptimized:mempool.CodeHeap 'non-profiled nmethods'.used  thrpt   15     516,750                 KiB
+HappyPathBulkheadBenchmarkFour.measurePureOverheadInqudiumOptimized:mempool.CodeHeap 'profiled nmethods'.used      thrpt   15    2541,750                 KiB
+HappyPathBulkheadBenchmarkFour.measurePureOverheadInqudiumOptimized:mempool.Compressed Class Space.used            thrpt   15     698,883                 KiB
+HappyPathBulkheadBenchmarkFour.measurePureOverheadInqudiumOptimized:mempool.G1 Eden Space.used                     thrpt   15  151552,000                 KiB
+HappyPathBulkheadBenchmarkFour.measurePureOverheadInqudiumOptimized:mempool.G1 Old Gen.used                        thrpt   15    6410,945                 KiB
+HappyPathBulkheadBenchmarkFour.measurePureOverheadInqudiumOptimized:mempool.G1 Survivor Space.used                 thrpt   15    5306,680                 KiB
+HappyPathBulkheadBenchmarkFour.measurePureOverheadInqudiumOptimized:mempool.Metaspace.used                         thrpt   15    6095,125                 KiB
+HappyPathBulkheadBenchmarkFour.measurePureOverheadInqudiumOptimized:mempool.total.codeheap.used                    thrpt   15    4992,750                 KiB
+HappyPathBulkheadBenchmarkFour.measurePureOverheadInqudiumOptimized:mempool.total.used                             thrpt   15  173977,602                 KiB
+HappyPathBulkheadBenchmarkFour.measurePureOverheadInqudiumOptimized:pauses                                         thrpt            3,391                  ms
+HappyPathBulkheadBenchmarkFour.measurePureOverheadInqudiumOptimized:pauses.avg                                     thrpt            3,391                  ms
+HappyPathBulkheadBenchmarkFour.measurePureOverheadInqudiumOptimized:pauses.count                                   thrpt            1,000                   #
+HappyPathBulkheadBenchmarkFour.measurePureOverheadInqudiumOptimized:pauses.p0.00                                   thrpt            3,391                  ms
+HappyPathBulkheadBenchmarkFour.measurePureOverheadInqudiumOptimized:pauses.p0.50                                   thrpt            3,391                  ms
+HappyPathBulkheadBenchmarkFour.measurePureOverheadInqudiumOptimized:pauses.p0.90                                   thrpt            3,391                  ms
+HappyPathBulkheadBenchmarkFour.measurePureOverheadInqudiumOptimized:pauses.p0.95                                   thrpt            3,391                  ms
+HappyPathBulkheadBenchmarkFour.measurePureOverheadInqudiumOptimized:pauses.p0.99                                   thrpt            3,391                  ms
+HappyPathBulkheadBenchmarkFour.measurePureOverheadInqudiumOptimized:pauses.p0.999                                  thrpt            3,391                  ms
+HappyPathBulkheadBenchmarkFour.measurePureOverheadInqudiumOptimized:pauses.p0.9999                                 thrpt            3,391                  ms
+HappyPathBulkheadBenchmarkFour.measurePureOverheadInqudiumOptimized:pauses.p1.00                                   thrpt            3,391                  ms
+HappyPathBulkheadBenchmarkFour.measurePureOverheadResilience4j                                                     thrpt   15    9848,268 ±  1963,075  ops/ms
+HappyPathBulkheadBenchmarkFour.measurePureOverheadResilience4j:gc.alloc.rate                                       thrpt   15     550,086 ±   109,746  MB/sec
+HappyPathBulkheadBenchmarkFour.measurePureOverheadResilience4j:gc.alloc.rate.norm                                  thrpt   15      58,679 ±     0,003    B/op
+HappyPathBulkheadBenchmarkFour.measurePureOverheadResilience4j:gc.count                                            thrpt   15      54,000              counts
+HappyPathBulkheadBenchmarkFour.measurePureOverheadResilience4j:gc.time                                             thrpt   15      48,000                  ms
+HappyPathBulkheadBenchmarkFour.measurePureOverheadResilience4j:mempool.CodeHeap 'non-nmethods'.used                thrpt   15    1979,750                 KiB
+HappyPathBulkheadBenchmarkFour.measurePureOverheadResilience4j:mempool.CodeHeap 'non-profiled nmethods'.used       thrpt   15     522,875                 KiB
+HappyPathBulkheadBenchmarkFour.measurePureOverheadResilience4j:mempool.CodeHeap 'profiled nmethods'.used           thrpt   15    2455,250                 KiB
+HappyPathBulkheadBenchmarkFour.measurePureOverheadResilience4j:mempool.Compressed Class Space.used                 thrpt   15     694,211                 KiB
+HappyPathBulkheadBenchmarkFour.measurePureOverheadResilience4j:mempool.G1 Eden Space.used                          thrpt   15  184320,000                 KiB
+HappyPathBulkheadBenchmarkFour.measurePureOverheadResilience4j:mempool.G1 Old Gen.used                             thrpt   15    6437,664                 KiB
+HappyPathBulkheadBenchmarkFour.measurePureOverheadResilience4j:mempool.G1 Survivor Space.used                      thrpt   15    4855,500                 KiB
+HappyPathBulkheadBenchmarkFour.measurePureOverheadResilience4j:mempool.Metaspace.used                              thrpt   15    6045,781                 KiB
+HappyPathBulkheadBenchmarkFour.measurePureOverheadResilience4j:mempool.total.codeheap.used                         thrpt   15    4907,000                 KiB
+HappyPathBulkheadBenchmarkFour.measurePureOverheadResilience4j:mempool.total.used                                  thrpt   15  206363,734                 KiB
+HappyPathBulkheadBenchmarkFour.measurePureOverheadResilience4j:pauses                                              thrpt   12      32,723                  ms
+HappyPathBulkheadBenchmarkFour.measurePureOverheadResilience4j:pauses.avg                                          thrpt            2,727                  ms
+HappyPathBulkheadBenchmarkFour.measurePureOverheadResilience4j:pauses.count                                        thrpt           12,000                   #
+HappyPathBulkheadBenchmarkFour.measurePureOverheadResilience4j:pauses.p0.00                                        thrpt            2,540                  ms
+HappyPathBulkheadBenchmarkFour.measurePureOverheadResilience4j:pauses.p0.50                                        thrpt            2,705                  ms
+HappyPathBulkheadBenchmarkFour.measurePureOverheadResilience4j:pauses.p0.90                                        thrpt            3,069                  ms
+HappyPathBulkheadBenchmarkFour.measurePureOverheadResilience4j:pauses.p0.95                                        thrpt            3,174                  ms
+HappyPathBulkheadBenchmarkFour.measurePureOverheadResilience4j:pauses.p0.99                                        thrpt            3,174                  ms
+HappyPathBulkheadBenchmarkFour.measurePureOverheadResilience4j:pauses.p0.999                                       thrpt            3,174                  ms
+HappyPathBulkheadBenchmarkFour.measurePureOverheadResilience4j:pauses.p0.9999                                      thrpt            3,174                  ms
+HappyPathBulkheadBenchmarkFour.measurePureOverheadResilience4j:pauses.p1.00                                        thrpt            3,174                  ms
+HappyPathBulkheadBenchmarkFour.measurePureOverheadSemaphore                                                        thrpt   15   14348,807 ±  2745,785  ops/ms
+HappyPathBulkheadBenchmarkFour.measurePureOverheadSemaphore:gc.alloc.rate                                          thrpt   15     473,785 ±    90,668  MB/sec
+HappyPathBulkheadBenchmarkFour.measurePureOverheadSemaphore:gc.alloc.rate.norm                                     thrpt   15      34,675 ±     0,002    B/op
+HappyPathBulkheadBenchmarkFour.measurePureOverheadSemaphore:gc.count                                               thrpt   15      49,000              counts
+HappyPathBulkheadBenchmarkFour.measurePureOverheadSemaphore:gc.time                                                thrpt   15      51,000                  ms
+HappyPathBulkheadBenchmarkFour.measurePureOverheadSemaphore:mempool.CodeHeap 'non-nmethods'.used                   thrpt   15    2513,000                 KiB
+HappyPathBulkheadBenchmarkFour.measurePureOverheadSemaphore:mempool.CodeHeap 'non-profiled nmethods'.used          thrpt   15     479,500                 KiB
+HappyPathBulkheadBenchmarkFour.measurePureOverheadSemaphore:mempool.CodeHeap 'profiled nmethods'.used              thrpt   15    2373,125                 KiB
+HappyPathBulkheadBenchmarkFour.measurePureOverheadSemaphore:mempool.Compressed Class Space.used                    thrpt   15     684,656                 KiB
+HappyPathBulkheadBenchmarkFour.measurePureOverheadSemaphore:mempool.G1 Eden Space.used                             thrpt   15  151552,000                 KiB
+HappyPathBulkheadBenchmarkFour.measurePureOverheadSemaphore:mempool.G1 Old Gen.used                                thrpt   15    6468,250                 KiB
+HappyPathBulkheadBenchmarkFour.measurePureOverheadSemaphore:mempool.G1 Survivor Space.used                         thrpt   15    5183,945                 KiB
+HappyPathBulkheadBenchmarkFour.measurePureOverheadSemaphore:mempool.Metaspace.used                                 thrpt   15    5999,609                 KiB
+HappyPathBulkheadBenchmarkFour.measurePureOverheadSemaphore:mempool.total.codeheap.used                            thrpt   15    5353,375                 KiB
+HappyPathBulkheadBenchmarkFour.measurePureOverheadSemaphore:mempool.total.used                                     thrpt   15  174017,094                 KiB
+HappyPathBulkheadBenchmarkFour.measurePureOverheadSemaphore:pauses                                                 thrpt    8      25,412                  ms
+HappyPathBulkheadBenchmarkFour.measurePureOverheadSemaphore:pauses.avg                                             thrpt            3,176                  ms
+HappyPathBulkheadBenchmarkFour.measurePureOverheadSemaphore:pauses.count                                           thrpt            8,000                   #
+HappyPathBulkheadBenchmarkFour.measurePureOverheadSemaphore:pauses.p0.00                                           thrpt            2,601                  ms
+HappyPathBulkheadBenchmarkFour.measurePureOverheadSemaphore:pauses.p0.50                                           thrpt            2,994                  ms
+HappyPathBulkheadBenchmarkFour.measurePureOverheadSemaphore:pauses.p0.90                                           thrpt            4,174                  ms
+HappyPathBulkheadBenchmarkFour.measurePureOverheadSemaphore:pauses.p0.95                                           thrpt            4,174                  ms
+HappyPathBulkheadBenchmarkFour.measurePureOverheadSemaphore:pauses.p0.99                                           thrpt            4,174                  ms
+HappyPathBulkheadBenchmarkFour.measurePureOverheadSemaphore:pauses.p0.999                                          thrpt            4,174                  ms
+HappyPathBulkheadBenchmarkFour.measurePureOverheadSemaphore:pauses.p0.9999                                         thrpt            4,174                  ms
+HappyPathBulkheadBenchmarkFour.measurePureOverheadSemaphore:pauses.p1.00                                           thrpt            4,174                  ms
+
+
+HappyPathBulkheadBenchmarkFour Results on 2026-04-03 (with isDone() optimization):
+
+Benchmark                                                                                                           Mode  Cnt       Score      Error   Units
+HappyPathBulkheadBenchmarkFour.baselineNoBulkhead                                                                  thrpt   15   40257,491 ± 1038,547  ops/ms
+HappyPathBulkheadBenchmarkFour.baselineNoBulkhead:gc.alloc.rate                                                    thrpt   15    1329,153 ±   34,558  MB/sec
+HappyPathBulkheadBenchmarkFour.baselineNoBulkhead:gc.alloc.rate.norm                                               thrpt   15      34,669 ±    0,001    B/op
+HappyPathBulkheadBenchmarkFour.baselineNoBulkhead:gc.count                                                         thrpt   15     106,000             counts
+HappyPathBulkheadBenchmarkFour.baselineNoBulkhead:gc.time                                                          thrpt   15      58,000                 ms
+HappyPathBulkheadBenchmarkFour.baselineNoBulkhead:mempool.CodeHeap 'non-nmethods'.used                             thrpt   15    2519,875                KiB
+HappyPathBulkheadBenchmarkFour.baselineNoBulkhead:mempool.CodeHeap 'non-profiled nmethods'.used                    thrpt   15     455,500                KiB
+HappyPathBulkheadBenchmarkFour.baselineNoBulkhead:mempool.CodeHeap 'profiled nmethods'.used                        thrpt   15    2356,250                KiB
+HappyPathBulkheadBenchmarkFour.baselineNoBulkhead:mempool.Compressed Class Space.used                              thrpt   15     683,414                KiB
+HappyPathBulkheadBenchmarkFour.baselineNoBulkhead:mempool.G1 Eden Space.used                                       thrpt   15  223232,000                KiB
+HappyPathBulkheadBenchmarkFour.baselineNoBulkhead:mempool.G1 Old Gen.used                                          thrpt   15    6394,891                KiB
+HappyPathBulkheadBenchmarkFour.baselineNoBulkhead:mempool.G1 Survivor Space.used                                   thrpt   15     103,305                KiB
+HappyPathBulkheadBenchmarkFour.baselineNoBulkhead:mempool.Metaspace.used                                           thrpt   15    5981,734                KiB
+HappyPathBulkheadBenchmarkFour.baselineNoBulkhead:mempool.total.codeheap.used                                      thrpt   15    5318,375                KiB
+HappyPathBulkheadBenchmarkFour.baselineNoBulkhead:mempool.total.used                                               thrpt   15  241348,328                KiB
+HappyPathBulkheadBenchmarkFour.baselineNoBulkhead:pauses                                                           thrpt              NaN                 ms
+HappyPathBulkheadBenchmarkFour.baselineNoBulkhead:pauses.avg                                                       thrpt              NaN                 ms
+HappyPathBulkheadBenchmarkFour.baselineNoBulkhead:pauses.count                                                     thrpt              ≈ 0                  #
+HappyPathBulkheadBenchmarkFour.baselineNoBulkhead:pauses.p0.00                                                     thrpt              NaN                 ms
+HappyPathBulkheadBenchmarkFour.baselineNoBulkhead:pauses.p0.50                                                     thrpt              NaN                 ms
+HappyPathBulkheadBenchmarkFour.baselineNoBulkhead:pauses.p0.90                                                     thrpt              NaN                 ms
+HappyPathBulkheadBenchmarkFour.baselineNoBulkhead:pauses.p0.95                                                     thrpt              NaN                 ms
+HappyPathBulkheadBenchmarkFour.baselineNoBulkhead:pauses.p0.99                                                     thrpt              NaN                 ms
+HappyPathBulkheadBenchmarkFour.baselineNoBulkhead:pauses.p0.999                                                    thrpt              NaN                 ms
+HappyPathBulkheadBenchmarkFour.baselineNoBulkhead:pauses.p0.9999                                                   thrpt              NaN                 ms
+HappyPathBulkheadBenchmarkFour.baselineNoBulkhead:pauses.p1.00                                                     thrpt              NaN                 ms
+HappyPathBulkheadBenchmarkFour.measureContentionFailsafe                                                           thrpt   15     380,030 ±   54,772  ops/ms
+HappyPathBulkheadBenchmarkFour.measureContentionFailsafe:gc.alloc.rate                                             thrpt   15     763,086 ±  112,346  MB/sec
+HappyPathBulkheadBenchmarkFour.measureContentionFailsafe:gc.alloc.rate.norm                                        thrpt   15    2108,470 ±   40,240    B/op
+HappyPathBulkheadBenchmarkFour.measureContentionFailsafe:gc.count                                                  thrpt   15      42,000             counts
+HappyPathBulkheadBenchmarkFour.measureContentionFailsafe:gc.time                                                   thrpt   15     213,000                 ms
+HappyPathBulkheadBenchmarkFour.measureContentionFailsafe:mempool.CodeHeap 'non-nmethods'.used                      thrpt   15    2528,500                KiB
+HappyPathBulkheadBenchmarkFour.measureContentionFailsafe:mempool.CodeHeap 'non-profiled nmethods'.used             thrpt   15    1256,000                KiB
+HappyPathBulkheadBenchmarkFour.measureContentionFailsafe:mempool.CodeHeap 'profiled nmethods'.used                 thrpt   15    3468,750                KiB
+HappyPathBulkheadBenchmarkFour.measureContentionFailsafe:mempool.Compressed Class Space.used                       thrpt   15     806,664                KiB
+HappyPathBulkheadBenchmarkFour.measureContentionFailsafe:mempool.G1 Eden Space.used                                thrpt   15  294912,000                KiB
+HappyPathBulkheadBenchmarkFour.measureContentionFailsafe:mempool.G1 Old Gen.used                                   thrpt   15   11430,023                KiB
+HappyPathBulkheadBenchmarkFour.measureContentionFailsafe:mempool.G1 Survivor Space.used                            thrpt   15   14259,914                KiB
+HappyPathBulkheadBenchmarkFour.measureContentionFailsafe:mempool.Metaspace.used                                    thrpt   15    6753,367                KiB
+HappyPathBulkheadBenchmarkFour.measureContentionFailsafe:mempool.total.codeheap.used                               thrpt   15    7192,625                KiB
+HappyPathBulkheadBenchmarkFour.measureContentionFailsafe:mempool.total.used                                        thrpt   15  334517,367                KiB
+HappyPathBulkheadBenchmarkFour.measureContentionFailsafe:pauses                                                    thrpt   42     250,495                 ms
+HappyPathBulkheadBenchmarkFour.measureContentionFailsafe:pauses.avg                                                thrpt            5,964                 ms
+HappyPathBulkheadBenchmarkFour.measureContentionFailsafe:pauses.count                                              thrpt           42,000                  #
+HappyPathBulkheadBenchmarkFour.measureContentionFailsafe:pauses.p0.00                                              thrpt            4,415                 ms
+HappyPathBulkheadBenchmarkFour.measureContentionFailsafe:pauses.p0.50                                              thrpt            5,804                 ms
+HappyPathBulkheadBenchmarkFour.measureContentionFailsafe:pauses.p0.90                                              thrpt            7,127                 ms
+HappyPathBulkheadBenchmarkFour.measureContentionFailsafe:pauses.p0.95                                              thrpt            7,215                 ms
+HappyPathBulkheadBenchmarkFour.measureContentionFailsafe:pauses.p0.99                                              thrpt            8,110                 ms
+HappyPathBulkheadBenchmarkFour.measureContentionFailsafe:pauses.p0.999                                             thrpt            8,110                 ms
+HappyPathBulkheadBenchmarkFour.measureContentionFailsafe:pauses.p0.9999                                            thrpt            8,110                 ms
+HappyPathBulkheadBenchmarkFour.measureContentionFailsafe:pauses.p1.00                                              thrpt            8,110                 ms
+HappyPathBulkheadBenchmarkFour.measureContentionInqudium                                                           thrpt   15     220,492 ±    7,995  ops/ms
+HappyPathBulkheadBenchmarkFour.measureContentionInqudium:gc.alloc.rate                                             thrpt   15      45,481 ±   13,017  MB/sec
+HappyPathBulkheadBenchmarkFour.measureContentionInqudium:gc.alloc.rate.norm                                        thrpt   15      69,565 ±    4,737    B/op
+HappyPathBulkheadBenchmarkFour.measureContentionInqudium:gc.count                                                  thrpt   15       7,000             counts
+HappyPathBulkheadBenchmarkFour.measureContentionInqudium:gc.time                                                   thrpt   15      16,000                 ms
+HappyPathBulkheadBenchmarkFour.measureContentionInqudium:mempool.CodeHeap 'non-nmethods'.used                      thrpt   15    2010,625                KiB
+HappyPathBulkheadBenchmarkFour.measureContentionInqudium:mempool.CodeHeap 'non-profiled nmethods'.used             thrpt   15     729,500                KiB
+HappyPathBulkheadBenchmarkFour.measureContentionInqudium:mempool.CodeHeap 'profiled nmethods'.used                 thrpt   15    2842,875                KiB
+HappyPathBulkheadBenchmarkFour.measureContentionInqudium:mempool.Compressed Class Space.used                       thrpt   15     692,727                KiB
+HappyPathBulkheadBenchmarkFour.measureContentionInqudium:mempool.G1 Eden Space.used                                thrpt   15  147456,000                KiB
+HappyPathBulkheadBenchmarkFour.measureContentionInqudium:mempool.G1 Old Gen.used                                   thrpt   15    1173,930                KiB
+HappyPathBulkheadBenchmarkFour.measureContentionInqudium:mempool.G1 Survivor Space.used                            thrpt   15    4869,227                KiB
+HappyPathBulkheadBenchmarkFour.measureContentionInqudium:mempool.Metaspace.used                                    thrpt   15    6191,656                KiB
+HappyPathBulkheadBenchmarkFour.measureContentionInqudium:mempool.total.codeheap.used                               thrpt   15    5483,250                KiB
+HappyPathBulkheadBenchmarkFour.measureContentionInqudium:mempool.total.used                                        thrpt   15  165790,938                KiB
+HappyPathBulkheadBenchmarkFour.measureContentionInqudium:pauses                                                    thrpt    3      10,740                 ms
+HappyPathBulkheadBenchmarkFour.measureContentionInqudium:pauses.avg                                                thrpt            3,580                 ms
+HappyPathBulkheadBenchmarkFour.measureContentionInqudium:pauses.count                                              thrpt            3,000                  #
+HappyPathBulkheadBenchmarkFour.measureContentionInqudium:pauses.p0.00                                              thrpt            3,150                 ms
+HappyPathBulkheadBenchmarkFour.measureContentionInqudium:pauses.p0.50                                              thrpt            3,760                 ms
+HappyPathBulkheadBenchmarkFour.measureContentionInqudium:pauses.p0.90                                              thrpt            3,830                 ms
+HappyPathBulkheadBenchmarkFour.measureContentionInqudium:pauses.p0.95                                              thrpt            3,830                 ms
+HappyPathBulkheadBenchmarkFour.measureContentionInqudium:pauses.p0.99                                              thrpt            3,830                 ms
+HappyPathBulkheadBenchmarkFour.measureContentionInqudium:pauses.p0.999                                             thrpt            3,830                 ms
+HappyPathBulkheadBenchmarkFour.measureContentionInqudium:pauses.p0.9999                                            thrpt            3,830                 ms
+HappyPathBulkheadBenchmarkFour.measureContentionInqudium:pauses.p1.00                                              thrpt            3,830                 ms
+HappyPathBulkheadBenchmarkFour.measureContentionInqudiumOptimized                                                  thrpt   15     214,754 ±   23,359  ops/ms
+HappyPathBulkheadBenchmarkFour.measureContentionInqudiumOptimized:gc.alloc.rate                                    thrpt   15      40,221 ±   14,644  MB/sec
+HappyPathBulkheadBenchmarkFour.measureContentionInqudiumOptimized:gc.alloc.rate.norm                               thrpt   15      71,681 ±    6,670    B/op
+HappyPathBulkheadBenchmarkFour.measureContentionInqudiumOptimized:gc.count                                         thrpt   15       5,000             counts
+HappyPathBulkheadBenchmarkFour.measureContentionInqudiumOptimized:gc.time                                          thrpt   15      13,000                 ms
+HappyPathBulkheadBenchmarkFour.measureContentionInqudiumOptimized:mempool.CodeHeap 'non-nmethods'.used             thrpt   15    3083,875                KiB
+HappyPathBulkheadBenchmarkFour.measureContentionInqudiumOptimized:mempool.CodeHeap 'non-profiled nmethods'.used    thrpt   15     607,250                KiB
+HappyPathBulkheadBenchmarkFour.measureContentionInqudiumOptimized:mempool.CodeHeap 'profiled nmethods'.used        thrpt   15    2720,750                KiB
+HappyPathBulkheadBenchmarkFour.measureContentionInqudiumOptimized:mempool.Compressed Class Space.used              thrpt   15     699,758                KiB
+HappyPathBulkheadBenchmarkFour.measureContentionInqudiumOptimized:mempool.G1 Eden Space.used                       thrpt   15  147456,000                KiB
+HappyPathBulkheadBenchmarkFour.measureContentionInqudiumOptimized:mempool.G1 Old Gen.used                          thrpt   15    1173,930                KiB
+HappyPathBulkheadBenchmarkFour.measureContentionInqudiumOptimized:mempool.G1 Survivor Space.used                   thrpt   15    4868,023                KiB
+HappyPathBulkheadBenchmarkFour.measureContentionInqudiumOptimized:mempool.Metaspace.used                           thrpt   15    6167,953                KiB
+HappyPathBulkheadBenchmarkFour.measureContentionInqudiumOptimized:mempool.total.codeheap.used                      thrpt   15    6319,750                KiB
+HappyPathBulkheadBenchmarkFour.measureContentionInqudiumOptimized:mempool.total.used                               thrpt   15  165334,133                KiB
+HappyPathBulkheadBenchmarkFour.measureContentionInqudiumOptimized:pauses                                           thrpt   11      45,756                 ms
+HappyPathBulkheadBenchmarkFour.measureContentionInqudiumOptimized:pauses.avg                                       thrpt            4,160                 ms
+HappyPathBulkheadBenchmarkFour.measureContentionInqudiumOptimized:pauses.count                                     thrpt           11,000                  #
+HappyPathBulkheadBenchmarkFour.measureContentionInqudiumOptimized:pauses.p0.00                                     thrpt            3,469                 ms
+HappyPathBulkheadBenchmarkFour.measureContentionInqudiumOptimized:pauses.p0.50                                     thrpt            4,145                 ms
+HappyPathBulkheadBenchmarkFour.measureContentionInqudiumOptimized:pauses.p0.90                                     thrpt            5,000                 ms
+HappyPathBulkheadBenchmarkFour.measureContentionInqudiumOptimized:pauses.p0.95                                     thrpt            5,030                 ms
+HappyPathBulkheadBenchmarkFour.measureContentionInqudiumOptimized:pauses.p0.99                                     thrpt            5,030                 ms
+HappyPathBulkheadBenchmarkFour.measureContentionInqudiumOptimized:pauses.p0.999                                    thrpt            5,030                 ms
+HappyPathBulkheadBenchmarkFour.measureContentionInqudiumOptimized:pauses.p0.9999                                   thrpt            5,030                 ms
+HappyPathBulkheadBenchmarkFour.measureContentionInqudiumOptimized:pauses.p1.00                                     thrpt            5,030                 ms
+HappyPathBulkheadBenchmarkFour.measureContentionResilience4j                                                       thrpt   15     203,731 ±   19,098  ops/ms
+HappyPathBulkheadBenchmarkFour.measureContentionResilience4j:gc.alloc.rate                                         thrpt   15      55,826 ±   26,272  MB/sec
+HappyPathBulkheadBenchmarkFour.measureContentionResilience4j:gc.alloc.rate.norm                                    thrpt   15      67,839 ±    5,498    B/op
+HappyPathBulkheadBenchmarkFour.measureContentionResilience4j:gc.count                                              thrpt   15       6,000             counts
+HappyPathBulkheadBenchmarkFour.measureContentionResilience4j:gc.time                                               thrpt   15      13,000                 ms
+HappyPathBulkheadBenchmarkFour.measureContentionResilience4j:mempool.CodeHeap 'non-nmethods'.used                  thrpt   15    2526,750                KiB
+HappyPathBulkheadBenchmarkFour.measureContentionResilience4j:mempool.CodeHeap 'non-profiled nmethods'.used         thrpt   15     638,500                KiB
+HappyPathBulkheadBenchmarkFour.measureContentionResilience4j:mempool.CodeHeap 'profiled nmethods'.used             thrpt   15    2865,750                KiB
+HappyPathBulkheadBenchmarkFour.measureContentionResilience4j:mempool.Compressed Class Space.used                   thrpt   15     704,367                KiB
+HappyPathBulkheadBenchmarkFour.measureContentionResilience4j:mempool.G1 Eden Space.used                            thrpt   15  147456,000                KiB
+HappyPathBulkheadBenchmarkFour.measureContentionResilience4j:mempool.G1 Old Gen.used                               thrpt   15    1173,930                KiB
+HappyPathBulkheadBenchmarkFour.measureContentionResilience4j:mempool.G1 Survivor Space.used                        thrpt   15    4953,008                KiB
+HappyPathBulkheadBenchmarkFour.measureContentionResilience4j:mempool.Metaspace.used                                thrpt   15    6184,273                KiB
+HappyPathBulkheadBenchmarkFour.measureContentionResilience4j:mempool.total.codeheap.used                           thrpt   15    5946,875                KiB
+HappyPathBulkheadBenchmarkFour.measureContentionResilience4j:mempool.total.used                                    thrpt   15  165688,203                KiB
+HappyPathBulkheadBenchmarkFour.measureContentionResilience4j:pauses                                                thrpt    5      29,614                 ms
+HappyPathBulkheadBenchmarkFour.measureContentionResilience4j:pauses.avg                                            thrpt            5,923                 ms
+HappyPathBulkheadBenchmarkFour.measureContentionResilience4j:pauses.count                                          thrpt            5,000                  #
+HappyPathBulkheadBenchmarkFour.measureContentionResilience4j:pauses.p0.00                                          thrpt            3,244                 ms
+HappyPathBulkheadBenchmarkFour.measureContentionResilience4j:pauses.p0.50                                          thrpt            3,838                 ms
+HappyPathBulkheadBenchmarkFour.measureContentionResilience4j:pauses.p0.90                                          thrpt           15,237                 ms
+HappyPathBulkheadBenchmarkFour.measureContentionResilience4j:pauses.p0.95                                          thrpt           15,237                 ms
+HappyPathBulkheadBenchmarkFour.measureContentionResilience4j:pauses.p0.99                                          thrpt           15,237                 ms
+HappyPathBulkheadBenchmarkFour.measureContentionResilience4j:pauses.p0.999                                         thrpt           15,237                 ms
+HappyPathBulkheadBenchmarkFour.measureContentionResilience4j:pauses.p0.9999                                        thrpt           15,237                 ms
+HappyPathBulkheadBenchmarkFour.measureContentionResilience4j:pauses.p1.00                                          thrpt           15,237                 ms
+HappyPathBulkheadBenchmarkFour.measureContentionSemaphore                                                          thrpt   15     232,157 ±   27,060  ops/ms
+HappyPathBulkheadBenchmarkFour.measureContentionSemaphore:gc.alloc.rate                                            thrpt   15      47,340 ±   13,455  MB/sec
+HappyPathBulkheadBenchmarkFour.measureContentionSemaphore:gc.alloc.rate.norm                                       thrpt   15      41,113 ±    3,816    B/op
+HappyPathBulkheadBenchmarkFour.measureContentionSemaphore:gc.count                                                 thrpt   15       4,000             counts
+HappyPathBulkheadBenchmarkFour.measureContentionSemaphore:gc.time                                                  thrpt   15       8,000                 ms
+HappyPathBulkheadBenchmarkFour.measureContentionSemaphore:mempool.CodeHeap 'non-nmethods'.used                     thrpt   15    2513,125                KiB
+HappyPathBulkheadBenchmarkFour.measureContentionSemaphore:mempool.CodeHeap 'non-profiled nmethods'.used            thrpt   15     601,125                KiB
+HappyPathBulkheadBenchmarkFour.measureContentionSemaphore:mempool.CodeHeap 'profiled nmethods'.used                thrpt   15    2668,000                KiB
+HappyPathBulkheadBenchmarkFour.measureContentionSemaphore:mempool.Compressed Class Space.used                      thrpt   15     692,289                KiB
+HappyPathBulkheadBenchmarkFour.measureContentionSemaphore:mempool.G1 Eden Space.used                               thrpt   15  147456,000                KiB
+HappyPathBulkheadBenchmarkFour.measureContentionSemaphore:mempool.G1 Old Gen.used                                  thrpt   15    1173,930                KiB
+HappyPathBulkheadBenchmarkFour.measureContentionSemaphore:mempool.G1 Survivor Space.used                           thrpt   15    5031,438                KiB
+HappyPathBulkheadBenchmarkFour.measureContentionSemaphore:mempool.Metaspace.used                                   thrpt   15    6108,023                KiB
+HappyPathBulkheadBenchmarkFour.measureContentionSemaphore:mempool.total.codeheap.used                              thrpt   15    5698,750                KiB
+HappyPathBulkheadBenchmarkFour.measureContentionSemaphore:mempool.total.used                                       thrpt   15  165514,523                KiB
+HappyPathBulkheadBenchmarkFour.measureContentionSemaphore:pauses                                                   thrpt    4      14,463                 ms
+HappyPathBulkheadBenchmarkFour.measureContentionSemaphore:pauses.avg                                               thrpt            3,616                 ms
+HappyPathBulkheadBenchmarkFour.measureContentionSemaphore:pauses.count                                             thrpt            4,000                  #
+HappyPathBulkheadBenchmarkFour.measureContentionSemaphore:pauses.p0.00                                             thrpt            2,638                 ms
+HappyPathBulkheadBenchmarkFour.measureContentionSemaphore:pauses.p0.50                                             thrpt            2,943                 ms
+HappyPathBulkheadBenchmarkFour.measureContentionSemaphore:pauses.p0.90                                             thrpt            5,939                 ms
+HappyPathBulkheadBenchmarkFour.measureContentionSemaphore:pauses.p0.95                                             thrpt            5,939                 ms
+HappyPathBulkheadBenchmarkFour.measureContentionSemaphore:pauses.p0.99                                             thrpt            5,939                 ms
+HappyPathBulkheadBenchmarkFour.measureContentionSemaphore:pauses.p0.999                                            thrpt            5,939                 ms
+HappyPathBulkheadBenchmarkFour.measureContentionSemaphore:pauses.p0.9999                                           thrpt            5,939                 ms
+HappyPathBulkheadBenchmarkFour.measureContentionSemaphore:pauses.p1.00                                             thrpt            5,939                 ms
+HappyPathBulkheadBenchmarkFour.measurePureOverheadFailsafe                                                         thrpt   15     934,828 ±  133,509  ops/ms
+HappyPathBulkheadBenchmarkFour.measurePureOverheadFailsafe:gc.alloc.rate                                           thrpt   15    1236,269 ±  178,034  MB/sec
+HappyPathBulkheadBenchmarkFour.measurePureOverheadFailsafe:gc.alloc.rate.norm                                      thrpt   15    1388,825 ±    2,194    B/op
+HappyPathBulkheadBenchmarkFour.measurePureOverheadFailsafe:gc.count                                                thrpt   15      82,000             counts
+HappyPathBulkheadBenchmarkFour.measurePureOverheadFailsafe:gc.time                                                 thrpt   15      60,000                 ms
+HappyPathBulkheadBenchmarkFour.measurePureOverheadFailsafe:mempool.CodeHeap 'non-nmethods'.used                    thrpt   15    1965,375                KiB
+HappyPathBulkheadBenchmarkFour.measurePureOverheadFailsafe:mempool.CodeHeap 'non-profiled nmethods'.used           thrpt   15    1009,125                KiB
+HappyPathBulkheadBenchmarkFour.measurePureOverheadFailsafe:mempool.CodeHeap 'profiled nmethods'.used               thrpt   15    3029,250                KiB
+HappyPathBulkheadBenchmarkFour.measurePureOverheadFailsafe:mempool.Compressed Class Space.used                     thrpt   15     744,594                KiB
+HappyPathBulkheadBenchmarkFour.measurePureOverheadFailsafe:mempool.G1 Eden Space.used                              thrpt   15  268288,000                KiB
+HappyPathBulkheadBenchmarkFour.measurePureOverheadFailsafe:mempool.G1 Old Gen.used                                 thrpt   15    6637,633                KiB
+HappyPathBulkheadBenchmarkFour.measurePureOverheadFailsafe:mempool.G1 Survivor Space.used                          thrpt   15     157,313                KiB
+HappyPathBulkheadBenchmarkFour.measurePureOverheadFailsafe:mempool.Metaspace.used                                  thrpt   15    6370,695                KiB
+HappyPathBulkheadBenchmarkFour.measurePureOverheadFailsafe:mempool.total.codeheap.used                             thrpt   15    5921,125                KiB
+HappyPathBulkheadBenchmarkFour.measurePureOverheadFailsafe:mempool.total.used                                      thrpt   15  287873,227                KiB
+HappyPathBulkheadBenchmarkFour.measurePureOverheadFailsafe:pauses                                                  thrpt              NaN                 ms
+HappyPathBulkheadBenchmarkFour.measurePureOverheadFailsafe:pauses.avg                                              thrpt              NaN                 ms
+HappyPathBulkheadBenchmarkFour.measurePureOverheadFailsafe:pauses.count                                            thrpt              ≈ 0                  #
+HappyPathBulkheadBenchmarkFour.measurePureOverheadFailsafe:pauses.p0.00                                            thrpt              NaN                 ms
+HappyPathBulkheadBenchmarkFour.measurePureOverheadFailsafe:pauses.p0.50                                            thrpt              NaN                 ms
+HappyPathBulkheadBenchmarkFour.measurePureOverheadFailsafe:pauses.p0.90                                            thrpt              NaN                 ms
+HappyPathBulkheadBenchmarkFour.measurePureOverheadFailsafe:pauses.p0.95                                            thrpt              NaN                 ms
+HappyPathBulkheadBenchmarkFour.measurePureOverheadFailsafe:pauses.p0.99                                            thrpt              NaN                 ms
+HappyPathBulkheadBenchmarkFour.measurePureOverheadFailsafe:pauses.p0.999                                           thrpt              NaN                 ms
+HappyPathBulkheadBenchmarkFour.measurePureOverheadFailsafe:pauses.p0.9999                                          thrpt              NaN                 ms
+HappyPathBulkheadBenchmarkFour.measurePureOverheadFailsafe:pauses.p1.00                                            thrpt              NaN                 ms
+HappyPathBulkheadBenchmarkFour.measurePureOverheadInqudium                                                         thrpt   15    6407,678 ± 1078,432  ops/ms
+HappyPathBulkheadBenchmarkFour.measurePureOverheadInqudium:gc.alloc.rate                                           thrpt   15     358,133 ±   60,356  MB/sec
+HappyPathBulkheadBenchmarkFour.measurePureOverheadInqudium:gc.alloc.rate.norm                                      thrpt   15      58,683 ±    0,003    B/op
+HappyPathBulkheadBenchmarkFour.measurePureOverheadInqudium:gc.count                                                thrpt   15      36,000             counts
+HappyPathBulkheadBenchmarkFour.measurePureOverheadInqudium:gc.time                                                 thrpt   15      40,000                 ms
+HappyPathBulkheadBenchmarkFour.measurePureOverheadInqudium:mempool.CodeHeap 'non-nmethods'.used                    thrpt   15    1982,500                KiB
+HappyPathBulkheadBenchmarkFour.measurePureOverheadInqudium:mempool.CodeHeap 'non-profiled nmethods'.used           thrpt   15     555,375                KiB
+HappyPathBulkheadBenchmarkFour.measurePureOverheadInqudium:mempool.CodeHeap 'profiled nmethods'.used               thrpt   15    2470,500                KiB
+HappyPathBulkheadBenchmarkFour.measurePureOverheadInqudium:mempool.Compressed Class Space.used                     thrpt   15     687,000                KiB
+HappyPathBulkheadBenchmarkFour.measurePureOverheadInqudium:mempool.G1 Eden Space.used                              thrpt   15  151552,000                KiB
+HappyPathBulkheadBenchmarkFour.measurePureOverheadInqudium:mempool.G1 Old Gen.used                                 thrpt   15    5965,344                KiB
+HappyPathBulkheadBenchmarkFour.measurePureOverheadInqudium:mempool.G1 Survivor Space.used                          thrpt   15    5511,461                KiB
+HappyPathBulkheadBenchmarkFour.measurePureOverheadInqudium:mempool.Metaspace.used                                  thrpt   15    6061,898                KiB
+HappyPathBulkheadBenchmarkFour.measurePureOverheadInqudium:mempool.total.codeheap.used                             thrpt   15    4960,750                KiB
+HappyPathBulkheadBenchmarkFour.measurePureOverheadInqudium:mempool.total.used                                      thrpt   15  173160,773                KiB
+HappyPathBulkheadBenchmarkFour.measurePureOverheadInqudium:pauses                                                  thrpt              NaN                 ms
+HappyPathBulkheadBenchmarkFour.measurePureOverheadInqudium:pauses.avg                                              thrpt              NaN                 ms
+HappyPathBulkheadBenchmarkFour.measurePureOverheadInqudium:pauses.count                                            thrpt              ≈ 0                  #
+HappyPathBulkheadBenchmarkFour.measurePureOverheadInqudium:pauses.p0.00                                            thrpt              NaN                 ms
+HappyPathBulkheadBenchmarkFour.measurePureOverheadInqudium:pauses.p0.50                                            thrpt              NaN                 ms
+HappyPathBulkheadBenchmarkFour.measurePureOverheadInqudium:pauses.p0.90                                            thrpt              NaN                 ms
+HappyPathBulkheadBenchmarkFour.measurePureOverheadInqudium:pauses.p0.95                                            thrpt              NaN                 ms
+HappyPathBulkheadBenchmarkFour.measurePureOverheadInqudium:pauses.p0.99                                            thrpt              NaN                 ms
+HappyPathBulkheadBenchmarkFour.measurePureOverheadInqudium:pauses.p0.999                                           thrpt              NaN                 ms
+HappyPathBulkheadBenchmarkFour.measurePureOverheadInqudium:pauses.p0.9999                                          thrpt              NaN                 ms
+HappyPathBulkheadBenchmarkFour.measurePureOverheadInqudium:pauses.p1.00                                            thrpt              NaN                 ms
+HappyPathBulkheadBenchmarkFour.measurePureOverheadInqudiumOptimized                                                thrpt   15   10722,644 ± 1257,752  ops/ms
+HappyPathBulkheadBenchmarkFour.measurePureOverheadInqudiumOptimized:gc.alloc.rate                                  thrpt   15     599,155 ±   70,461  MB/sec
+HappyPathBulkheadBenchmarkFour.measurePureOverheadInqudiumOptimized:gc.alloc.rate.norm                             thrpt   15      58,677 ±    0,001    B/op
+HappyPathBulkheadBenchmarkFour.measurePureOverheadInqudiumOptimized:gc.count                                       thrpt   15      62,000             counts
+HappyPathBulkheadBenchmarkFour.measurePureOverheadInqudiumOptimized:gc.time                                        thrpt   15      44,000                 ms
+HappyPathBulkheadBenchmarkFour.measurePureOverheadInqudiumOptimized:mempool.CodeHeap 'non-nmethods'.used           thrpt   15    2536,750                KiB
+HappyPathBulkheadBenchmarkFour.measurePureOverheadInqudiumOptimized:mempool.CodeHeap 'non-profiled nmethods'.used  thrpt   15     505,000                KiB
+HappyPathBulkheadBenchmarkFour.measurePureOverheadInqudiumOptimized:mempool.CodeHeap 'profiled nmethods'.used      thrpt   15    2416,000                KiB
+HappyPathBulkheadBenchmarkFour.measurePureOverheadInqudiumOptimized:mempool.Compressed Class Space.used            thrpt   15     685,109                KiB
+HappyPathBulkheadBenchmarkFour.measurePureOverheadInqudiumOptimized:mempool.G1 Eden Space.used                     thrpt   15  151552,000                KiB
+HappyPathBulkheadBenchmarkFour.measurePureOverheadInqudiumOptimized:mempool.G1 Old Gen.used                        thrpt   15    6398,219                KiB
+HappyPathBulkheadBenchmarkFour.measurePureOverheadInqudiumOptimized:mempool.G1 Survivor Space.used                 thrpt   15    4815,523                KiB
+HappyPathBulkheadBenchmarkFour.measurePureOverheadInqudiumOptimized:mempool.Metaspace.used                         thrpt   15    6036,133                KiB
+HappyPathBulkheadBenchmarkFour.measurePureOverheadInqudiumOptimized:mempool.total.codeheap.used                    thrpt   15    5406,500                KiB
+HappyPathBulkheadBenchmarkFour.measurePureOverheadInqudiumOptimized:mempool.total.used                             thrpt   15  174072,203                KiB
+HappyPathBulkheadBenchmarkFour.measurePureOverheadInqudiumOptimized:pauses                                         thrpt              NaN                 ms
+HappyPathBulkheadBenchmarkFour.measurePureOverheadInqudiumOptimized:pauses.avg                                     thrpt              NaN                 ms
+HappyPathBulkheadBenchmarkFour.measurePureOverheadInqudiumOptimized:pauses.count                                   thrpt              ≈ 0                  #
+HappyPathBulkheadBenchmarkFour.measurePureOverheadInqudiumOptimized:pauses.p0.00                                   thrpt              NaN                 ms
+HappyPathBulkheadBenchmarkFour.measurePureOverheadInqudiumOptimized:pauses.p0.50                                   thrpt              NaN                 ms
+HappyPathBulkheadBenchmarkFour.measurePureOverheadInqudiumOptimized:pauses.p0.90                                   thrpt              NaN                 ms
+HappyPathBulkheadBenchmarkFour.measurePureOverheadInqudiumOptimized:pauses.p0.95                                   thrpt              NaN                 ms
+HappyPathBulkheadBenchmarkFour.measurePureOverheadInqudiumOptimized:pauses.p0.99                                   thrpt              NaN                 ms
+HappyPathBulkheadBenchmarkFour.measurePureOverheadInqudiumOptimized:pauses.p0.999                                  thrpt              NaN                 ms
+HappyPathBulkheadBenchmarkFour.measurePureOverheadInqudiumOptimized:pauses.p0.9999                                 thrpt              NaN                 ms
+HappyPathBulkheadBenchmarkFour.measurePureOverheadInqudiumOptimized:pauses.p1.00                                   thrpt              NaN                 ms
+HappyPathBulkheadBenchmarkFour.measurePureOverheadResilience4j                                                     thrpt   15   12473,167 ± 1438,071  ops/ms
+HappyPathBulkheadBenchmarkFour.measurePureOverheadResilience4j:gc.alloc.rate                                       thrpt   15     697,130 ±   80,523  MB/sec
+HappyPathBulkheadBenchmarkFour.measurePureOverheadResilience4j:gc.alloc.rate.norm                                  thrpt   15      58,675 ±    0,001    B/op
+HappyPathBulkheadBenchmarkFour.measurePureOverheadResilience4j:gc.count                                            thrpt   15      71,000             counts
+HappyPathBulkheadBenchmarkFour.measurePureOverheadResilience4j:gc.time                                             thrpt   15      38,000                 ms
+HappyPathBulkheadBenchmarkFour.measurePureOverheadResilience4j:mempool.CodeHeap 'non-nmethods'.used                thrpt   15    1961,500                KiB
+HappyPathBulkheadBenchmarkFour.measurePureOverheadResilience4j:mempool.CodeHeap 'non-profiled nmethods'.used       thrpt   15     517,875                KiB
+HappyPathBulkheadBenchmarkFour.measurePureOverheadResilience4j:mempool.CodeHeap 'profiled nmethods'.used           thrpt   15    2506,125                KiB
+HappyPathBulkheadBenchmarkFour.measurePureOverheadResilience4j:mempool.Compressed Class Space.used                 thrpt   15     694,688                KiB
+HappyPathBulkheadBenchmarkFour.measurePureOverheadResilience4j:mempool.G1 Eden Space.used                          thrpt   15  151552,000                KiB
+HappyPathBulkheadBenchmarkFour.measurePureOverheadResilience4j:mempool.G1 Old Gen.used                             thrpt   15    6555,500                KiB
+HappyPathBulkheadBenchmarkFour.measurePureOverheadResilience4j:mempool.G1 Survivor Space.used                      thrpt   15     633,797                KiB
+HappyPathBulkheadBenchmarkFour.measurePureOverheadResilience4j:mempool.Metaspace.used                              thrpt   15    6054,438                KiB
+HappyPathBulkheadBenchmarkFour.measurePureOverheadResilience4j:mempool.total.codeheap.used                         thrpt   15    4936,500                KiB
+HappyPathBulkheadBenchmarkFour.measurePureOverheadResilience4j:mempool.total.used                                  thrpt   15  170117,094                KiB
+HappyPathBulkheadBenchmarkFour.measurePureOverheadResilience4j:pauses                                              thrpt              NaN                 ms
+HappyPathBulkheadBenchmarkFour.measurePureOverheadResilience4j:pauses.avg                                          thrpt              NaN                 ms
+HappyPathBulkheadBenchmarkFour.measurePureOverheadResilience4j:pauses.count                                        thrpt              ≈ 0                  #
+HappyPathBulkheadBenchmarkFour.measurePureOverheadResilience4j:pauses.p0.00                                        thrpt              NaN                 ms
+HappyPathBulkheadBenchmarkFour.measurePureOverheadResilience4j:pauses.p0.50                                        thrpt              NaN                 ms
+HappyPathBulkheadBenchmarkFour.measurePureOverheadResilience4j:pauses.p0.90                                        thrpt              NaN                 ms
+HappyPathBulkheadBenchmarkFour.measurePureOverheadResilience4j:pauses.p0.95                                        thrpt              NaN                 ms
+HappyPathBulkheadBenchmarkFour.measurePureOverheadResilience4j:pauses.p0.99                                        thrpt              NaN                 ms
+HappyPathBulkheadBenchmarkFour.measurePureOverheadResilience4j:pauses.p0.999                                       thrpt              NaN                 ms
+HappyPathBulkheadBenchmarkFour.measurePureOverheadResilience4j:pauses.p0.9999                                      thrpt              NaN                 ms
+HappyPathBulkheadBenchmarkFour.measurePureOverheadResilience4j:pauses.p1.00                                        thrpt              NaN                 ms
+HappyPathBulkheadBenchmarkFour.measurePureOverheadSemaphore                                                        thrpt   15   13968,265 ± 2525,657  ops/ms
+HappyPathBulkheadBenchmarkFour.measurePureOverheadSemaphore:gc.alloc.rate                                          thrpt   15     461,249 ±   83,347  MB/sec
+HappyPathBulkheadBenchmarkFour.measurePureOverheadSemaphore:gc.alloc.rate.norm                                     thrpt   15      34,675 ±    0,002    B/op
+HappyPathBulkheadBenchmarkFour.measurePureOverheadSemaphore:gc.count                                               thrpt   15      47,000             counts
+HappyPathBulkheadBenchmarkFour.measurePureOverheadSemaphore:gc.time                                                thrpt   15      40,000                 ms
+HappyPathBulkheadBenchmarkFour.measurePureOverheadSemaphore:mempool.CodeHeap 'non-nmethods'.used                   thrpt   15    2525,125                KiB
+HappyPathBulkheadBenchmarkFour.measurePureOverheadSemaphore:mempool.CodeHeap 'non-profiled nmethods'.used          thrpt   15     485,750                KiB
+HappyPathBulkheadBenchmarkFour.measurePureOverheadSemaphore:mempool.CodeHeap 'profiled nmethods'.used              thrpt   15    2380,875                KiB
+HappyPathBulkheadBenchmarkFour.measurePureOverheadSemaphore:mempool.Compressed Class Space.used                    thrpt   15     683,148                KiB
+HappyPathBulkheadBenchmarkFour.measurePureOverheadSemaphore:mempool.G1 Eden Space.used                             thrpt   15  151552,000                KiB
+HappyPathBulkheadBenchmarkFour.measurePureOverheadSemaphore:mempool.G1 Old Gen.used                                thrpt   15    5703,289                KiB
+HappyPathBulkheadBenchmarkFour.measurePureOverheadSemaphore:mempool.G1 Survivor Space.used                         thrpt   15    5477,148                KiB
+HappyPathBulkheadBenchmarkFour.measurePureOverheadSemaphore:mempool.Metaspace.used                                 thrpt   15    5998,477                KiB
+HappyPathBulkheadBenchmarkFour.measurePureOverheadSemaphore:mempool.total.codeheap.used                            thrpt   15    5378,500                KiB
+HappyPathBulkheadBenchmarkFour.measurePureOverheadSemaphore:mempool.total.used                                     thrpt   15  173427,523                KiB
+HappyPathBulkheadBenchmarkFour.measurePureOverheadSemaphore:pauses                                                 thrpt    3      11,092                 ms
+HappyPathBulkheadBenchmarkFour.measurePureOverheadSemaphore:pauses.avg                                             thrpt            3,697                 ms
+HappyPathBulkheadBenchmarkFour.measurePureOverheadSemaphore:pauses.count                                           thrpt            3,000                  #
+HappyPathBulkheadBenchmarkFour.measurePureOverheadSemaphore:pauses.p0.00                                           thrpt            3,252                 ms
+HappyPathBulkheadBenchmarkFour.measurePureOverheadSemaphore:pauses.p0.50                                           thrpt            3,277                 ms
+HappyPathBulkheadBenchmarkFour.measurePureOverheadSemaphore:pauses.p0.90                                           thrpt            4,563                 ms
+HappyPathBulkheadBenchmarkFour.measurePureOverheadSemaphore:pauses.p0.95                                           thrpt            4,563                 ms
+HappyPathBulkheadBenchmarkFour.measurePureOverheadSemaphore:pauses.p0.99                                           thrpt            4,563                 ms
+HappyPathBulkheadBenchmarkFour.measurePureOverheadSemaphore:pauses.p0.999                                          thrpt            4,563                 ms
+HappyPathBulkheadBenchmarkFour.measurePureOverheadSemaphore:pauses.p0.9999                                         thrpt            4,563                 ms
+HappyPathBulkheadBenchmarkFour.measurePureOverheadSemaphore:pauses.p1.00                                           thrpt            4,563                 ms

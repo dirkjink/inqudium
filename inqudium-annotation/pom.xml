@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xmlns="http://maven.apache.org/POM/4.0.0"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <groupId>eu.inqudium</groupId>
+        <artifactId>inqudium-parent</artifactId>
+        <version>${revision}</version>
+    </parent>
+
+    <artifactId>inqudium-annotation</artifactId>
+    <name>Inqudium :: Annotation</name>
+    <description>
+        Resilience pipeline annotations for Inqudium.
+        Zero runtime dependencies — service modules depend only on this
+        lightweight artifact to annotate methods and classes.
+    </description>
+
+    <!--
+      This module has NO dependencies — not on inqudium-core, not on Spring,
+      not on AspectJ. This is intentional: service code that uses
+      @InqCircuitBreaker or @InqRetry should compile with only this tiny
+      JAR on the classpath.
+
+      The runtime infrastructure (annotation scanning, pipeline building,
+      AOP integration) lives in separate modules:
+        - inqudium-core:       InqAnnotationScanner, InqPipeline
+        - inqudium-aspect:     AspectJ integration
+        - inqudium-spring:     Spring AOP integration
+    -->
+
+
+</project>

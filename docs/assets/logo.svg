@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 240" width="200" height="240">
+    <!-- Card outline -->
+    <rect x="10" y="10" width="180" height="220" rx="16" fill="none" stroke="#1d9e75" stroke-width="1.5" opacity="0.4"/>
+    <rect x="10" y="10" width="180" height="220" rx="16" fill="#0a0e14" opacity="0.85"/>
+    <rect x="10" y="10" width="180" height="220" rx="16" fill="none" stroke="#1d9e75" stroke-width="1"/>
+
+    <!-- Atomic number -->
+    <text x="32" y="46" font-family="'JetBrains Mono', 'SF Mono', 'Consolas', monospace" font-size="13"
+          font-weight="500" fill="#5e5c56">42
+    </text>
+
+    <!-- Shield icon -->
+    <path d="M162,30 L172,30 L172,42 L167,47 L162,42 Z" fill="none" stroke="rgba(255,255,255,0.12)" stroke-width="1"
+          stroke-linejoin="round"/>
+
+    <!-- Element symbol -->
+    <text x="100" y="145" text-anchor="middle" font-family="'Outfit', 'Helvetica Neue', sans-serif" font-size="80"
+          font-weight="600" fill="#e8e6e1" letter-spacing="-3">Iq
+    </text>
+
+    <!-- Element name -->
+    <text x="100" y="180" text-anchor="middle" font-family="'Outfit', 'Helvetica Neue', sans-serif" font-size="14"
+          font-weight="400" fill="#9a978f" letter-spacing="5" text-transform="uppercase">INQUDIUM
+    </text>
+
+    <!-- Properties -->
+    <text x="100" y="210" text-anchor="middle" font-family="'JetBrains Mono', 'SF Mono', monospace" font-size="8.5"
+          fill="#5e5c56">resilience · stability · protection
+    </text>
+
+    <!-- Electron orbits -->
+    <ellipse cx="100" cy="120" rx="120" ry="32" fill="none" stroke="#1d9e75" stroke-width="0.4" opacity="0.15"
+             transform="rotate(-18 100 120)"/>
+    <ellipse cx="100" cy="120" rx="120" ry="32" fill="none" stroke="#1d9e75" stroke-width="0.4" opacity="0.15"
+             transform="rotate(18 100 120)"/>
+
+    <!-- Electrons -->
+    <circle cx="16" cy="82" r="3" fill="#1d9e75" opacity="0.7"/>
+    <circle cx="188" cy="158" r="3" fill="#1d9e75" opacity="0.7"/>
+</svg>

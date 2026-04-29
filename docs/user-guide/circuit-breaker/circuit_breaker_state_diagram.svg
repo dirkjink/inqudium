@@ -1,0 +1,126 @@
+<svg width="100%" viewBox="0 0 680 300" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+        <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6"
+                orient="auto-start-reverse">
+            <path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.5" stroke-linecap="round"
+                  stroke-linejoin="round"/>
+        </marker>
+        <mask id="imagine-text-gaps-gr1o6u" maskUnits="userSpaceOnUse">
+            <rect x="0" y="0" width="680" height="300" fill="white"/>
+            <rect x="127.62489318847656" y="51.185150146484375" width="54.750179290771484" height="21.629697799682617"
+                  fill="black" rx="2"/>
+            <rect x="86.19707489013672" y="72.44441223144531" width="137.60581970214844" height="19.111169815063477"
+                  fill="black" rx="2"/>
+            <rect x="502.583251953125" y="51.185150146484375" width="44.83347702026367" height="21.629697799682617"
+                  fill="black" rx="2"/>
+            <rect x="469.2471923828125" y="72.44441223144531" width="111.62289428710938" height="19.111169815063477"
+                  fill="black" rx="2"/>
+            <rect x="302.77215576171875" y="217.18515014648438" width="74.45569610595703" height="21.629697799682617"
+                  fill="black" rx="2"/>
+            <rect x="274.4092102050781" y="238.4444122314453" width="130.67237854003906" height="19.111169815063477"
+                  fill="black" rx="2"/>
+            <rect x="259.5833435058594" y="40.036991119384766" width="160.9482879638672" height="19.111169815063477"
+                  fill="black" rx="2"/>
+            <rect x="437.3703918457031" y="138.0369873046875" width="99.40670776367188" height="19.111169815063477"
+                  fill="black" rx="2"/>
+            <rect x="27.603866577148438" y="158.0369873046875" width="88.53341674804688" height="19.111169815063477"
+                  fill="black" rx="2"/>
+            <rect x="563.370361328125" y="158.0369873046875" width="57.873592376708984" height="19.111169815063477"
+                  fill="black" rx="2"/>
+            <rect x="127.68392944335938" y="4.036991119384766" width="54.76845169067383" height="19.111170768737793"
+                  fill="black" rx="2"/>
+        </mask>
+    </defs>
+
+    <!-- Start indicator -->
+    <circle cx="46" cy="72" r="5" fill="var(--p)"
+            style="fill:rgb(20, 20, 19);stroke:none;color:rgb(0, 0, 0);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
+    <line x1="54" y1="72" x2="68" y2="72" marker-end="url(#arrow)"
+          style="fill:none;stroke:rgb(115, 114, 108);color:rgb(0, 0, 0);stroke-width:1.5px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
+
+    <!-- Closed -->
+    <g onclick="sendPrompt('Explain the Closed state of a circuit breaker')"
+       style="fill:rgb(0, 0, 0);stroke:none;color:rgb(0, 0, 0);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto">
+        <rect x="70" y="44" width="170" height="56" rx="8" stroke-width="0.5"
+              style="fill:rgb(234, 243, 222);stroke:rgb(59, 109, 17);color:rgb(0, 0, 0);stroke-width:0.5px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
+        <text x="155" y="62" text-anchor="middle" dominant-baseline="central"
+              style="fill:rgb(39, 80, 10);stroke:none;color:rgb(0, 0, 0);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:14px;font-weight:500;text-anchor:middle;dominant-baseline:central">
+            Closed
+        </text>
+        <text x="155" y="82" text-anchor="middle" dominant-baseline="central"
+              style="fill:rgb(59, 109, 17);stroke:none;color:rgb(0, 0, 0);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:12px;font-weight:400;text-anchor:middle;dominant-baseline:central">
+            Requests pass through
+        </text>
+    </g>
+
+    <!-- Open -->
+    <g onclick="sendPrompt('Explain the Open state of a circuit breaker')"
+       style="fill:rgb(0, 0, 0);stroke:none;color:rgb(0, 0, 0);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto">
+        <rect x="440" y="44" width="170" height="56" rx="8" stroke-width="0.5"
+              style="fill:rgb(252, 235, 235);stroke:rgb(163, 45, 45);color:rgb(0, 0, 0);stroke-width:0.5px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
+        <text x="525" y="62" text-anchor="middle" dominant-baseline="central"
+              style="fill:rgb(121, 31, 31);stroke:none;color:rgb(0, 0, 0);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:14px;font-weight:500;text-anchor:middle;dominant-baseline:central">
+            Open
+        </text>
+        <text x="525" y="82" text-anchor="middle" dominant-baseline="central"
+              style="fill:rgb(163, 45, 45);stroke:none;color:rgb(0, 0, 0);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:12px;font-weight:400;text-anchor:middle;dominant-baseline:central">
+            Requests rejected
+        </text>
+    </g>
+
+    <!-- Half-open -->
+    <g onclick="sendPrompt('Explain the Half-Open state of a circuit breaker')"
+       style="fill:rgb(0, 0, 0);stroke:none;color:rgb(0, 0, 0);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto">
+        <rect x="255" y="210" width="170" height="56" rx="8" stroke-width="0.5"
+              style="fill:rgb(250, 238, 218);stroke:rgb(133, 79, 11);color:rgb(0, 0, 0);stroke-width:0.5px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
+        <text x="340" y="228" text-anchor="middle" dominant-baseline="central"
+              style="fill:rgb(99, 56, 6);stroke:none;color:rgb(0, 0, 0);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:14px;font-weight:500;text-anchor:middle;dominant-baseline:central">
+            Half-open
+        </text>
+        <text x="340" y="248" text-anchor="middle" dominant-baseline="central"
+              style="fill:rgb(133, 79, 11);stroke:none;color:rgb(0, 0, 0);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:12px;font-weight:400;text-anchor:middle;dominant-baseline:central">
+            Test requests allowed
+        </text>
+    </g>
+
+    <!-- Closed → Open (horizontal, perpendicular into left side) -->
+    <line x1="240" y1="64" x2="438" y2="64" marker-end="url(#arrow)"
+          style="fill:none;stroke:rgb(115, 114, 108);color:rgb(0, 0, 0);stroke-width:1.5px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
+    <text x="340" y="54" text-anchor="middle"
+          style="fill:rgb(61, 61, 58);stroke:none;color:rgb(0, 0, 0);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:12px;font-weight:400;text-anchor:middle;dominant-baseline:auto">
+        Failure threshold exceeded
+    </text>
+
+    <!-- Open → Half-open (down from Open bottom, left, then down into Half-open top) -->
+    <path d="M500 100 L500 160 L380 160 L380 208" fill="none" marker-end="url(#arrow)"
+          mask="url(#imagine-text-gaps-gr1o6u)"
+          style="fill:none;stroke:rgb(115, 114, 108);color:rgb(0, 0, 0);stroke-width:1.5px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
+    <text x="442" y="152" text-anchor="start"
+          style="fill:rgb(61, 61, 58);stroke:none;color:rgb(0, 0, 0);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:12px;font-weight:400;text-anchor:start;dominant-baseline:auto">
+        Timeout expires
+    </text>
+
+    <!-- Half-open → Closed (left from Half-open, then up into Closed bottom) -->
+    <path d="M255 235 L120 235 L120 102" fill="none" marker-end="url(#arrow)"
+          style="fill:none;stroke:rgb(115, 114, 108);color:rgb(0, 0, 0);stroke-width:1.5px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
+    <text x="112" y="172" text-anchor="end"
+          style="fill:rgb(61, 61, 58);stroke:none;color:rgb(0, 0, 0);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:12px;font-weight:400;text-anchor:end;dominant-baseline:auto">
+        Test succeeds
+    </text>
+
+    <!-- Half-open → Open (right from Half-open, then up into Open bottom) -->
+    <path d="M425 235 L560 235 L560 102" fill="none" marker-end="url(#arrow)"
+          style="fill:none;stroke:rgb(115, 114, 108);color:rgb(0, 0, 0);stroke-width:1.5px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
+    <text x="568" y="172" text-anchor="start"
+          style="fill:rgb(61, 61, 58);stroke:none;color:rgb(0, 0, 0);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:12px;font-weight:400;text-anchor:start;dominant-baseline:auto">
+        Test fails
+    </text>
+
+    <!-- Self-loop on Closed: Success -->
+    <path d="M130 44 C120 12 190 12 180 42" fill="none" marker-end="url(#arrow)" mask="url(#imagine-text-gaps-gr1o6u)"
+          style="fill:none;stroke:rgb(115, 114, 108);color:rgb(0, 0, 0);stroke-width:1.5px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
+    <text x="155" y="18" text-anchor="middle"
+          style="fill:rgb(61, 61, 58);stroke:none;color:rgb(0, 0, 0);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:12px;font-weight:400;text-anchor:middle;dominant-baseline:auto">
+        Success
+    </text>
+</svg>

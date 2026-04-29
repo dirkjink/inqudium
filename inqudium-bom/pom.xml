@@ -1,0 +1,121 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xmlns="http://maven.apache.org/POM/4.0.0"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <groupId>eu.inqudium</groupId>
+        <artifactId>inqudium-parent</artifactId>
+        <version>${revision}</version>
+    </parent>
+
+    <artifactId>inqudium-bom</artifactId>
+    <packaging>pom</packaging>
+
+    <name>Inqudium :: BOM</name>
+    <description>Bill of Materials for Inqudium — import this to align versions across modules.</description>
+
+    <dependencyManagement>
+        <dependencies>
+            <!-- Core -->
+            <dependency>
+                <groupId>eu.inqudium</groupId>
+                <artifactId>inqudium-core</artifactId>
+                <version>${revision}</version>
+            </dependency>
+            <dependency>
+                <groupId>eu.inqudium</groupId>
+                <artifactId>inqudium-aspect</artifactId>
+                <version>${revision}</version>
+            </dependency>
+
+            <!-- Imperative elements -->
+            <dependency>
+                <groupId>eu.inqudium</groupId>
+                <artifactId>inqudium-circuitbreaker</artifactId>
+                <version>${revision}</version>
+            </dependency>
+            <dependency>
+                <groupId>eu.inqudium</groupId>
+                <artifactId>inqudium-retry</artifactId>
+                <version>${revision}</version>
+            </dependency>
+            <dependency>
+                <groupId>eu.inqudium</groupId>
+                <artifactId>inqudium-ratelimiter</artifactId>
+                <version>${revision}</version>
+            </dependency>
+            <dependency>
+                <groupId>eu.inqudium</groupId>
+                <artifactId>inqudium-bulkhead</artifactId>
+                <version>${revision}</version>
+            </dependency>
+            <dependency>
+                <groupId>eu.inqudium</groupId>
+                <artifactId>inqudium-timelimiter</artifactId>
+                <version>${revision}</version>
+            </dependency>
+
+            <!-- Native paradigm implementations -->
+            <dependency>
+                <groupId>eu.inqudium</groupId>
+                <artifactId>inqudium-kotlin</artifactId>
+                <version>${revision}</version>
+            </dependency>
+            <dependency>
+                <groupId>eu.inqudium</groupId>
+                <artifactId>inqudium-reactor</artifactId>
+                <version>${revision}</version>
+            </dependency>
+            <dependency>
+                <groupId>eu.inqudium</groupId>
+                <artifactId>inqudium-rxjava3</artifactId>
+                <version>${revision}</version>
+            </dependency>
+
+            <!-- Integrations -->
+            <dependency>
+                <groupId>eu.inqudium</groupId>
+                <artifactId>inqudium-spring-boot</artifactId>
+                <version>${revision}</version>
+            </dependency>
+
+            <!-- Context bridges -->
+            <dependency>
+                <groupId>eu.inqudium</groupId>
+                <artifactId>inqudium-context-slf4j</artifactId>
+                <version>${revision}</version>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>flatten-maven-plugin</artifactId>
+                <configuration>
+                    <updatePomFile>true</updatePomFile>
+                    <flattenMode>bom</flattenMode>
+                    <outputDirectory>${project.build.directory}/flatten</outputDirectory>
+                </configuration>
+                <executions>
+                    <execution>
+                        <id>flatten</id>
+                        <phase>process-resources</phase>
+                        <goals>
+                            <goal>flatten</goal>
+                        </goals>
+                    </execution>
+                    <execution>
+                        <id>flatten.clean</id>
+                        <phase>clean</phase>
+                        <goals>
+                            <goal>clean</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+</project>
