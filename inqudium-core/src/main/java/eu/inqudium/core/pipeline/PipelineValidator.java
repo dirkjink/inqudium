@@ -112,9 +112,9 @@ public final class PipelineValidator {
 
         if (retryIndex >= 0 && cbIndex >= 0 && retryIndex < cbIndex) {
             warnings.add(
-                    "Retry ('" + elements.get(retryIndex).getName()
+                    "Retry ('" + elements.get(retryIndex).name()
                             + "') is outside CircuitBreaker ('"
-                            + elements.get(cbIndex).getName()
+                            + elements.get(cbIndex).name()
                             + "'). The circuit breaker will not see individual retry "
                             + "attempts — failure rate is based on the final outcome "
                             + "after all retries. Consider placing Retry innermost "
@@ -135,9 +135,9 @@ public final class PipelineValidator {
 
         if (tlIndex >= 0 && retryIndex >= 0 && tlIndex > retryIndex) {
             warnings.add(
-                    "TimeLimiter ('" + elements.get(tlIndex).getName()
+                    "TimeLimiter ('" + elements.get(tlIndex).name()
                             + "') is inside Retry ('"
-                            + elements.get(retryIndex).getName()
+                            + elements.get(retryIndex).name()
                             + "'). Each retry attempt has its own timeout, but total "
                             + "wait time across all attempts is unbounded. Consider "
                             + "placing TimeLimiter outermost (standard ordering).");
@@ -156,9 +156,9 @@ public final class PipelineValidator {
 
         if (bhIndex >= 0 && retryIndex >= 0 && bhIndex > retryIndex) {
             warnings.add(
-                    "Bulkhead ('" + elements.get(bhIndex).getName()
+                    "Bulkhead ('" + elements.get(bhIndex).name()
                             + "') is inside Retry ('"
-                            + elements.get(retryIndex).getName()
+                            + elements.get(retryIndex).name()
                             + "'). Each retry attempt acquires a new bulkhead permit — "
                             + "retries can exhaust bulkhead capacity. Consider placing "
                             + "Bulkhead outside Retry (standard ordering).");
@@ -177,9 +177,9 @@ public final class PipelineValidator {
 
         if (rlIndex >= 0 && retryIndex >= 0 && rlIndex > retryIndex) {
             warnings.add(
-                    "RateLimiter ('" + elements.get(rlIndex).getName()
+                    "RateLimiter ('" + elements.get(rlIndex).name()
                             + "') is inside Retry ('"
-                            + elements.get(retryIndex).getName()
+                            + elements.get(retryIndex).name()
                             + "'). Each retry attempt consumes a rate limit token — "
                             + "retries drain the token bucket faster than expected. "
                             + "Consider placing RateLimiter outside Retry "
@@ -191,7 +191,7 @@ public final class PipelineValidator {
 
     private static int indexOf(List<InqElement> elements, InqElementType type) {
         for (int i = 0; i < elements.size(); i++) {
-            if (elements.get(i).getElementType() == type) {
+            if (elements.get(i).elementType() == type) {
                 return i;
             }
         }

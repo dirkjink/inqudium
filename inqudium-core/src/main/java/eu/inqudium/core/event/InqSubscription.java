@@ -6,7 +6,7 @@ package eu.inqudium.core.event;
  * <p>Returned by {@link InqEventPublisher#onEvent} methods. Call {@link #cancel()}
  * to remove the consumer from the publisher:
  * <pre>{@code
- * InqSubscription sub = circuitBreaker.getEventPublisher()
+ * InqSubscription sub = circuitBreaker.eventPublisher()
  *     .onEvent(CircuitBreakerOnStateTransitionEvent.class, e -> log.info("transition"));
  *
  * // Later — unsubscribe

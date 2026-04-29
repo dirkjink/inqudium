@@ -103,7 +103,7 @@ public interface Bulkhead<A, R>
      * <p>Always returns {@link InqElementType#BULKHEAD}.</p>
      */
     @Override
-    default InqElementType getElementType() {
+    default InqElementType elementType() {
         return InqElementType.BULKHEAD;
     }
 }

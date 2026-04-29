@@ -63,17 +63,17 @@ class InqPipelineEndToEndTest {
         }
 
         @Override
-        public String getName() {
+        public String name() {
             return name;
         }
 
         @Override
-        public InqElementType getElementType() {
+        public InqElementType elementType() {
             return InqElementType.BULKHEAD;
         }
 
         @Override
-        public InqEventPublisher getEventPublisher() {
+        public InqEventPublisher eventPublisher() {
             return null;
         }
 
@@ -122,17 +122,17 @@ class InqPipelineEndToEndTest {
         }
 
         @Override
-        public String getName() {
+        public String name() {
             return name;
         }
 
         @Override
-        public InqElementType getElementType() {
+        public InqElementType elementType() {
             return InqElementType.CIRCUIT_BREAKER;
         }
 
         @Override
-        public InqEventPublisher getEventPublisher() {
+        public InqEventPublisher eventPublisher() {
             return null;
         }
 
@@ -255,7 +255,7 @@ class InqPipelineEndToEndTest {
 
             // Then
             assertThat(pipeline.elements())
-                    .extracting(InqElement::getName)
+                    .extracting(InqElement::name)
                     .containsExactly("bh", "cb");
             assertThat(pipeline.depth()).isEqualTo(2);
         }

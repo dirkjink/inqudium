@@ -121,7 +121,7 @@ public abstract class AbstractBaseWrapper<T, S extends AbstractBaseWrapper<T, S>
      * @return a formatted layer description string
      */
     protected static String newLayerDesc(InqElement decorator) {
-        return decorator.getElementType().name() + "(" + decorator.getName() + ")";
+        return decorator.elementType().name() + "(" + decorator.name() + ")";
     }
 
     /**

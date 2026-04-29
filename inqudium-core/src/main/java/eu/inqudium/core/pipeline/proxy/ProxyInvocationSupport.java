@@ -58,7 +58,7 @@ public final class ProxyInvocationSupport {
         } else {
             sb.append(pipeline.depth()).append(" elements: ");
             sb.append(pipeline.chain("target",
-                    (acc, element) -> element.getName() + " → " + acc));
+                    (acc, element) -> element.name() + " → " + acc));
         }
         sb.append(']');
         return sb.toString();

@@ -119,8 +119,8 @@ public final class HybridProxyPipelineTerminal {
     private static InqDecorator<?, ?> asDecorator(InqElement element) {
         if (element instanceof InqDecorator<?, ?> d) return d;
         throw new ClassCastException(
-                element.getClass().getName() + " ('" + element.getName()
-                        + "', type=" + element.getElementType()
+                element.getClass().getName() + " ('" + element.name()
+                        + "', type=" + element.elementType()
                         + ") does not implement InqDecorator. "
                         + "HybridProxyPipelineTerminal requires all elements to implement "
                         + "InqDecorator for sync methods.");
@@ -129,8 +129,8 @@ public final class HybridProxyPipelineTerminal {
     private static InqAsyncDecorator<?, ?> asAsyncDecorator(InqElement element) {
         if (element instanceof InqAsyncDecorator<?, ?> d) return d;
         throw new ClassCastException(
-                element.getClass().getName() + " ('" + element.getName()
-                        + "', type=" + element.getElementType()
+                element.getClass().getName() + " ('" + element.name()
+                        + "', type=" + element.elementType()
                         + ") does not implement InqAsyncDecorator. "
                         + "HybridProxyPipelineTerminal requires all elements to implement "
                         + "InqAsyncDecorator for async methods (returning CompletionStage).");

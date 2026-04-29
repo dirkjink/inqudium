@@ -21,8 +21,8 @@ import java.util.concurrent.CompletionStage;
  *
  * <p>The constructor uses an intersection type bound to enforce this at
  * compile time. The layer name is derived automatically from the element's
- * {@link InqElement#getElementType() type} and
- * {@link InqElement#getName() name}, e.g. {@code "BULKHEAD(paymentService)"}
+ * {@link InqElement#elementType() type} and
+ * {@link InqElement#name() name}, e.g. {@code "BULKHEAD(paymentService)"}
  * or {@code "RETRY(orderApi)"}.</p>
  *
  * <h3>Method filtering</h3>
@@ -95,8 +95,8 @@ public final class ElementLayerProvider implements AspectLayerProvider<Object> {
         this.element = element;
         this.layerAction = element::execute;
         this.order = order;
-        this.layerName = element.getElementType().name()
-                + "(" + element.getName() + ")";
+        this.layerName = element.elementType().name()
+                + "(" + element.name() + ")";
     }
 
     /**
@@ -113,7 +113,7 @@ public final class ElementLayerProvider implements AspectLayerProvider<Object> {
      * @throws NullPointerException if element is null
      */
     public <E extends InqElement & InqDecorator<Void, Object>> ElementLayerProvider(E element) {
-        this(element, element.getElementType().defaultPipelineOrder());
+        this(element, element.elementType().defaultPipelineOrder());
     }
 
     /**
@@ -135,7 +135,7 @@ public final class ElementLayerProvider implements AspectLayerProvider<Object> {
     public <E extends InqElement & InqDecorator<Void, Object>> ElementLayerProvider(
             E element, eu.inqudium.core.pipeline.PipelineOrdering ordering) {
         this(element, Objects.requireNonNull(ordering, "Ordering must not be null")
-                .orderFor(element.getElementType()));
+                .orderFor(element.elementType()));
     }
 
     @Override

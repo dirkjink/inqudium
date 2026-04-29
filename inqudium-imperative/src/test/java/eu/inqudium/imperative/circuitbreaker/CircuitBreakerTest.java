@@ -226,7 +226,7 @@ class CircuitBreakerTest {
             var cb = createCircuitBreaker(defaultConfig());
 
             // When / Then
-            assertThat(cb.getName()).isEqualTo("test-cb");
+            assertThat(cb.name()).isEqualTo("test-cb");
         }
     }
 

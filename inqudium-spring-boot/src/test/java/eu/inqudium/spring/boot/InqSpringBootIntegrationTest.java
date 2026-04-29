@@ -123,17 +123,17 @@ class InqSpringBootIntegrationTest {
         }
 
         @Override
-        public String getName() {
+        public String name() {
             return name;
         }
 
         @Override
-        public InqElementType getElementType() {
+        public InqElementType elementType() {
             return type;
         }
 
         @Override
-        public InqEventPublisher getEventPublisher() {
+        public InqEventPublisher eventPublisher() {
             return null;
         }
 
@@ -330,7 +330,7 @@ class InqSpringBootIntegrationTest {
 
         @Test
         void registry_contains_all_inq_element_beans() {
-            // Then — all six elements auto-discovered by getName()
+            // Then — all six elements auto-discovered by name()
             assertThat(registry.size()).isEqualTo(6);
             assertThat(registry.names()).containsExactlyInAnyOrder(
                     "orderCb", "orderRetry", "orderBh",

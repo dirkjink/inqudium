@@ -216,7 +216,7 @@ public final class RateLimiter implements AutoCloseable {
     }
 
     // Expose the publisher for consumer registration
-    public InqEventPublisher getEventPublisher() {
+    public InqEventPublisher eventPublisher() {
         return eventPublisher;
     }
 

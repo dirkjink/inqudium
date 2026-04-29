@@ -144,8 +144,8 @@ public final class AsyncPipelineTerminal {
             return decorator;
         }
         throw new ClassCastException(
-                element.getClass().getName() + " ('" + element.getName()
-                        + "', type=" + element.getElementType()
+                element.getClass().getName() + " ('" + element.name()
+                        + "', type=" + element.elementType()
                         + ") does not implement InqAsyncDecorator. "
                         + "AsyncPipelineTerminal requires all pipeline elements to "
                         + "implement InqAsyncDecorator<A, R>. For sync elements, use "
