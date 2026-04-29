@@ -784,3 +784,308 @@ maturity), the checklist should include explicitly:
 Process retrospective, not a code defect. The fix is to remember the lesson next time. No
 action needed in the bulkhead refactor itself — the companion finding (the actual
 preset-restoration) handles the substantive work.
+
+---
+
+## 2.17.1 — Inventory: which Function/Proxy wrappers exist in core + imperative
+
+**Bereich:** 2.17.1
+**Priorität:** info (Bestandsaufnahme, kein Defekt für sich)
+**Vorschlag:** Bleibt im Bericht, kein eigener Folge-Step. Dient als Referenz für 2.18 / 2.20.
+
+**Beobachtung:**
+
+Die Wrapper-Mechanismen sind nicht „Pre-Phase-1-Legacy" — sie wurden im Lauf des Refactors
+neu implementiert und leben in der Pipeline-Schicht des Core- und des Imperative-Moduls.
+
+Synchron, in `inqudium-core/src/main/java/eu/inqudium/core/pipeline/`:
+
+| Klasse                  | Aufgabe                                                                                     |
+|-------------------------|---------------------------------------------------------------------------------------------|
+| `LayerAction`           | Funktionales Interface — `execute(chainId, callId, argument, next)`, das around-advice.     |
+| `InqDecorator`          | `extends InqElement, LayerAction<A,R>` — markiert Element-konforme Around-Advice-Quellen.   |
+| `BaseWrapper`/`AbstractBaseWrapper` | Generische Wrapper-Basis, hält `LayerAction` als Feld.                          |
+| `RunnableWrapper`/`SupplierWrapper`/`CallableWrapper`/`FunctionWrapper`/`JoinPointWrapper` | Konkrete Wrapper. |
+| `SyncPipelineTerminal`  | Liste von `InqDecorator`s als Pipeline; `decorateXxx(...)` und `execute(JoinPointExecutor)`. |
+| `proxy/ProxyWrapper` + `AbstractProxyWrapper` | JDK-Proxy-Invocation-Handler, dispatch über `DispatchExtension[]`.   |
+| `proxy/InqProxyFactory` | User-Facing Single-Layer-Proxy-Factory (`of(name, LayerAction).protect(iface, target)`).    |
+| `proxy/ProxyPipelineTerminal` | Pipeline-basiert — wrappt jede Methode durch eine `SyncPipelineTerminal`-Pipeline.     |
+
+Asynchron, in `inqudium-imperative/src/main/java/eu/inqudium/imperative/core/pipeline/`:
+
+| Klasse                          | Aufgabe                                                                |
+|---------------------------------|------------------------------------------------------------------------|
+| `AsyncLayerAction`              | `executeAsync(chainId, callId, argument, nextStage) → CompletionStage`.|
+| `InqAsyncDecorator`             | Async-Pendant zu `InqDecorator`.                                       |
+| `AsyncBaseWrapper`              | Generische Async-Wrapper-Basis.                                        |
+| `AsyncRunnable/Supplier/Callable/Function/JoinPointWrapper` | Async-Konkretisierungen.                   |
+| `AsyncPipelineTerminal`         | Async-Pendant zu `SyncPipelineTerminal`.                               |
+| `InqAsyncProxyFactory`          | User-Facing Dual-Action-Proxy-Factory (sync + async).                  |
+| `HybridProxyPipelineTerminal`   | Pipeline-Proxy mit Auto-Routing nach Method-Return-Typ.                |
+
+Tests (`WrapperPipelineTest`, `SyncPipelineTerminalTest`, `JoinPointWrapperDynamicProxyTest`,
+`InqProxyFactorySyncTest`, `ProxyPipelineTerminalTest`, `ProxyChainBypassTest`,
+`ProxyChainCompositionTest`, `MethodHandleDispatchTest`, `ProxyObjectMethodsTest`,
+`ProxyCreationValidationTest`, `AsyncWrapperPipelineTest`, `AsyncPipelineTerminalTest`,
+`HybridProxyPipelineTerminalTest`, `InqProxyFactoryAsyncTest`, `ProxyWrapperTest`,
+`AsyncDispatchExtensionTypeSafetyTest`, `AbstractBaseWrapperInnerTypeSafetyTest`,
+`FinalWrapperHierarchyTest`) testen das Wrapper-/Proxy-Verhalten umfassend — aber
+ausschließlich gegen synthetische `LayerAction`/`AsyncLayerAction`-Lambdas. Kein Test
+verkettet ein reales `InqBulkhead` mit dieser Maschinerie.
+
+**Begründung der Priorität:**
+
+Die Inventarisierung selbst ist kein Defekt; sie ist die Grundlage für die nachfolgenden
+Befunde. Ohne sie lassen sich Drift-Aussagen nicht festnageln.
+
+---
+
+## 2.17.2 — `InqBulkhead` implementiert weder `InqElement` noch `InqDecorator`
+
+**Bereich:** 2.17.2
+**Priorität:** kritisch
+**Vorschlag:** Eigener Sub-Step zwischen 2.17 und 2.18 (oder Bestandteil von 2.18, falls die
+Reparatur dort natürlich anfällt). Routing ist Review-Entscheidung, nicht jetzt.
+
+**Beobachtung:**
+
+`InqDecorator<A,R>` (`inqudium-core/.../pipeline/InqDecorator.java:53`) ist definiert als:
+
+```java
+public interface InqDecorator<A, R> extends InqElement, LayerAction<A, R> { … }
+```
+
+Die Legacy-`Bulkhead`-Schnittstelle erfüllt diesen Vertrag (`inqudium-imperative/.../bulkhead/Bulkhead.java:53` —
+`extends InqDecorator<A, R>, …`), und die deprecated `ImperativeBulkhead<A, R>` implementiert sie.
+
+Die neue `InqBulkhead` (`inqudium-imperative/.../bulkhead/InqBulkhead.java:37-39`) hingegen:
+
+```java
+public final class InqBulkhead
+        extends ImperativeLifecyclePhasedComponent<BulkheadSnapshot>
+        implements ImperativeBulkhead { … }
+```
+
+`ImperativeLifecyclePhasedComponent`
+(`inqudium-imperative/.../lifecycle/ImperativeLifecyclePhasedComponent.java:61-62`) deklariert:
+
+```java
+public abstract class ImperativeLifecyclePhasedComponent<S extends ComponentSnapshot>
+        implements LifecycleAware, ListenerRegistry<S>, InternalMutabilityCheck<S> { … }
+```
+
+Weder `InqElement` (das `getName()`, `getElementType()`, `getEventPublisher()` fordert) noch
+`LayerAction` noch `InqDecorator` werden implementiert. `InqBulkhead` hat zwar die korrekte
+Methodensignatur — `public final <A,R> R execute(long chainId, long callId, A argument,
+InternalExecutor<A,R> next)` (geerbt aus dem Lifecycle-Base-Class, Zeilen 244–251) — aber
+strukturell typgleich ist sie nur, kein Interface bestätigt es.
+
+Folge:
+
+1. APIs, die einen `InqDecorator`-Bound erwarten, lehnen `InqBulkhead` ab. Konkretes Beispiel
+   außerhalb des 2.17-Scopes, aber als Drift-Indikator zentral:
+   `inqudium-aspect/.../pipeline/ElementLayerProvider.java:92` —
+   `<E extends InqElement & InqDecorator<Void, Object>> ElementLayerProvider(E element, int order)`.
+   Mit `new ElementLayerProvider(inqBulkhead, 100)` beschwert sich der Compiler („type
+   parameter `E` is not within bound").
+2. Im Core- und Imperative-Modul gibt es keinen alternativen, idiomatischen Weg, ein
+   `InqBulkhead` an eine `LayerAction`-empfangende API zu reichen. Der einzig funktionierende
+   Pfad ist die Methoden-Referenz `bulkhead::execute`, die syntaktisch ein
+   `LayerAction<A,R>` erzeugt — aber nirgends dokumentiert oder durch eine Helper-Methode
+   abgedeckt ist.
+3. Das deprecated `ImperativeBulkhead<A,R>` ist die einzige Klasse im Repo, die heute mit
+   `InqDecorator`-Bound-APIs benutzbar ist. Die Aspekt-Javadoc-Beispiele
+   (`inqudium-aspect/.../ElementLayerProvider.java:36-65`) zeigen genau das: `new
+   ImperativeBulkhead<>(cfg, strategy)`. Mit dem Lösch-Trigger der Legacy-Klasse fällt diese
+   Brücke ersatzlos weg, sofern `InqBulkhead` bis dahin den `InqDecorator`-Vertrag nicht
+   übernimmt — oder die Aspekt-Schicht von `InqDecorator` auf `LayerAction` umgestellt wird.
+
+**Begründung der Priorität:**
+
+Es ist ein struktureller Bruch zwischen dem Element-Beitrag von Phase 1 (`InqBulkhead`) und
+der Wrapper-/Proxy-/Aspekt-Plumbing, die seit Phase 0 auf `InqDecorator` codiert ist. Die
+Aspekt-Integration (2.18) trifft genau auf diese Wand. Solange kein Sub-Step ihn schließt —
+entweder durch Implementierung von `InqElement`/`LayerAction` auf
+`ImperativeLifecyclePhasedComponent` oder durch Aufweichen der `ElementLayerProvider`-Bound
+auf `LayerAction` — können neue Bulkheads nicht via Aspekt geschützt werden, was ein
+Kernfeature des bisherigen Aspekt-Moduls ist. „Kritisch", weil ohne diese Reparatur 2.18
+nicht abgeschlossen werden kann.
+
+---
+
+## 2.17.2 — Kein Helper konvertiert `InqBulkhead` in eine `LayerAction`
+
+**Bereich:** 2.17.2
+**Priorität:** wichtig
+**Vorschlag:** Aufnahme in den 2.17.2-Folge-Sub-Step (zusammen mit dem `InqDecorator`-Bruch),
+falls dieser kommt; alternativ Aufnahme in 2.20 als dokumentierter Usage-Pattern in den
+Integrations-Tests.
+
+**Beobachtung:**
+
+In `inqudium-core` und `inqudium-imperative` existiert kein Helper, keine Factory, kein
+Adapter, der ein `InqBulkhead` (oder allgemeiner: eine
+`ImperativeLifecyclePhasedComponent`-Subklasse) in eine `LayerAction<A,R>` verpackt. Der
+einzige Pfad ist die strukturelle Methoden-Referenz `bulkhead::execute`. Das funktioniert,
+weil die Methodensignatur passt — ist aber:
+
+- nirgends dokumentiert (keine Javadoc auf `InqBulkhead.execute(...)` weist darauf hin),
+- nirgends in einem Beispiel oder Test gezeigt,
+- nicht typsicher in Bezug auf den `InqDecorator`-Vertrag (siehe Vorbefund — Methoden-Referenz
+  bringt nur `LayerAction`-Typ, keinen `InqElement`-Anteil).
+
+Konkret: Will man `bulkhead::execute` an `InqProxyFactory.of(name, LayerAction)`
+(`inqudium-core/.../pipeline/proxy/InqProxyFactory.java`) übergeben, muss man den Namen
+separat aus `bulkhead` herauslesen — `InqBulkhead` selbst hat aber kein `getName()` (das
+gehörte zu `InqElement`). Stattdessen erbt es ein `name()` aus
+`ImperativeLifecyclePhasedComponent`. Die API-Asymmetrie macht den Adapter-Code für den
+Endnutzer holprig.
+
+**Begründung der Priorität:**
+
+Funktional umgehbar, aber das Fehlen eines geprüften, dokumentierten Bridge-Idioms ist die
+Drift-Wurzel: Solange es keine kanonische Antwort auf „wie reiche ich ein `InqBulkhead` an
+einen Wrapper" gibt, kann jede Integrations-Schicht (Aspekt, Spring, Annotation) sich eine
+eigene Lösung ausdenken — oder, wie heute, gar keine Brücke schlagen und faktisch nur mit
+der Legacy-API funktionieren.
+
+---
+
+## 2.17.3 — Lifecycle-Kompatibilität strukturell intakt, aber nicht test-bewiesen
+
+**Bereich:** 2.17.3
+**Priorität:** wichtig (positives Finding mit Test-Lücke)
+**Vorschlag:** Aufnahme der Test-Coverage in 2.20 (Bulkhead Integration Test Module). Dort
+explizit drei Szenarien:
+(a) Wrapper über cold→hot-Übergang,
+(b) Wrapper über Strategy-Hot-Swap zur Laufzeit,
+(c) Wrapper nach struktureller Removal (`ComponentRemovedException`).
+
+**Beobachtung:**
+
+Strukturell sind die Wrapper mit der neuen Architektur kompatibel — vorausgesetzt, der
+Bulkhead wird über die `bulkhead::execute`-Methodenreferenz in eine `LayerAction` gehoben:
+
+- **Cold→Hot:** Jeder Wrapper-Aufruf landet in `ImperativeLifecyclePhasedComponent.execute(...)`
+  (Zeilen 244–251), das `phase.get()` jedes Mal frisch liest.
+  `ColdPhase.execute(...)` (Zeilen 300–322) führt den CAS auf den Hot-Phase-Container durch
+  und delegiert. Der Wrapper merkt nichts vom Übergang — aus seiner Sicht ist es ein
+  gewöhnlicher `next.execute(...)`-Call.
+- **Strategy-Hot-Swap:** `BulkheadHotPhase.strategy` ist `volatile`
+  (`BulkheadHotPhase.java:105`). `BulkheadHotPhase.execute(...)` ruft `tryAcquire(...)` auf,
+  das `strategy` re-liest (Zeilen 176–187). Eine via Snapshot-Patch ausgetauschte Strategy
+  wird beim nächsten Wrapper-Aufruf aktiv. Wrapper cachen keine Strategy-Referenz, sondern
+  eine `LayerAction` — und diese ist (per Methodenreferenz) auf das Bulkhead-Objekt gebunden,
+  nicht auf eine Phase oder Strategy.
+- **Removal:** `ImperativeLifecyclePhasedComponent.execute(...)` (Zeile 247–248) prüft auf
+  `RemovedPhase` und wirft `ComponentRemovedException`. Auch hier: pro Aufruf, kein Caching
+  beim Wrapper.
+
+Der einzige Weg, in dem ein Wrapper „blind" für Lifecycle-Übergänge wäre, ist ein
+selbst-konstruierter `LayerAction`, der eine `BulkheadStrategy` direkt schließt:
+`(c, k, a, n) -> { strategy.acquire(...); … }`. Eine Suche danach in `inqudium-core` und
+`inqudium-imperative` Production-Code ergibt nichts; alle `LayerAction`-Lambda-Erzeugung
+außerhalb von Tests wäre einzig in `DefaultBulkheadProtection` (deprecated DSL) zu erwarten,
+ist aber dort auch nicht vorhanden.
+
+Das Problem: kein Test pinnt diese Eigenschaften für die Wrapper-Schicht fest.
+
+- `WrapperPipelineTest`, `SyncPipelineTerminalTest`, `ProxyChainCompositionTest`,
+  `InqProxyFactorySyncTest`, `ProxyPipelineTerminalTest`, `AsyncWrapperPipelineTest`,
+  `HybridProxyPipelineTerminalTest`, `InqProxyFactoryAsyncTest` etc. nutzen ausschließlich
+  synthetische `LayerAction`/`AsyncLayerAction`-Lambdas — kein einziges echtes
+  `InqBulkhead`.
+- `InqBulkheadTest` testet cold→hot, in-place semaphore tuning, removal — aber nur direkt
+  über `bulkhead.execute(...)`. Nie eingebettet in einen Wrapper, nie über einen Proxy.
+
+Wenn morgen jemand einen Caching-Adapter zwischen Bulkhead und Wrapper einführt (z. B.
+einen `LayerAction` aus einem konkreten `BulkheadHotPhase` extrahiert statt aus dem
+`InqBulkhead`-Handle), gibt es keinen Test, der den Hot-Swap-Verlust auffangen würde.
+
+**Begründung der Priorität:**
+
+Die Lifecycle-Kompatibilität ist heute korrekt — aber eine implizite Korrektheit, die auf
+Java-Methodenreferenz-Semantik beruht, ist genau das, was im Stress falsch wird, wenn jemand
+einen Adapter „optimiert". Die Test-Lücke ist die Form, in der die korrekte Eigenschaft als
+nicht-load-bearing wahrgenommen wird, bis sie es gewesen wäre. „Wichtig" statt „kritisch",
+weil heute keine Code-Änderung nötig ist; aber 2.20 muss die Eigenschaften ans Test-Netz
+nageln.
+
+---
+
+## 2.17.4 — Wrapper-/Proxy-Tests verwenden ausschließlich synthetische `LayerAction`s
+
+**Bereich:** 2.17.4
+**Priorität:** wichtig
+**Vorschlag:** Aufnahme in 2.20 (Bulkhead Integration Test Module). Mindestens je ein Test
+pro Wrapper-Familie, der das Wrapping eines via `Inqudium.configure()` aufgebauten
+`InqBulkhead` exerciert.
+
+**Beobachtung:**
+
+Eine systematische Sichtung der Wrapper-/Proxy-Tests in beiden Modulen zeigt: keiner baut
+eine reale `InqBulkhead` (`Inqudium.configure()...build()` oder ähnlich) und reicht sie an
+einen Wrapper / eine `SyncPipelineTerminal` / einen Proxy weiter. Belegstellen
+(repräsentativ, nicht erschöpfend):
+
+- `inqudium-core/src/test/java/eu/inqudium/core/pipeline/WrapperPipelineTest.java:43-128`:
+  alle Wrapper-Konstruktionen verwenden ad-hoc-Lambdas; `trackingAction(name, log)` als
+  hand-rolled `LayerAction`.
+- `inqudium-core/src/test/java/eu/inqudium/core/pipeline/proxy/ProxyChainCompositionTest.java:95-317`:
+  diverse `LayerAction<Void, Object> innerAction = (chainId, callId, arg, next) -> { … }`,
+  keine `InqBulkhead`-Referenz im File.
+- `inqudium-imperative/src/test/java/eu/inqudium/imperative/core/pipeline/AsyncWrapperPipelineTest.java:179`:
+  hand-rolled `AsyncLayerAction`.
+- Weder `decorate*` noch `bulkhead::execute` taucht in irgendeinem Test in
+  `inqudium-imperative/src/test/.../bulkhead/` auf.
+
+Im Gegenzug ist die Bulkhead-Lifecycle-Suite (`InqBulkheadTest`, `BulkheadRemovalTest`,
+`BulkheadHotPhaseStrategyMaterializationTest`, …) blind für die Wrapper-Schicht — sie ruft
+`bulkhead.execute(...)` direkt auf.
+
+Die zwei Test-Welten — Wrapper-Welt und Bulkhead-Welt — überlappen sich nicht. Das ist
+genau der Zustand, den 2.20 (laut REFACTORING.md Zeile 772–805) auflösen soll: ein
+Integrations-Test-Modul, das den Stack als Ganzes verifiziert.
+
+**Begründung der Priorität:**
+
+Das Findings-Catalog-Item als solches ist nur ein Coverage-Befund, keine sofortige
+Code-Drift. Die Priorität „wichtig" ergibt sich daraus, dass diese Lücke der Grund ist, warum
+die anderen 2.17-Findings (insb. 2.17.2 und 2.17.3) bisher unauffällig waren: ohne
+End-to-End-Test schlägt der Drift nicht an.
+
+---
+
+## 2.17 — Empfehlungen für nachfolgende Sub-Steps
+
+**Bereich:** 2.17 (Empfehlungs-Synopse)
+**Priorität:** info
+**Vorschlag:** Review-Diskussion direkt nach Abschluss von 2.17.
+
+Die 2.17-Findings legen folgende Routing-Hypothesen nahe — finale Zuteilung in der
+Review-Session:
+
+1. **Neuer Sub-Step zwischen 2.17 und 2.18: `InqDecorator`-/`LayerAction`-Brücke für
+   `InqBulkhead`.** Entweder `ImperativeLifecyclePhasedComponent` implementiert `InqElement` +
+   `LayerAction` (dann erfüllt jede Lifecycle-aware Komponente den Vertrag automatisch), oder
+   `ElementLayerProvider` bekommt einen zweiten Constructor mit `LayerAction`-Bound
+   (entkoppelt Aspect-Schicht von `InqDecorator`). Erste Variante ist invasiver, zweite
+   geringeres Blast-Radius — Trade-off ist Review-Entscheidung.
+
+2. **2.18 (AspectJ-Integration) muss explizit prüfen, ob `ElementLayerProvider` mit
+   `InqBulkhead` instanziierbar ist** — heute nicht der Fall. Falls Sub-Step 1 nicht zuerst
+   gemacht wird, bricht 2.18 strukturell.
+
+3. **2.20 (Integration-Test-Modul) absorbiert die Test-Coverage-Befunde** —
+   Wrapper-über-Lifecycle, Wrapper-über-Hot-Swap, Wrapper-nach-Removal. Drei dedizierte
+   Test-Klassen, die die Behauptungen aus 2.17.3 festschrauben.
+
+4. **Keine triviale Doku-Korrektur direkt in 2.17 erledigt** — die Javadoc-Beispiele in
+   `ElementLayerProvider` und `PipelineOrdering` zeigen `new ImperativeBulkhead<>(...)`, also
+   die deprecated Klasse. Eine Korrektur ist sinnvoll, aber erst nachdem Sub-Step 1
+   entschieden ist (sonst zeigt das Beispiel etwas Nicht-Compile-Bares).
+
+5. **Async-Lücke** (`InqBulkhead` ohne async-Variante, `TODO` an `InqBulkhead.java:178-184`):
+   bereits in 2.12.1-Findings („`InqBulkhead` hat keine asynchrone Variante") vermerkt. 2.17
+   bestätigt es als Wrapper-seitiges Symptom (`AsyncSupplierWrapper` & Co. haben keine
+   produktionsseitige Bulkhead-Quelle), fügt aber kein neues Action-Item hinzu.
