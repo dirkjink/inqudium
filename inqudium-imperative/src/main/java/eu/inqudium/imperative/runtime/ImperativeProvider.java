@@ -91,7 +91,13 @@ public final class ImperativeProvider implements ParadigmProvider {
             GeneralSnapshot general, String name, BulkheadPatch patch) {
         BulkheadSnapshot initial = patch.applyTo(defaultSnapshot(name));
         LiveContainer<BulkheadSnapshot> live = new LiveContainer<>(initial);
-        InqBulkhead bulkhead = new InqBulkhead(live, general);
+        // ADR-033 Stage 2: components served via the runtime registry are wildcard-typed in the
+        // Entry record because one bulkhead instance dispatches calls of any shape over its
+        // lifetime. Diamond inference picks up the wildcard target from the variable
+        // declaration, so the constructor stays diamond-style. Callers that need the typed
+        // entry point cast to InqBulkhead<A, R> at the call site (transitional until Stage 3
+        // widens the registry's return type to BulkheadHandle<ImperativeTag>).
+        InqBulkhead<?, ?> bulkhead = new InqBulkhead<>(live, general);
         return new DefaultImperative.Entry(bulkhead, live);
     }
 

@@ -54,8 +54,13 @@ public final class DefaultImperative implements Imperative {
      * Pair of a live bulkhead component and its backing live container. Stored together so the
      * update path can apply a patch via {@link LiveContainer#apply} without exposing the live
      * container through the public handle API.
+     *
+     * <p>The bulkhead's type parameters are intentionally wildcard-typed: the runtime registry
+     * serves a single component instance to callers of any call shape (ADR-033 Stage 2), so the
+     * record must not commit to a concrete instantiation. Type-aware consumers cast at their
+     * call site.
      */
-    public record Entry(InqBulkhead bulkhead, LiveContainer<BulkheadSnapshot> live) {
+    public record Entry(InqBulkhead<?, ?> bulkhead, LiveContainer<BulkheadSnapshot> live) {
         public Entry {
             Objects.requireNonNull(bulkhead, "bulkhead");
             Objects.requireNonNull(live, "live");

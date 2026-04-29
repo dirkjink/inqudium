@@ -42,7 +42,7 @@ class BulkheadHotPhaseStrategyMaterializationTest {
         return new GeneralSnapshotBuilder().build();
     }
 
-    private static InqBulkhead newBulkhead(BulkheadStrategyConfig strategy) {
+    private static InqBulkhead<String, String> newBulkhead(BulkheadStrategyConfig strategy) {
         return newBulkhead(strategy, 5).bulkhead;
     }
 
@@ -51,12 +51,12 @@ class BulkheadHotPhaseStrategyMaterializationTest {
                 "inventory", max, Duration.ofMillis(100), Set.of(), null,
                 BulkheadEventConfig.disabled(), strategy);
         LiveContainer<BulkheadSnapshot> live = new LiveContainer<>(snap);
-        return new Wired(new InqBulkhead(live, defaultGeneral()), live);
+        return new Wired(new InqBulkhead<>(live, defaultGeneral()), live);
     }
 
     /** Test fixture holding both the bulkhead and its live container so the transition-state
      *  test can apply a patch directly. */
-    private record Wired(InqBulkhead bulkhead, LiveContainer<BulkheadSnapshot> live) {
+    private record Wired(InqBulkhead<String, String> bulkhead, LiveContainer<BulkheadSnapshot> live) {
     }
 
     @Nested
@@ -70,7 +70,7 @@ class BulkheadHotPhaseStrategyMaterializationTest {
             // afterwards. Why important: confirms the factory's default branch wires a working
             // semaphore even after the hot-phase delegate refactor.
 
-            InqBulkhead bh = newBulkhead(new SemaphoreStrategyConfig());
+            InqBulkhead<String, String> bh = newBulkhead(new SemaphoreStrategyConfig());
 
             String result = bh.execute(1L, 1L, "x", IDENTITY);
 
@@ -83,7 +83,7 @@ class BulkheadHotPhaseStrategyMaterializationTest {
             // CoDel takes the same blocking path as Semaphore from the hot phase's perspective;
             // a normal call must complete identically.
 
-            InqBulkhead bh = newBulkhead(new CoDelStrategyConfig(
+            InqBulkhead<String, String> bh = newBulkhead(new CoDelStrategyConfig(
                     Duration.ofMillis(50), Duration.ofMillis(500)));
 
             String result = bh.execute(1L, 1L, "x", IDENTITY);
@@ -98,7 +98,7 @@ class BulkheadHotPhaseStrategyMaterializationTest {
                     5, 1, 100, 0.9,
                     Duration.ofSeconds(1), 0.05, true, 0.0);
 
-            InqBulkhead bh = newBulkhead(new AdaptiveStrategyConfig(aimd));
+            InqBulkhead<String, String> bh = newBulkhead(new AdaptiveStrategyConfig(aimd));
 
             String result = bh.execute(1L, 1L, "x", IDENTITY);
 
@@ -113,7 +113,7 @@ class BulkheadHotPhaseStrategyMaterializationTest {
                     Duration.ofSeconds(1), Duration.ofSeconds(2), Duration.ofSeconds(3),
                     0.05, 0.0);
 
-            InqBulkhead bh = newBulkhead(new AdaptiveStrategyConfig(vegas));
+            InqBulkhead<String, String> bh = newBulkhead(new AdaptiveStrategyConfig(vegas));
 
             String result = bh.execute(1L, 1L, "x", IDENTITY);
 
@@ -132,7 +132,7 @@ class BulkheadHotPhaseStrategyMaterializationTest {
                     5, 1, 100, 0.9,
                     Duration.ofSeconds(1), 0.05, true, 0.0);
 
-            InqBulkhead bh = newBulkhead(new AdaptiveNonBlockingStrategyConfig(aimd));
+            InqBulkhead<String, String> bh = newBulkhead(new AdaptiveNonBlockingStrategyConfig(aimd));
 
             String result = bh.execute(1L, 1L, "x", IDENTITY);
 
@@ -147,7 +147,7 @@ class BulkheadHotPhaseStrategyMaterializationTest {
                     Duration.ofSeconds(1), Duration.ofSeconds(2), Duration.ofSeconds(3),
                     0.05, 0.0);
 
-            InqBulkhead bh = newBulkhead(new AdaptiveNonBlockingStrategyConfig(vegas));
+            InqBulkhead<String, String> bh = newBulkhead(new AdaptiveNonBlockingStrategyConfig(vegas));
 
             String result = bh.execute(1L, 1L, "x", IDENTITY);
 
@@ -167,7 +167,7 @@ class BulkheadHotPhaseStrategyMaterializationTest {
             // factory unit test; this is the end-to-end variant that exercises
             // bh.availablePermits().
 
-            InqBulkhead bh = newBulkhead(new SemaphoreStrategyConfig(), 17).bulkhead;
+            InqBulkhead<String, String> bh = newBulkhead(new SemaphoreStrategyConfig(), 17).bulkhead;
 
             // Warm — the cold accessor reads from the snapshot, so warm first to confirm the
             // hot-side accessor agrees.
@@ -194,7 +194,7 @@ class BulkheadHotPhaseStrategyMaterializationTest {
             // limit changes for every Semaphore-strategy bulkhead.
 
             Wired wired = newBulkhead(new SemaphoreStrategyConfig(), 5);
-            InqBulkhead bh = wired.bulkhead;
+            InqBulkhead<String, String> bh = wired.bulkhead;
             bh.execute(1L, 1L, "warm", IDENTITY);
 
             assertThat(bh.availablePermits()).isEqualTo(5);
@@ -223,7 +223,7 @@ class BulkheadHotPhaseStrategyMaterializationTest {
             // ("snapshot updates but running strategy does not"); the contract is now flipped.
 
             Wired wired = newBulkhead(new SemaphoreStrategyConfig(), 5);
-            InqBulkhead bh = wired.bulkhead;
+            InqBulkhead<String, String> bh = wired.bulkhead;
             bh.execute(1L, 1L, "warm", IDENTITY);
             assertThat(bh.availablePermits()).isEqualTo(5);
 
