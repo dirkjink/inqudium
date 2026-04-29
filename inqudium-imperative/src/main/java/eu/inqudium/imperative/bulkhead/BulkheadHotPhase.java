@@ -90,11 +90,11 @@ import java.util.Set;
  * semaphore variant, or ignores the change when the active strategy is not in-place tunable
  * (the mutability check vetoes such patches before they reach the live container).
  */
-final class BulkheadHotPhase
-        implements ImperativePhase, HotPhaseMarker, PostCommitInitializable,
+final class BulkheadHotPhase<A, R>
+        implements ImperativePhase<A, R>, HotPhaseMarker, PostCommitInitializable,
         InternalMutabilityCheck<BulkheadSnapshot>, ShutdownAware {
 
-    private final InqBulkhead component;
+    private final InqBulkhead<A, R> component;
     /**
      * The active strategy. Volatile so the snapshot-change handler can swap the reference
      * atomically while in-flight calls retain their already-read strategy: a single volatile
@@ -111,7 +111,7 @@ final class BulkheadHotPhase
      */
     private volatile AutoCloseable subscription;
 
-    BulkheadHotPhase(InqBulkhead component, BulkheadSnapshot snapshot) {
+    BulkheadHotPhase(InqBulkhead<A, R> component, BulkheadSnapshot snapshot) {
         // Constructor stays side-effect-free per ADR-029 — no publishes, no subscriptions, no
         // resource acquisition that survives garbage collection. Discarded candidates under CAS
         // contention will be GC'd without any cleanup work. Strategy materialization runs through
@@ -128,7 +128,7 @@ final class BulkheadHotPhase
      * always goes through the snapshot-based constructor, which materializes a real strategy via
      * {@link BulkheadStrategyFactory}.
      */
-    BulkheadHotPhase(InqBulkhead component, BulkheadStrategy strategy) {
+    BulkheadHotPhase(InqBulkhead<A, R> component, BulkheadStrategy strategy) {
         this.component = component;
         this.strategy = strategy;
     }
@@ -327,7 +327,7 @@ final class BulkheadHotPhase
     }
 
     @Override
-    public <A, R> R execute(
+    public R execute(
             long chainId, long callId, A argument, InternalExecutor<A, R> next) {
         BulkheadSnapshot snap = component.snapshot();
         BulkheadEventConfig events = snap.events();

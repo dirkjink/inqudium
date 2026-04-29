@@ -54,9 +54,12 @@ class ImperativeLifecyclePhasedComponentTest {
      * Test component with optional contention coordination. The hot phase optionally implements
      * PostCommitInitializable, and the construction can wait on a barrier so the test forces every
      * thread to finish constructing its hot candidate before any thread reaches the CAS.
+     *
+     * <p>Parametrised on the call type so the existing tests that exercise the component with
+     * {@code String} arguments stay strongly typed under ADR-033's type-level phase generics.
      */
     private static final class TestComponent
-            extends ImperativeLifecyclePhasedComponent<BulkheadSnapshot> {
+            extends ImperativeLifecyclePhasedComponent<BulkheadSnapshot, String, String> {
 
         final AtomicInteger hotPhaseConstructions = new AtomicInteger();
         final AtomicInteger afterCommitInvocations = new AtomicInteger();
@@ -78,9 +81,9 @@ class ImperativeLifecyclePhasedComponentTest {
         }
 
         @Override
-        protected ImperativePhase createHotPhase() {
+        protected ImperativePhase<String, String> createHotPhase() {
             hotPhaseConstructions.incrementAndGet();
-            ImperativePhase phase = hotPhaseImplementsPostCommit
+            ImperativePhase<String, String> phase = hotPhaseImplementsPostCommit
                     ? new TestHotPhaseWithPostCommit()
                     : new TestHotPhase();
             // Force every concurrent constructor to converge here before any thread is allowed to
@@ -100,10 +103,11 @@ class ImperativeLifecyclePhasedComponentTest {
             return phase;
         }
 
-        class TestHotPhase implements ImperativePhase, HotPhaseMarker {
+        class TestHotPhase implements ImperativePhase<String, String>, HotPhaseMarker {
             @Override
-            public <A, R> R execute(
-                    long chainId, long callId, A argument, InternalExecutor<A, R> next) {
+            public String execute(
+                    long chainId, long callId, String argument,
+                    InternalExecutor<String, String> next) {
                 return next.execute(chainId, callId, argument);
             }
         }
@@ -149,14 +153,14 @@ class ImperativeLifecyclePhasedComponentTest {
         @Test
         void should_reject_a_null_name() {
             // Given / When / Then
-            assertThatNullPointerException().isThrownBy(() -> new ImperativeLifecyclePhasedComponent<BulkheadSnapshot>(
+            assertThatNullPointerException().isThrownBy(() -> new ImperativeLifecyclePhasedComponent<BulkheadSnapshot, Object, Object>(
                     null,
                     InqElementType.BULKHEAD,
                     new LiveContainer<>(defaultSnapshot()),
                     publisher,
                     InqClock.system()) {
                 @Override
-                protected ImperativePhase createHotPhase() {
+                protected ImperativePhase<Object, Object> createHotPhase() {
                     return null;
                 }
             }).withMessageContaining("name");
@@ -165,14 +169,14 @@ class ImperativeLifecyclePhasedComponentTest {
         @Test
         void should_reject_a_null_element_type() {
             // Given / When / Then
-            assertThatNullPointerException().isThrownBy(() -> new ImperativeLifecyclePhasedComponent<BulkheadSnapshot>(
+            assertThatNullPointerException().isThrownBy(() -> new ImperativeLifecyclePhasedComponent<BulkheadSnapshot, Object, Object>(
                     "n",
                     null,
                     new LiveContainer<>(defaultSnapshot()),
                     publisher,
                     InqClock.system()) {
                 @Override
-                protected ImperativePhase createHotPhase() {
+                protected ImperativePhase<Object, Object> createHotPhase() {
                     return null;
                 }
             }).withMessageContaining("elementType");
@@ -181,14 +185,14 @@ class ImperativeLifecyclePhasedComponentTest {
         @Test
         void should_reject_a_null_live_container() {
             // Given / When / Then
-            assertThatNullPointerException().isThrownBy(() -> new ImperativeLifecyclePhasedComponent<BulkheadSnapshot>(
+            assertThatNullPointerException().isThrownBy(() -> new ImperativeLifecyclePhasedComponent<BulkheadSnapshot, Object, Object>(
                     "n",
                     InqElementType.BULKHEAD,
                     null,
                     publisher,
                     InqClock.system()) {
                 @Override
-                protected ImperativePhase createHotPhase() {
+                protected ImperativePhase<Object, Object> createHotPhase() {
                     return null;
                 }
             }).withMessageContaining("live");
@@ -197,14 +201,14 @@ class ImperativeLifecyclePhasedComponentTest {
         @Test
         void should_reject_a_null_event_publisher() {
             // Given / When / Then
-            assertThatNullPointerException().isThrownBy(() -> new ImperativeLifecyclePhasedComponent<BulkheadSnapshot>(
+            assertThatNullPointerException().isThrownBy(() -> new ImperativeLifecyclePhasedComponent<BulkheadSnapshot, Object, Object>(
                     "n",
                     InqElementType.BULKHEAD,
                     new LiveContainer<>(defaultSnapshot()),
                     null,
                     InqClock.system()) {
                 @Override
-                protected ImperativePhase createHotPhase() {
+                protected ImperativePhase<Object, Object> createHotPhase() {
                     return null;
                 }
             }).withMessageContaining("eventPublisher");
@@ -213,14 +217,14 @@ class ImperativeLifecyclePhasedComponentTest {
         @Test
         void should_reject_a_null_clock() {
             // Given / When / Then
-            assertThatNullPointerException().isThrownBy(() -> new ImperativeLifecyclePhasedComponent<BulkheadSnapshot>(
+            assertThatNullPointerException().isThrownBy(() -> new ImperativeLifecyclePhasedComponent<BulkheadSnapshot, Object, Object>(
                     "n",
                     InqElementType.BULKHEAD,
                     new LiveContainer<>(defaultSnapshot()),
                     publisher,
                     null) {
                 @Override
-                protected ImperativePhase createHotPhase() {
+                protected ImperativePhase<Object, Object> createHotPhase() {
                     return null;
                 }
             }).withMessageContaining("clock");
@@ -577,7 +581,7 @@ class ImperativeLifecyclePhasedComponentTest {
      * direct {@code Instant.now()} call.
      */
     private static final class ClockOverriddenComponent
-            extends ImperativeLifecyclePhasedComponent<BulkheadSnapshot> {
+            extends ImperativeLifecyclePhasedComponent<BulkheadSnapshot, String, String> {
 
         ClockOverriddenComponent(InqEventPublisher publisher, InqClock clock) {
             super(
@@ -589,11 +593,12 @@ class ImperativeLifecyclePhasedComponentTest {
         }
 
         @Override
-        protected ImperativePhase createHotPhase() {
-            class Hot implements ImperativePhase, HotPhaseMarker {
+        protected ImperativePhase<String, String> createHotPhase() {
+            class Hot implements ImperativePhase<String, String>, HotPhaseMarker {
                 @Override
-                public <A, R> R execute(
-                        long chainId, long callId, A argument, InternalExecutor<A, R> next) {
+                public String execute(
+                        long chainId, long callId, String argument,
+                        InternalExecutor<String, String> next) {
                     return next.execute(chainId, callId, argument);
                 }
             }

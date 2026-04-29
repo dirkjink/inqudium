@@ -56,9 +56,18 @@ import java.util.concurrent.atomic.AtomicReference;
  * <p>The {@link ListenerRegistry} interface is implemented so the phase-2 update dispatcher in
  * {@code inqudium-config} can iterate listeners through a paradigm-agnostic reference.
  *
+ * <p>The {@code A}/{@code R} type parameters propagate the call's argument and return shape into
+ * the phase reference and into the {@link #execute(long, long, Object, InternalExecutor) execute}
+ * signature (ADR-033). Components that dispatch calls of arbitrary shape — such as
+ * {@code InqBulkhead} accessed via the runtime registry — instantiate at
+ * {@code <S, Object, Object>} so the inherited execute reduces to the type-erased form callers
+ * already use.
+ *
  * @param <S> the component's snapshot type.
+ * @param <A> the call argument type flowing through the chain.
+ * @param <R> the call return type flowing back through the chain.
  */
-public abstract class ImperativeLifecyclePhasedComponent<S extends ComponentSnapshot>
+public abstract class ImperativeLifecyclePhasedComponent<S extends ComponentSnapshot, A, R>
         implements LifecycleAware, ListenerRegistry<S>, InternalMutabilityCheck<S> {
 
     private final String name;
@@ -67,7 +76,7 @@ public abstract class ImperativeLifecyclePhasedComponent<S extends ComponentSnap
     private final InqEventPublisher eventPublisher;
     private final InqClock clock;
     private final CopyOnWriteArrayList<ChangeRequestListener<S>> listeners;
-    private final AtomicReference<ImperativePhase> phase;
+    private final AtomicReference<ImperativePhase<A, R>> phase;
 
     /**
      * @param name           the component's stable name; non-null.
@@ -93,7 +102,7 @@ public abstract class ImperativeLifecyclePhasedComponent<S extends ComponentSnap
         this.clock = Objects.requireNonNull(clock, "clock");
         this.listeners = new CopyOnWriteArrayList<>();
         this.phase = new AtomicReference<>(new ColdPhase());
-        this.removedPhase = new RemovedPhase(this.name, this.elementType);
+        this.removedPhase = new RemovedPhase<>(this.name, this.elementType);
     }
 
     /**
@@ -107,11 +116,11 @@ public abstract class ImperativeLifecyclePhasedComponent<S extends ComponentSnap
      *
      * @return a new hot phase. Must implement {@link ImperativePhase} and {@link HotPhaseMarker}.
      */
-    protected abstract ImperativePhase createHotPhase();
+    protected abstract ImperativePhase<A, R> createHotPhase();
 
     @Override
     public final LifecycleState lifecycleState() {
-        ImperativePhase current = phase.get();
+        ImperativePhase<A, R> current = phase.get();
         if (current instanceof RemovedPhase) {
             throw new ComponentRemovedException(name, elementType);
         }
@@ -127,7 +136,7 @@ public abstract class ImperativeLifecyclePhasedComponent<S extends ComponentSnap
         // Hot phase: delegate to the phase if it implements the check. Concrete components
         // (BulkheadHotPhase et al.) opt in by implementing InternalMutabilityCheck<S>; phases
         // that do not implement it inherit the conservative accept.
-        ImperativePhase current = phase.get();
+        ImperativePhase<A, R> current = phase.get();
         if (current instanceof InternalMutabilityCheck<?> check) {
             // The phase, when it implements the check, must do so for the same snapshot type S
             // by construction — concrete components extend
@@ -189,7 +198,7 @@ public abstract class ImperativeLifecyclePhasedComponent<S extends ComponentSnap
      * has been accepted; never called from user code.
      */
     public final void markRemoved() {
-        ImperativePhase current = phase.get();
+        ImperativePhase<A, R> current = phase.get();
         if (current instanceof RemovedPhase) {
             return;
         }
@@ -237,13 +246,11 @@ public abstract class ImperativeLifecyclePhasedComponent<S extends ComponentSnap
      * @param callId   the call identifier.
      * @param argument the argument flowing through the chain.
      * @param next     the next executor in the chain.
-     * @param <A>      the argument type.
-     * @param <R>      the return type.
      * @return the value produced by the chain after passing through this component.
      */
-    public final <A, R> R execute(
+    public final R execute(
             long chainId, long callId, A argument, InternalExecutor<A, R> next) {
-        ImperativePhase current = phase.get();
+        ImperativePhase<A, R> current = phase.get();
         if (current instanceof RemovedPhase) {
             throw new ComponentRemovedException(name, elementType);
         }
@@ -288,7 +295,7 @@ public abstract class ImperativeLifecyclePhasedComponent<S extends ComponentSnap
      *         instance, a bulkhead that returns its hot strategy's available permits when hot,
      *         or the snapshot's max permits when cold.
      */
-    protected final ImperativePhase currentPhase() {
+    protected final ImperativePhase<A, R> currentPhase() {
         return phase.get();
     }
 
@@ -297,12 +304,12 @@ public abstract class ImperativeLifecyclePhasedComponent<S extends ComponentSnap
      * unreachable. Non-static so it can read the enclosing component's {@code phase} field
      * directly — this is the whole point of the inner-class form.
      */
-    private final class ColdPhase implements ImperativePhase {
+    private final class ColdPhase implements ImperativePhase<A, R> {
 
         @Override
-        public <A, R> R execute(
+        public R execute(
                 long chainId, long callId, A argument, InternalExecutor<A, R> next) {
-            ImperativePhase hot = createHotPhase();
+            ImperativePhase<A, R> hot = createHotPhase();
             if (phase.compareAndSet(this, hot)) {
                 eventPublisher.publish(new ComponentBecameHotEvent(
                         chainId, callId, name, elementType, clock.instant()));
@@ -323,9 +330,12 @@ public abstract class ImperativeLifecyclePhasedComponent<S extends ComponentSnap
      * component's real identity captured at construction time.
      *
      * <p>Static nested form rather than non-static inner because Java's pattern-matching
-     * {@code instanceof RemovedPhase} cannot safely refine a generic outer's inner type.
+     * {@code instanceof RemovedPhase} cannot safely refine a generic outer's inner type. The
+     * sentinel's type parameters are present only for type-homogeneity of the {@code phase}
+     * reference; its {@link #execute execute} body throws unconditionally and never produces an
+     * {@code R} value.
      */
-    private static final class RemovedPhase implements ImperativePhase {
+    private static final class RemovedPhase<A, R> implements ImperativePhase<A, R> {
 
         private final String componentName;
         private final InqElementType componentElementType;
@@ -336,13 +346,13 @@ public abstract class ImperativeLifecyclePhasedComponent<S extends ComponentSnap
         }
 
         @Override
-        public <A, R> R execute(
+        public R execute(
                 long chainId, long callId, A argument, InternalExecutor<A, R> next) {
             throw new ComponentRemovedException(componentName, componentElementType);
         }
     }
 
-    private final RemovedPhase removedPhase;
+    private final RemovedPhase<A, R> removedPhase;
 
     /**
      * Marker interface for hot phases that need to release resources at structural removal —

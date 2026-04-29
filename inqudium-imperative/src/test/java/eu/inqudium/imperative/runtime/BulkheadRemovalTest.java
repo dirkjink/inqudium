@@ -16,6 +16,7 @@ import eu.inqudium.config.validation.BuildReport;
 import eu.inqudium.config.validation.VetoFinding;
 import eu.inqudium.core.element.InqElementType;
 import eu.inqudium.core.pipeline.InternalExecutor;
+import eu.inqudium.imperative.bulkhead.InqBulkhead;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -53,7 +54,9 @@ class BulkheadRemovalTest {
                     .imperative(im -> im.bulkhead("inventory", b -> b.balanced()))
                     .build()) {
 
-                ImperativeBulkhead bh = runtime.imperative().bulkhead("inventory");
+                @SuppressWarnings("unchecked")
+                InqBulkhead<String, String> bh =
+                        (InqBulkhead<String, String>) runtime.imperative().bulkhead("inventory");
                 bh.execute(1L, 1L, "warm", IDENTITY);
 
                 // When
@@ -152,7 +155,9 @@ class BulkheadRemovalTest {
                     .imperative(im -> im.bulkhead("inventory", b -> b.balanced()))
                     .build()) {
 
-                ImperativeBulkhead bh = runtime.imperative().bulkhead("inventory");
+                @SuppressWarnings("unchecked")
+                InqBulkhead<String, String> bh =
+                        (InqBulkhead<String, String>) runtime.imperative().bulkhead("inventory");
                 bh.execute(1L, 1L, "warm", IDENTITY);
                 runtime.update(u -> u.imperative(im -> im.removeBulkhead("inventory")));
 
@@ -168,7 +173,9 @@ class BulkheadRemovalTest {
                     .imperative(im -> im.bulkhead("inventory", b -> b.balanced()))
                     .build()) {
 
-                ImperativeBulkhead bh = runtime.imperative().bulkhead("inventory");
+                @SuppressWarnings("unchecked")
+                InqBulkhead<String, String> bh =
+                        (InqBulkhead<String, String>) runtime.imperative().bulkhead("inventory");
                 runtime.update(u -> u.imperative(im -> im.removeBulkhead("inventory")));
 
                 assertThatThrownBy(bh::snapshot)
@@ -183,7 +190,9 @@ class BulkheadRemovalTest {
                     .imperative(im -> im.bulkhead("inventory", b -> b.balanced()))
                     .build()) {
 
-                ImperativeBulkhead bh = runtime.imperative().bulkhead("inventory");
+                @SuppressWarnings("unchecked")
+                InqBulkhead<String, String> bh =
+                        (InqBulkhead<String, String>) runtime.imperative().bulkhead("inventory");
                 runtime.update(u -> u.imperative(im -> im.removeBulkhead("inventory")));
 
                 assertThatThrownBy(bh::availablePermits)
@@ -197,7 +206,9 @@ class BulkheadRemovalTest {
                     .imperative(im -> im.bulkhead("inventory", b -> b.balanced()))
                     .build()) {
 
-                ImperativeBulkhead bh = runtime.imperative().bulkhead("inventory");
+                @SuppressWarnings("unchecked")
+                InqBulkhead<String, String> bh =
+                        (InqBulkhead<String, String>) runtime.imperative().bulkhead("inventory");
                 runtime.update(u -> u.imperative(im -> im.removeBulkhead("inventory")));
 
                 assertThatThrownBy(bh::concurrentCalls)
@@ -211,7 +222,9 @@ class BulkheadRemovalTest {
                     .imperative(im -> im.bulkhead("inventory", b -> b.balanced()))
                     .build()) {
 
-                ImperativeBulkhead bh = runtime.imperative().bulkhead("inventory");
+                @SuppressWarnings("unchecked")
+                InqBulkhead<String, String> bh =
+                        (InqBulkhead<String, String>) runtime.imperative().bulkhead("inventory");
                 runtime.update(u -> u.imperative(im -> im.removeBulkhead("inventory")));
 
                 assertThatThrownBy(bh::lifecycleState)
@@ -229,7 +242,9 @@ class BulkheadRemovalTest {
                     .imperative(im -> im.bulkhead("inventory", b -> b.balanced()))
                     .build()) {
 
-                ImperativeBulkhead bh = runtime.imperative().bulkhead("inventory");
+                @SuppressWarnings("unchecked")
+                InqBulkhead<String, String> bh =
+                        (InqBulkhead<String, String>) runtime.imperative().bulkhead("inventory");
                 runtime.update(u -> u.imperative(im -> im.removeBulkhead("inventory")));
 
                 ComponentRemovedException ex =
@@ -256,7 +271,9 @@ class BulkheadRemovalTest {
                             b -> b.balanced().maxConcurrentCalls(15)))
                     .build()) {
 
-                ImperativeBulkhead bh = runtime.imperative().bulkhead("inventory");
+                @SuppressWarnings("unchecked")
+                InqBulkhead<String, String> bh =
+                        (InqBulkhead<String, String>) runtime.imperative().bulkhead("inventory");
                 bh.execute(1L, 1L, "warm", IDENTITY);
                 bh.onChangeRequest(new ChangeRequestListener<BulkheadSnapshot>() {
                     @Override
@@ -309,7 +326,9 @@ class BulkheadRemovalTest {
                     .imperative(im -> im.bulkhead("inventory", b -> b.balanced()))
                     .build()) {
 
-                ImperativeBulkhead bh = runtime.imperative().bulkhead("inventory");
+                @SuppressWarnings("unchecked")
+                InqBulkhead<String, String> bh =
+                        (InqBulkhead<String, String>) runtime.imperative().bulkhead("inventory");
                 bh.execute(1L, 1L, "warm", IDENTITY);
                 // SAM-form lambda — only overrides decide; decideRemoval inherits accept.
                 bh.onChangeRequest(req -> ChangeDecision.veto("vetoes every patch"));
@@ -343,7 +362,9 @@ class BulkheadRemovalTest {
                     .imperative(im -> im.bulkhead("inventory", b -> b.balanced()))
                     .build()) {
 
-                ImperativeBulkhead bh = runtime.imperative().bulkhead("inventory");
+                @SuppressWarnings("unchecked")
+                InqBulkhead<String, String> bh =
+                        (InqBulkhead<String, String>) runtime.imperative().bulkhead("inventory");
                 AutoCloseable handle = bh.onChangeRequest(req -> ChangeDecision.accept());
                 runtime.update(u -> u.imperative(im -> im.removeBulkhead("inventory")));
 
@@ -398,7 +419,9 @@ class BulkheadRemovalTest {
                             .bulkhead("b", b -> b.balanced()))
                     .build()) {
 
-                ImperativeBulkhead a = runtime.imperative().bulkhead("a");
+                @SuppressWarnings("unchecked")
+                InqBulkhead<String, String> a =
+                        (InqBulkhead<String, String>) runtime.imperative().bulkhead("a");
                 a.execute(1L, 1L, "warm", IDENTITY);
                 a.onChangeRequest(new ChangeRequestListener<BulkheadSnapshot>() {
                     @Override

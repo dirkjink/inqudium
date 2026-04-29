@@ -14,6 +14,7 @@ import eu.inqudium.config.validation.ApplyOutcome;
 import eu.inqudium.config.validation.BuildReport;
 import eu.inqudium.config.validation.VetoFinding;
 import eu.inqudium.core.pipeline.InternalExecutor;
+import eu.inqudium.imperative.bulkhead.InqBulkhead;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -52,7 +53,9 @@ class BulkheadHotSwapTest {
                     .imperative(im -> im.bulkhead("inventory", b -> b.balanced()))
                     .build()) {
 
-                ImperativeBulkhead bh = runtime.imperative().bulkhead("inventory");
+                @SuppressWarnings("unchecked")
+                InqBulkhead<String, String> bh =
+                        (InqBulkhead<String, String>) runtime.imperative().bulkhead("inventory");
                 bh.execute(1L, 1L, "warm", IDENTITY);
                 assertThat(bh.snapshot().strategy())
                         .isInstanceOf(SemaphoreStrategyConfig.class);
@@ -81,7 +84,9 @@ class BulkheadHotSwapTest {
                     .imperative(im -> im.bulkhead("inventory", b -> b.balanced()))
                     .build()) {
 
-                ImperativeBulkhead bh = runtime.imperative().bulkhead("inventory");
+                @SuppressWarnings("unchecked")
+                InqBulkhead<String, String> bh =
+                        (InqBulkhead<String, String>) runtime.imperative().bulkhead("inventory");
                 bh.execute(1L, 1L, "warm", IDENTITY);
 
                 runtime.update(u -> u.imperative(im -> im.bulkhead("inventory", b -> b
@@ -124,7 +129,9 @@ class BulkheadHotSwapTest {
                     .imperative(im -> im.bulkhead("inventory", b -> b.balanced()))
                     .build()) {
 
-                ImperativeBulkhead bh = runtime.imperative().bulkhead("inventory");
+                @SuppressWarnings("unchecked")
+                InqBulkhead<String, String> bh =
+                        (InqBulkhead<String, String>) runtime.imperative().bulkhead("inventory");
                 CountDownLatch holding = new CountDownLatch(1);
                 CountDownLatch acquired = new CountDownLatch(1);
                 InternalExecutor<String, String> blocking = (cid, callId, arg) -> {
@@ -181,7 +188,9 @@ class BulkheadHotSwapTest {
                     .imperative(im -> im.bulkhead("inventory", b -> b.balanced()))
                     .build()) {
 
-                ImperativeBulkhead bh = runtime.imperative().bulkhead("inventory");
+                @SuppressWarnings("unchecked")
+                InqBulkhead<String, String> bh =
+                        (InqBulkhead<String, String>) runtime.imperative().bulkhead("inventory");
                 bh.execute(1L, 1L, "warm", IDENTITY);
                 bh.onChangeRequest(req -> ChangeDecision.veto(
                         "policy: strategy locked by listener"));
@@ -223,7 +232,9 @@ class BulkheadHotSwapTest {
                     .imperative(im -> im.bulkhead("inventory", b -> b.balanced()))
                     .build()) {
 
-                ImperativeBulkhead bh = runtime.imperative().bulkhead("inventory");
+                @SuppressWarnings("unchecked")
+                InqBulkhead<String, String> bh =
+                        (InqBulkhead<String, String>) runtime.imperative().bulkhead("inventory");
                 bh.execute(1L, 1L, "warm", IDENTITY);
                 assertThat(bh.snapshot().strategy())
                         .isInstanceOf(SemaphoreStrategyConfig.class);

@@ -15,6 +15,7 @@ import eu.inqudium.config.snapshot.VegasLimitAlgorithmConfig;
 import eu.inqudium.config.validation.ApplyOutcome;
 import eu.inqudium.config.validation.BuildReport;
 import eu.inqudium.core.pipeline.InternalExecutor;
+import eu.inqudium.imperative.bulkhead.InqBulkhead;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -113,7 +114,9 @@ class BulkheadStrategyDslEndToEndTest {
                                     .interval(Duration.ofMillis(500)))))
                     .build()) {
 
-                ImperativeBulkhead bh = runtime.imperative().bulkhead("inventory");
+                @SuppressWarnings("unchecked")
+                InqBulkhead<String, String> bh =
+                        (InqBulkhead<String, String>) runtime.imperative().bulkhead("inventory");
                 String result = bh.execute(1L, 1L, "x", IDENTITY);
 
                 assertThat(result).isEqualTo("x");
@@ -138,7 +141,9 @@ class BulkheadStrategyDslEndToEndTest {
                     .imperative(im -> im.bulkhead("inventory", b -> b.balanced()))
                     .build()) {
 
-                ImperativeBulkhead bh = runtime.imperative().bulkhead("inventory");
+                @SuppressWarnings("unchecked")
+                InqBulkhead<String, String> bh =
+                        (InqBulkhead<String, String>) runtime.imperative().bulkhead("inventory");
                 bh.execute(1L, 1L, "warm", IDENTITY);
 
                 BuildReport report = runtime.update(u -> u.imperative(im -> im

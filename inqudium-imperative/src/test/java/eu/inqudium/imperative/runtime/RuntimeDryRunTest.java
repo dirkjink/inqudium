@@ -18,6 +18,7 @@ import eu.inqudium.config.validation.BuildReport;
 import eu.inqudium.config.validation.VetoFinding;
 import eu.inqudium.core.event.InqEvent;
 import eu.inqudium.core.pipeline.InternalExecutor;
+import eu.inqudium.imperative.bulkhead.InqBulkhead;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -56,7 +57,9 @@ class RuntimeDryRunTest {
                             b -> b.balanced().maxConcurrentCalls(15)))
                     .build()) {
 
-                ImperativeBulkhead bh = runtime.imperative().bulkhead("inventory");
+                @SuppressWarnings("unchecked")
+                InqBulkhead<String, String> bh =
+                        (InqBulkhead<String, String>) runtime.imperative().bulkhead("inventory");
 
                 // When
                 BuildReport report = runtime.dryRun(u -> u.imperative(im -> im
@@ -139,7 +142,9 @@ class RuntimeDryRunTest {
                     .imperative(im -> im.bulkhead("inventory", b -> b.balanced()))
                     .build()) {
 
-                ImperativeBulkhead bh = runtime.imperative().bulkhead("inventory");
+                @SuppressWarnings("unchecked")
+                InqBulkhead<String, String> bh =
+                        (InqBulkhead<String, String>) runtime.imperative().bulkhead("inventory");
                 bh.execute(1L, 1L, "warm", IDENTITY);
 
                 BuildReport report = runtime.dryRun(u -> u.imperative(im -> im
@@ -188,7 +193,9 @@ class RuntimeDryRunTest {
                             b -> b.balanced().maxConcurrentCalls(15)))
                     .build()) {
 
-                ImperativeBulkhead bh = runtime.imperative().bulkhead("inventory");
+                @SuppressWarnings("unchecked")
+                InqBulkhead<String, String> bh =
+                        (InqBulkhead<String, String>) runtime.imperative().bulkhead("inventory");
                 bh.execute(1L, 1L, "warm", IDENTITY);
                 bh.onChangeRequest(req -> ChangeDecision.veto("policy: limits frozen"));
 
@@ -214,7 +221,9 @@ class RuntimeDryRunTest {
                     .imperative(im -> im.bulkhead("inventory", b -> b.balanced()))
                     .build()) {
 
-                ImperativeBulkhead bh = runtime.imperative().bulkhead("inventory");
+                @SuppressWarnings("unchecked")
+                InqBulkhead<String, String> bh =
+                        (InqBulkhead<String, String>) runtime.imperative().bulkhead("inventory");
                 bh.execute(1L, 1L, "warm", IDENTITY);
                 bh.onChangeRequest(new ChangeRequestListener<BulkheadSnapshot>() {
                     @Override
@@ -265,7 +274,9 @@ class RuntimeDryRunTest {
                     .build()) {
 
                 // Warm gamma so a hot-patch listener veto can engage.
-                ImperativeBulkhead gamma = runtime.imperative().bulkhead("gamma");
+                @SuppressWarnings("unchecked")
+                InqBulkhead<String, String> gamma =
+                        (InqBulkhead<String, String>) runtime.imperative().bulkhead("gamma");
                 gamma.execute(1L, 1L, "warm", IDENTITY);
                 gamma.onChangeRequest(req -> ChangeDecision.veto("frozen"));
 
@@ -311,7 +322,9 @@ class RuntimeDryRunTest {
                             .bulkhead("inventory", b -> b.balanced().maxConcurrentCalls(15)))
                     .build()) {
 
-                ImperativeBulkhead bh = runtime.imperative().bulkhead("inventory");
+                @SuppressWarnings("unchecked")
+                InqBulkhead<String, String> bh =
+                        (InqBulkhead<String, String>) runtime.imperative().bulkhead("inventory");
                 bh.execute(1L, 1L, "warm", IDENTITY);
 
                 BuildReport first = runtime.dryRun(u -> u.imperative(im -> im

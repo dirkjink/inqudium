@@ -11,6 +11,7 @@ import eu.inqudium.config.validation.ApplyOutcome;
 import eu.inqudium.config.validation.BuildReport;
 import eu.inqudium.config.validation.VetoFinding;
 import eu.inqudium.core.pipeline.InternalExecutor;
+import eu.inqudium.imperative.bulkhead.InqBulkhead;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -51,7 +52,9 @@ class BulkheadLiveTunabilityTest {
                     .imperative(im -> im.bulkhead("inventory", b -> b.balanced()))
                     .build()) {
 
-                ImperativeBulkhead bh = runtime.imperative().bulkhead("inventory");
+                @SuppressWarnings("unchecked")
+                InqBulkhead<String, String> bh =
+                        (InqBulkhead<String, String>) runtime.imperative().bulkhead("inventory");
                 bh.execute(1L, 1L, "warm", IDENTITY);
 
                 BuildReport report = runtime.update(u -> u.imperative(im -> im
@@ -76,7 +79,9 @@ class BulkheadLiveTunabilityTest {
                                     .interval(Duration.ofMillis(500)))))
                     .build()) {
 
-                ImperativeBulkhead bh = runtime.imperative().bulkhead("inventory");
+                @SuppressWarnings("unchecked")
+                InqBulkhead<String, String> bh =
+                        (InqBulkhead<String, String>) runtime.imperative().bulkhead("inventory");
                 bh.execute(1L, 1L, "warm", IDENTITY);
 
                 BuildReport report = runtime.update(u -> u.imperative(im -> im
@@ -101,7 +106,9 @@ class BulkheadLiveTunabilityTest {
                             .adaptive(a -> a.aimd(x -> x.initialLimit(7)))))
                     .build()) {
 
-                ImperativeBulkhead bh = runtime.imperative().bulkhead("inventory");
+                @SuppressWarnings("unchecked")
+                InqBulkhead<String, String> bh =
+                        (InqBulkhead<String, String>) runtime.imperative().bulkhead("inventory");
                 bh.execute(1L, 1L, "warm", IDENTITY);
 
                 BuildReport report = runtime.update(u -> u.imperative(im -> im
@@ -133,7 +140,9 @@ class BulkheadLiveTunabilityTest {
                                     .interval(Duration.ofMillis(500)))))
                     .build()) {
 
-                ImperativeBulkhead bh = runtime.imperative().bulkhead("inventory");
+                @SuppressWarnings("unchecked")
+                InqBulkhead<String, String> bh =
+                        (InqBulkhead<String, String>) runtime.imperative().bulkhead("inventory");
                 bh.execute(1L, 1L, "warm", IDENTITY);
 
                 BuildReport report = runtime.update(u -> u.imperative(im -> im
@@ -166,7 +175,9 @@ class BulkheadLiveTunabilityTest {
                                     .interval(Duration.ofMillis(500)))))
                     .build()) {
 
-                ImperativeBulkhead bh = runtime.imperative().bulkhead("inventory");
+                @SuppressWarnings("unchecked")
+                InqBulkhead<String, String> bh =
+                        (InqBulkhead<String, String>) runtime.imperative().bulkhead("inventory");
                 CountDownLatch holding = new CountDownLatch(1);
                 CountDownLatch acquired = new CountDownLatch(1);
                 InternalExecutor<String, String> blocking = (cid, callId, arg) -> {
