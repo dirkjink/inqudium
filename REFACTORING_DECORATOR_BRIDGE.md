@@ -2,6 +2,8 @@
 
 **Audience:** Claude Code, executing the refactoring work, plus the human reviewer.
 
+**Implemented (Stages 1, 2, 3)**
+
 **Scope:** Implementation of ADR-033 (pipeline integration of lifecycle-aware
 components). This is a standalone refactor that runs in parallel to the
 Phase 2 closure sequence in `REFACTORING.md`. It must complete before
