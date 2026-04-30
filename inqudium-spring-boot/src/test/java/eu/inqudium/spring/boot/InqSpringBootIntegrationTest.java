@@ -71,7 +71,6 @@ class InqSpringBootIntegrationTest {
     // =========================================================================
 
     @SpringBootApplication
-    @org.springframework.context.annotation.Import(InqAutoConfiguration.class)
     static class TestApplication {
 
         // --- Element beans: auto-discovered by InqAutoConfiguration ---
