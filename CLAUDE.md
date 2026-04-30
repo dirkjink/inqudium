@@ -73,6 +73,13 @@ All tests are JUnit 5 with AssertJ. Any new test Claude writes must follow this 
   - in kotlin use backticks. Example: \`should open the circuit after the failure threshold is reached\`.
 
 - **Grouping** via `@Nested` inner classes for categories (e.g. a "State transitions" nested class, a "Thread safety" nested class).
+  Spring Boot test isolation caveat: When a test class uses an inner static @Configuration to scope its bean topology
+  (a common pattern with @SpringBootTest), avoid wrapping the test methods in @Nested inner classes. Spring Boot's
+  TestTypeExcludeFilter walks getEnclosingClassName() recursively and stops recognizing the inner @Configuration as
+  test-internal once non-static @Nested test classes appear at the same nesting level. The result: that @Configuration
+  leaks into the component scan of other @SpringBootTest classes, with cascading bean-conflict failures.
+  Keep such test classes flat.
+
 - **AssertJ only** (`assertThat(...)`). No JUnit `assertEquals`, no Hamcrest.
 - **Deterministic time.** Inject `InqNanoTimeSource` or `InqClock` from an `AtomicLong`/`AtomicReference`. Never `Thread.sleep`.
 - Tests should be thorough. Cover happy path, edge cases, error conditions, and concurrency where relevant.

@@ -30,25 +30,33 @@ import java.util.Objects;
  * use {@link ElementLayerProvider} instead.</p>
  *
  * <h3>Usage</h3>
+ * <p>The async aspect counterpart accepts any element implementing {@link InqAsyncDecorator}.
+ * Note that the imperative bulkhead does <em>not</em> currently implement
+ * {@code InqAsyncDecorator} — ADR-033 carves the asynchronous bulkhead out for a dedicated
+ * future ADR. Until that ADR lands, async pipelines compose the components that already
+ * speak the async contract (retry, time-limiter, etc.) and leave the bulkhead to the
+ * synchronous side via {@link ElementLayerProvider}:</p>
  * <pre>{@code
- * ImperativeBulkhead<Void, Object> bulkhead = new ImperativeBulkhead<>(cfg, strategy);
- * ImperativeRetry<Void, Object>    retry    = new ImperativeRetry<>(retryCfg);
+ * InqRuntime runtime = Inqudium.configure()
+ *         .imperative(im -> im
+ *                 .retry("paymentRetry", r -> r.attempts(3)))
+ *         .build();
+ *
+ * InqElement paymentRetry = (InqElement) runtime.imperative().retry("paymentRetry");
  *
  * // Standard ordering — derived from InqElementType.defaultPipelineOrder()
  * @Aspect
  * public class AsyncResilienceAspect extends AbstractAsyncPipelineAspect {
  *     public AsyncResilienceAspect() {
  *         super(List.of(
- *             new AsyncElementLayerProvider(bulkhead),
- *             new AsyncElementLayerProvider(retry)
+ *             new AsyncElementLayerProvider(paymentRetry)
  *         ));
  *     }
  * }
  *
- * // Custom ordering — explicit override
+ * // Explicit-order override
  * super(List.of(
- *     new AsyncElementLayerProvider(bulkhead),
- *     new AsyncElementLayerProvider(retry, 150)
+ *     new AsyncElementLayerProvider(paymentRetry, 150)
  * ));
  * }</pre>
  *

@@ -33,36 +33,44 @@ import java.util.concurrent.CompletionStage;
  * {@link AsyncElementLayerProvider} instead.</p>
  *
  * <h3>Usage</h3>
+ * <p>Construct the underlying components through the {@code Inqudium.configure()} runtime
+ * builder, then look up each handle via the runtime and pass it to {@code ElementLayerProvider}
+ * — the handles are real {@code InqDecorator}s after ADR-033, no wrapping required:</p>
  * <pre>{@code
- * ImperativeBulkhead<Void, Object> bulkhead = new ImperativeBulkhead<>(cfg, strategy);
- * ImperativeRetry<Void, Object>    retry    = new ImperativeRetry<>(retryCfg);
- * ImperativeTimeout<Void, Object>  timeout  = new ImperativeTimeout<>(toCfg);
+ * InqRuntime runtime = Inqudium.configure()
+ *         .imperative(im -> im
+ *                 .bulkhead("paymentBh", b -> b.balanced())
+ *                 .retry("paymentRetry", r -> r.attempts(3)))
+ *         .build();
+ *
+ * InqElement paymentBh    = (InqElement) runtime.imperative().bulkhead("paymentBh");
+ * InqElement paymentRetry = (InqElement) runtime.imperative().retry("paymentRetry");
  *
  * // Standard ordering — derived from InqElementType.defaultPipelineOrder():
- * // BULKHEAD(100) → RETRY(400) → TIME_LIMITER(500)
+ * // BULKHEAD(100) → RETRY(400)
  * super(List.of(
- *     new ElementLayerProvider(bulkhead),
- *     new ElementLayerProvider(retry),
- *     new ElementLayerProvider(timeout)
+ *     new ElementLayerProvider(paymentBh),
+ *     new ElementLayerProvider(paymentRetry)
  * ));
  *
  * // Resilience4j ordering — via PipelineOrdering profile:
- * // RETRY(100) → TIME_LIMITER(400) → BULKHEAD(500)
+ * // RETRY(100) → BULKHEAD(500)
  * PipelineOrdering r4j = PipelineOrdering.resilience4j();
  * super(List.of(
- *     new ElementLayerProvider(bulkhead, r4j),
- *     new ElementLayerProvider(retry, r4j),
- *     new ElementLayerProvider(timeout, r4j)
+ *     new ElementLayerProvider(paymentBh, r4j),
+ *     new ElementLayerProvider(paymentRetry, r4j)
  * ));
  *
- * // Single element override — timeout outside retry:
- * // BULKHEAD(100) → TIME_LIMITER(350) → RETRY(400)
+ * // Explicit-order override — pin a specific layer's position numerically:
  * super(List.of(
- *     new ElementLayerProvider(bulkhead),
- *     new ElementLayerProvider(timeout, 350),
- *     new ElementLayerProvider(retry)
+ *     new ElementLayerProvider(paymentBh),
+ *     new ElementLayerProvider(paymentRetry, 350)
  * ));
  * }</pre>
+ *
+ * <p>The legacy {@code new ImperativeBulkhead<>(cfg, strategy)} construction path no longer
+ * exists: bulkheads are owned by an {@link eu.inqudium.config.runtime.InqRuntime} and obtained
+ * by name from the runtime's paradigm container.</p>
  *
  * @see AsyncElementLayerProvider
  * @since 0.8.0
