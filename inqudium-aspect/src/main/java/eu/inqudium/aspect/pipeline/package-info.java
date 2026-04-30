@@ -33,6 +33,21 @@
  *       base class that caches an {@code AsyncResolvedPipeline} per {@code Method}.</li>
  * </ul>
  *
+ * <h3>ADR-033 decorator bridge</h3>
+ * <p>Lifecycle-aware components such as
+ * {@link eu.inqudium.imperative.bulkhead.InqBulkhead} are themselves
+ * {@link eu.inqudium.core.pipeline.InqDecorator}s — their layer action is the inherited
+ * {@link eu.inqudium.core.pipeline.LayerAction#execute LayerAction.execute(...)} the
+ * lifecycle base class fulfils. The aspect-pipeline classes consume these handles directly:
+ * pass an {@code InqBulkhead} to {@link eu.inqudium.aspect.pipeline.ElementLayerProvider}
+ * and the cold/hot transition, the strategy hot-swap, and structural removal flow through
+ * the aspect path with no extra adapter. Async pendants are out of scope of ADR-033 and
+ * will arrive with a dedicated ADR; until then,
+ * {@link eu.inqudium.aspect.pipeline.AsyncElementLayerProvider} only accepts elements that
+ * already implement
+ * {@link eu.inqudium.imperative.core.pipeline.InqAsyncDecorator}, which the bulkhead
+ * deliberately does not.</p>
+ *
  * <p>This module depends on {@code inqudium-core} for the wrapper infrastructure,
  * {@code inqudium-imperative} for the async pipeline classes,
  * and on AspectJ for the advice annotations.</p>

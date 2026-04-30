@@ -259,7 +259,7 @@ public class ResilienceConfig {
 
 ### Spring Boot (auto-configuration)
 
-Add `inqudium-spring-boot` — everything is automatic:
+Add `inqudium-spring-boot` and declare your runtime plus each component handle as a `@Bean`. Auto-configuration discovers the `InqElement` beans, registers them by name, and wires them through the aspect — so once your beans exist there is no further glue code:
 
 ```xml
 
@@ -274,19 +274,28 @@ Add `inqudium-spring-boot` — everything is automatic:
 @Configuration
 public class ResilienceConfig {
 
-    @Bean
-    public CircuitBreaker paymentCb() {
-        return CircuitBreaker.of(config);
+    @Bean(destroyMethod = "close")
+    public InqRuntime inqRuntime() {
+        return Inqudium.configure()
+                .imperative(im -> im
+                        .bulkhead("paymentBh", b -> b.balanced())
+                        .retry("paymentRetry", r -> r.attempts(3)))
+                .build();
     }
 
     @Bean
-    public Retry paymentRt() {
-        return Retry.of(config);
+    public InqElement paymentBh(InqRuntime runtime) {
+        return (InqElement) runtime.imperative().bulkhead("paymentBh");
+    }
+
+    @Bean
+    public InqElement paymentRetry(InqRuntime runtime) {
+        return (InqElement) runtime.imperative().retry("paymentRetry");
     }
 }
 ```
 
-`InqAutoConfiguration` discovers all `InqElement` beans, registers them by `getName()`, and creates the
+`InqAutoConfiguration` discovers all `InqElement` beans, registers them by `name()`, and creates the
 `InqShieldAspect`. Override the auto-configured registry with your own `@Bean`:
 
 ```java

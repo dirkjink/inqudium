@@ -1,0 +1,148 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xmlns="http://maven.apache.org/POM/4.0.0"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <groupId>eu.inqudium</groupId>
+        <artifactId>inqudium-parent</artifactId>
+        <version>${revision}</version>
+    </parent>
+
+    <artifactId>inqudium-bulkhead-integration-tests</artifactId>
+    <name>Inqudium :: Bulkhead :: Integration Tests</name>
+    <description>
+        End-to-end integration tests that exercise the imperative bulkhead as a complete
+        stack across all integration variants — DSL configuration, function and proxy
+        wrappers, AspectJ aspect, and Spring Boot auto-configuration. The module produces
+        no production artifact; it exists solely to pin the cross-module behaviours that
+        no single module's own test suite can cover. Test classes also serve as readable,
+        executable documentation of the typical end-user usage patterns.
+    </description>
+
+    <dependencies>
+
+        <!-- ========================= -->
+        <!--  Modules under test       -->
+        <!-- ========================= -->
+        <dependency>
+            <groupId>eu.inqudium</groupId>
+            <artifactId>inqudium-core</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>eu.inqudium</groupId>
+            <artifactId>inqudium-config</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>eu.inqudium</groupId>
+            <artifactId>inqudium-imperative</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>eu.inqudium</groupId>
+            <artifactId>inqudium-aspect</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>eu.inqudium</groupId>
+            <artifactId>inqudium-spring</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>eu.inqudium</groupId>
+            <artifactId>inqudium-spring-boot</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>eu.inqudium</groupId>
+            <artifactId>inqudium-annotation</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <!-- ========================= -->
+        <!--  AspectJ runtime          -->
+        <!-- ========================= -->
+        <dependency>
+            <groupId>org.aspectj</groupId>
+            <artifactId>aspectjrt</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.aspectj</groupId>
+            <artifactId>aspectjweaver</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <!-- ========================= -->
+        <!--  Spring (Boot) test       -->
+        <!-- ========================= -->
+        <dependency>
+            <groupId>org.springframework</groupId>
+            <artifactId>spring-context</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework</groupId>
+            <artifactId>spring-aop</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-autoconfigure</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-aspectj</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <!-- ========================= -->
+        <!--  Test                     -->
+        <!-- ========================= -->
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.assertj</groupId>
+            <artifactId>assertj-core</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+    </dependencies>
+
+    <build>
+        <plugins>
+            <!-- Skip install/deploy — this module produces no reusable artifact -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-install-plugin</artifactId>
+                <configuration>
+                    <skip>true</skip>
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-deploy-plugin</artifactId>
+                <configuration>
+                    <skip>true</skip>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+
+</project>

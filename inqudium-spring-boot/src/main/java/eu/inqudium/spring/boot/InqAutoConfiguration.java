@@ -27,20 +27,31 @@ import java.util.List;
  * </ol>
  *
  * <h3>Usage</h3>
- * <p>Add {@code inqudium-spring} to your classpath — auto-configuration
- * activates automatically. Define your elements as Spring beans:</p>
+ * <p>Add {@code inqudium-spring-boot} to your classpath — auto-configuration activates
+ * automatically. Components live on an {@link eu.inqudium.config.runtime.InqRuntime} which
+ * you declare as a Spring bean; expose each component handle as an {@link InqElement} bean
+ * so auto-configuration discovers it:</p>
  * <pre>{@code
  * @Configuration
  * public class ResilienceConfig {
  *
- *     @Bean
- *     public CircuitBreaker paymentCb() {
- *         return CircuitBreaker.of(config);  // name() returns "paymentCb"
+ *     @Bean(destroyMethod = "close")
+ *     public InqRuntime inqRuntime() {
+ *         return Inqudium.configure()
+ *                 .imperative(im -> im
+ *                         .bulkhead("paymentBh", b -> b.balanced())
+ *                         .retry("paymentRetry", r -> r.attempts(3)))
+ *                 .build();
  *     }
  *
  *     @Bean
- *     public Retry paymentRetry() {
- *         return Retry.of(config);  // name() returns "paymentRetry"
+ *     public InqElement paymentBh(InqRuntime runtime) {
+ *         return (InqElement) runtime.imperative().bulkhead("paymentBh");
+ *     }
+ *
+ *     @Bean
+ *     public InqElement paymentRetry(InqRuntime runtime) {
+ *         return (InqElement) runtime.imperative().retry("paymentRetry");
  *     }
  * }
  * }</pre>
@@ -50,13 +61,18 @@ import java.util.List;
  * @Service
  * public class PaymentService {
  *
- *     @InqCircuitBreaker("paymentCb")
+ *     @InqBulkhead("paymentBh")
  *     @InqRetry("paymentRetry")
  *     public PaymentResult processPayment(PaymentRequest request) {
  *         return remoteService.call(request);
  *     }
  * }
  * }</pre>
+ *
+ * <p>The legacy {@code CircuitBreaker.of(config)} / {@code Retry.of(config)} static
+ * factories no longer exist: every component is materialized through the runtime
+ * builder, and the corresponding {@code @Bean InqElement} method is what makes the
+ * handle discoverable to auto-configuration.</p>
  *
  * <h3>Customization</h3>
  * <p>Define your own {@link InqElementRegistry} bean to override the
