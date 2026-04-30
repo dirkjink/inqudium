@@ -250,10 +250,37 @@ TODO.md so it is not lost when the class itself is read or when the deprecated
 **Scope:** Imperative paradigm. Other paradigms (reactive, RxJava, coroutines) have their
 own native async forms and do not face this exact gap.
 
+**Concrete consequences observed in audit 2.18:** The aspect module's hybrid and async
+paths require both `InqDecorator` and `InqAsyncDecorator` contracts on every pipeline
+element. `InqBulkhead` implements only `InqDecorator`. Two specific consequences:
+
+- `HybridAspectPipelineTerminal.of(InqPipeline)` validates eagerly in its constructor that
+  every pipeline element implements both contracts (audit 2.18 finding F-2.18-1). Any
+  pipeline containing an `InqBulkhead` throws `ClassCastException` on construction, even
+  when the intercepted method is synchronous and the hybrid async path is never entered
+  at runtime. The eager validation is a defensible design choice for a hybrid terminal —
+  but it makes hybrid dispatch unusable with bulkhead until the async variant exists or
+  the validation is made lazy.
+
+- `AsyncElementLayerProvider`'s constructor type bound is
+  `<E extends InqElement & InqAsyncDecorator<Void, Object>>` (audit 2.18 finding
+  F-2.18-2). This rejects `InqBulkhead` at compile time. Today only the deprecated
+  `Bulkhead` / `ImperativeBulkhead` pair satisfies the bound. Async aspect setups using
+  bulkhead are pinned to deprecated types until the async variant lands; users cannot
+  migrate off the deprecated pair without losing async aspect support.
+
+Both consequences resolve when the async variant of `InqBulkhead` is introduced.
+Alternative partial mitigations (loosening hybrid eager validation, dual constructors on
+`AsyncElementLayerProvider`) exist but each carries its own design trade-offs and would
+need their own decision in the async-variant ADR.
+
 **Why we deferred it:** The async path is a substantial new feature, not a bug fix. It
 warrants its own ADR (lifecycle interaction with deferred subscription is non-trivial),
 and the legacy class still exists as a bridge. Closing it is appropriate work for after
-the bulkhead pattern is otherwise complete and other patterns are being addressed.
+the bulkhead pattern is otherwise complete and other patterns are being addressed. The
+audit-2.18 consequences above sharpen the urgency: as long as deprecated `Bulkhead` /
+`ImperativeBulkhead` exists, users have a working migration path; once removal of those
+deprecated types is scheduled, the async variant must land first.
 
 ---
 
