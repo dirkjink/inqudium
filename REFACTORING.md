@@ -786,6 +786,43 @@ The Spring integration module and the Spring Boot starter against the new archit
   hot? Is shutdown coordinated with Spring's context shutdown?
 - Example application or integration tests demonstrating the typical usage pattern.
 
+### 2.19a Spring Boot auto-configuration descriptor and conditional gating
+
+A small, locally-scoped fix derived from audit 2.19. Three pieces of work, all sitting
+in `inqudium-spring-boot`:
+
+- **Add the missing Spring Boot 3+ auto-configuration descriptor.** The file
+  `inqudium-spring-boot/src/main/resources/META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports`
+  does not exist today; create it with the single line
+  `eu.inqudium.spring.boot.InqAutoConfiguration`. Without this file Spring Boot's
+  `@EnableAutoConfiguration` does not discover the auto-configuration class, and the
+  user-guide's promise of *"everything is automatic"* fails silently — users only notice
+  when their `@InqShield` annotations have no effect (audit 2.19 finding F-2.19-1).
+- **Strengthen `InqCustomRegistryTest` so it actually tests
+  `@ConditionalOnMissingBean`.** The current test passes for the wrong reason: because
+  auto-discovery itself fails (consequence of the missing descriptor), there is no
+  competing bean for `@ConditionalOnMissingBean` to gate against. Once the descriptor is
+  in place, the test must be re-shaped to demonstrate the override semantics deterministically:
+  a user-supplied `InqElementRegistry` with one element stays intact, an additional
+  `@Bean InqElement` in the test config does not get auto-added to the user registry, but
+  is reachable as a bean directly. Concrete shape in audit 2.19 finding F-2.19-2.
+- **Add `@ConditionalOnClass` to `InqAutoConfiguration`** to gate activation on the
+  presence of `Inqudium` (or another representative core class). This protects a project
+  that adds `inqudium-spring-boot` to the classpath without `inqudium-core` — admittedly a
+  rare configuration, but the gating is conventional Spring Boot hygiene and costs almost
+  nothing to add (audit 2.19 finding F-2.19-3).
+
+This sub-step is **not** in `inqudium-bulkhead-integration-tests` (sub-step 2.20). It is a
+production-side fix to `inqudium-spring-boot` itself: a missing classpath resource and
+two test/annotation refinements that complete the auto-configuration story before the
+integration tests in 2.20 exercise it. After 2.19a, sub-step 2.20 can construct realistic
+Spring Boot test scenarios without working around the discovery gap.
+
+The Javadoc and user-guide doc-patches identified in 2.19 (findings F-2.19-8 and the
+documentation half of F-2.19-9 — *"everything is automatic"* needs nuancing to *"…once
+you declare your elements as `@Bean`s"*) are deferred to 2.20, where the integration
+tests produce concrete code shapes that the documentation can mirror.
+
 ### 2.20 Bulkhead integration test module
 
 A new module — `inqudium-bulkhead-integration-tests` — that exercises the bulkhead as a
@@ -869,13 +906,17 @@ top-to-bottom.
 
 ### Phase 2 closure
 
-After 2.11 through 2.20 are complete and reviewed:
+After 2.11 through 2.20 (including 2.19a) are complete and reviewed:
 
 - `REFACTORING.md` is deleted. Its purpose is fulfilled.
 - `REFACTORING_DECORATOR_BRIDGE.md` is deleted alongside (the ADR-033 implementation
   document — see the cross-reference between sub-step 2.17 and 2.18).
 - `AUDIT_FINDINGS.md` is already gone — its findings have been routed to their respective
   destinations (TODO.md, sub-step 2.20 above, ADR-033) before this Phase 2 closure point.
+- The audit reports under `docs/audit/` (`2.18-aspectj-integration.md`,
+  `2.19-spring-integration.md`, plus any later additions) are deleted alongside. They
+  served as routing-decision records during their sub-step's review and are no longer
+  needed once findings have moved to their permanent homes.
 - The imperative bulkhead is officially complete as a resilience pattern.
 - The next document to be created — when work begins — is a new `REFACTORING.md` for the
   ADR audit (a separate, dedicated effort), and after that, separate `REFACTORING.md`

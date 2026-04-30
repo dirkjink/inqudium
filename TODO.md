@@ -250,9 +250,10 @@ TODO.md so it is not lost when the class itself is read or when the deprecated
 **Scope:** Imperative paradigm. Other paradigms (reactive, RxJava, coroutines) have their
 own native async forms and do not face this exact gap.
 
-**Concrete consequences observed in audit 2.18:** The aspect module's hybrid and async
-paths require both `InqDecorator` and `InqAsyncDecorator` contracts on every pipeline
-element. `InqBulkhead` implements only `InqDecorator`. Two specific consequences:
+**Concrete consequences observed in audits 2.18 and 2.19:** The aspect module's hybrid
+and async paths require both `InqDecorator` and `InqAsyncDecorator` contracts on every
+pipeline element. `InqBulkhead` implements only `InqDecorator`. Three specific
+consequences:
 
 - `HybridAspectPipelineTerminal.of(InqPipeline)` validates eagerly in its constructor that
   every pipeline element implements both contracts (audit 2.18 finding F-2.18-1). Any
@@ -269,10 +270,23 @@ element. `InqBulkhead` implements only `InqDecorator`. Two specific consequences
   bulkhead are pinned to deprecated types until the async variant lands; users cannot
   migrate off the deprecated pair without losing async aspect support.
 
-Both consequences resolve when the async variant of `InqBulkhead` is introduced.
+- The Spring `InqShieldAspect` casts elements to `InqAsyncDecorator` in its async-method
+  dispatch path (audit 2.19 finding F-2.19-6). This is the runtime manifestation of the
+  same root cause: a Spring user who registers a real `InqBulkhead` as an `InqElement` bean
+  and intercepts an async-returning method (`CompletionStage<T>`, `Mono<T>`, etc.) gets a
+  `ClassCastException` at first invocation. The synchronous path remains clean. The cast
+  is wrapped in a generic exception handler, but the failure mode is still: deprecated
+  bulkhead works, new bulkhead breaks for async-returning methods.
+
+Three different sites in the codebase, three different failure modes (compile-time
+rejection, eager constructor failure, runtime cast), one root cause: `InqBulkhead` does
+not implement `InqAsyncDecorator`.
+
+All consequences resolve when the async variant of `InqBulkhead` is introduced.
 Alternative partial mitigations (loosening hybrid eager validation, dual constructors on
-`AsyncElementLayerProvider`) exist but each carries its own design trade-offs and would
-need their own decision in the async-variant ADR.
+`AsyncElementLayerProvider`, runtime feature-detection in `InqShieldAspect`) exist but
+each carries its own design trade-offs and would need their own decision in the
+async-variant ADR.
 
 **Why we deferred it:** The async path is a substantial new feature, not a bug fix. It
 warrants its own ADR (lifecycle interaction with deferred subscription is non-trivial),
@@ -435,3 +449,55 @@ is redundant and should be deleted.
 follows: either receives the bridge code, or is deleted from the multi-module build.
 
 **When to address:** ADR-audit refactor, paired with the SLF4J-in-core entry.
+
+---
+
+## Spring aspect cache is not invalidated when an `InqElement` bean is replaced
+
+**Where:** `inqudium-spring/src/main/java/eu/inqudium/spring/InqShieldAspect.java` —
+the per-method element cache.
+
+**The gap:** `InqShieldAspect` looks up `InqElement` instances via the registry once per
+intercepted method, then caches the resolved element keyed by the method signature. The
+cache has no invalidation hook. If a user re-registers an element with the same name —
+either by replacing the registry bean or by mutating the registry directly — the aspect
+continues to use the cached reference to the original element.
+
+**Why it matters:** Spring users sometimes wire elements through `@Bean` methods that
+expose `BulkheadHandle<ImperativeTag>` or other element types into the application
+context. If they replace one of these beans at runtime (rare but legitimate, e.g. via
+`@Profile`-driven re-creation, or hot reload during development), the aspect cache holds
+the old reference. The intercepted method then bypasses the new element silently —
+exactly the kind of stale-cache bug that is hard to spot because the call still succeeds,
+just against the wrong element.
+
+The deprecated `Bulkhead` / `ImperativeBulkhead` pair has the same shape and the same
+gap; this is not new drift, but the post-ADR-033 picture makes it more visible because
+the new architecture's snapshot-based lifecycle was supposed to surface state changes
+through the volatile-and-AtomicReference patterns that the aspect cache deliberately
+breaks.
+
+**Why we deferred it:** Element-replacement-via-registry is not a documented or supported
+operation today. The Inqudium runtime registry is first-registration-wins (CLAUDE.md
+"first-registration-wins registries" principle). The user-guide does not encourage or
+demonstrate replacement; the aspect's cache was a deliberate performance choice under the
+assumption of stable bean topology. Closing the gap requires deciding what
+"replacement" means at the architecture level — is it supported? Through which API? Is
+the cache invalidation a Spring-aspect concern or a registry-level concern? — and that
+decision deserves its own ADR.
+
+**Shape of the fix:** Two plausible directions, depending on the architectural answer:
+
+- If element replacement is to be a supported operation: the registry exposes a
+  change-listener API (similar to the snapshot/listener pattern), and `InqShieldAspect`
+  subscribes to invalidate the cache on replacement.
+- If element replacement remains unsupported: the user-guide states explicitly that bean
+  replacement after first interception is undefined behaviour, and a runtime check (e.g.
+  identity comparison on cache hit, with a one-time WARN log on mismatch) catches the
+  most common misuse without imposing a listener overhead.
+
+The choice is design work, not implementation work — neither direction is obviously
+better without a stated semantics for what registries are.
+
+**When to address:** Together with the registry-semantics review in the next architecture
+audit cycle. Not on the critical path for the bulkhead pattern's completion.
