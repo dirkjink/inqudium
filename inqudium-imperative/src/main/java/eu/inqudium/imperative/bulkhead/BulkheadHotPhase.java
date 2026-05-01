@@ -9,6 +9,7 @@ import eu.inqudium.config.live.LiveContainer;
 import eu.inqudium.config.snapshot.BulkheadEventConfig;
 import eu.inqudium.config.snapshot.BulkheadField;
 import eu.inqudium.config.snapshot.BulkheadSnapshot;
+import eu.inqudium.config.snapshot.BulkheadStrategyConfig;
 import eu.inqudium.config.snapshot.SemaphoreStrategyConfig;
 import eu.inqudium.imperative.lifecycle.ImperativeLifecyclePhasedComponent.ShutdownAware;
 import eu.inqudium.core.element.bulkhead.BulkheadEventPublishFailureException;
@@ -33,6 +34,7 @@ import eu.inqudium.imperative.lifecycle.spi.ImperativePhase;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Objects;
 import java.util.Set;
 
 /**
@@ -84,11 +86,13 @@ import java.util.Set;
  * phase to live snapshot changes only after the cold-to-hot CAS has committed — discarded
  * candidates therefore leave no listeners behind. The subscription handler always re-reads
  * {@link LiveContainer#snapshot()} to converge to the latest state under concurrent updates,
- * then takes one of three paths: it swaps the strategy atomically when the snapshot's strategy
- * config has changed type, re-tunes the running strategy in place via
- * {@link SemaphoreBulkheadStrategy#adjustMaxConcurrent} when the active strategy is the
- * semaphore variant, or ignores the change when the active strategy is not in-place tunable
- * (the mutability check vetoes such patches before they reach the live container).
+ * then takes one of three paths: it materializes a fresh strategy and swaps the reference
+ * atomically when the snapshot's strategy config differs from the one the running strategy was
+ * last built from (cross-type swap or same-type rebuild with different field values), re-tunes
+ * the running strategy in place via {@link SemaphoreBulkheadStrategy#adjustMaxConcurrent} when
+ * the active strategy is the semaphore variant, or ignores the change when the active strategy
+ * is not in-place tunable (the mutability check vetoes such patches before they reach the live
+ * container).
  */
 final class BulkheadHotPhase<A, R>
         implements ImperativePhase<A, R>, HotPhaseMarker, PostCommitInitializable,
@@ -104,6 +108,18 @@ final class BulkheadHotPhase<A, R>
      */
     private volatile BulkheadStrategy strategy;
     /**
+     * The {@link BulkheadStrategyConfig} the {@link #strategy} field was last materialized from.
+     * Updated on every swap — both the cross-type swap and the same-type rebuild — so that
+     * {@link #strategyChanged(BulkheadSnapshot)} can detect both flavours by structural record
+     * equality. Volatile because it is read on the snapshot-listener thread and written on the
+     * same thread, but may be observed across listener invocations on different threads under
+     * update concurrency. {@code null} only when the test seam constructor was used with a
+     * pre-built strategy that was never derived from a config; in that case the first
+     * snapshot-change event always treats the change as a swap, which matches the existing
+     * test seam expectations.
+     */
+    private volatile BulkheadStrategyConfig lastMaterializedConfig;
+    /**
      * Live-container subscription registered in {@link #afterCommit(LiveContainer)} and released
      * in {@link #shutdown()}. Volatile because the writer (afterCommit, on the cold-to-hot CAS
      * winner) and the reader (shutdown, on the dispatcher thread serving a removal) are
@@ -118,7 +134,9 @@ final class BulkheadHotPhase<A, R>
         // the paradigm-internal factory so the choice between Semaphore / CoDel / Adaptive (and
         // the AIMD vs Vegas algorithm picks) lands in one exhaustive switch — adding a new
         // strategy variant is a compile-time error there until the new branch lands (ADR-032).
-        this(component, BulkheadStrategyFactory.create(snapshot, component.general()));
+        this.component = component;
+        this.strategy = BulkheadStrategyFactory.create(snapshot, component.general());
+        this.lastMaterializedConfig = snapshot.strategy();
     }
 
     /**
@@ -127,6 +145,11 @@ final class BulkheadHotPhase<A, R>
      * that simulates an algorithm failure thrown out of {@code onCallComplete}). Production code
      * always goes through the snapshot-based constructor, which materializes a real strategy via
      * {@link BulkheadStrategyFactory}.
+     *
+     * <p>{@link #lastMaterializedConfig} stays {@code null} on this path: the seam strategy was
+     * not materialized from a config, so the first snapshot-change event compared via
+     * {@link #strategyChanged(BulkheadSnapshot)} unambiguously sees a difference and routes
+     * through the swap branch — which is what the existing seam tests expect.
      */
     BulkheadHotPhase(InqBulkhead<A, R> component, BulkheadStrategy strategy) {
         this.component = component;
@@ -202,6 +225,7 @@ final class BulkheadHotPhase<A, R>
         if (strategyChanged(latest)) {
             BulkheadStrategy old = this.strategy;
             this.strategy = BulkheadStrategyFactory.create(latest, component.general());
+            this.lastMaterializedConfig = latest.strategy();
             closeStrategy(old);
             return;
         }
@@ -216,34 +240,28 @@ final class BulkheadHotPhase<A, R>
     }
 
     /**
-     * Detect whether the latest snapshot's strategy config differs from the one this hot phase
-     * was constructed with.
+     * Detect whether the latest snapshot's strategy config differs from the one the running
+     * {@link #strategy} was last materialized from.
      *
-     * <p>Records compare structurally — a {@code SemaphoreStrategyConfig} (no fields) always
-     * equals another, so a "set strategy to semaphore" patch on a hot semaphore bulkhead is
-     * detected as no-swap and falls through to the in-place re-tune. CoDel and the adaptive
-     * variants compare against their own field state; differing fields trigger a fresh
-     * materialization.
+     * <p>The comparison runs on the cached {@link #lastMaterializedConfig} record by structural
+     * equality. {@link BulkheadStrategyConfig} is sealed and every permitted variant is a
+     * record, so {@link Objects#equals} settles all three cases uniformly:
      *
-     * <p>Strategy class identity gives us the cross-type signal: a snapshot now carrying
-     * {@code CoDelStrategyConfig} when the hot phase runs on a {@link SemaphoreBulkheadStrategy}
-     * is unambiguously a swap candidate.
+     * <ul>
+     *   <li>same type, same fields — equal, returns {@code false}, no swap;</li>
+     *   <li>same type, different fields — unequal (e.g. CoDel(50ms) vs CoDel(80ms),
+     *       AIMD vs Vegas inside an adaptive variant) — returns {@code true}, swap path
+     *       runs and the running strategy is rebuilt from the new config;</li>
+     *   <li>different type — unequal, returns {@code true}, swap path runs.</li>
+     * </ul>
+     *
+     * <p>The earlier implementation switched on the latest config and tested
+     * {@code instanceof} against {@link #strategy} — this missed the same-type-different-field
+     * case (TODO.md "Strategy config tweaks without strategy-type change"), where the snapshot
+     * carried the new fields but the running strategy silently kept the old ones.
      */
     private boolean strategyChanged(BulkheadSnapshot latest) {
-        BulkheadStrategy current = this.strategy;
-        return switch (latest.strategy()) {
-            case SemaphoreStrategyConfig ignored ->
-                    !(current instanceof SemaphoreBulkheadStrategy);
-            case eu.inqudium.config.snapshot.CoDelStrategyConfig codel ->
-                    !(current instanceof eu.inqudium.imperative.bulkhead.strategy
-                            .CoDelBulkheadStrategy);
-            case eu.inqudium.config.snapshot.AdaptiveStrategyConfig adaptive ->
-                    !(current instanceof eu.inqudium.imperative.bulkhead.strategy
-                            .AdaptiveBulkheadStrategy);
-            case eu.inqudium.config.snapshot.AdaptiveNonBlockingStrategyConfig nb ->
-                    !(current instanceof eu.inqudium.core.element.bulkhead.strategy
-                            .AdaptiveNonBlockingBulkheadStrategy);
-        };
+        return !Objects.equals(this.lastMaterializedConfig, latest.strategy());
     }
 
     /**
