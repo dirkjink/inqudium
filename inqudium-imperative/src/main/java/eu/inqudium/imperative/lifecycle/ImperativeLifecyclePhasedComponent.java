@@ -16,11 +16,14 @@ import eu.inqudium.core.element.InqElementType;
 import eu.inqudium.core.event.InqEventPublisher;
 import eu.inqudium.core.pipeline.InternalExecutor;
 import eu.inqudium.core.time.InqClock;
+import eu.inqudium.imperative.core.pipeline.InternalAsyncExecutor;
+import eu.inqudium.imperative.lifecycle.spi.AsyncImperativePhase;
 import eu.inqudium.imperative.lifecycle.spi.HotPhaseMarker;
 import eu.inqudium.imperative.lifecycle.spi.ImperativePhase;
 
 import java.util.List;
 import java.util.Objects;
+import java.util.concurrent.CompletionStage;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -257,6 +260,55 @@ public abstract class ImperativeLifecyclePhasedComponent<S extends ComponentSnap
         return current.execute(chainId, callId, argument, next);
     }
 
+    /**
+     * Async counterpart to {@link #execute execute}. Routes the call through the current phase's
+     * async dispatch.
+     *
+     * <p>Cold path: the {@code ColdPhase}'s {@code executeAsync} performs the same CAS-and-publish
+     * dance the sync path performs — installs the hot phase, fires
+     * {@link ComponentBecameHotEvent} on the winning candidate, optionally invokes the
+     * post-commit hook — and then delegates to the now-installed hot phase's async execute.
+     * Hot path: the hot phase's {@code executeAsync} runs directly without any lifecycle check.
+     *
+     * <p>The cold-to-hot trigger fires on the method-call moment, not on stage completion: under
+     * {@link CompletionStage} semantics, {@code executeAsync} is an eager call that returns a
+     * stage already started, so by the time this method returns the hot phase exists and has
+     * already done its synchronous start-phase work.
+     *
+     * <p>Failures from the synchronous start phase (rejection, interruption, removal) surface
+     * by throwing directly from this method — the caller has not yet received a stage and the
+     * error is therefore visible before any async work begins. Failures of the downstream stage
+     * surface through that stage's exceptional completion.
+     *
+     * @param chainId  the chain identifier of the call.
+     * @param callId   the call identifier.
+     * @param argument the argument flowing through the chain.
+     * @param next     the next async executor in the chain.
+     * @return the {@link CompletionStage} produced by the chain after passing through this
+     *         component.
+     * @throws ComponentRemovedException     if this component has been
+     *         {@linkplain #markRemoved() marked as removed}.
+     * @throws UnsupportedOperationException if the hot phase does not implement
+     *         {@link AsyncImperativePhase}, indicating the concrete component does not support
+     *         the async pipeline contract.
+     */
+    public final CompletionStage<R> executeAsync(
+            long chainId, long callId, A argument, InternalAsyncExecutor<A, R> next) {
+        ImperativePhase<A, R> current = phase.get();
+        if (current instanceof RemovedPhase) {
+            throw new ComponentRemovedException(name, elementType);
+        }
+        if (current instanceof AsyncImperativePhase<?, ?> async) {
+            @SuppressWarnings("unchecked")
+            AsyncImperativePhase<A, R> typed = (AsyncImperativePhase<A, R>) async;
+            return typed.executeAsync(chainId, callId, argument, next);
+        }
+        throw new UnsupportedOperationException(
+                "Hot phase " + current.getClass().getName() + " for component '" + name
+                        + "' does not support async execution: implement AsyncImperativePhase to "
+                        + "opt in.");
+    }
+
     @Override
     public final AutoCloseable onChangeRequest(ChangeRequestListener<S> listener) {
         Objects.requireNonNull(listener, "listener");
@@ -303,12 +355,44 @@ public abstract class ImperativeLifecyclePhasedComponent<S extends ComponentSnap
      * The cold phase. Performs the CAS-and-delegate transition exactly once and then becomes
      * unreachable. Non-static so it can read the enclosing component's {@code phase} field
      * directly — this is the whole point of the inner-class form.
+     *
+     * <p>Implements both {@link ImperativePhase} (sync dispatch) and {@link AsyncImperativePhase}
+     * (async dispatch). Both methods share the same CAS-and-publish sequence so the cold-to-hot
+     * trigger semantics are identical regardless of which entry point the caller used; the only
+     * difference is whether the post-commit delegate is the hot phase's sync or async execute.
      */
-    private final class ColdPhase implements ImperativePhase<A, R> {
+    private final class ColdPhase implements ImperativePhase<A, R>, AsyncImperativePhase<A, R> {
 
         @Override
         public R execute(
                 long chainId, long callId, A argument, InternalExecutor<A, R> next) {
+            transitionToHot(chainId, callId);
+            return phase.get().execute(chainId, callId, argument, next);
+        }
+
+        @Override
+        public CompletionStage<R> executeAsync(
+                long chainId, long callId, A argument, InternalAsyncExecutor<A, R> next) {
+            transitionToHot(chainId, callId);
+            ImperativePhase<A, R> current = phase.get();
+            if (current instanceof AsyncImperativePhase<?, ?> async) {
+                @SuppressWarnings("unchecked")
+                AsyncImperativePhase<A, R> typed = (AsyncImperativePhase<A, R>) async;
+                return typed.executeAsync(chainId, callId, argument, next);
+            }
+            throw new UnsupportedOperationException(
+                    "Hot phase " + current.getClass().getName() + " for component '" + name
+                            + "' does not support async execution: implement "
+                            + "AsyncImperativePhase to opt in.");
+        }
+
+        /**
+         * Run the cold-to-hot CAS once. The winning thread publishes
+         * {@link ComponentBecameHotEvent} and invokes {@link PostCommitInitializable#afterCommit}
+         * on the winning candidate. Losing candidates are discarded; the next read of
+         * {@code phase} sees whichever candidate won the CAS.
+         */
+        private void transitionToHot(long chainId, long callId) {
             ImperativePhase<A, R> hot = createHotPhase();
             if (phase.compareAndSet(this, hot)) {
                 eventPublisher.publish(new ComponentBecameHotEvent(
@@ -317,7 +401,6 @@ public abstract class ImperativeLifecyclePhasedComponent<S extends ComponentSnap
                     post.afterCommit(live);
                 }
             }
-            return phase.get().execute(chainId, callId, argument, next);
         }
     }
 

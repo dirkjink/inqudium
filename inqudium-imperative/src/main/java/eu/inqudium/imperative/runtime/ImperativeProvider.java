@@ -6,6 +6,7 @@ import eu.inqudium.config.patch.BulkheadPatch;
 import eu.inqudium.config.runtime.ImperativeTag;
 import eu.inqudium.config.runtime.ParadigmContainer;
 import eu.inqudium.config.runtime.ParadigmTag;
+import eu.inqudium.config.runtime.UpdateDispatcher;
 import eu.inqudium.config.snapshot.BulkheadEventConfig;
 import eu.inqudium.config.snapshot.BulkheadSnapshot;
 import eu.inqudium.config.snapshot.GeneralSnapshot;
@@ -74,7 +75,11 @@ public final class ImperativeProvider implements ParadigmProvider {
             entries.put(entry.getKey(),
                     materializeBulkhead(general, entry.getKey(), entry.getValue()));
         }
-        return new DefaultImperative(this, entries);
+        // Wire the dispatcher's LoggerFactory through from the runtime's general snapshot so
+        // listener / internal-check throws absorbed by the dispatcher are routed to the same
+        // log destination the rest of the framework uses.
+        return new DefaultImperative(this, entries,
+                new UpdateDispatcher(general.loggerFactory()));
     }
 
     /**

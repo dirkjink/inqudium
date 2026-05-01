@@ -12,6 +12,8 @@ import eu.inqudium.config.patch.ComponentPatch;
 import eu.inqudium.config.snapshot.ComponentSnapshot;
 import eu.inqudium.config.validation.ApplyOutcome;
 import eu.inqudium.config.validation.VetoFinding;
+import eu.inqudium.core.log.Logger;
+import eu.inqudium.core.log.LoggerFactory;
 
 import java.util.Objects;
 import java.util.Optional;
@@ -51,6 +53,31 @@ import java.util.Optional;
  * directly when it materializes the new entry.
  */
 public final class UpdateDispatcher {
+
+    private static final String ROLE_LISTENER = "listener";
+    private static final String ROLE_INTERNAL_CHECK = "internal mutability check";
+
+    private final Logger logger;
+
+    /**
+     * No-arg constructor that produces a dispatcher whose absorbed-throw logging is silently
+     * dropped. Suitable for unit tests that do not assert on log output; production wiring uses
+     * {@link #UpdateDispatcher(LoggerFactory)} so absorbed listener and internal-check throws are
+     * routed to the runtime's configured {@link LoggerFactory}.
+     */
+    public UpdateDispatcher() {
+        this(LoggerFactory.NO_OP_LOGGER_FACTORY);
+    }
+
+    /**
+     * @param loggerFactory the runtime's logger factory. Listener and internal-check throws that
+     *                      the dispatcher absorbs as synthetic vetoes are logged through this
+     *                      factory at error level so the operator can trace them to source.
+     */
+    public UpdateDispatcher(LoggerFactory loggerFactory) {
+        Objects.requireNonNull(loggerFactory, "loggerFactory");
+        this.logger = loggerFactory.getLogger(UpdateDispatcher.class);
+    }
 
     /**
      * Apply a patch to an existing component, routing through the cold or hot path.
@@ -209,7 +236,7 @@ public final class UpdateDispatcher {
         };
     }
 
-    private static <S extends ComponentSnapshot,
+    private <S extends ComponentSnapshot,
             T extends ListenerRegistry<S> & InternalMutabilityCheck<S>>
     DispatchResult dispatchRemovalHot(
             ComponentKey key,
@@ -219,7 +246,16 @@ public final class UpdateDispatcher {
         S currentSnapshot = live.snapshot();
 
         for (ChangeRequestListener<S> listener : target.listeners()) {
-            ChangeDecision decision = listener.decideRemoval(currentSnapshot);
+            ChangeDecision decision;
+            try {
+                decision = listener.decideRemoval(currentSnapshot);
+            } catch (Exception ex) {
+                logAbsorbedThrow(ROLE_LISTENER, key, ex);
+                return DispatchResult.vetoed(new VetoFinding(
+                        key, java.util.Set.of(),
+                        synthesizeReason(ROLE_LISTENER, ex),
+                        VetoFinding.Source.LISTENER));
+            }
             if (decision instanceof ChangeDecision.Veto veto) {
                 return DispatchResult.vetoed(new VetoFinding(
                         key, java.util.Set.of(), veto.reason(),
@@ -227,7 +263,16 @@ public final class UpdateDispatcher {
             }
         }
 
-        ChangeDecision internal = target.evaluateRemoval(currentSnapshot);
+        ChangeDecision internal;
+        try {
+            internal = target.evaluateRemoval(currentSnapshot);
+        } catch (Exception ex) {
+            logAbsorbedThrow(ROLE_INTERNAL_CHECK, key, ex);
+            return DispatchResult.vetoed(new VetoFinding(
+                    key, java.util.Set.of(),
+                    synthesizeReason(ROLE_INTERNAL_CHECK, ex),
+                    VetoFinding.Source.COMPONENT_INTERNAL));
+        }
         if (internal instanceof ChangeDecision.Veto veto) {
             return DispatchResult.vetoed(new VetoFinding(
                     key, java.util.Set.of(), veto.reason(),
@@ -237,7 +282,7 @@ public final class UpdateDispatcher {
         return DispatchResult.applied(ApplyOutcome.REMOVED);
     }
 
-    private static <S extends ComponentSnapshot,
+    private <S extends ComponentSnapshot,
             T extends ListenerRegistry<S> & InternalMutabilityCheck<S>>
     DispatchResult dispatchHot(
             ComponentKey key,
@@ -251,7 +296,7 @@ public final class UpdateDispatcher {
         return DispatchResult.applied(applyCold(live, patch));
     }
 
-    private static <S extends ComponentSnapshot,
+    private <S extends ComponentSnapshot,
             T extends ListenerRegistry<S> & InternalMutabilityCheck<S>>
     DispatchResult decideHot(
             ComponentKey key,
@@ -265,7 +310,7 @@ public final class UpdateDispatcher {
         return DispatchResult.applied(decideCold(live, patch));
     }
 
-    private static <S extends ComponentSnapshot,
+    private <S extends ComponentSnapshot,
             T extends ListenerRegistry<S> & InternalMutabilityCheck<S>>
     Optional<VetoFinding> runHotVetoChain(
             ComponentKey key,
@@ -284,7 +329,23 @@ public final class UpdateDispatcher {
                 currentSnapshot, postPatch, patch.touchedFields(), patch.proposedValues());
 
         for (ChangeRequestListener<S> listener : target.listeners()) {
-            ChangeDecision decision = listener.decide(request);
+            ChangeDecision decision;
+            try {
+                decision = listener.decide(request);
+            } catch (Exception ex) {
+                // A listener that throws (instead of returning a clean Veto) is absorbed as a
+                // synthetic veto for this component: the patch is rejected, the rest of the
+                // listener loop is short-circuited (matches real-veto semantics), and the
+                // throwable is logged at error level so the operator can trace it to source.
+                // Other components in the same update wave are unaffected — this preserves the
+                // cross-component-atomicity contract from ADR-026. Errors propagate untouched
+                // so JVM-level conditions (OOM, StackOverflow, …) are not masked.
+                logAbsorbedThrow(ROLE_LISTENER, key, ex);
+                return Optional.of(new VetoFinding(
+                        key, patch.touchedFields(),
+                        synthesizeReason(ROLE_LISTENER, ex),
+                        VetoFinding.Source.LISTENER));
+            }
             if (decision instanceof ChangeDecision.Veto veto) {
                 return Optional.of(new VetoFinding(
                         key, patch.touchedFields(), veto.reason(),
@@ -295,7 +356,16 @@ public final class UpdateDispatcher {
         // Component-internal mutability check is the last gate before apply — runs only after
         // every listener has accepted, and therefore is never consulted on a listener-vetoed
         // patch.
-        ChangeDecision internal = target.evaluate(request);
+        ChangeDecision internal;
+        try {
+            internal = target.evaluate(request);
+        } catch (Exception ex) {
+            logAbsorbedThrow(ROLE_INTERNAL_CHECK, key, ex);
+            return Optional.of(new VetoFinding(
+                    key, patch.touchedFields(),
+                    synthesizeReason(ROLE_INTERNAL_CHECK, ex),
+                    VetoFinding.Source.COMPONENT_INTERNAL));
+        }
         if (internal instanceof ChangeDecision.Veto veto) {
             return Optional.of(new VetoFinding(
                     key, patch.touchedFields(), veto.reason(),
@@ -303,5 +373,26 @@ public final class UpdateDispatcher {
         }
 
         return Optional.empty();
+    }
+
+    private void logAbsorbedThrow(String role, ComponentKey key, Exception ex) {
+        // Four-arg form routes to LogAction#log(String, Object...) — the abstraction has fixed-
+        // arity overloads only up to three args, so four args resolve to varargs. The trailing
+        // Throwable in a varargs call is recognized by SLF4J's contract and logged with full
+        // stack trace (in the no-op logger this whole call is dropped).
+        logger.error().log(
+                "Update {} threw on component {}: {}; absorbed as synthetic veto",
+                role, key, summarize(ex), ex);
+    }
+
+    private static String synthesizeReason(String role, Exception ex) {
+        String msg = ex.getMessage();
+        return role + " threw " + ex.getClass().getSimpleName()
+                + ": " + (msg != null ? msg : "no message");
+    }
+
+    private static String summarize(Exception ex) {
+        String msg = ex.getMessage();
+        return ex.getClass().getSimpleName() + ": " + (msg != null ? msg : "no message");
     }
 }

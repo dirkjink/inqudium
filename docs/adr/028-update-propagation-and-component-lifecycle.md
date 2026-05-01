@@ -289,6 +289,19 @@ distinction explicit.
 removed, its handle becomes inert; pending listeners are silently discarded. There is no leak. Listeners
 that need cross-removal continuity must re-register on the new component if it is recreated.
 
+**A listener that throws is treated as having vetoed.** When a `decide(...)` or `decideRemoval(...)`
+invocation raises an exception instead of returning a `ChangeDecision`, the dispatcher absorbs the throw
+and synthesizes a `Veto` with reason `"listener threw <ExceptionClass>: <message>"`. The resulting
+`VetoFinding` carries `Source.LISTENER`, so the rejection is indistinguishable from a deliberate veto
+downstream — `BuildReport`, `RuntimeComponentVetoedEvent`, and operator dashboards all see a uniform
+shape. The Throwable is logged at error level via the runtime's `LoggerFactory` so the underlying bug
+remains diagnosable, but it does not propagate out of `runtime.update(...)`. This preserves
+cross-component-atomicity (ADR-026): a listener bug on one component no longer fails the update for
+unrelated components in the same wave. It also preserves the conjunctive-chain semantics — the
+remaining listeners for the affected component are not consulted, exactly as for a real veto. `Error`
+subtypes (e.g. `OutOfMemoryError`) are NOT absorbed and propagate unchanged. The same rule applies to
+the component-internal mutability check; see "Component-internal veto" below.
+
 ### Component-internal veto
 
 After all external listeners have accepted, the component itself is consulted via the
@@ -324,6 +337,14 @@ the dispatcher as the last gate before `LiveContainer.apply(patch)` and is owned
 component, not by the listener registry. The chain remains conjunctive — a single
 `ChangeDecision.Veto` from the check rejects the whole component patch and surfaces in the
 `BuildReport` with `Source.COMPONENT_INTERNAL`.
+
+A throw from `evaluate(...)` or `evaluateRemoval(...)` is absorbed by the dispatcher with the
+same shape as the listener-throw rule (see "Listener API" above): the dispatcher synthesizes a
+`Veto` with reason `"internal mutability check threw <ExceptionClass>: <message>"`, the
+resulting `VetoFinding` carries `Source.COMPONENT_INTERNAL`, the Throwable is logged at error
+level via the runtime's `LoggerFactory`, and `Error` subtypes propagate unchanged. The check
+is the last gate before the apply, so absorbing its throw means a buggy check rejects only its
+own component's patch — `runtime.update(...)` for unrelated components proceeds normally.
 
 #### What the check evaluates against
 

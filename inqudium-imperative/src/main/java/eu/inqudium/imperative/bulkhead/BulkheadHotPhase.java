@@ -29,13 +29,17 @@ import eu.inqudium.core.event.InqEventPublisher;
 import eu.inqudium.core.exception.InqException;
 import eu.inqudium.core.pipeline.InternalExecutor;
 import eu.inqudium.imperative.bulkhead.strategy.SemaphoreBulkheadStrategy;
+import eu.inqudium.imperative.core.pipeline.InternalAsyncExecutor;
+import eu.inqudium.imperative.lifecycle.spi.AsyncImperativePhase;
 import eu.inqudium.imperative.lifecycle.spi.HotPhaseMarker;
-import eu.inqudium.imperative.lifecycle.spi.ImperativePhase;
 
 import java.time.Duration;
-import java.time.Instant;
 import java.util.Objects;
 import java.util.Set;
+import java.util.concurrent.CancellationException;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
+import java.util.concurrent.CompletionStage;
 
 /**
  * Hot phase of the lifecycle-aware imperative bulkhead.
@@ -43,11 +47,26 @@ import java.util.Set;
  * <p>Carries the actual permit-management state — a {@link BulkheadStrategy} selected by
  * {@link BulkheadStrategyFactory} from the snapshot's
  * {@link eu.inqudium.config.snapshot.BulkheadStrategyConfig} at cold-to-hot transition time.
- * The phase's {@link #execute(long, long, Object, InternalExecutor) execute} acquires a permit,
- * runs the downstream chain, feeds the strategy's adaptive algorithm with the call's RTT and
- * success flag, and releases the permit in a {@code finally} block. Acquisition rejections
- * surface as {@link InqBulkheadFullException}; thread interruptions during {@code tryAcquire}
- * surface as {@link InqBulkheadInterruptedException}.
+ * The phase serves both the synchronous and the asynchronous pipeline contracts through a
+ * single strategy instance:
+ *
+ * <ul>
+ *   <li>{@link #execute(long, long, Object, InternalExecutor) execute} (sync) acquires a permit,
+ *       runs the downstream chain, feeds the strategy's adaptive algorithm with the call's RTT
+ *       and success flag, and releases the permit in a {@code finally} block.</li>
+ *   <li>{@link #executeAsync(long, long, Object, InternalAsyncExecutor) executeAsync} acquires
+ *       the permit synchronously on the calling thread (back-pressure), runs the downstream
+ *       async chain, and attaches a release callback to the returned stage so the permit
+ *       remains held for the lifetime of the async operation. Per ADR-023 the method returns
+ *       the {@code whenComplete} copy. A fast path returns the original stage unchanged when
+ *       the downstream stage is already complete on entry.</li>
+ * </ul>
+ *
+ * <p>Acquisition rejections surface as {@link InqBulkheadFullException}; thread interruptions
+ * during {@code tryAcquire} surface as {@link InqBulkheadInterruptedException}. Both
+ * exceptions are thrown synchronously from both paths — the async path does <em>not</em>
+ * convert these to a failed stage, so back-pressure is visible to the caller before any async
+ * work begins.
  *
  * <h2>Event publishing (ADR-030)</h2>
  *
@@ -95,7 +114,7 @@ import java.util.Set;
  * container).
  */
 final class BulkheadHotPhase<A, R>
-        implements ImperativePhase<A, R>, HotPhaseMarker, PostCommitInitializable,
+        implements AsyncImperativePhase<A, R>, HotPhaseMarker, PostCommitInitializable,
         InternalMutabilityCheck<BulkheadSnapshot>, ShutdownAware {
 
     private final InqBulkhead<A, R> component;
@@ -360,49 +379,21 @@ final class BulkheadHotPhase<A, R>
         try {
             rejection = tryAcquire(snap.maxWaitDuration());
         } catch (InterruptedException ie) {
+            // Sync path leaves wait-trace and reject events unpublished on interrupt — preserved
+            // from the pre-refactor behaviour. The async path differs and publishes a
+            // wait-trace acquired=false via handleAcquireFailure(rejection=null).
             Thread.currentThread().interrupt();
             throw new InqBulkheadInterruptedException(
                     chainId, callId, component.name(), optimizeException);
         }
 
         if (rejection != null) {
-            if (events.waitTrace()) {
-                long waitNanos = component.nanoTimeSource().now() - waitStartNanos;
-                publisher.publish(new BulkheadWaitTraceEvent(
-                        chainId, callId, component.name(), waitNanos, false,
-                        component.clock().instant()));
-            }
-            if (events.onReject()) {
-                publisher.publish(new BulkheadOnRejectEvent(
-                        chainId, callId, component.name(), rejection,
-                        component.clock().instant()));
-            }
+            handleAcquireFailure(chainId, callId, events, publisher, waitStartNanos, rejection);
             throw new InqBulkheadFullException(
                     chainId, callId, component.name(), rejection, optimizeException);
         }
 
-        // Both publishes below run while the permit is held. A subscriber-thrown exception or
-        // a publisher-internal failure on either of them would leak the permit unless we
-        // actively roll back. publishWhileHoldingPermit rolls back, optionally emits the
-        // rollback trace, and rethrows as BulkheadEventPublishFailureException carrying the
-        // original cause.
-        if (events.waitTrace()) {
-            long waitNanos = component.nanoTimeSource().now() - waitStartNanos;
-            publishWhileHoldingPermit(
-                    publisher, events,
-                    new BulkheadWaitTraceEvent(
-                            chainId, callId, component.name(), waitNanos, true,
-                            component.clock().instant()),
-                    chainId, callId);
-        }
-        if (events.onAcquire()) {
-            publishWhileHoldingPermit(
-                    publisher, events,
-                    new BulkheadOnAcquireEvent(
-                            chainId, callId, component.name(), strategy.concurrentCalls(),
-                            component.clock().instant()),
-                    chainId, callId);
-        }
+        handleAcquireSuccess(chainId, callId, events, publisher, waitStartNanos);
 
         // Sample RTT around the downstream call so the strategy can feed its adaptive algorithm
         // (ADR-020). Adaptive algorithms read in-flight count plus RTT to decide whether to
@@ -420,24 +411,195 @@ final class BulkheadHotPhase<A, R>
             throw t;
         } finally {
             long rttNanos = component.nanoTimeSource().now() - startNanos;
-            try {
-                strategy.onCallComplete(rttNanos, businessError == null);
-            } catch (RuntimeException algorithmFailure) {
-                component.general().loggerFactory()
-                        .getLogger(BulkheadHotPhase.class)
-                        .error().log(
-                                "Adaptive algorithm hook failed for bulkhead '"
-                                        + component.name() + "', callId=" + callId
-                                        + ". Permit will still be released. Cause: "
-                                        + algorithmFailure);
-            }
-            strategy.release();
-            if (events.onRelease()) {
-                Instant timestamp = component.clock().instant();
-                publisher.publish(new BulkheadOnReleaseEvent(
-                        chainId, callId, component.name(), strategy.concurrentCalls(),
-                        timestamp));
-            }
+            releaseAndReport(chainId, callId, rttNanos, businessError);
+        }
+    }
+
+    /**
+     * Async counterpart to {@link #execute}. Acquires the permit synchronously on the calling
+     * thread (back-pressure: rejection or interrupt surface as a synchronous throw before any
+     * stage exists), runs the downstream {@link InternalAsyncExecutor#executeAsync}, and attaches
+     * a release callback to the returned stage so the permit is held for the entire lifetime
+     * of the async operation.
+     *
+     * <p>Per ADR-023, the method returns the decorated copy produced by
+     * {@link CompletionStage#whenComplete whenComplete} so an exception thrown inside the
+     * release callback surfaces on the caller's stage rather than disappearing on a detached
+     * branch. Fast path: if the downstream stage is already complete on entry (sync-wrapped
+     * async, caching, validation failure), the release runs inline and the original stage is
+     * returned unchanged — no callback attachment, no extra stage allocation.
+     *
+     * <p>The release callback runs on whatever thread completes the downstream stage. Strategy
+     * accounting and event publishing are thread-safe; the strategy's {@code release()} is
+     * idempotent across threads, the per-component publisher is thread-safe per ADR-030.
+     */
+    @Override
+    public CompletionStage<R> executeAsync(
+            long chainId, long callId, A argument, InternalAsyncExecutor<A, R> next) {
+        BulkheadSnapshot snap = component.snapshot();
+        BulkheadEventConfig events = snap.events();
+        InqEventPublisher publisher = component.eventPublisher();
+        boolean optimizeException = component.general().enableExceptionOptimization();
+
+        long waitStartNanos = events.waitTrace() ? component.nanoTimeSource().now() : 0L;
+
+        RejectionContext rejection;
+        try {
+            rejection = tryAcquire(snap.maxWaitDuration());
+        } catch (InterruptedException ie) {
+            Thread.currentThread().interrupt();
+            handleAcquireFailure(chainId, callId, events, publisher, waitStartNanos, null);
+            throw new InqBulkheadInterruptedException(
+                    chainId, callId, component.name(), optimizeException);
+        }
+
+        if (rejection != null) {
+            handleAcquireFailure(chainId, callId, events, publisher, waitStartNanos, rejection);
+            throw new InqBulkheadFullException(
+                    chainId, callId, component.name(), rejection, optimizeException);
+        }
+
+        handleAcquireSuccess(chainId, callId, events, publisher, waitStartNanos);
+
+        long startNanos = component.nanoTimeSource().now();
+        CompletionStage<R> stage;
+        try {
+            stage = next.executeAsync(chainId, callId, argument);
+        } catch (Throwable t) {
+            // Synchronous throw during stage construction. Without this catch, the permit
+            // would leak — the whenComplete callback never runs because no stage was returned.
+            // Throwable is the right catch: any sync failure (including Error) must release;
+            // the rethrow leaves Error propagation intact.
+            long rttNanos = component.nanoTimeSource().now() - startNanos;
+            releaseAndReport(chainId, callId, rttNanos, t);
+            throw t;
+        }
+
+        // Fast path: an already-completed CompletableFuture (sync-wrapped-as-async, caching,
+        // validation failure) gets the release inline and the original stage back. No
+        // intermediate stage is allocated, no callback is attached.
+        if (stage instanceof CompletableFuture<?> cf && cf.isDone()) {
+            long rttNanos = component.nanoTimeSource().now() - startNanos;
+            releaseAndReport(chainId, callId, rttNanos, completionError(cf));
+            return stage;
+        }
+
+        // Slow path: pending stage. The release callback runs on the completion thread. ADR-023:
+        // return the whenComplete copy so a throw inside the callback surfaces on the returned
+        // stage rather than getting swallowed on a detached branch.
+        return stage.whenComplete((result, error) -> {
+            long rttNanos = component.nanoTimeSource().now() - startNanos;
+            releaseAndReport(chainId, callId, rttNanos, error);
+        });
+    }
+
+    /**
+     * Reads the failure of an already-completed {@link CompletableFuture} without blocking.
+     * Returns {@code null} if the future completed successfully. Only called on the fast path,
+     * after {@code cf.isDone()} returned {@code true}, so {@code getNow} resolves immediately.
+     */
+    private static Throwable completionError(CompletableFuture<?> cf) {
+        try {
+            cf.getNow(null);
+            return null;
+        } catch (CompletionException ce) {
+            return ce.getCause();
+        } catch (CancellationException ce) {
+            return ce;
+        }
+    }
+
+    /**
+     * Publish wait-trace (acquired=false) and on-reject events for an acquire that did not
+     * succeed. Used by both the sync rejection path and the async rejection / interrupt paths.
+     *
+     * <p>The {@code rejection} parameter is {@code null} on the async interrupt path —
+     * the wait-trace publish runs anyway (the wait happened) but the on-reject publish does
+     * not (interrupt is not a capacity rejection). Sync's interrupt path bypasses this helper
+     * entirely to preserve its pre-refactor "no events on interrupt" behaviour.
+     */
+    private void handleAcquireFailure(
+            long chainId,
+            long callId,
+            BulkheadEventConfig events,
+            InqEventPublisher publisher,
+            long waitStartNanos,
+            RejectionContext rejection) {
+        if (events.waitTrace()) {
+            long waitNanos = component.nanoTimeSource().now() - waitStartNanos;
+            publisher.publish(new BulkheadWaitTraceEvent(
+                    chainId, callId, component.name(), waitNanos, false,
+                    component.clock().instant()));
+        }
+        if (rejection != null && events.onReject()) {
+            publisher.publish(new BulkheadOnRejectEvent(
+                    chainId, callId, component.name(), rejection,
+                    component.clock().instant()));
+        }
+    }
+
+    /**
+     * Publish wait-trace (acquired=true) and on-acquire events for a successful acquire. Both
+     * publishes run while the permit is held — a throw on either path must release the permit
+     * via {@link #publishWhileHoldingPermit}, which is shared with the sync rollback path.
+     */
+    private void handleAcquireSuccess(
+            long chainId,
+            long callId,
+            BulkheadEventConfig events,
+            InqEventPublisher publisher,
+            long waitStartNanos) {
+        if (events.waitTrace()) {
+            long waitNanos = component.nanoTimeSource().now() - waitStartNanos;
+            publishWhileHoldingPermit(
+                    publisher, events,
+                    new BulkheadWaitTraceEvent(
+                            chainId, callId, component.name(), waitNanos, true,
+                            component.clock().instant()),
+                    chainId, callId);
+        }
+        if (events.onAcquire()) {
+            publishWhileHoldingPermit(
+                    publisher, events,
+                    new BulkheadOnAcquireEvent(
+                            chainId, callId, component.name(), strategy.concurrentCalls(),
+                            component.clock().instant()),
+                    chainId, callId);
+        }
+    }
+
+    /**
+     * Run the post-call work: feed the strategy's adaptive algorithm with the call's RTT and
+     * success flag, release the permit, then publish the on-release event if configured. Used
+     * by both the sync finally path and the async whenComplete callback. The on-release publish
+     * deliberately re-reads the current snapshot's events: in the async path the snapshot may
+     * have been updated between acquire and release, and the user's expectation is that the
+     * release event reflects the latest configuration, not a stale capture from the start
+     * phase.
+     *
+     * <p>The method is safe to invoke from any thread — the strategy's release operation is
+     * thread-safe and the per-component publisher is thread-safe per ADR-030.
+     */
+    private void releaseAndReport(
+            long chainId, long callId, long rttNanos, Throwable businessError) {
+        try {
+            strategy.onCallComplete(rttNanos, businessError == null);
+        } catch (RuntimeException algorithmFailure) {
+            component.general().loggerFactory()
+                    .getLogger(BulkheadHotPhase.class)
+                    .error().log(
+                            "Adaptive algorithm hook failed for bulkhead '"
+                                    + component.name() + "', callId=" + callId
+                                    + ". Permit will still be released. Cause: "
+                                    + algorithmFailure);
+        }
+        strategy.release();
+
+        BulkheadEventConfig events = component.snapshot().events();
+        if (events.onRelease()) {
+            component.eventPublisher().publish(new BulkheadOnReleaseEvent(
+                    chainId, callId, component.name(), strategy.concurrentCalls(),
+                    component.clock().instant()));
         }
     }
 

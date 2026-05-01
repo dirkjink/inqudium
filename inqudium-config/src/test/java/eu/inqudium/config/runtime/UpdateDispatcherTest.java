@@ -17,6 +17,9 @@ import eu.inqudium.config.snapshot.BulkheadSnapshot;
 import eu.inqudium.config.snapshot.SemaphoreStrategyConfig;
 import eu.inqudium.config.validation.ApplyOutcome;
 import eu.inqudium.config.validation.VetoFinding;
+import eu.inqudium.core.log.LogAction;
+import eu.inqudium.core.log.Logger;
+import eu.inqudium.core.log.LoggerFactory;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -27,9 +30,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Supplier;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatNullPointerException;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 @DisplayName("UpdateDispatcher")
 class UpdateDispatcherTest {
@@ -845,6 +850,377 @@ class UpdateDispatcherTest {
             // Then
             assertThat(result.outcome()).isEqualTo(ApplyOutcome.PATCHED);
             assertThat(live.snapshot().maxConcurrentCalls()).isEqualTo(5);
+        }
+    }
+
+    @Nested
+    @DisplayName("absorbed listener / internal-check throws (TODO sub-step 2)")
+    class AbsorbedThrows {
+
+        @Test
+        void should_VETO_with_LISTENER_source_when_a_patch_listener_throws_a_runtime_exception() {
+            // What is to be tested: a listener that throws RuntimeException (instead of returning
+            // a clean Veto) is absorbed as a synthetic veto with Source.LISTENER. The patch is
+            // rejected for the affected component, the live snapshot is unchanged, and the synthetic
+            // reason names the thrown exception type and message.
+            // Why successful: outcome=VETOED, source=LISTENER, reason mentions both "listener threw"
+            // and the exception class+message; touchedFields equal the patch's touched-set; live
+            // snapshot still reads the pre-dispatch value.
+            // Why important: pins variant (b) of the TODO entry — listener bugs do NOT take down
+            // runtime.update for unrelated components. Cross-component-atomicity (ADR-026) and the
+            // conjunctive veto chain (ADR-028) depend on this absorption.
+            CapturingLoggerFactory captured = new CapturingLoggerFactory();
+
+            // Given
+            LiveContainer<BulkheadSnapshot> live = new LiveContainer<>(snapshot(10));
+            BulkheadPatch patch = new BulkheadPatch();
+            patch.touchMaxConcurrentCalls(25);
+
+            FakeHandle target = new FakeHandle(LifecycleState.HOT);
+            target.onChangeRequest(req -> {
+                throw new IllegalStateException("boom");
+            });
+
+            // When
+            DispatchResult result =
+                    new UpdateDispatcher(captured).dispatch(KEY, target, live, patch);
+
+            // Then
+            assertThat(result.outcome()).isEqualTo(ApplyOutcome.VETOED);
+            VetoFinding finding = result.vetoFinding().orElseThrow();
+            assertThat(finding.source()).isEqualTo(VetoFinding.Source.LISTENER);
+            assertThat(finding.componentKey()).isEqualTo(KEY);
+            assertThat(finding.reason())
+                    .contains("listener threw")
+                    .contains("IllegalStateException")
+                    .contains("boom");
+            assertThat(finding.touchedFields())
+                    .extracting(ComponentField::name)
+                    .containsExactly(BulkheadField.MAX_CONCURRENT_CALLS.name());
+            assertThat(live.snapshot().maxConcurrentCalls())
+                    .as("absorbed-throw veto must not be applied")
+                    .isEqualTo(10);
+        }
+
+        @Test
+        void should_VETO_with_LISTENER_source_when_a_removal_listener_throws_a_runtime_exception() {
+            // What is to be tested: a listener whose decideRemoval throws is absorbed as a
+            // synthetic veto on the removal path, mirroring the patch path. The removal is
+            // rejected, touchedFields is empty (matches the real-veto removal contract), and the
+            // live container's component remains addressable.
+            // Why important: removal-path absorption is the second of the four throw sites the
+            // sub-step pins. Without it a removal-time listener bug would propagate out of
+            // runtime.update and break cross-component-atomicity for removal waves.
+            CapturingLoggerFactory captured = new CapturingLoggerFactory();
+
+            // Given
+            LiveContainer<BulkheadSnapshot> live = new LiveContainer<>(snapshot(10));
+            FakeHandle target = new FakeHandle(LifecycleState.HOT);
+            target.onChangeRequest(new ChangeRequestListener<BulkheadSnapshot>() {
+                @Override
+                public ChangeDecision decide(ChangeRequest<BulkheadSnapshot> request) {
+                    return ChangeDecision.accept();
+                }
+
+                @Override
+                public ChangeDecision decideRemoval(BulkheadSnapshot currentSnapshot) {
+                    throw new IllegalStateException("removal-time bug");
+                }
+            });
+
+            // When
+            DispatchResult result =
+                    new UpdateDispatcher(captured).dispatchRemoval(KEY, target, live);
+
+            // Then
+            assertThat(result.outcome()).isEqualTo(ApplyOutcome.VETOED);
+            VetoFinding finding = result.vetoFinding().orElseThrow();
+            assertThat(finding.source()).isEqualTo(VetoFinding.Source.LISTENER);
+            assertThat(finding.componentKey()).isEqualTo(KEY);
+            assertThat(finding.reason())
+                    .contains("listener threw")
+                    .contains("IllegalStateException")
+                    .contains("removal-time bug");
+            assertThat(finding.touchedFields())
+                    .as("removal carries no touched fields, even on an absorbed-throw veto")
+                    .isEmpty();
+            assertThat(target.internalCheckCalls())
+                    .as("internal check must not run once a listener has thrown")
+                    .isZero();
+        }
+
+        @Test
+        void should_VETO_with_COMPONENT_INTERNAL_source_when_the_patch_internal_check_throws() {
+            // What is to be tested: the component-internal mutability check throwing on a patch
+            // path is absorbed as a synthetic veto with Source.COMPONENT_INTERNAL. The patch is
+            // rejected and the live snapshot is unchanged.
+            // Why important: third throw site. The internal check is the last gate; a throw here
+            // must not bubble up because that would re-create the cross-component-atomicity break
+            // the sub-step closes — even though the bug surface is per-component code, the failure
+            // mode is identical to a listener throw.
+            CapturingLoggerFactory captured = new CapturingLoggerFactory();
+
+            // Given
+            LiveContainer<BulkheadSnapshot> live = new LiveContainer<>(snapshot(10));
+            BulkheadPatch patch = new BulkheadPatch();
+            patch.touchMaxConcurrentCalls(25);
+
+            FakeHandle target = new FakeHandle(LifecycleState.HOT);
+            target.setInternalCheck(req -> {
+                throw new IllegalArgumentException("invariant violated");
+            });
+
+            // When
+            DispatchResult result =
+                    new UpdateDispatcher(captured).dispatch(KEY, target, live, patch);
+
+            // Then
+            assertThat(result.outcome()).isEqualTo(ApplyOutcome.VETOED);
+            VetoFinding finding = result.vetoFinding().orElseThrow();
+            assertThat(finding.source()).isEqualTo(VetoFinding.Source.COMPONENT_INTERNAL);
+            assertThat(finding.reason())
+                    .contains("internal mutability check threw")
+                    .contains("IllegalArgumentException")
+                    .contains("invariant violated");
+            assertThat(finding.touchedFields())
+                    .extracting(ComponentField::name)
+                    .containsExactly(BulkheadField.MAX_CONCURRENT_CALLS.name());
+            assertThat(live.snapshot().maxConcurrentCalls()).isEqualTo(10);
+        }
+
+        @Test
+        void should_VETO_with_COMPONENT_INTERNAL_source_when_the_removal_internal_check_throws() {
+            // What is to be tested: the internal-check throw absorbed on the removal path,
+            // mirroring the patch-path internal-check absorption above. Source is
+            // COMPONENT_INTERNAL, touchedFields is empty.
+            // Why important: fourth and final throw site. Pinning all four sites pins the full
+            // cross-product (listener × {patch, removal} ∪ internal-check × {patch, removal}).
+            CapturingLoggerFactory captured = new CapturingLoggerFactory();
+
+            // Given
+            LiveContainer<BulkheadSnapshot> live = new LiveContainer<>(snapshot(10));
+            FakeHandle target = new FakeHandle(LifecycleState.HOT);
+            target.setRemovalCheck(snap -> {
+                throw new IllegalArgumentException("cannot remove now");
+            });
+
+            // When
+            DispatchResult result =
+                    new UpdateDispatcher(captured).dispatchRemoval(KEY, target, live);
+
+            // Then
+            assertThat(result.outcome()).isEqualTo(ApplyOutcome.VETOED);
+            VetoFinding finding = result.vetoFinding().orElseThrow();
+            assertThat(finding.source()).isEqualTo(VetoFinding.Source.COMPONENT_INTERNAL);
+            assertThat(finding.reason())
+                    .contains("internal mutability check threw")
+                    .contains("IllegalArgumentException")
+                    .contains("cannot remove now");
+            assertThat(finding.touchedFields()).isEmpty();
+        }
+
+        @Test
+        void should_short_circuit_the_remaining_listeners_when_an_earlier_listener_throws() {
+            // What is to be tested: when listener[1] throws mid-chain, listener[0] has already run
+            // and listener[2] does NOT run. The synthetic veto preserves the conjunctive-chain
+            // short-circuit semantics — a throw is treated identically to a real Veto.
+            // Why successful: counters confirm 1, 1, 0; the synthetic veto names listener[1]'s
+            // exception, not listener[2]'s (which never ran). Internal check does not run either.
+            // Why important: ADR-028's conjunctive-chain contract must apply to synthetic vetoes,
+            // not just real ones — otherwise downstream listeners would observe patches the chain
+            // already committed to rejecting, which is the bug the chain is designed to prevent.
+            CapturingLoggerFactory captured = new CapturingLoggerFactory();
+
+            // Given
+            LiveContainer<BulkheadSnapshot> live = new LiveContainer<>(snapshot(10));
+            BulkheadPatch patch = new BulkheadPatch();
+            patch.touchMaxConcurrentCalls(25);
+
+            FakeHandle target = new FakeHandle(LifecycleState.HOT);
+            AtomicInteger first = new AtomicInteger();
+            AtomicInteger second = new AtomicInteger();
+            AtomicInteger third = new AtomicInteger();
+            target.onChangeRequest(req -> {
+                first.incrementAndGet();
+                return ChangeDecision.accept();
+            });
+            target.onChangeRequest(req -> {
+                second.incrementAndGet();
+                throw new IllegalStateException("middle listener bug");
+            });
+            target.onChangeRequest(req -> {
+                third.incrementAndGet();
+                return ChangeDecision.accept();
+            });
+
+            // When
+            DispatchResult result =
+                    new UpdateDispatcher(captured).dispatch(KEY, target, live, patch);
+
+            // Then
+            assertThat(result.outcome()).isEqualTo(ApplyOutcome.VETOED);
+            assertThat(result.vetoFinding().orElseThrow().source())
+                    .isEqualTo(VetoFinding.Source.LISTENER);
+            assertThat(result.vetoFinding().orElseThrow().reason())
+                    .contains("middle listener bug");
+            assertThat(first.get())
+                    .as("first listener runs before the throw")
+                    .isEqualTo(1);
+            assertThat(second.get())
+                    .as("throwing listener was invoked exactly once")
+                    .isEqualTo(1);
+            assertThat(third.get())
+                    .as("listeners after the throw must not be called")
+                    .isZero();
+            assertThat(target.internalCheckCalls())
+                    .as("internal check must not run once a listener has thrown")
+                    .isZero();
+        }
+
+        @Test
+        void should_propagate_an_Error_thrown_by_a_listener_unchanged() {
+            // What is to be tested: an Error (e.g. OutOfMemoryError, StackOverflowError) thrown
+            // from a listener is NOT caught and absorbed — it propagates out of dispatch. Errors
+            // signal JVM-level conditions that synthetic-veto absorption would mask, so the
+            // catch block intentionally targets `Exception` only.
+            // Why successful: assertThatThrownBy observes the original Error; outcome is never
+            // produced because the exception propagates.
+            // Why important: the boundary between Exception (absorb) and Error (propagate) is
+            // load-bearing. A regression that broadened to `catch (Throwable)` would silently
+            // hide OOM-class failures under a synthetic veto, which is exactly the kind of
+            // catastrophic-condition masking the JVM's Error subhierarchy is designed to avoid.
+            CapturingLoggerFactory captured = new CapturingLoggerFactory();
+
+            // Given
+            LiveContainer<BulkheadSnapshot> live = new LiveContainer<>(snapshot(10));
+            BulkheadPatch patch = new BulkheadPatch();
+            patch.touchMaxConcurrentCalls(25);
+
+            FakeHandle target = new FakeHandle(LifecycleState.HOT);
+            target.onChangeRequest(req -> {
+                throw new OutOfMemoryError("simulated");
+            });
+
+            UpdateDispatcher dispatcher = new UpdateDispatcher(captured);
+
+            // When / Then
+            assertThatThrownBy(() -> dispatcher.dispatch(KEY, target, live, patch))
+                    .isInstanceOf(OutOfMemoryError.class)
+                    .hasMessage("simulated");
+            assertThat(captured.errorEntries)
+                    .as("Errors must not be absorbed and so must not be logged as synthetic vetoes")
+                    .isEmpty();
+            assertThat(live.snapshot().maxConcurrentCalls())
+                    .as("the patch was not applied — Error short-circuited the chain before apply")
+                    .isEqualTo(10);
+        }
+
+        @Test
+        void should_log_at_error_level_when_a_listener_throws() {
+            // What is to be tested: an absorbed listener throw is logged through the runtime's
+            // LoggerFactory at error level. The captured entry references both the listener role
+            // and the original exception (the throwable is passed as the trailing varargs arg, so
+            // an SLF4J-backed LoggerFactory in production logs the full stack trace; the
+            // capturing fixture pins that the throwable arrives in the args array).
+            // Why important: traceability. The TODO entry's variant (b) requires that operators
+            // can trace an absorbed throw to its source — a synthetic veto reason without a log
+            // line would leave them with no stack trace.
+            CapturingLoggerFactory captured = new CapturingLoggerFactory();
+
+            // Given
+            LiveContainer<BulkheadSnapshot> live = new LiveContainer<>(snapshot(10));
+            BulkheadPatch patch = new BulkheadPatch();
+            patch.touchMaxConcurrentCalls(25);
+
+            FakeHandle target = new FakeHandle(LifecycleState.HOT);
+            IllegalStateException original = new IllegalStateException("traceable");
+            target.onChangeRequest(req -> {
+                throw original;
+            });
+
+            // When
+            new UpdateDispatcher(captured).dispatch(KEY, target, live, patch);
+
+            // Then
+            assertThat(captured.errorEntries).hasSize(1);
+            CapturedLogEntry entry = captured.errorEntries.get(0);
+            assertThat(entry.format)
+                    .contains("absorbed as synthetic veto");
+            assertThat(entry.args)
+                    .as("the original throwable is included in the args so SLF4J logs the stack trace")
+                    .contains((Object) original);
+        }
+    }
+
+    // ──────────────────────────────────────────────────────────────────────────────
+    // Test fixtures
+    // ──────────────────────────────────────────────────────────────────────────────
+
+    /**
+     * Logger factory whose error channel records every log call into {@link #errorEntries}. The
+     * other channels are wired to no-op so unrelated logs do not pollute assertions. Modeled on
+     * the {@code CapturingLoggerFactory} pattern used by
+     * {@code BulkheadHotPhaseFailureModeTest} in the imperative module — kept as a private inner
+     * class because there is no project-wide log-capture fixture today.
+     */
+    private static final class CapturingLoggerFactory implements LoggerFactory {
+
+        final List<CapturedLogEntry> errorEntries = new ArrayList<>();
+
+        @Override
+        public Logger getLogger(Class<?> clazz) {
+            return new Logger(
+                    Logger.NO_OP_ACTION,
+                    Logger.NO_OP_ACTION,
+                    Logger.NO_OP_ACTION,
+                    new CapturingLogAction(errorEntries));
+        }
+    }
+
+    private record CapturedLogEntry(String format, Object[] args) {
+    }
+
+    private static final class CapturingLogAction implements LogAction {
+
+        private final List<CapturedLogEntry> sink;
+
+        CapturingLogAction(List<CapturedLogEntry> sink) {
+            this.sink = sink;
+        }
+
+        @Override
+        public boolean isEnabled() {
+            return true;
+        }
+
+        @Override
+        public void log(String message) {
+            sink.add(new CapturedLogEntry(message, new Object[0]));
+        }
+
+        @Override
+        public void log(String message, Object arg) {
+            sink.add(new CapturedLogEntry(message, new Object[]{arg}));
+        }
+
+        @Override
+        public void log(String message, Object arg1, Object arg2) {
+            sink.add(new CapturedLogEntry(message, new Object[]{arg1, arg2}));
+        }
+
+        @Override
+        public void log(String message, Object arg1, Object arg2, Object arg3) {
+            sink.add(new CapturedLogEntry(message, new Object[]{arg1, arg2, arg3}));
+        }
+
+        @Override
+        public void log(String message, Supplier<?> argSupplier) {
+            sink.add(new CapturedLogEntry(message, new Object[]{argSupplier.get()}));
+        }
+
+        @Override
+        public void log(String message, Object... args) {
+            sink.add(new CapturedLogEntry(message, args.clone()));
         }
     }
 }
