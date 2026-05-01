@@ -63,11 +63,15 @@ Three named presets cover the common starting points. They establish a baseline 
 `maxWaitDuration`; individual setters can refine the result afterwards (preset-then-customize order is required —
 calling a preset after a setter throws `IllegalStateException`).
 
-| Preset       | `maxConcurrentCalls` | `maxWaitDuration`  | Intent                                              |
-|--------------|----------------------|--------------------|-----------------------------------------------------|
-| `protective` | 10                   | `Duration.ZERO`    | Conservative limits, fail-fast — critical services. |
-| `balanced`   | 50                   | 500&nbsp;ms        | Production default — reasonable headroom.           |
-| `permissive` | 200                  | 5&nbsp;s           | Generous limits — elastic downstream services.      |
+The Presets and [Configuration reference](#configuration-reference) tables below carry a Strategy column. A
+`varies — see Strategies` entry in that column flags a row whose effect depends on the active strategy — see the
+[Strategies](#strategies) chapter for the variation. Rows with the column blank apply to all four strategies.
+
+| Preset       | `maxConcurrentCalls` | `maxWaitDuration`  | Strategy                  | Intent                                                                                                                              |
+|--------------|----------------------|--------------------|---------------------------|-------------------------------------------------------------------------------------------------------------------------------------|
+| `protective` | 10                   | `Duration.ZERO`    | varies — see Strategies   | Conservative limits, fail-fast — critical services. The fail-fast framing assumes `semaphore`; with adaptive variants the algorithm's limits govern instead of `maxConcurrentCalls`. |
+| `balanced`   | 50                   | 500&nbsp;ms        | varies — see Strategies   | Production default — reasonable headroom. The 50-permit headroom applies to `semaphore` and `codel` only; adaptive variants use the algorithm's `initialLimit` instead.             |
+| `permissive` | 200                  | 5&nbsp;s           | varies — see Strategies   | Generous limits — elastic downstream services. The 200-permit ceiling applies to `semaphore` and `codel` only; adaptive variants use the algorithm's `initialLimit`/`maxLimit` instead. |
 
 ```java
 .bulkhead("inventory", b -> b
@@ -316,14 +320,14 @@ one it runs now.
 
 ## Configuration reference
 
-| Parameter            | Type                     | Default                          | Description                                                                                                                  |
-|----------------------|--------------------------|----------------------------------|------------------------------------------------------------------------------------------------------------------------------|
-| `name`               | `String`                 | (required, constructor argument) | Component identity used for lookup, events, and exceptions.                                                                  |
-| `maxConcurrentCalls` | `int`                    | 50                               | Maximum number of concurrent calls. Strictly positive. Live-tunable on the semaphore strategy only.                          |
-| `maxWaitDuration`    | `Duration`               | 500&nbsp;ms                      | How long to wait for a permit. `Duration.ZERO` = fail immediately. Non-negative.                                             |
-| `tags`               | `Set<String>`            | empty                            | Operational tags. Duplicates from the varargs setter are silently deduped.                                                   |
-| `events`             | `BulkheadEventConfig`    | `disabled()`                     | Per-call event flags. Opt-in so the hot path stays unweighted by default.                                                    |
-| `strategy`           | `BulkheadStrategyConfig` | `SemaphoreStrategyConfig`        | Permit-management policy. Set via `b.semaphore()`, `b.codel(...)`, `b.adaptive(...)`, or `b.adaptiveNonBlocking(...)`.       |
+| Parameter            | Type                     | Default                          | Strategy                  | Description                                                                                                                                                                                                                                            |
+|----------------------|--------------------------|----------------------------------|---------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `name`               | `String`                 | (required, constructor argument) |                           | Component identity used for lookup, events, and exceptions.                                                                                                                                                                                            |
+| `maxConcurrentCalls` | `int`                    | 50                               | varies — see Strategies   | Maximum number of concurrent calls. Strictly positive. Hard cap on `semaphore` and `codel`; both adaptive variants ignore the field and use the algorithm's `initialLimit`/`minLimit`/`maxLimit` instead. Live-tunable on the semaphore strategy only. |
+| `maxWaitDuration`    | `Duration`               | 500&nbsp;ms                      | varies — see Strategies   | How long to wait for a permit. `Duration.ZERO` = fail immediately. Non-negative. Park duration on `semaphore`, `codel`, and the blocking `adaptive` variant; ignored by `adaptiveNonBlocking`, which fails fast on saturation.                          |
+| `tags`               | `Set<String>`            | empty                            |                           | Operational tags. Duplicates from the varargs setter are silently deduped.                                                                                                                                                                             |
+| `events`             | `BulkheadEventConfig`    | `disabled()`                     |                           | Per-call event flags. Opt-in so the hot path stays unweighted by default.                                                                                                                                                                              |
+| `strategy`           | `BulkheadStrategyConfig` | `SemaphoreStrategyConfig`        |                           | Permit-management policy. Set via `b.semaphore()`, `b.codel(...)`, `b.adaptive(...)`, or `b.adaptiveNonBlocking(...)`.                                                                                                                                 |
 
 **Full example:**
 
