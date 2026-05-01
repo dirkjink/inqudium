@@ -18,6 +18,7 @@ import eu.inqudium.core.pipeline.InqDecorator;
 import eu.inqudium.core.pipeline.InqExecutor;
 import eu.inqudium.core.time.InqClock;
 import eu.inqudium.core.time.InqNanoTimeSource;
+import eu.inqudium.imperative.core.pipeline.InqAsyncDecorator;
 import eu.inqudium.imperative.lifecycle.ImperativeLifecyclePhasedComponent;
 import eu.inqudium.imperative.lifecycle.spi.ImperativePhase;
 
@@ -37,14 +38,26 @@ import eu.inqudium.imperative.lifecycle.spi.ImperativePhase;
  * and a strategy-config change triggers an atomic strategy swap on the hot phase (after the
  * mutability check has accepted, per ADR-032).
  *
- * <p>Pipeline contracts (ADR-033). The class implements both {@link InqExecutor} (one-shot
- * execution) and {@link InqDecorator} (deferred wrapper construction) directly: their default
- * methods all reduce to the inherited {@link LayerAction#execute LayerAction.execute(...)} which
- * the lifecycle base class fulfils via {@link ImperativeLifecyclePhasedComponent#execute}. The
- * generic {@code <A, R>} parameters propagate from {@code LayerAction} through the lifecycle
- * base into the phase reference. The async pipeline contracts ({@code InqAsyncExecutor},
- * {@code InqAsyncDecorator}) are intentionally not implemented here — a separate ADR designs
- * the asynchronous bulkhead variant.
+ * <p>Pipeline contracts (ADR-033). The class implements both the synchronous pipeline
+ * contracts ({@link InqExecutor} for one-shot execution and {@link InqDecorator} for deferred
+ * wrapper construction) and the asynchronous pipeline contract ({@link InqAsyncDecorator})
+ * directly: their default methods all reduce to either
+ * {@link LayerAction#execute LayerAction.execute(...)} (sync) or
+ * {@link eu.inqudium.imperative.core.pipeline.AsyncLayerAction#executeAsync
+ * AsyncLayerAction.executeAsync(...)} (async), which the lifecycle base class fulfils via
+ * {@link ImperativeLifecyclePhasedComponent#execute} and
+ * {@link ImperativeLifecyclePhasedComponent#executeAsync} respectively. The generic
+ * {@code <A, R>} parameters propagate from these layer contracts through the lifecycle base
+ * into the phase reference.
+ *
+ * <p>Both paths share the same hot-phase strategy instance, the same listener registry, and
+ * the same lifecycle identity — a bulkhead is one component regardless of which method shape
+ * its callers use. The async path acquires the permit synchronously on the calling thread
+ * (back-pressure semantics) and releases it asynchronously on stage completion via
+ * {@code whenComplete}, per ADR-020 and ADR-023. The cold-to-hot trigger fires on the method
+ * call moment for both paths: under {@link java.util.concurrent.CompletionStage} semantics,
+ * {@code executeAsync} is an eager operation, so by the time the method returns the hot phase
+ * exists and its synchronous start-phase work has already happened.
  *
  * @param <A> the call argument type; reduces to {@code Object} for components served via the
  *            runtime registry.
@@ -53,7 +66,10 @@ import eu.inqudium.imperative.lifecycle.spi.ImperativePhase;
  */
 public final class InqBulkhead<A, R>
         extends ImperativeLifecyclePhasedComponent<BulkheadSnapshot, A, R>
-        implements BulkheadHandle<ImperativeTag>, InqExecutor<A, R>, InqDecorator<A, R> {
+        implements BulkheadHandle<ImperativeTag>,
+                   InqExecutor<A, R>,
+                   InqDecorator<A, R>,
+                   InqAsyncDecorator<A, R> {
 
     private final InqEventPublisher componentEventPublisher;
     private final InqClock clock;
@@ -192,11 +208,4 @@ public final class InqBulkhead<A, R>
         };
     }
 
-    // TODO: an asynchronous variant of InqBulkhead — analogous to the old InqAsyncDecorator
-    //   contract (CompletionStage-based decorate methods, two-phase around-advice with the
-    //   release running on stage completion rather than in a synchronous finally) — has not yet
-    //   been designed in the new architecture. The phase for this work is undecided; it likely
-    //   warrants its own ADR because the cold/hot transition under deferred subscription is not
-    //   the same problem the synchronous form solves (the reactive paradigm's deferred CAS
-    //   pattern from ADR-029 is closer in spirit). Flagged here so the question is not lost.
 }
