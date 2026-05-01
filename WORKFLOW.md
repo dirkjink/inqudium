@@ -126,9 +126,28 @@ What to look for, in rough priority order:
   pattern). If a sub-step introduces new Spring Boot tests, scrutinize for those
   patterns.
 
-After the review, this session either approves (with a written summary that the
-maintainer can use as PR review feedback) or returns to the prompt-writing phase with a
-correction.
+When a sub-step is approved, log its completion in `REFACTORING.md` (or the parallel
+plan document, if the work belongs to a `REFACTORING_<NAME>.md`). Each section that
+defines a step or sub-step ends with a **completion log** — a bullet list at the bottom
+of that section. When the implementation session reports the step as done and this
+session approves, add an entry of the form:
+
+```
+- [x] 2025-04-30 14:32 — Stage 1: InqElement renamed to record-style accessors across 34 files
+```
+
+Each entry carries the date, the time, and a one-sentence topic that names what was
+accomplished — concrete enough that a later reader can see what the sub-step actually
+delivered, not just that it ran. The format is `- [x] YYYY-MM-DD HH:MM — <topic>`.
+
+The completion log is a running record visible in the same document as the plan, so a
+reader scanning a sub-step section sees both the spec and the closure receipt next to
+each other. When `REFACTORING.md` is deleted at refactor end, the log goes with it; the
+audit trail at that point lives in the Git history and in the closed PRs.
+
+After the review and the log entry, this session either approves (with a written summary
+that the maintainer can use as PR review feedback) or returns to the prompt-writing
+phase with a correction.
 
 ### 4. Maintain workflow documents
 
@@ -138,10 +157,9 @@ correction.
 Conventions:
 
 - **`REFACTORING.md`** lives at the repository root for the duration of the active
-  refactor. Sub-step descriptions, status markers (when an implementation session has
-  closed a sub-step), audit-finding routing, and a clear Phase-N closure section that
-  names what gets deleted at the end. Deleted at refactor end together with its
-  parallels.
+  refactor. Sub-step descriptions, audit-finding routing, a clear Phase-N closure
+  section that names what gets deleted at the end, and per-section completion logs
+  (see review section above). Deleted at refactor end together with its parallels.
 - **`REFACTORING_<NAME>.md`** parallel documents for self-contained threads
   (`REFACTORING_DECORATOR_BRIDGE.md` was Phase 2's precedent for the ADR-033
   implementation). Same lifecycle as `REFACTORING.md`. Use one when a thread has

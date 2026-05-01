@@ -13,50 +13,6 @@ Wishlist items go in `IDEAS.md`.
 
 ---
 
-## Audit 2.12.4-A — strategy construction failure on cold-to-hot is structurally unreachable
-
-**Where:** `BulkheadHotPhase.BulkheadHotPhase(InqBulkhead, BulkheadSnapshot)` — the constructor
-that delegates to `BulkheadStrategyFactory.create(snapshot, general)` from inside the
-super-call.
-
-**The gap:** Audit 2.12.4 listed two scenarios that the bulkhead's failure-mode tests should
-pin. Sub-step 2.20's follow-up closed scenario B (`closeStrategy(...)` throws on hot-swap) in
-`BulkheadHotPhaseFailureModeTest`. Scenario A — the strategy materialization throws during
-the cold-to-hot transition — could not be pinned with any combination of inputs the public
-DSL accepts. Three structural facts combine:
-
-1. `BulkheadStrategyConfig` is a sealed interface with four implementations
-   (`SemaphoreStrategyConfig`, `CoDelStrategyConfig`, `AdaptiveStrategyConfig`,
-   `AdaptiveNonBlockingStrategyConfig`); a synthetic throwing variant cannot be added from
-   outside the package.
-2. Every concrete production strategy constructor (`SemaphoreBulkheadStrategy`,
-   `CoDelBulkheadStrategy`, `AdaptiveBulkheadStrategy`, `AdaptiveNonBlockingBulkheadStrategy`)
-   only throws on inputs that `BulkheadSnapshot`, `GeneralSnapshot`, `CoDelStrategyConfig`,
-   `AimdLimitAlgorithmConfig` and `VegasLimitAlgorithmConfig` reject in their compact
-   constructors. The factory therefore cannot be made to throw with a snapshot that itself
-   passed validation.
-3. `BulkheadStrategyFactory` is a final class with a private constructor and only a static
-   `create(...)` method; it cannot be subclassed or substituted at runtime. `InqBulkhead` and
-   its `createHotPhase()` are also final, ruling out a test-side override.
-
-**Why it does not need a fix:** The defensive code in `ColdPhase.execute(...)` (the
-`createHotPhase()` call placed before the CAS, so any throw aborts the transition without
-mutating the phase reference) remains as forward-looking belt-and-braces. The actual failure
-mode it guards against is unreachable today; the cost of carrying the guard is one method
-call. If a future change introduces a strategy whose constructor can throw on validated
-inputs, the guard activates without further work.
-
-**What this entry replaces:** Audit 2.12.4-A is closed by acceptance — the test gap is
-documented here rather than papered over with a synthetic seam. Future contributors who add a
-new `BulkheadStrategyConfig` variant whose strategy constructor *can* throw on valid inputs
-must add a pinning test at that point; this entry is the breadcrumb that says "look here".
-
-**When to revisit:** When a fifth strategy is added whose constructor has a non-validated
-failure mode, or when a future ADR decides that test-only seams in production code are
-acceptable for failure-mode pinning.
-
----
-
 ## Strategy config tweaks without strategy-type change
 
 **Where:** `BulkheadHotPhase.strategyChanged(...)` and `BulkheadHotPhase.onSnapshotChange(...)`
