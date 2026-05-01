@@ -19,6 +19,7 @@ import eu.inqudium.core.log.LoggerFactory;
 import eu.inqudium.core.pipeline.InternalExecutor;
 import eu.inqudium.core.time.InqClock;
 import eu.inqudium.core.time.InqNanoTimeSource;
+import eu.inqudium.imperative.core.pipeline.InternalAsyncExecutor;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -29,6 +30,8 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
@@ -373,6 +376,63 @@ class BulkheadEventPublishingTest {
                     .findFirst()
                     .orElseThrow();
             assertThat(rejection.isAcquired()).isFalse();
+        }
+    }
+
+    @Nested
+    @DisplayName("async path")
+    class AsyncPath {
+
+        @Test
+        void executeAsync_publishes_acquire_and_release_events_when_traced() throws Exception {
+            // What is to be tested: with allEnabled events, an async call publishes
+            // wait-trace + on-acquire on the synchronous start phase, and on-release once the
+            // downstream stage completes. The release event fires on whichever thread
+            // completes the downstream stage; the publisher is thread-safe per ADR-030.
+            // Why successful: the captured event list contains exactly the three events in
+            // order, with chain/call ids matching the call.
+            // Why important: dashboards counting acquire vs release events must see the same
+            // pairing on the async path that they see on the sync path; a missing release
+            // event would silently drift those counters under async traffic.
+
+            // Given
+            List<BulkheadEvent> captured = new CopyOnWriteArrayList<>();
+            componentPublisher.onEvent(BulkheadEvent.class, captured::add);
+
+            LiveContainer<BulkheadSnapshot> live =
+                    new LiveContainer<>(snapshot(BulkheadEventConfig.allEnabled(), Duration.ZERO));
+            InqBulkhead<String, String> bulkhead = newBulkhead(live);
+
+            CompletableFuture<String> downstream = new CompletableFuture<>();
+            InternalAsyncExecutor<String, String> next = (chainId, callId, arg) -> downstream;
+
+            // When — start phase publishes the two acquire events on the calling thread
+            CompletionStage<String> result = bulkhead.executeAsync(7L, 11L, "x", next);
+
+            // Then — wait-trace + on-acquire fired during the synchronous start phase
+            assertThat(captured)
+                    .extracting(e -> e.getClass().getSimpleName())
+                    .containsExactly(
+                            "BulkheadWaitTraceEvent",
+                            "BulkheadOnAcquireEvent");
+
+            // When — downstream completes, whenComplete fires release event on the completion
+            // thread (here, the test thread because completion is synchronous).
+            downstream.complete("done");
+            result.toCompletableFuture().get(5, TimeUnit.SECONDS);
+
+            // Then — on-release joined the capture log; chain/call ids on each event match
+            assertThat(captured)
+                    .extracting(e -> e.getClass().getSimpleName())
+                    .containsExactly(
+                            "BulkheadWaitTraceEvent",
+                            "BulkheadOnAcquireEvent",
+                            "BulkheadOnReleaseEvent");
+            assertThat(captured)
+                    .allSatisfy(e -> {
+                        assertThat(e.getChainId()).isEqualTo(7L);
+                        assertThat(e.getCallId()).isEqualTo(11L);
+                    });
         }
     }
 
