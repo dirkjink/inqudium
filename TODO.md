@@ -13,59 +13,6 @@ Wishlist items go in `IDEAS.md`.
 
 ---
 
-## Listener that throws (instead of returning a clean veto) — behaviour unspecified
-
-**Where:** `ImperativeLifecyclePhasedComponent.evaluate(...)` and the dispatcher's
-listener iteration in the veto chain.
-
-**The gap:** A listener registered via `bh.onChangeRequest(...)` is contractually expected
-to return a `ChangeDecision` — either `accept()` or `veto(reason)`. What happens if a
-listener instead throws a `RuntimeException` is not specified, not tested, and not obvious
-from the code.
-
-**Concrete example:** A listener has a bug, a misconfigured external service it consults,
-or simply throws an `IllegalStateException` from a defensive check. The dispatcher iterating
-the listeners encounters the throw mid-chain. From code reading, the exception likely
-propagates up through `dispatchUpdate` to `runtime.update(...)`, surfacing to the caller
-as an update-time failure rather than as a veto with a synthetic reason. But that path is
-not test-covered, and the semantics are not pinned in any ADR.
-
-**Why it matters:** Operator trust in the veto chain depends on its predictability. A
-listener bug that takes down `runtime.update(...)` for unrelated components is a worse
-failure mode than the same bug being absorbed as a veto with a "listener X threw" reason.
-The current behaviour is plausibly the former; the desired behaviour is undecided.
-
-**Three options for the fix:**
-
-- **(a) Throw propagates, update fails.** Current de-facto behaviour. Listener bugs are
-  loud and visible. But the update fails for components unrelated to the listener's target,
-  which violates the cross-component-atomicity contract from ADR-026.
-- **(b) Throw is treated as veto with synthetic reason.** "listener X threw IllegalStateException".
-  The patch is rejected for the affected component but the rest of the update proceeds.
-  Conjunctive veto chain stays intact. Operator gets a clear `BuildReport.vetoFindings` entry.
-- **(c) Throw is logged and the listener is skipped.** Other listeners run, and the patch
-  may still commit. Most permissive, but hides bugs from the operator.
-
-Recommendation when this is taken up: variant (b). It preserves the cross-component-atomicity
-contract, keeps the bug visible (in the BuildReport, not as a thrown exception), and matches
-the "listeners must provide a non-blank reason" discipline by synthesizing one when they fail
-to.
-
-**Tests that would pin the fix:**
-
-- A listener that throws — the patch on its component is reported as `VETOED` with
-  `Source.LISTENER` and a reason naming the thrown exception type.
-- The same update touching multiple components only fails for the listener's component;
-  the others commit per cross-component-atomicity.
-- The throw is logged via `general().loggerFactory()` at `error` level so the operator can
-  trace it to source.
-
-**Scope:** Veto-chain semantics, paradigm-agnostic. Decision belongs in the dispatcher
-(`UpdateDispatcher` in `inqudium-config`) and applies uniformly to all current and future
-paradigms.
-
----
-
 ## Asynchronous variant of `InqBulkhead` is not implemented
 
 **Where:** `InqBulkhead.java` (line 137 carries an explicit code-level TODO that flags this).
