@@ -216,6 +216,14 @@ strategy-specific fields a particular strategy may want to re-tune (e.g. CoDel's
 exposed as live-tunable). A change to `STRATEGY` does **not** flow through
 `onSnapshotChange` — it goes through hot-swap.
 
+The hot phase remembers the `BulkheadStrategyConfig` it last materialized from in a
+`lastMaterializedConfig` field. When a snapshot change is dispatched, change detection is a
+single record-equality check against this field. This covers both flavours uniformly: a
+different strategy type triggers a fresh materialization through the factory; the same
+strategy type with different field values (a CoDel `targetDelay` tweak, an Adaptive algorithm
+switch from AIMD to Vegas) goes through the same path. The veto in `evaluate(...)` —
+`concurrentCalls() > 0` rejects any `STRATEGY`-touching patch — gates both equally.
+
 ### The atomic hot-swap mechanism
 
 When a patch touches `BulkheadField.STRATEGY`, the dispatcher routes through the existing
@@ -286,9 +294,8 @@ private void onSnapshotChange(BulkheadSnapshot dispatchedSnapshot) {
 }
 ```
 
-`strategyChanged(...)` compares the snapshot's strategy-config type to the running
-strategy's class — it uses the sealed-type discriminator on the snapshot side and the
-strategy class on the runtime side. The `instanceof` guard in the in-place branch is
+`strategyChanged(...)` performs the record-equality check described above against the
+cached `lastMaterializedConfig`. The `instanceof` guard in the in-place branch is
 defence-in-depth: the mutability check has already vetoed any `MAX_CONCURRENT_CALLS` patch
 on a non-semaphore strategy before reaching this branch, but the guard ensures a coherent
 state if the dispatcher were ever bypassed.
@@ -369,17 +376,6 @@ bulkhead.onChangeRequest(req -> req.touchedFields().contains(BulkheadField.STRAT
   custom `BulkheadStrategy` implementations through the configuration. The four built-in
   strategies cover the design space the framework targets. A future ADR can introduce a
   custom-strategy SPI if a real need surfaces.
-- **Same-type config rebuild on `STRATEGY` patch.** This ADR specifies the hot-swap path
-  for *strategy-type* changes — semaphore → CoDel, CoDel → adaptive, and so on. A patch
-  that touches `STRATEGY` but lands on the same strategy type with different field values
-  (CoDel with a new `targetDelay`, an adaptive variant with new algorithm parameters) does
-  not currently trigger a rebuild: `strategyChanged(...)` checks type identity. The veto
-  check in `evaluate(...)` already vetoes any `STRATEGY`-touching patch on a non-quiescent
-  bulkhead, so the *safety* property is preserved; only the *propagation* of the new
-  field values to the running strategy is missing. Closing this gap means extending
-  `strategyChanged(...)` to detect config-value differences within a same-type strategy
-  and routing those through the same swap path. The design is straightforward but not
-  free; it is tracked separately as a follow-up rather than rolled into this ADR.
 
 ## Consequences
 
