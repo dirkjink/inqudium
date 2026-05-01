@@ -1,10 +1,13 @@
 package eu.inqudium.imperative.core.pipeline;
 
+import eu.inqudium.config.Inqudium;
+import eu.inqudium.config.runtime.InqRuntime;
 import eu.inqudium.core.element.InqElement;
 import eu.inqudium.core.element.InqElementType;
 import eu.inqudium.core.event.InqEventPublisher;
 import eu.inqudium.core.pipeline.InqPipeline;
 import eu.inqudium.core.pipeline.JoinPointExecutor;
+import eu.inqudium.imperative.bulkhead.InqBulkhead;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -461,6 +464,98 @@ class AsyncPipelineTerminalTest {
             // When / Then
             assertThatThrownBy(() -> AsyncPipelineTerminal.of(null))
                     .isInstanceOf(NullPointerException.class);
+        }
+    }
+
+    // =========================================================================
+    // Sibling of F-2.18-1 — InqBulkhead acceptance regression pin
+    // =========================================================================
+
+    @Nested
+    @DisplayName("InqBulkhead acceptance in the pipeline (sibling of F-2.18-1)")
+    class BulkheadAsyncDecoratorAcceptance {
+
+        // What is to be tested: that AsyncPipelineTerminal accepts a pipeline
+        // containing a real InqBulkhead and successfully exercises the
+        // asAsyncDecorator(...) cast on it. Unlike HybridAspectPipelineTerminal
+        // (where 3.B's F-2.18-1 pin landed and the cast is eager), here the
+        // cast is captured INSIDE the chain-factory's inner lambda — it does
+        // not fire at of(...) time but on the first execute() call. The
+        // existing `non_async_decorator_element_produces_descriptive_class_cast_exception`
+        // test documents the failure shape: a NonAsyncElement passes through
+        // of() and only produces the CCE (wrapped in the stage) on execute().
+        // To genuinely pin the regression we therefore run the chain
+        // end-to-end; observing a successful result proves the cast on the
+        // bulkhead succeeded.
+        // Why successful: terminal.execute(...) returns a CompletionStage that
+        // completes with the core executor's value, with no CCE wrapped in the
+        // stage. The trace from the synthetic decorator (in the mixed
+        // pipeline) confirms the bulkhead participated as a real layer.
+        // Why important: a future refactor that drops "implements
+        // InqAsyncDecorator" from InqBulkhead would silently re-introduce the
+        // original audit symptom. These tests fail loudly at the same site
+        // that would surface the regression in production.
+
+        @Test
+        @DisplayName("AsyncPipelineTerminal accepts InqBulkhead alone — sibling of F-2.18-1")
+        void should_construct_terminal_when_pipeline_contains_only_an_InqBulkhead() {
+            // Given — a real InqBulkhead built through the standard runtime DSL
+            try (InqRuntime runtime = Inqudium.configure()
+                    .imperative(im -> im.bulkhead("payments", b -> b.balanced()))
+                    .build()) {
+                @SuppressWarnings("unchecked")
+                InqBulkhead<Void, Object> bulkhead =
+                        (InqBulkhead<Void, Object>) runtime.imperative().bulkhead("payments");
+                InqPipeline pipeline = InqPipeline.builder()
+                        .shield(bulkhead)
+                        .build();
+
+                // When — construct the terminal and execute through the lazy cast
+                AsyncPipelineTerminal terminal = AsyncPipelineTerminal.of(pipeline);
+                CompletionStage<Object> stage =
+                        terminal.execute(asyncExecutor("ok"));
+
+                // Then — terminal accepts the bulkhead, the cast on first
+                // execute succeeds, the value flows through to the caller
+                assertThat(terminal).isNotNull();
+                assertThat(terminal.pipeline().depth()).isEqualTo(1);
+                assertThat(stage.toCompletableFuture().join()).isEqualTo("ok");
+            }
+        }
+
+        @Test
+        @DisplayName("AsyncPipelineTerminal accepts InqBulkhead alongside another element — sibling of F-2.18-1")
+        void should_construct_terminal_when_pipeline_contains_an_InqBulkhead_alongside_other_elements() {
+            // Given — InqBulkhead next to the existing TracingAsyncDecorator
+            // fixture. The trace lets us verify the chain ran through the
+            // mixed pipeline, with the synthetic decorator inside the bulkhead
+            // (BH order=400 outer, CB order=500 inner per ADR-021).
+            try (InqRuntime runtime = Inqudium.configure()
+                    .imperative(im -> im.bulkhead("payments", b -> b.balanced()))
+                    .build()) {
+                @SuppressWarnings("unchecked")
+                InqBulkhead<Void, Object> bulkhead =
+                        (InqBulkhead<Void, Object>) runtime.imperative().bulkhead("payments");
+                List<String> trace = new ArrayList<>();
+                InqPipeline pipeline = InqPipeline.builder()
+                        .shield(bulkhead)
+                        .shield(tracing("cb", InqElementType.CIRCUIT_BREAKER, trace))
+                        .build();
+
+                // When
+                AsyncPipelineTerminal terminal = AsyncPipelineTerminal.of(pipeline);
+                CompletionStage<Object> stage = terminal.execute(() -> {
+                    trace.add("core");
+                    return CompletableFuture.completedFuture("ok");
+                });
+
+                // Then — mixed pipeline accepted; lazy async cast succeeded on
+                // both layers; the synthetic decorator participated end-to-end
+                assertThat(terminal).isNotNull();
+                assertThat(terminal.pipeline().depth()).isEqualTo(2);
+                assertThat(stage.toCompletableFuture().join()).isEqualTo("ok");
+                assertThat(trace).containsExactly("cb:enter", "core", "cb:exit");
+            }
         }
     }
 }

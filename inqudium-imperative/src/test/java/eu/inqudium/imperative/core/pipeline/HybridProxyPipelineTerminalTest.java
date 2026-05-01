@@ -1,10 +1,13 @@
 package eu.inqudium.imperative.core.pipeline;
 
+import eu.inqudium.config.Inqudium;
+import eu.inqudium.config.runtime.InqRuntime;
 import eu.inqudium.core.element.InqElementType;
 import eu.inqudium.core.event.InqEventPublisher;
 import eu.inqudium.core.pipeline.InqDecorator;
 import eu.inqudium.core.pipeline.InqPipeline;
 import eu.inqudium.core.pipeline.InternalExecutor;
+import eu.inqudium.imperative.bulkhead.InqBulkhead;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -510,6 +513,98 @@ class HybridProxyPipelineTerminalTest {
                     .isEqualTo("async-ordered:C");
             assertThat(proxy.placeOrderAsync("D").toCompletableFuture().join())
                     .isEqualTo("async-ordered:D");
+        }
+    }
+
+    // =========================================================================
+    // Sibling of F-2.18-1 — InqBulkhead acceptance regression pin
+    // =========================================================================
+
+    @Nested
+    @DisplayName("InqBulkhead acceptance in the pipeline (sibling of F-2.18-1)")
+    class BulkheadAsyncDecoratorAcceptance {
+
+        // What is to be tested: that HybridProxyPipelineTerminal accepts a
+        // pipeline containing a real InqBulkhead and successfully exercises
+        // the asAsyncDecorator(...) cast on the async dispatch path. Unlike
+        // HybridAspectPipelineTerminal (where 3.B's F-2.18-1 pin landed and
+        // the cast is eager), the cast here fires not at of(...) but on the
+        // FIRST proxy method invocation, per Method, via resolveChain. To
+        // genuinely pin the regression we therefore invoke an async proxy
+        // method end-to-end.
+        // Why successful: proxy.placeOrderAsync(...) returns a CompletionStage
+        // that completes with the expected value — proves the lazy
+        // asAsyncDecorator cast on the bulkhead succeeded. The trace from the
+        // synthetic decorator (in the mixed pipeline) confirms the bulkhead
+        // participated as a real outer layer (BH order=400 outer, CB
+        // order=500 inner per ADR-021).
+        // Why important: a future refactor that drops "implements
+        // InqAsyncDecorator" from InqBulkhead would silently re-introduce the
+        // original audit symptom (CCE wrapped in the failed stage on first
+        // async dispatch). These tests fail loudly at the same site.
+
+        @Test
+        @DisplayName("HybridProxyPipelineTerminal accepts InqBulkhead alone — sibling of F-2.18-1")
+        void should_construct_terminal_when_pipeline_contains_only_an_InqBulkhead() {
+            // Given — a real InqBulkhead built through the standard runtime DSL
+            try (InqRuntime runtime = Inqudium.configure()
+                    .imperative(im -> im.bulkhead("payments", b -> b.balanced()))
+                    .build()) {
+                @SuppressWarnings("unchecked")
+                InqBulkhead<Void, Object> bulkhead =
+                        (InqBulkhead<Void, Object>) runtime.imperative().bulkhead("payments");
+                InqPipeline pipeline = InqPipeline.builder()
+                        .shield(bulkhead)
+                        .build();
+
+                // When — construct the terminal, build the proxy, exercise the
+                // async dispatch path so the lazy asAsyncDecorator cast fires
+                HybridProxyPipelineTerminal terminal =
+                        HybridProxyPipelineTerminal.of(pipeline);
+                OrderService proxy = terminal.protect(OrderService.class, new RealOrderService());
+                String result = proxy.placeOrderAsync("Widget")
+                        .toCompletableFuture().join();
+
+                // Then — async cast on the bulkhead succeeded and the value
+                // flowed through end-to-end
+                assertThat(terminal).isNotNull();
+                assertThat(terminal.pipeline().depth()).isEqualTo(1);
+                assertThat(result).isEqualTo("async-ordered:Widget");
+            }
+        }
+
+        @Test
+        @DisplayName("HybridProxyPipelineTerminal accepts InqBulkhead alongside another element — sibling of F-2.18-1")
+        void should_construct_terminal_when_pipeline_contains_an_InqBulkhead_alongside_other_elements() {
+            // Given — InqBulkhead next to the existing DualDecorator fixture.
+            // The trace lets us verify the chain ran through the mixed
+            // pipeline on the async path.
+            try (InqRuntime runtime = Inqudium.configure()
+                    .imperative(im -> im.bulkhead("payments", b -> b.balanced()))
+                    .build()) {
+                @SuppressWarnings("unchecked")
+                InqBulkhead<Void, Object> bulkhead =
+                        (InqBulkhead<Void, Object>) runtime.imperative().bulkhead("payments");
+                List<String> trace = new ArrayList<>();
+                InqPipeline pipeline = InqPipeline.builder()
+                        .shield(bulkhead)
+                        .shield(new DualDecorator("CB", InqElementType.CIRCUIT_BREAKER, trace))
+                        .build();
+
+                // When
+                HybridProxyPipelineTerminal terminal =
+                        HybridProxyPipelineTerminal.of(pipeline);
+                OrderService proxy = terminal.protect(OrderService.class, new RealOrderService());
+                String result = proxy.placeOrderAsync("Widget")
+                        .toCompletableFuture().join();
+
+                // Then — mixed pipeline accepted on the async path; the
+                // synthetic decorator executed inside the bulkhead layer
+                assertThat(terminal).isNotNull();
+                assertThat(terminal.pipeline().depth()).isEqualTo(2);
+                assertThat(result).isEqualTo("async-ordered:Widget");
+                assertThat(trace).containsExactly("CB:async-enter", "CB:async-exit");
+            }
         }
     }
 }
