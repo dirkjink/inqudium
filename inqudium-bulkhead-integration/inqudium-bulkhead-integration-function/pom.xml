@@ -22,7 +22,16 @@
         <!-- ========================= -->
         <!--  Modules under demonstration -->
         <!-- ========================= -->
-        <!-- inqudium-imperative transitively brings inqudium-core and inqudium-config. -->
+        <dependency>
+            <groupId>eu.inqudium</groupId>
+            <artifactId>inqudium-core</artifactId>
+            <scope>compile</scope>
+        </dependency>
+        <dependency>
+            <groupId>eu.inqudium</groupId>
+            <artifactId>inqudium-config</artifactId>
+            <scope>compile</scope>
+        </dependency>
         <dependency>
             <groupId>eu.inqudium</groupId>
             <artifactId>inqudium-imperative</artifactId>
