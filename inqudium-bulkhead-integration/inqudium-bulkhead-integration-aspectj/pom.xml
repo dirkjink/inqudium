@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xmlns="http://maven.apache.org/POM/4.0.0"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <groupId>eu.inqudium</groupId>
+        <artifactId>inqudium-bulkhead-integration</artifactId>
+        <version>${revision}</version>
+    </parent>
+
+    <artifactId>inqudium-bulkhead-integration-aspectj</artifactId>
+    <name>Inqudium :: Bulkhead :: Integration Example :: AspectJ</name>
+    <description>
+        AspectJ bulkhead integration example without Spring. Demonstrates aspect
+        machinery applied directly to a regular OrderService class via pointcuts and
+        around advice. Stub at sub-step 5.A; populated in 5.D.
+    </description>
+
+</project>

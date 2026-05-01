@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xmlns="http://maven.apache.org/POM/4.0.0"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <groupId>eu.inqudium</groupId>
+        <artifactId>inqudium-parent</artifactId>
+        <version>${revision}</version>
+    </parent>
+
+    <artifactId>inqudium-bulkhead-integration</artifactId>
+    <packaging>pom</packaging>
+    <name>Inqudium :: Bulkhead :: Integration Examples</name>
+    <description>
+        Aggregator for the imperative-bulkhead integration example modules. Each
+        sub-module is a self-contained tiny webshop demonstrating one integration
+        style (function, proxy, AspectJ, Spring Framework, Spring Boot). The
+        sub-modules are not installable or deployable artifacts — they exist as
+        in-repo demonstrations only.
+    </description>
+
+    <modules>
+        <module>inqudium-bulkhead-integration-function</module>
+        <module>inqudium-bulkhead-integration-proxy</module>
+        <module>inqudium-bulkhead-integration-aspectj</module>
+        <module>inqudium-bulkhead-integration-spring-framework</module>
+        <module>inqudium-bulkhead-integration-spring-boot</module>
+    </modules>
+
+    <build>
+        <pluginManagement>
+            <plugins>
+                <!-- Skip install/deploy — example modules produce no reusable artifact -->
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-install-plugin</artifactId>
+                    <configuration>
+                        <skip>true</skip>
+                    </configuration>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-deploy-plugin</artifactId>
+                    <configuration>
+                        <skip>true</skip>
+                    </configuration>
+                </plugin>
+            </plugins>
+        </pluginManagement>
+    </build>
+
+</project>

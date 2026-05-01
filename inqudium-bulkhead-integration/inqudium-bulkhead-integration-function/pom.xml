@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xmlns="http://maven.apache.org/POM/4.0.0"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <groupId>eu.inqudium</groupId>
+        <artifactId>inqudium-bulkhead-integration</artifactId>
+        <version>${revision}</version>
+    </parent>
+
+    <artifactId>inqudium-bulkhead-integration-function</artifactId>
+    <name>Inqudium :: Bulkhead :: Integration Example :: Function</name>
+    <description>
+        Function-based bulkhead integration example — no framework, no DI, no AspectJ.
+        Demonstrates the canonical Inqudium function-decoration pattern against a tiny
+        webshop OrderService. Stub at sub-step 5.A; populated in 5.B.
+    </description>
+
+</project>

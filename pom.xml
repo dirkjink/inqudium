@@ -46,7 +46,8 @@
         <module>inqudium-annotation</module>
         <module>inqudium-annotation-support</module>
         <module>inqudium-spring</module>
-        <module>inqudium-bulkhead-integration-tests</module>
+        <module>inqudium-bulkhead-library-tests</module>
+        <module>inqudium-bulkhead-integration</module>
     </modules>
 
     <!-- ═══════════════════════════════════════════════════════ -->
