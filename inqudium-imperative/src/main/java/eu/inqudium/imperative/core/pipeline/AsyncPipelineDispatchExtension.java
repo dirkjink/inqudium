@@ -177,9 +177,6 @@ public class AsyncPipelineDispatchExtension implements DispatchExtension {
     /**
      * Casts an {@link InqElement} to {@link InqAsyncDecorator}, providing a
      * descriptive error if the element does not implement the async decorator.
-     *
-     * <p>Mirrors the message form used by {@code HybridProxyPipelineTerminal}
-     * so that diagnostics remain consistent across the proxy stack.</p>
      */
     private static InqAsyncDecorator<?, ?> asAsyncDecorator(InqElement element) {
         if (element instanceof InqAsyncDecorator<?, ?> decorator) {
@@ -451,10 +448,9 @@ public class AsyncPipelineDispatchExtension implements DispatchExtension {
      * <p>Synchronous failures during chain composition or terminal invocation
      * are lifted into a failed {@link CompletionStage} via
      * {@link CompletableFuture#failedFuture(Throwable)}. This preserves the
-     * uniform-error-channel semantics that
-     * {@code HybridProxyPipelineTerminal}'s async dispatch path provides
-     * today: the caller always observes failures via the returned stage,
-     * never as a synchronous throw.</p>
+     * uniform-error-channel semantics for the async dispatch path: the caller
+     * always observes failures via the returned stage, never as a synchronous
+     * throw.</p>
      *
      * @param chainId  the chain identifier
      * @param callId   the call identifier
@@ -478,8 +474,8 @@ public class AsyncPipelineDispatchExtension implements DispatchExtension {
             return chainFactory.apply(joinPoint).proceed();
         } catch (Throwable t) {
             // Uniform error channel: lift synchronous failures into a failed
-            // stage. Mirrors HybridProxyPipelineTerminal's async dispatch
-            // path so the observable contract stays unchanged.
+            // stage so callers always observe failures via the returned stage,
+            // never as a synchronous throw.
             return CompletableFuture.failedFuture(t);
         }
     }

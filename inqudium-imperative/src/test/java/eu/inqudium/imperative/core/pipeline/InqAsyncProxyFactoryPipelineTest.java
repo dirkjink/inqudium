@@ -227,10 +227,9 @@ class InqAsyncProxyFactoryPipelineTest {
             //   async call's enter/exit (async-tagged). If routing were
             //   wrong, the wrong tag would appear for one of the calls.
             // Why is this important?
-            //   Hybrid dispatch is the entire point of this factory — it
-            //   replaces the deleted HybridProxyPipelineTerminal. A regression
-            //   here would silently break hybrid services that previously
-            //   relied on the terminal.
+            //   Hybrid dispatch is the entire point of this factory. A
+            //   regression here would silently break hybrid services that
+            //   mix sync and async methods on the same interface.
 
             // Given
             List<String> trace = new ArrayList<>();

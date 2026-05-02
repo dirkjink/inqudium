@@ -444,7 +444,7 @@ naming-cleanup and unified-introspection follow-ups.
 - [x] P.D — New factory methods on InqProxyFactory and InqAsyncProxyFactory (2026-05-02, PR #44)
 - [x] P.D.A — layerDescriptions() on Pipeline dispatch extensions (2026-05-02, PR #45)
 - [x] P.E — Delete ProxyPipelineTerminal (2026-05-03, PR #46)
-- [ ] P.F — Delete HybridProxyPipelineTerminal
+- [x] P.F — Delete HybridProxyPipelineTerminal (2026-05-03, PR #47)
 - [ ] P.G — Behavioral verification
 - [ ] P.H — Documentation closure
 
