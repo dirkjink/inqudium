@@ -29,9 +29,9 @@ public final class ProxyInvocationSupport {
      * For empty pipelines, the element list is replaced with
      * {@code "no elements (pass-through)"}.</p>
      *
-     * <p>Used by {@link ProxyPipelineTerminal} and hybrid variants in other
-     * packages to produce consistent proxy-{@code toString()} output — the
-     * only difference between call-sites is the {@code label} prefix.</p>
+     * <p>Used by hybrid pipeline terminals in other packages to produce
+     * consistent proxy-{@code toString()} output — the only difference
+     * between call-sites is the {@code label} prefix.</p>
      *
      * @param label         the proxy-kind label (e.g. {@code "InqPipelineProxy"} or
      *                      {@code "HybridPipelineProxy"}) — appears at the start of

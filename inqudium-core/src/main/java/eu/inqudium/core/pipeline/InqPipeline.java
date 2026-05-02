@@ -30,8 +30,8 @@ import java.util.function.BiFunction;
  *               │                   │                         │
  *     ┌─────────┴──────┐            │            ┌────────────┴────────────┐
  *     │                │            │            │                         │
- * SyncPipeline   ProxyPipeline      │      HybridProxy               HybridAspect
- *  Terminal        Terminal         │    PipelineTerminal          PipelineTerminal
+ * SyncPipeline   InqProxyFactory    │      HybridProxy               HybridAspect
+ *  Terminal       .of(pipeline)     │    PipelineTerminal          PipelineTerminal
  *  (core)           (core)          │       (imperative)               (aspect)
  *     │                │            │            │                         │
  *     ▼                ▼            │       ┌────┴────┐               ┌────┴────┐
@@ -47,8 +47,8 @@ import java.util.function.BiFunction;
  * <pre>
  *                     Functions      Dynamic Proxy        AspectJ
  *                  ┌──────────────┬──────────────────┬──────────────────┐
- *   Sync           │ SyncPipeline │ ProxyPipeline    │ AspectPipeline   │
- *                  │ Terminal     │ Terminal         │ Terminal         │
+ *   Sync           │ SyncPipeline │ InqProxyFactory  │ AspectPipeline   │
+ *                  │ Terminal     │  .of(pipeline)   │ Terminal         │
  *                  ├──────────────┼──────────────────┼──────────────────┤
  *   Async          │ AsyncPipeline│       —          │       —          │
  *                  │ Terminal     │                  │                  │
@@ -80,8 +80,8 @@ import java.util.function.BiFunction;
  * // Sync terminal (inqudium-core)
  * SyncPipelineTerminal.of(pipeline).execute(() -> service.call());
  *
- * // Dynamic proxy terminal (inqudium-core)
- * ProxyPipelineTerminal.of(pipeline).protect(MyService.class, target);
+ * // Dynamic proxy factory (inqudium-core)
+ * InqProxyFactory.of(pipeline).protect(MyService.class, target);
  *
  * // Async terminal (inqudium-imperative)
  * AsyncPipelineTerminal.of(pipeline).execute(() -> service.callAsync());

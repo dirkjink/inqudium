@@ -10,7 +10,6 @@ import eu.inqudium.core.pipeline.InqPipeline;
 import eu.inqudium.core.pipeline.JoinPointExecutor;
 import eu.inqudium.core.pipeline.SyncPipelineTerminal;
 import eu.inqudium.core.pipeline.proxy.InqProxyFactory;
-import eu.inqudium.core.pipeline.proxy.ProxyPipelineTerminal;
 import eu.inqudium.imperative.bulkhead.InqBulkhead;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -123,7 +122,7 @@ class BulkheadWrapperFamilyTest {
     }
 
     @Nested
-    @DisplayName("InqProxyFactory and ProxyPipelineTerminal with a real bulkhead")
+    @DisplayName("InqProxyFactory variants with a real bulkhead")
     class ProxyConstruction {
 
         public interface InventoryService {
@@ -155,9 +154,9 @@ class BulkheadWrapperFamilyTest {
         }
 
         @Test
-        void proxy_pipeline_terminal_routes_method_calls_through_the_bulkhead() {
-            // What is to be tested: ProxyPipelineTerminal built from an InqPipeline whose
-            // single element is the real bulkhead routes method calls correctly.
+        void inq_proxy_factory_with_pipeline_routes_method_calls_through_the_bulkhead() {
+            // What is to be tested: InqProxyFactory.of(pipeline) built from an InqPipeline
+            // whose single element is the real bulkhead routes method calls correctly.
 
             try (InqRuntime runtime = Inqudium.configure()
                     .imperative(im -> im.bulkhead("inventory", b -> b.balanced()))
@@ -165,10 +164,10 @@ class BulkheadWrapperFamilyTest {
 
                 InqBulkhead<Void, Object> bh = newBulkhead(runtime, "inventory");
                 InqPipeline pipeline = InqPipeline.builder().shield((InqElement) bh).build();
-                ProxyPipelineTerminal terminal = ProxyPipelineTerminal.of(pipeline);
 
                 InventoryService real = sku -> "stock:" + sku;
-                InventoryService proxied = terminal.protect(InventoryService.class, real);
+                InventoryService proxied = InqProxyFactory.of(pipeline)
+                        .protect(InventoryService.class, real);
 
                 assertThat(proxied.checkStock("SKU-002")).isEqualTo("stock:SKU-002");
             }
