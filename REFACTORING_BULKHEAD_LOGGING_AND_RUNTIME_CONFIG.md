@@ -255,7 +255,7 @@ order and see the same complexity progression in two refactor cycles.
 ## Completion log
 
 - [ ] 6.A — Plan document
-- [x] 6.B — InqShieldAspect introspection API (Library) (2026-05-02, PR #TBD)
+- [x] 6.B — InqShieldAspect introspection API (Library) (2026-05-02, PR #39)
 - [ ] 6.C — Function-based example
 - [ ] 6.D — Proxy-based example
 - [ ] 6.E — AspectJ example
