@@ -438,7 +438,7 @@ naming-cleanup and unified-introspection follow-ups.
 
 ## Completion log
 
-- [ ] P.A — Plan document
+- [x] P.A — Plan document (2026-05-02, PR #41)
 - [ ] P.B — PipelineDispatchExtension (sync)
 - [ ] P.C — AsyncPipelineDispatchExtension (async)
 - [ ] P.D — New factory methods on InqProxyFactory and InqAsyncProxyFactory
