@@ -8,7 +8,6 @@ import eu.inqudium.core.pipeline.proxy.MethodHandleCache;
 import eu.inqudium.core.pipeline.proxy.MethodInvoker;
 
 import java.lang.reflect.Method;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
@@ -319,12 +318,9 @@ public class AsyncPipelineDispatchExtension implements DispatchExtension {
      * {@code null}, possibly empty for a no-element pipeline
      */
     public List<String> layerDescriptions() {
-        List<InqElement> elements = pipeline.elements();
-        List<String> result = new ArrayList<>(elements.size());
-        for (InqElement element : elements) {
-            result.add(element.elementType() + "(" + element.name() + ")");
-        }
-        return List.copyOf(result);
+        return pipeline.elements().stream()
+                .map(element -> element.elementType() + "(" + element.name() + ")")
+                .toList();
     }
 
     // ======================== DispatchExtension SPI ========================
