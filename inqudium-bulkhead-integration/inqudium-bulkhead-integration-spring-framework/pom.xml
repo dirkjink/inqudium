@@ -12,10 +12,93 @@
     <artifactId>inqudium-bulkhead-integration-spring-framework</artifactId>
     <name>Inqudium :: Bulkhead :: Integration Example :: Spring Framework</name>
     <description>
-        Spring Framework (no Boot) bulkhead integration example. Demonstrates
-        manually wired ApplicationContext with @InqBulkhead on service methods —
-        for users on legacy Spring or non-Boot setups. Stub at sub-step 5.A;
-        populated in 5.E.
+        Spring Framework (no Boot) bulkhead integration example. Demonstrates manually
+        wired ApplicationContext with @InqBulkhead on service methods — for users on
+        legacy Spring or non-Boot setups. The InqElementRegistry, the InqShieldAspect,
+        and the OrderService are explicit @Bean methods on a @Configuration class
+        carrying @EnableAspectJAutoProxy; nothing is auto-discovered. Pedagogically the
+        module makes Spring Boot's auto-configuration value visible by showing what
+        would otherwise be manual.
     </description>
+
+    <dependencies>
+
+        <!-- ========================= -->
+        <!--  Inqudium library modules -->
+        <!-- ========================= -->
+        <dependency>
+            <groupId>eu.inqudium</groupId>
+            <artifactId>inqudium-core</artifactId>
+            <scope>compile</scope>
+        </dependency>
+        <dependency>
+            <groupId>eu.inqudium</groupId>
+            <artifactId>inqudium-config</artifactId>
+            <scope>compile</scope>
+        </dependency>
+        <dependency>
+            <groupId>eu.inqudium</groupId>
+            <artifactId>inqudium-imperative</artifactId>
+            <scope>compile</scope>
+        </dependency>
+        <dependency>
+            <groupId>eu.inqudium</groupId>
+            <artifactId>inqudium-annotation</artifactId>
+            <scope>compile</scope>
+        </dependency>
+        <dependency>
+            <groupId>eu.inqudium</groupId>
+            <artifactId>inqudium-spring</artifactId>
+            <scope>compile</scope>
+        </dependency>
+
+        <!-- ========================= -->
+        <!--  Plain Spring Framework — no Boot -->
+        <!-- ========================= -->
+        <dependency>
+            <groupId>org.springframework</groupId>
+            <artifactId>spring-context</artifactId>
+            <scope>compile</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework</groupId>
+            <artifactId>spring-aop</artifactId>
+            <scope>compile</scope>
+        </dependency>
+
+        <!-- ========================= -->
+        <!--  AspectJ runtime — required by Spring AOP and inqudium-spring -->
+        <!-- ========================= -->
+        <dependency>
+            <groupId>org.aspectj</groupId>
+            <artifactId>aspectjrt</artifactId>
+            <scope>compile</scope>
+        </dependency>
+
+        <!-- spring-beans is brought in transitively by spring-context, but Main.java needs
+             it on the compile classpath because the AnnotationConfigApplicationContext
+             try-with-resources reference resolves through a class hierarchy whose ancestors
+             live in spring-beans (DefaultListableBeanFactory et al.). Declaring it test-only
+             breaks the main compile; declaring it explicitly at compile scope makes the
+             example's framework dependencies fully visible to a reader scanning the POM.
+             dependency:analyze-only's heuristics flag this as "Non-test scoped test only"
+             because the only direct bytecode references it sees are the @Autowired imports
+             in the test class — that warning is a false positive in this case. -->
+        <dependency>
+            <groupId>org.springframework</groupId>
+            <artifactId>spring-beans</artifactId>
+            <scope>compile</scope>
+        </dependency>
+
+        <!-- ========================= -->
+        <!--  Test scope: JUnit 5 + AssertJ are inherited from the root parent POM -->
+        <!-- ========================= -->
+        <dependency>
+            <groupId>org.springframework</groupId>
+            <artifactId>spring-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+    </dependencies>
 
 </project>
