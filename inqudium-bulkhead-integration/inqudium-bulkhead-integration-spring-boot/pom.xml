@@ -12,9 +12,79 @@
     <artifactId>inqudium-bulkhead-integration-spring-boot</artifactId>
     <name>Inqudium :: Bulkhead :: Integration Example :: Spring Boot</name>
     <description>
-        Spring Boot bulkhead integration example. Demonstrates auto-configured
-        wiring of @InqBulkhead-annotated service methods via @SpringBootApplication
-        and @Bean. Stub at sub-step 5.A; populated in 5.F.
+        Spring Boot bulkhead integration example. Demonstrates auto-configured wiring of
+        @InqBulkhead-annotated service methods through @SpringBootApplication and @Bean.
+        Pedagogically the counterpart to the plain-Spring (no Boot) example: the
+        InqElementRegistry is populated automatically by inqudium-spring-boot's
+        InqAutoConfiguration descriptor, the InqShieldAspect is registered automatically,
+        and AOP auto-proxying is activated by spring-boot-starter-aspectj — every line of
+        boilerplate the plain-Spring example performs by hand disappears here.
     </description>
+
+    <dependencies>
+
+        <!-- ========================= -->
+        <!--  Inqudium library modules -->
+        <!-- ========================= -->
+        <dependency>
+            <groupId>eu.inqudium</groupId>
+            <artifactId>inqudium-core</artifactId>
+            <scope>compile</scope>
+        </dependency>
+        <dependency>
+            <groupId>eu.inqudium</groupId>
+            <artifactId>inqudium-config</artifactId>
+            <scope>compile</scope>
+        </dependency>
+        <dependency>
+            <groupId>eu.inqudium</groupId>
+            <artifactId>inqudium-imperative</artifactId>
+            <scope>compile</scope>
+        </dependency>
+        <dependency>
+            <groupId>eu.inqudium</groupId>
+            <artifactId>inqudium-annotation</artifactId>
+            <scope>compile</scope>
+        </dependency>
+        <dependency>
+            <groupId>eu.inqudium</groupId>
+            <artifactId>inqudium-spring-boot</artifactId>
+            <scope>compile</scope>
+        </dependency>
+
+        <!-- ========================= -->
+        <!--  Spring Boot               -->
+        <!-- ========================= -->
+        <!-- spring-boot-starter pulls the Boot core stack (autoconfigure, context, beans, …)
+             transitively. -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter</artifactId>
+            <scope>compile</scope>
+        </dependency>
+        <!-- spring-boot-starter-aspectj activates Spring AOP auto-configuration: Boot adds
+             @EnableAspectJAutoProxy implicitly when this starter is on the classpath, so
+             InqShieldAspect's @Around advice fires without any explicit opt-in on the
+             application class. The plain-Spring (no Boot) example performs that opt-in by
+             hand; collapsing it into a starter is part of what makes this example shorter.
+             (In Spring Boot 4.x the AOP starter was renamed from "spring-boot-starter-aop"
+             to "spring-boot-starter-aspectj"; both transitively pull spring-aop and
+             aspectjweaver, only the artifactId changed.) -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-aspectj</artifactId>
+            <scope>compile</scope>
+        </dependency>
+
+        <!-- ========================= -->
+        <!--  Test scope: JUnit 5 + AssertJ are inherited from the root parent POM -->
+        <!-- ========================= -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+    </dependencies>
 
 </project>
