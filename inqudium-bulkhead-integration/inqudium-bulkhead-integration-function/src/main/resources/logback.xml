@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    Logback configuration shared by every bulkhead-integration example module
+    (sub-steps 6.C through 6.G of REFACTORING_BULKHEAD_LOGGING_AND_RUNTIME_CONFIG.md).
+    The file is intentionally identical across modules so a reader who steps
+    through the examples in sequence sees output framed the same way every time.
+
+    Pattern: short timestamp, fixed-width level, abbreviated logger name, message.
+    Levels:
+      - Root at INFO so the runtime's own diagnostic log lines stay visible
+        without flooding the console.
+      - eu.inqudium.bulkhead.integration at TRACE so the example's per-call
+        bulkhead-event lines (acquire/release published at TRACE by OrderService)
+        are visible. Without this, a reader running Main would observe no log
+        output during the saturation phases at all and would have to trust the
+        stdout headers alone to follow the demo flow.
+-->
+<configuration>
+    <appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>%d{HH:mm:ss.SSS} %-5level %logger{36} - %msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <logger name="eu.inqudium.bulkhead.integration" level="TRACE"/>
+
+    <root level="INFO">
+        <appender-ref ref="STDOUT"/>
+    </root>
+</configuration>

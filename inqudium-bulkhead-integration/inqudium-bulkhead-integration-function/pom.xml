@@ -38,6 +38,28 @@
             <scope>compile</scope>
         </dependency>
 
+        <!-- ========================= -->
+        <!--  Logging                  -->
+        <!-- ========================= -->
+        <!--
+             Practice-grade logging stack used by the example: SLF4J as the
+             compile-time API, Logback as the runtime implementation.
+             logback-classic is referenced exclusively from
+             src/main/resources/logback.xml — never from source — so it lives
+             in scope=runtime. SLF4J's binding mechanism picks it up off the
+             runtime classpath at the first LoggerFactory call.
+        -->
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-api</artifactId>
+            <scope>compile</scope>
+        </dependency>
+        <dependency>
+            <groupId>ch.qos.logback</groupId>
+            <artifactId>logback-classic</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+
         <!-- JUnit 5 + AssertJ are inherited as test-scope from the root parent POM. -->
 
     </dependencies>
