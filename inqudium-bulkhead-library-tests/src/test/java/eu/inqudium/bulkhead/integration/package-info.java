@@ -14,7 +14,7 @@
  *       and structural removal of the underlying bulkhead.</li>
  *   <li><strong>Wrapper-family compatibility</strong> — {@code BulkheadWrapperFamilyTest}
  *       covers every {@code decorateXxx} factory and every pipeline terminal
- *       ({@code SyncPipelineTerminal}, {@code ProxyPipelineTerminal},
+ *       ({@code SyncPipelineTerminal}, {@code InqProxyFactory.of(pipeline)},
  *       {@code AspectPipelineTerminal}) against a real {@code InqBulkhead} after
  *       ADR-033's decorator bridge.</li>
  *   <li><strong>Spring Boot integration as a library safety net</strong> — the

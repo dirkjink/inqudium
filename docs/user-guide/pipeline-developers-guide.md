@@ -93,8 +93,8 @@ CompletionStage<String> stage = AsyncPipelineTerminal.of(pipeline)
 ```
                       Functions          Proxy            AspectJ
                    ┌──────────────┬─────────────────┬──────────────────┐
-  Sync             │ SyncPipeline │ ProxyPipeline   │ AspectPipeline   │
-                   │ Terminal     │ Terminal        │ Terminal         │
+  Sync             │ SyncPipeline │ InqProxyFactory │ AspectPipeline   │
+                   │ Terminal     │  .of(pipeline)  │ Terminal         │
                    ├──────────────┼─────────────────┼──────────────────┤
   Async            │ AsyncPipeline│       —         │       —          │
                    │ Terminal     │                 │                  │
@@ -111,17 +111,11 @@ decision is cached per `Method` in a `ConcurrentHashMap`.
 
 ```java
 // Protect an interface via JDK dynamic proxy
-PaymentService protected =ProxyPipelineTerminal.
-
-of(pipeline)
-        .
-
-protect(PaymentService .class, realPaymentService);
+PaymentService protected = InqProxyFactory.of(pipeline)
+        .protect(PaymentService.class, realPaymentService);
 
 // All interface methods now route through the pipeline
-protected.
-
-processPayment(request);  // → BH → CB → RT → real call
+protected.processPayment(request);  // → BH → CB → RT → real call
 ```
 
 ---
