@@ -1,5 +1,7 @@
 package eu.inqudium.core.pipeline.proxy;
 
+import eu.inqudium.core.pipeline.InqDecorator;
+import eu.inqudium.core.pipeline.InqPipeline;
 import eu.inqudium.core.pipeline.LayerAction;
 import eu.inqudium.core.pipeline.Wrapper;
 
@@ -105,6 +107,78 @@ public interface InqProxyFactory {
      */
     static InqProxyFactory of(LayerAction<?, ?> action) {
         return of("proxy", action);
+    }
+
+    /**
+     * Creates a factory that wraps service methods through the given
+     * {@link InqPipeline} with a custom layer name.
+     *
+     * <p>This is the pipeline-driven counterpart to
+     * {@link #of(String, LayerAction)}. The single
+     * {@link PipelineDispatchExtension} created here is the catch-all sync
+     * extension on the resulting proxy — every method, regardless of return
+     * type, is routed through the pipeline. Service interfaces with methods
+     * returning {@link java.util.concurrent.CompletionStage} would be
+     * dispatched through the same sync chain and would fail at the terminal's
+     * sync invocation; for hybrid sync+async dispatch, use the matching
+     * {@code InqAsyncProxyFactory.of(InqPipeline)} variant in the
+     * {@code inqudium-imperative} module instead.</p>
+     *
+     * <p>Pipeline elements must implement {@link InqDecorator}. Elements that
+     * do not satisfy this contract are rejected with a {@link ClassCastException}
+     * at the first dispatch — consistent with the failure mode of the underlying
+     * {@link PipelineDispatchExtension}. The check is lazy because the
+     * pipeline fold itself is lazy.</p>
+     *
+     * <p>The resulting proxy implements both the service interface and the
+     * {@link Wrapper} interface (via {@link ProxyWrapper#createProxy}), so
+     * {@code chainId()}, {@code inner()}, and {@code toStringHierarchy()} are
+     * available on every instance.</p>
+     *
+     * @param name     a human-readable name for the proxy layer (appears in
+     *                 {@code layerDescription()} and {@code toStringHierarchy()})
+     * @param pipeline the pre-composed pipeline driving the dispatch chain
+     * @return a new factory instance ready to create proxies
+     * @throws IllegalArgumentException if {@code pipeline} is null
+     */
+    static InqProxyFactory of(String name, InqPipeline pipeline) {
+        // Defensive null check — fail fast with a clear message
+        if (pipeline == null) {
+            throw new IllegalArgumentException("Pipeline must not be null.");
+        }
+
+        // The extension is created once at factory construction time and reused
+        // across every protect(...) call. The extension is stateful (cached
+        // chain factory + MethodHandleCache), but reuse is safe: each protect
+        // call produces a fresh ProxyWrapper which calls linkInner on this
+        // extension, returning a NEW instance for that proxy. The factory-side
+        // instance therefore only ever serves as the seed for linking.
+        PipelineDispatchExtension extension = new PipelineDispatchExtension(pipeline);
+        return new InqProxyFactory() {
+            @Override
+            public <T> T protect(Class<T> serviceInterface, T target) {
+                ProxyWrapper.validateInterface(serviceInterface);
+                return ProxyWrapper.createProxy(serviceInterface, target, name, extension);
+            }
+        };
+    }
+
+    /**
+     * Creates a pipeline-driven factory with the default layer name
+     * {@code "InqPipelineProxy"}.
+     *
+     * <p>Convenience overload for the common case where the layer name is
+     * not customised. The default value matches the prefix
+     * {@code ProxyInvocationSupport.buildSummary(...)} used to produce for the
+     * predecessor terminal-based mechanism, keeping {@code toString()} output
+     * familiar to existing diagnostics.</p>
+     *
+     * @param pipeline the pre-composed pipeline driving the dispatch chain
+     * @return a new factory instance with the default name
+     * @throws IllegalArgumentException if {@code pipeline} is null
+     */
+    static InqProxyFactory of(InqPipeline pipeline) {
+        return of("InqPipelineProxy", pipeline);
     }
 
     /**
