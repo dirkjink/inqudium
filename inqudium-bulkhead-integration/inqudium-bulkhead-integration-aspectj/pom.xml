@@ -12,9 +12,91 @@
     <artifactId>inqudium-bulkhead-integration-aspectj</artifactId>
     <name>Inqudium :: Bulkhead :: Integration Example :: AspectJ</name>
     <description>
-        AspectJ bulkhead integration example without Spring. Demonstrates aspect
-        machinery applied directly to a regular OrderService class via pointcuts and
-        around advice. Stub at sub-step 5.A; populated in 5.D.
+        AspectJ bulkhead integration example without Spring. Demonstrates resilience-via-AspectJ
+        in its native form: a plain OrderService with methods carrying a custom marker
+        annotation, an @Aspect class with @Around advice routing the matching join points
+        through a HybridAspectPipelineTerminal that holds the bulkhead, and compile-time
+        weaving wiring the two together at build time.
     </description>
+
+    <dependencies>
+
+        <!-- ========================= -->
+        <!--  Modules under demonstration -->
+        <!-- ========================= -->
+        <dependency>
+            <groupId>eu.inqudium</groupId>
+            <artifactId>inqudium-core</artifactId>
+            <scope>compile</scope>
+        </dependency>
+        <dependency>
+            <groupId>eu.inqudium</groupId>
+            <artifactId>inqudium-config</artifactId>
+            <scope>compile</scope>
+        </dependency>
+        <dependency>
+            <groupId>eu.inqudium</groupId>
+            <artifactId>inqudium-imperative</artifactId>
+            <scope>compile</scope>
+        </dependency>
+        <dependency>
+            <groupId>eu.inqudium</groupId>
+            <artifactId>inqudium-aspect</artifactId>
+            <scope>compile</scope>
+        </dependency>
+
+        <!-- ========================= -->
+        <!--  AspectJ                  -->
+        <!-- ========================= -->
+        <dependency>
+            <groupId>org.aspectj</groupId>
+            <artifactId>aspectjrt</artifactId>
+            <scope>compile</scope>
+        </dependency>
+
+        <!-- JUnit 5 + AssertJ are inherited as test-scope from the root parent POM. -->
+
+    </dependencies>
+
+    <build>
+        <plugins>
+            <!--
+              AspectJ compile-time weaving — this is where CTW is configured.
+              The @Aspect class (OrderBulkheadAspect) lives in this module's own
+              src/main/java, so no aspectLibraries entry is needed; ajc discovers
+              the aspect from the same source root it is compiling.
+
+              Both compile and test-compile goals are wired so that test-side
+              classes that carry the @BulkheadProtected marker (none today, but
+              the option is open for future tests) are also woven correctly.
+            -->
+            <plugin>
+                <groupId>dev.aspectj</groupId>
+                <artifactId>aspectj-maven-plugin</artifactId>
+                <version>1.14.1</version>
+                <configuration>
+                    <complianceLevel>${maven.compiler.release}</complianceLevel>
+                    <source>${maven.compiler.release}</source>
+                    <target>${maven.compiler.release}</target>
+                    <showWeaveInfo>true</showWeaveInfo>
+                </configuration>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>compile</goal>
+                            <goal>test-compile</goal>
+                        </goals>
+                    </execution>
+                </executions>
+                <dependencies>
+                    <dependency>
+                        <groupId>org.aspectj</groupId>
+                        <artifactId>aspectjtools</artifactId>
+                        <version>${aspectj.version}</version>
+                    </dependency>
+                </dependencies>
+            </plugin>
+        </plugins>
+    </build>
 
 </project>
