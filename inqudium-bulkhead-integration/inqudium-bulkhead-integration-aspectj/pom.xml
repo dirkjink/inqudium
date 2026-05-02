@@ -13,10 +13,11 @@
     <name>Inqudium :: Bulkhead :: Integration Example :: AspectJ</name>
     <description>
         AspectJ bulkhead integration example without Spring. Demonstrates resilience-via-AspectJ
-        in its native form: a plain OrderService with methods carrying a custom marker
-        annotation, an @Aspect class with @Around advice routing the matching join points
-        through a HybridAspectPipelineTerminal that holds the bulkhead, and compile-time
-        weaving wiring the two together at build time.
+        in its native form: a plain OrderService with methods carrying the project-wide
+        @InqBulkhead annotation from inqudium-annotation, an @Aspect class with @Around advice
+        that binds the annotation, reads its value(), resolves the named bulkhead from the
+        runtime registry, and routes the join point through a HybridAspectPipelineTerminal —
+        all wired together at build time by compile-time weaving.
     </description>
 
     <dependencies>
@@ -44,6 +45,11 @@
             <artifactId>inqudium-aspect</artifactId>
             <scope>compile</scope>
         </dependency>
+        <dependency>
+            <groupId>eu.inqudium</groupId>
+            <artifactId>inqudium-annotation</artifactId>
+            <scope>compile</scope>
+        </dependency>
 
         <!-- ========================= -->
         <!--  AspectJ                  -->
@@ -67,7 +73,7 @@
               the aspect from the same source root it is compiling.
 
               Both compile and test-compile goals are wired so that test-side
-              classes that carry the @BulkheadProtected marker (none today, but
+              classes that carry the @InqBulkhead annotation (none today, but
               the option is open for future tests) are also woven correctly.
             -->
             <plugin>

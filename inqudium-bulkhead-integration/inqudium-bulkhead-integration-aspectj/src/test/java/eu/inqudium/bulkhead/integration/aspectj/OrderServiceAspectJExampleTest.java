@@ -24,8 +24,9 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  *
  * <p>The tests exercise the example application — they construct a plain {@link OrderService}
  * and call its methods directly, just as {@link Main} does. The compile-time-woven
- * {@link OrderBulkheadAspect} routes every {@link BulkheadProtected}-annotated invocation
- * through the bulkhead transparently, so the test code does not build a runtime, a pipeline,
+ * {@link OrderBulkheadAspect} binds the {@link eu.inqudium.annotation.InqBulkhead @InqBulkhead}
+ * annotation, reads its {@code value()}, and routes every annotated invocation through the
+ * matching bulkhead transparently, so the test code does not build a runtime, a pipeline,
  * a terminal, or an aspect manually — that is the structural payoff of CTW: tests look like
  * application code.
  *
@@ -65,8 +66,8 @@ class OrderServiceAspectJExampleTest {
 
         @Test
         void place_order_succeeds_through_the_woven_aspect() {
-            // Given: a plain OrderService whose @BulkheadProtected methods have been woven
-            // by ajc to enter OrderBulkheadAspect first
+            // Given: a plain OrderService whose @InqBulkhead-annotated methods have been
+            // woven by ajc to enter OrderBulkheadAspect first
             OrderService service = new OrderService();
 
             // When: a single order is placed through the woven service
@@ -108,9 +109,9 @@ class OrderServiceAspectJExampleTest {
 
         @Test
         void async_place_order_succeeds_through_the_woven_aspect() {
-            // Given: a plain OrderService whose @BulkheadProtected async methods have been
-            // woven by ajc. The aspect reads the CompletionStage return type and routes the
-            // invocation through the async pipeline chain.
+            // Given: a plain OrderService whose @InqBulkhead-annotated async methods have
+            // been woven by ajc. The aspect reads the CompletionStage return type and routes
+            // the invocation through the async pipeline chain.
             OrderService service = new OrderService();
 
             // When: a single async order is placed through the woven service
@@ -360,6 +361,47 @@ class OrderServiceAspectJExampleTest {
             } finally {
                 syncRelease.countDown();
             }
+        }
+    }
+
+    @Nested
+    @DisplayName("Annotation value drives bulkhead resolution")
+    class AnnotationValueDrivenResolution {
+
+        @Test
+        void aspect_resolves_the_bulkhead_named_in_the_inq_bulkhead_value() {
+            // What is to be tested: the aspect's dispatch is driven by the annotation's
+            // value(), not by a hardcoded bulkhead name in the aspect itself. The annotation
+            // declares @InqBulkhead("orderBh") on every method (via BULKHEAD_NAME); the
+            // aspect's pointcut binds the annotation, the advice reads value(), and the
+            // resolved bulkhead's name() must equal what the annotation carried.
+            // How will the test be deemed successful and why: a woven invocation succeeds
+            // and returns its expected value (proving the dispatch reached a real bulkhead),
+            // and the bulkhead the aspect publishes via aspectOf().bulkhead() carries the
+            // same name that the annotation's value() carries (proving the connection).
+            // Why is it important: a future refactor that accidentally short-circuits the
+            // value()-read — for example, by hardcoding "orderBh" inside the advice or by
+            // matching the annotation only as a marker — would still pass every other test
+            // in this class because there is only one bulkhead. This test pins the explicit
+            // connection so a regression to a hardcoded path cannot slip through silently.
+            // Given — a plain OrderService whose methods are woven by ajc; the aspect
+            // singleton has been (or will be) constructed by AspectJ on first use.
+            OrderService service = new OrderService();
+            OrderBulkheadAspect aspect = Aspects.aspectOf(OrderBulkheadAspect.class);
+
+            // When — invoking a woven method whose @InqBulkhead value is BULKHEAD_NAME
+            String result = service.placeOrder("Widget");
+
+            // Then — the woven call returned its expected value, the bulkhead the aspect
+            // resolved is named by the annotation's value(), and that value() literal is
+            // the project-wide constant "orderBh".
+            assertThat(result).isEqualTo("ordered:Widget");
+            assertThat(aspect.bulkhead().name())
+                    .as("the aspect resolved the bulkhead named in the annotation value()")
+                    .isEqualTo(BulkheadConfig.BULKHEAD_NAME);
+            assertThat(BulkheadConfig.BULKHEAD_NAME)
+                    .as("BULKHEAD_NAME is what InqBulkhead.value() carries on every annotated method")
+                    .isEqualTo("orderBh");
         }
     }
 

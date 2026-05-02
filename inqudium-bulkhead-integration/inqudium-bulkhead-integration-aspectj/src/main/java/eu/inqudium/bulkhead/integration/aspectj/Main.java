@@ -14,12 +14,16 @@ import java.util.concurrent.CountDownLatch;
  * <p>The flow follows the natural structure of an AspectJ-native application:
  * <ol>
  *   <li>build a plain {@link OrderService} — no Inqudium type, no decoration, no proxy
- *       wrapper at the call site,</li>
+ *       wrapper at the call site. Methods on {@code OrderService} are annotated with
+ *       {@link eu.inqudium.annotation.InqBulkhead @InqBulkhead("orderBh")} — the same
+ *       annotation the Spring Boot integration uses,</li>
  *   <li>call its methods directly — the compile-time-woven {@link OrderBulkheadAspect}
- *       routes every {@link BulkheadProtected}-annotated invocation through the bulkhead
+ *       binds the {@code @InqBulkhead} annotation, reads its {@code value()}, resolves the
+ *       named bulkhead from the runtime, and routes the join point through that bulkhead
  *       transparently,</li>
  *   <li>let AspectJ construct the aspect singleton on first use; the aspect's constructor
- *       builds the {@link eu.inqudium.config.runtime.InqRuntime} and composes the pipeline.</li>
+ *       builds the {@link eu.inqudium.config.runtime.InqRuntime}, and the per-name terminal
+ *       cache populates lazily on the first invocation for each bulkhead name.</li>
  * </ol>
  *
  * <p>The decisive structural difference from the function-based example: here the bulkhead's
@@ -43,8 +47,9 @@ public final class Main {
 
     public static void main(String[] args) {
         // The aspect is woven into OrderService at build time. By the time we reach the first
-        // call below, ajc has already rewritten the bytecode of every @BulkheadProtected
-        // method to enter OrderBulkheadAspect.aroundBulkheadProtected first.
+        // call below, ajc has already rewritten the bytecode of every @InqBulkhead-annotated
+        // method to enter OrderBulkheadAspect.aroundInqBulkhead first; that advice reads the
+        // annotation's value() ("orderBh") and dispatches through the matching bulkhead.
         OrderService service = new OrderService();
 
         System.out.println("=== Sync demo ===");
