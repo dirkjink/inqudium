@@ -7,6 +7,7 @@ import eu.inqudium.core.pipeline.InternalExecutor;
 import eu.inqudium.core.pipeline.JoinPointExecutor;
 
 import java.lang.reflect.Method;
+import java.util.List;
 import java.util.Objects;
 import java.util.function.Function;
 
@@ -263,6 +264,39 @@ public class PipelineDispatchExtension implements DispatchExtension {
                 throw handleException(method, e);
             }
         };
+    }
+
+    // ======================== Diagnostics ========================
+
+    /**
+     * Returns the descriptions of the pipeline elements in outermost-first
+     * order, formatted as {@code ELEMENT_TYPE(name)}.
+     *
+     * <p>For a pipeline built as
+     * {@code builder.shield(bulkhead).shield(circuitBreaker).build()} where
+     * the bulkhead is named {@code "orderBh"} and the circuit breaker named
+     * {@code "orderCb"}, this method returns
+     * {@code [BULKHEAD(orderBh), CIRCUIT_BREAKER(orderCb)]} (with the standard
+     * pipeline ordering, BH at order 400 sits outside CB at order 500).</p>
+     *
+     * <p>The returned list is unmodifiable and uses the element ordering
+     * already produced by {@link InqPipeline#elements()} — outermost first
+     * (lowest {@code orderFor} value). The first entry is the layer a call
+     * enters first; the last entry is the layer immediately above the
+     * service-method invocation.</p>
+     *
+     * <p>Cold-path diagnostic only — intended for startup logging, topology
+     * inspection, and tests. The list is rebuilt on every call (the pipeline
+     * is immutable, so the result is stable, but this method should not be
+     * called on the dispatch hot path).</p>
+     *
+     * @return the layer descriptions in outermost-first order; never
+     * {@code null}, possibly empty for a no-element pipeline
+     */
+    public List<String> layerDescriptions() {
+        return pipeline.elements().stream()
+                .map(element -> element.elementType() + "(" + element.name() + ")")
+                .toList();
     }
 
     // ======================== DispatchExtension SPI ========================
