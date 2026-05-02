@@ -440,7 +440,7 @@ naming-cleanup and unified-introspection follow-ups.
 
 - [x] P.A — Plan document (2026-05-02, PR #41)
 - [x] P.B — PipelineDispatchExtension (sync) (2026-05-02, PR #42)
-- [ ] P.C — AsyncPipelineDispatchExtension (async)
+- [x] P.C — AsyncPipelineDispatchExtension (async) (2026-05-02, PR #43)
 - [ ] P.D — New factory methods on InqProxyFactory and InqAsyncProxyFactory
 - [ ] P.E — Delete ProxyPipelineTerminal
 - [ ] P.F — Delete HybridProxyPipelineTerminal
