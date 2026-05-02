@@ -186,17 +186,17 @@ public class OrderService {
     private static void subscribeBulkheadEvents(InqBulkhead<?, ?> bulkhead) {
         var publisher = bulkhead.eventPublisher();
         publisher.onEvent(BulkheadOnAcquireEvent.class, e ->
-                LOG.trace("Permit acquired on bulkhead '{}' (chain-id {}, concurrent {})",
-                        e.getElementName(), e.getChainId(), e.getConcurrentCalls()));
+                LOG.trace("Permit acquired on bulkhead '{}' (chain-id {}, call-id {}, concurrent {})",
+                        e.getElementName(), e.getChainId(), e.getCallId(), e.getConcurrentCalls()));
         publisher.onEvent(BulkheadOnReleaseEvent.class, e ->
-                LOG.trace("Permit released on bulkhead '{}' (chain-id {}, concurrent {})",
-                        e.getElementName(), e.getChainId(), e.getConcurrentCalls()));
+                LOG.trace("Permit released on bulkhead '{}' (chain-id {}, call-id {}, concurrent {})",
+                        e.getElementName(), e.getChainId(), e.getCallId(), e.getConcurrentCalls()));
         publisher.onEvent(BulkheadOnRejectEvent.class, e ->
-                LOG.warn("Permit rejected on bulkhead '{}' (chain-id {}, reason {})",
-                        e.getElementName(), e.getChainId(), e.getRejectionReason()));
+                LOG.warn("Permit rejected on bulkhead '{}' (chain-id {}, call-id {}, reason {})",
+                        e.getElementName(), e.getChainId(), e.getCallId(), e.getRejectionReason()));
         publisher.onEvent(BulkheadRollbackTraceEvent.class, e ->
-                LOG.error("Permit rolled back on bulkhead '{}' (chain-id {}, cause {})",
-                        e.getElementName(), e.getChainId(), e.getErrorType()));
+                LOG.error("Permit rolled back on bulkhead '{}' (chain-id {}, call-id {}, cause {})",
+                        e.getElementName(), e.getChainId(), e.getCallId(), e.getErrorType()));
     }
 
     @SuppressWarnings("unchecked")
