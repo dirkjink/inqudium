@@ -1,4 +1,4 @@
-package eu.inqudium.bulkhead.integration.aspect;
+package eu.inqudium.bulkhead.integration.aspectj.lifecycle;
 
 import eu.inqudium.aspect.pipeline.AbstractPipelineAspect;
 import eu.inqudium.aspect.pipeline.AspectLayerProvider;
@@ -22,13 +22,18 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 /**
  * AspectJ-pipeline lifecycle compatibility with a real bulkhead (audit finding F-2.18-3).
  *
- * <p>The three lifecycle scenarios from {@code BulkheadWrapperLifecycleTest} are re-played here
- * through the aspect-pipeline path. The path under test is
+ * <p>The three lifecycle scenarios from {@code BulkheadWrapperLifecycleTest} are re-played
+ * here through the aspect-pipeline path. The path under test is
  * {@code AbstractPipelineAspect.execute(JoinPointExecutor)} → {@code ResolvedPipeline} →
- * {@code SyncPipelineTerminal} — the same code that {@code @Around} advice runs after AspectJ
- * weaving. Compile-time weaving is intentionally not used here because the property being
- * verified is the pipeline's interaction with the bulkhead's lifecycle, not the woven
- * advice itself; the structural seam is identical with or without the weaver.
+ * {@code SyncPipelineTerminal} — the same code that {@code @Around} advice runs after
+ * AspectJ weaving.
+ *
+ * <p>This test exercises the aspect-pipeline API <em>directly</em>, not via CTW. That is
+ * deliberate: the property under test is the pipeline's interaction with the bulkhead's
+ * lifecycle, not the woven advice itself; the structural seam is identical with or without
+ * the weaver. The CTW path proper is demonstrated by {@code Main} in this module's
+ * {@code src/main} and exercised end-to-end by {@code OrderServiceAspectJExampleTest}; this
+ * lifecycle test sits beside them as the programmatic-API counterpart.
  */
 @DisplayName("Bulkhead aspect-pipeline lifecycle compatibility")
 class BulkheadAspectLifecycleTest {
