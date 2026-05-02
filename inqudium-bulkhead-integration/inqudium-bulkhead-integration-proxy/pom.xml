@@ -12,10 +12,35 @@
     <artifactId>inqudium-bulkhead-integration-proxy</artifactId>
     <name>Inqudium :: Bulkhead :: Integration Example :: Proxy</name>
     <description>
-        JDK-dynamic-proxy bulkhead integration example. Demonstrates wrapping an
-        OrderService interface implementation with InqProxyFactory so the bulkhead
-        sits transparently between caller and implementation. Stub at sub-step 5.A;
-        populated in 5.C.
+        JDK-dynamic-proxy bulkhead integration example. The OrderService is exposed
+        as an interface and protected through a HybridProxyPipelineTerminal so that
+        sync and async methods on the same service share a single bulkhead instance
+        transparently — the caller is unaware the service is decorated.
     </description>
+
+    <dependencies>
+
+        <!-- ========================= -->
+        <!--  Modules under demonstration -->
+        <!-- ========================= -->
+        <dependency>
+            <groupId>eu.inqudium</groupId>
+            <artifactId>inqudium-core</artifactId>
+            <scope>compile</scope>
+        </dependency>
+        <dependency>
+            <groupId>eu.inqudium</groupId>
+            <artifactId>inqudium-config</artifactId>
+            <scope>compile</scope>
+        </dependency>
+        <dependency>
+            <groupId>eu.inqudium</groupId>
+            <artifactId>inqudium-imperative</artifactId>
+            <scope>compile</scope>
+        </dependency>
+
+        <!-- JUnit 5 + AssertJ are inherited as test-scope from the root parent POM. -->
+
+    </dependencies>
 
 </project>
