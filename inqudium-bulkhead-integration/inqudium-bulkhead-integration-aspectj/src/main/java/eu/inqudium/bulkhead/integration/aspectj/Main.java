@@ -140,10 +140,10 @@ public final class Main {
      * by a pipeline element (including the bulkhead's synchronous {@code
      * InqBulkheadFullException}) is captured into a failed {@link CompletionStage} rather
      * than thrown to the caller. The behaviour matches what the proxy-based example
-     * demonstrates with {@code HybridProxyPipelineTerminal}; the rejection itself is
-     * identical, only the surface through which it reaches the caller is different. The
-     * function-based decoration path lets the throw propagate; the aspect normalizes it for
-     * callers that always expect a stage on async-typed methods.
+     * demonstrates through {@code InqAsyncProxyFactory.of(InqPipeline)}; the rejection
+     * itself is identical, only the surface through which it reaches the caller is
+     * different. The function-based decoration path lets the throw propagate; the aspect
+     * normalizes it for callers that always expect a stage on async-typed methods.
      *
      * <p>One structural detail that differs from the sync saturation:
      * <ul>

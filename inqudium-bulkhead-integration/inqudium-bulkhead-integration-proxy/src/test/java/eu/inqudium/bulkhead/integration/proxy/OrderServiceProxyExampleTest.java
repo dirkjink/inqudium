@@ -6,7 +6,7 @@ import eu.inqudium.config.runtime.InqRuntime;
 import eu.inqudium.core.element.bulkhead.InqBulkheadFullException;
 import eu.inqudium.core.pipeline.InqPipeline;
 import eu.inqudium.imperative.bulkhead.InqBulkhead;
-import eu.inqudium.imperative.core.pipeline.HybridProxyPipelineTerminal;
+import eu.inqudium.imperative.core.pipeline.InqAsyncProxyFactory;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -30,12 +30,12 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * <p>The tests exercise the example application — they use the same {@link OrderService}
  * interface, the same {@link DefaultOrderService} implementation, the same
  * {@link BulkheadConfig#newRuntime()} entry point, and the same
- * {@link HybridProxyPipelineTerminal#protect proxy wrapping} pattern that {@link Main}
- * demonstrates. The tests do not reach into bulkhead internals: assertions read
- * {@link InqBulkhead#availablePermits()}, the public handle accessor an application could
- * also consult.
+ * {@link InqAsyncProxyFactory#of(eu.inqudium.core.pipeline.InqPipeline) hybrid proxy factory}
+ * pattern that {@link Main} demonstrates. The tests do not reach into bulkhead internals:
+ * assertions read {@link InqBulkhead#availablePermits()}, the public handle accessor an
+ * application could also consult.
  *
- * <p>The fixture is per-test: each {@code @Test} builds a fresh runtime, pipeline, terminal,
+ * <p>The fixture is per-test: each {@code @Test} builds a fresh runtime, pipeline, factory,
  * and proxy in {@link #setUp()} and tears the runtime down in {@link #tearDown()}. The
  * lifecycle tests intentionally skip the fixture and build their own runtimes inside the
  * test method, since the property they pin is "two consecutive runtimes can be built and
@@ -59,8 +59,8 @@ class OrderServiceProxyExampleTest {
         runtime = BulkheadConfig.newRuntime();
         bulkhead = orderBulkhead(runtime);
         InqPipeline pipeline = InqPipeline.builder().shield(bulkhead).build();
-        HybridProxyPipelineTerminal terminal = HybridProxyPipelineTerminal.of(pipeline);
-        service = terminal.protect(OrderService.class, new DefaultOrderService());
+        service = InqAsyncProxyFactory.of(pipeline)
+                .protect(OrderService.class, new DefaultOrderService());
     }
 
     @AfterEach
@@ -230,11 +230,11 @@ class OrderServiceProxyExampleTest {
             // permits were acquired synchronously on the calling thread when the proxied
             // async method returned its still-pending stage), a third async call cannot
             // acquire a permit and is rejected with InqBulkheadFullException. Channel
-            // detail: HybridProxyPipelineTerminal's documented uniform-error-channel policy
-            // captures any synchronous throw on the async path into a failed CompletionStage
-            // rather than letting it propagate to the caller. The exception is the same; the
-            // surface differs from the function-based decoration path, where the throw
-            // propagates synchronously.
+            // detail: the hybrid proxy's documented uniform-error-channel policy on the
+            // async dispatch path (AsyncPipelineDispatchExtension.executeChain) captures any
+            // synchronous throw into a failed CompletionStage rather than letting it
+            // propagate to the caller. The exception is the same; the surface differs from
+            // the function-based decoration path, where the throw propagates synchronously.
             // How will the test be deemed successful and why: two stage holders each consume
             // a permit; the third proxied async call returns a CompletionStage that, when
             // joined, throws CompletionException whose cause is InqBulkheadFullException.
@@ -329,7 +329,7 @@ class OrderServiceProxyExampleTest {
 
             try (InqRuntime first = BulkheadConfig.newRuntime()) {
                 InqBulkhead<Object, Object> bh = orderBulkhead(first);
-                OrderService firstProxy = HybridProxyPipelineTerminal
+                OrderService firstProxy = InqAsyncProxyFactory
                         .of(InqPipeline.builder().shield(bh).build())
                         .protect(OrderService.class, new DefaultOrderService());
 
@@ -341,7 +341,7 @@ class OrderServiceProxyExampleTest {
 
             try (InqRuntime second = BulkheadConfig.newRuntime()) {
                 InqBulkhead<Object, Object> bh = orderBulkhead(second);
-                OrderService secondProxy = HybridProxyPipelineTerminal
+                OrderService secondProxy = InqAsyncProxyFactory
                         .of(InqPipeline.builder().shield(bh).build())
                         .protect(OrderService.class, new DefaultOrderService());
 

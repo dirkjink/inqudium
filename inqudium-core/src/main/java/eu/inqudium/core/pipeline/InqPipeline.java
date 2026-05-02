@@ -86,8 +86,8 @@ import java.util.function.BiFunction;
  * // Async terminal (inqudium-imperative)
  * AsyncPipelineTerminal.of(pipeline).execute(() -> service.callAsync());
  *
- * // Hybrid proxy — auto-dispatches sync vs async (inqudium-imperative)
- * HybridProxyPipelineTerminal.of(pipeline).protect(MyService.class, target);
+ * // Hybrid proxy factory — auto-dispatches sync vs async (inqudium-imperative)
+ * InqAsyncProxyFactory.of(pipeline).protect(MyService.class, target);
  *
  * // AspectJ terminal (inqudium-aspect)
  * AspectPipelineTerminal.of(pipeline).executeAround(pjp);

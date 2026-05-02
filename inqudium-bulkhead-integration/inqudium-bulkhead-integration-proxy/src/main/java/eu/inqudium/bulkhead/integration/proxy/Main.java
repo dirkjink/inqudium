@@ -4,7 +4,7 @@ import eu.inqudium.config.runtime.InqRuntime;
 import eu.inqudium.core.element.bulkhead.InqBulkheadFullException;
 import eu.inqudium.core.pipeline.InqPipeline;
 import eu.inqudium.imperative.bulkhead.InqBulkhead;
-import eu.inqudium.imperative.core.pipeline.HybridProxyPipelineTerminal;
+import eu.inqudium.imperative.core.pipeline.InqAsyncProxyFactory;
 
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
@@ -18,9 +18,9 @@ import java.util.concurrent.CountDownLatch;
  * <ol>
  *   <li>build an {@link InqRuntime} via the DSL,</li>
  *   <li>obtain the bulkhead handle from the runtime's imperative paradigm container,</li>
- *   <li>compose an {@link InqPipeline} containing the bulkhead and lift it through a
- *       {@link HybridProxyPipelineTerminal},</li>
- *   <li>call {@code terminal.protect(OrderService.class, new DefaultOrderService())} to
+ *   <li>compose an {@link InqPipeline} containing the bulkhead and lift it through
+ *       {@link InqAsyncProxyFactory#of(InqPipeline)},</li>
+ *   <li>call {@code factory.protect(OrderService.class, new DefaultOrderService())} to
  *       obtain a proxy that implements {@link OrderService}; method calls on the proxy are
  *       routed transparently through the pipeline.</li>
  * </ol>
@@ -29,10 +29,10 @@ import java.util.concurrent.CountDownLatch;
  * placement is invisible at every call site. The {@code service} reference held by the demo
  * code is an {@link OrderService}, indistinguishable from a plain implementation; callers do
  * not see {@code decorateFunction(...)} or {@code decorateAsyncFunction(...)} sprinkled
- * around the call site. The {@link HybridProxyPipelineTerminal} reads each method's return
- * type and dispatches sync methods through the {@code InqDecorator} chain and methods
- * returning {@link CompletionStage} through the {@code InqAsyncDecorator} chain, so a single
- * bulkhead instance protects both shapes through one proxy.
+ * around the call site. The {@link InqAsyncProxyFactory#of(InqPipeline)} factory wires two
+ * dispatch extensions behind one proxy — the async extension claims methods that return
+ * {@link CompletionStage} via its {@code canHandle}, the sync catch-all extension claims
+ * everything else — so a single bulkhead instance protects both shapes through one proxy.
  */
 public final class Main {
 
@@ -48,16 +48,15 @@ public final class Main {
             InqBulkhead<Object, Object> bulkhead = orderBulkhead(runtime);
 
             // Headline shape of the proxy-based pattern: build a pipeline holding the
-            // bulkhead, lift it through a hybrid terminal, and protect the implementation
+            // bulkhead, lift it through the hybrid factory, and protect the implementation
             // behind a JDK dynamic proxy. The variable below is typed as OrderService —
             // the proxy is transparent: it can be passed anywhere an OrderService is
             // expected, and the caller does not need to know the service is decorated.
             InqPipeline pipeline = InqPipeline.builder()
                     .shield(bulkhead)
                     .build();
-            HybridProxyPipelineTerminal terminal = HybridProxyPipelineTerminal.of(pipeline);
-            OrderService service = terminal.protect(
-                    OrderService.class, new DefaultOrderService());
+            OrderService service = InqAsyncProxyFactory.of(pipeline)
+                    .protect(OrderService.class, new DefaultOrderService());
 
             System.out.println("=== Sync demo ===");
             runSyncDemo(service);
@@ -156,8 +155,8 @@ public final class Main {
      * async-holding method with a release future that has not yet completed; a third
      * invocation is rejected with {@link InqBulkheadFullException}.
      *
-     * <p>Channel difference vs. the function-based example: {@link HybridProxyPipelineTerminal}
-     * implements a documented <em>uniform error channel</em> on the async path — any exception
+     * <p>Channel difference vs. the function-based example: the hybrid proxy's async
+     * dispatch path implements a documented <em>uniform error channel</em> — any exception
      * thrown synchronously by a pipeline element (including the bulkhead's
      * {@code InqBulkheadFullException}) is captured into a failed {@link CompletionStage}
      * rather than thrown to the caller. The rejection itself is identical; only the surface
