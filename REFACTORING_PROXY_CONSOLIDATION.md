@@ -445,7 +445,7 @@ naming-cleanup and unified-introspection follow-ups.
 - [x] P.D.A — layerDescriptions() on Pipeline dispatch extensions (2026-05-02, PR #45)
 - [x] P.E — Delete ProxyPipelineTerminal (2026-05-03, PR #46)
 - [x] P.F — Delete HybridProxyPipelineTerminal (2026-05-03, PR #47)
-- [ ] P.G — Behavioral verification
+- [x] P.G — Behavioral verification (2026-05-03, PR #48)
 - [ ] P.H — Documentation closure
 
 The discipline for keeping this log current is described in the
