@@ -559,6 +559,115 @@ class AsyncPipelineDispatchExtensionTest {
     }
 
     @Nested
+    class LayerDescriptions {
+
+        @Test
+        void layerDescriptions_returns_outermost_first_for_a_three_element_pipeline() {
+            // Given — three async elements added in deliberately mixed order;
+            // standard ordering puts BH(400) outside CB(500) outside RT(600)
+            InqPipeline pipeline = InqPipeline.builder()
+                    .shield(new TracingAsyncDecorator("orderRt", InqElementType.RETRY, new ArrayList<>()))
+                    .shield(new TracingAsyncDecorator("orderBh", InqElementType.BULKHEAD, new ArrayList<>()))
+                    .shield(new TracingAsyncDecorator("orderCb", InqElementType.CIRCUIT_BREAKER, new ArrayList<>()))
+                    .build();
+            AsyncPipelineDispatchExtension extension = new AsyncPipelineDispatchExtension(pipeline);
+
+            // When
+            List<String> descriptions = extension.layerDescriptions();
+
+            // Then — outermost-first, formatted as ELEMENT_TYPE(name)
+            assertThat(descriptions).containsExactly(
+                    "BULKHEAD(orderBh)",
+                    "CIRCUIT_BREAKER(orderCb)",
+                    "RETRY(orderRt)");
+        }
+
+        @Test
+        void layerDescriptions_returns_a_single_element_list_for_a_one_element_pipeline() {
+            // Given
+            InqPipeline pipeline = InqPipeline.builder()
+                    .shield(new TracingAsyncDecorator("loneCb", InqElementType.CIRCUIT_BREAKER, new ArrayList<>()))
+                    .build();
+            AsyncPipelineDispatchExtension extension = new AsyncPipelineDispatchExtension(pipeline);
+
+            // When / Then
+            assertThat(extension.layerDescriptions()).containsExactly("CIRCUIT_BREAKER(loneCb)");
+        }
+
+        @Test
+        void layerDescriptions_returns_an_empty_list_for_an_empty_pipeline() {
+            // What is being tested?
+            //   The empty-pipeline corner: InqPipeline accepts a no-element
+            //   build (validated by isEmpty() and depth() == 0), so the async
+            //   extension's diagnostic must not throw and must reflect that
+            //   emptiness as an empty list rather than null or a placeholder.
+            // How is success deemed?
+            //   layerDescriptions() returns a non-null, empty list.
+            // Why is this important?
+            //   Consumers (startup logging, topology inspectors) can iterate
+            //   the result without null-checking. An empty pipeline is a
+            //   pass-through and should be reported as "zero layers", not as
+            //   an error or as a synthetic placeholder layer.
+
+            // Given
+            InqPipeline pipeline = InqPipeline.builder().build();
+            AsyncPipelineDispatchExtension extension = new AsyncPipelineDispatchExtension(pipeline);
+
+            // When / Then
+            assertThat(extension.layerDescriptions()).isNotNull().isEmpty();
+        }
+
+        @Test
+        void layerDescriptions_format_is_ELEMENT_TYPE_paren_name_paren() {
+            // Given
+            InqPipeline pipeline = InqPipeline.builder()
+                    .shield(new TracingAsyncDecorator("checkoutBh", InqElementType.BULKHEAD, new ArrayList<>()))
+                    .build();
+            AsyncPipelineDispatchExtension extension = new AsyncPipelineDispatchExtension(pipeline);
+
+            // When
+            String entry = extension.layerDescriptions().get(0);
+
+            // Then — format is exactly the enum name plus "(name)"
+            assertThat(entry).isEqualTo("BULKHEAD(checkoutBh)");
+        }
+
+        @Test
+        void layerDescriptions_returns_immutable_list() {
+            // What is being tested?
+            //   The contract that the returned list cannot be mutated by a
+            //   caller — pinning the immutability promise so that consumers
+            //   never accidentally corrupt a future-cached snapshot or
+            //   surprise another reader by adding a synthetic entry.
+            // How is success deemed?
+            //   Calls to mutating List operations throw UnsupportedOperationException.
+            // Why is this important?
+            //   The JavaDoc promises an immutable list. Future consumers
+            //   (startup logging, the bulkhead-logging refactor) will share
+            //   these descriptions across threads and assume they cannot
+            //   change underneath them. A regression that returned a mutable
+            //   list would break that promise silently.
+
+            // Given
+            InqPipeline pipeline = InqPipeline.builder()
+                    .shield(new TracingAsyncDecorator("orderBh", InqElementType.BULKHEAD, new ArrayList<>()))
+                    .build();
+            AsyncPipelineDispatchExtension extension = new AsyncPipelineDispatchExtension(pipeline);
+
+            // When
+            List<String> descriptions = extension.layerDescriptions();
+
+            // Then — every mutation surface throws
+            assertThatThrownBy(() -> descriptions.add("BULKHEAD(injected)"))
+                    .isInstanceOf(UnsupportedOperationException.class);
+            assertThatThrownBy(() -> descriptions.remove(0))
+                    .isInstanceOf(UnsupportedOperationException.class);
+            assertThatThrownBy(descriptions::clear)
+                    .isInstanceOf(UnsupportedOperationException.class);
+        }
+    }
+
+    @Nested
     class Idempotence {
 
         @Test
