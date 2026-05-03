@@ -339,9 +339,9 @@ class InqAsyncProxyFactoryPipelineTest {
             HybridOrderService proxy = InqAsyncProxyFactory.of(pipeline)
                     .protect(HybridOrderService.class, new RealHybridOrderService());
 
-            // Then — pinned to keep toString diagnostics consistent with the
-            // predecessor terminal-based mechanism's "HybridPipelineProxy"
-            // prefix in ProxyInvocationSupport.buildSummary(...).
+            // Then — pins the layerDescription that appears as the toString
+            // prefix in AbstractProxyWrapper.handleObjectMethod's
+            // "<layerDescription> -> <realTarget>" format.
             assertThat(((Wrapper<?>) proxy).layerDescription())
                     .isEqualTo("InqHybridPipelineProxy");
         }
@@ -368,6 +368,76 @@ class InqAsyncProxyFactoryPipelineTest {
             assertThatThrownBy(() -> InqAsyncProxyFactory.of("any-name", (InqPipeline) null))
                     .isInstanceOf(IllegalArgumentException.class)
                     .hasMessageContaining("Pipeline must not be null");
+        }
+
+        @Test
+        void two_pipeline_proxies_around_the_same_target_are_equal() {
+            // What is being tested?
+            //   The Real-Target equals contract on hybrid pipeline-driven
+            //   proxies: two distinct proxy instances wrapping the same real
+            //   target compare equal via the AbstractProxyWrapper.handleEquals
+            //   semantics.
+            // How is success deemed?
+            //   proxy1.equals(proxy2) is true even though proxy1 != proxy2
+            //   as object references; the symmetric proxy2.equals(proxy1)
+            //   also holds.
+            // Why is this important?
+            //   The previous HybridProxyPipelineTerminal used identity equals,
+            //   meaning two proxy instances around the same target compared
+            //   unequal. The consolidation intentionally changed this to
+            //   real-target equals — which is the correct semantics for
+            //   service-method proxies. This test pins the new behavior on
+            //   the pipeline-factory surface specifically; without it, a
+            //   future refactor could revert the property here without any
+            //   factory-level test failing.
+
+            // Given
+            InqPipeline pipeline = InqPipeline.builder().build();
+            HybridOrderService target = new RealHybridOrderService();
+
+            // When — two separate factories, same target
+            HybridOrderService proxy1 = InqAsyncProxyFactory.of(pipeline)
+                    .protect(HybridOrderService.class, target);
+            HybridOrderService proxy2 = InqAsyncProxyFactory.of(pipeline)
+                    .protect(HybridOrderService.class, target);
+
+            // Then
+            assertThat(proxy1).isNotSameAs(proxy2);  // distinct instances
+            assertThat(proxy1).isEqualTo(proxy2);    // but real-target equal
+            assertThat(proxy2).isEqualTo(proxy1);    // and symmetric
+            assertThat(proxy1.hashCode()).isEqualTo(proxy2.hashCode());
+        }
+
+        @Test
+        void toString_uses_layerDescription_then_realTarget_format() {
+            // What is being tested?
+            //   The exact toString format produced by
+            //   AbstractProxyWrapper.handleObjectMethod on hybrid
+            //   pipeline-driven proxies:
+            //   "<layerDescription> -> <realTarget.toString()>".
+            // How is success deemed?
+            //   The proxy's toString matches the format exactly, with the
+            //   default layer name and the real target's own toString.
+            // Why is this important?
+            //   The previous HybridProxyPipelineTerminal produced a custom
+            //   summary format from ProxyInvocationSupport.buildSummary. The
+            //   consolidation deletes that mechanism and uses
+            //   AbstractProxyWrapper's standard format. This test pins the
+            //   new format on the factory surface so a future change to
+            //   AbstractProxyWrapper.handleObjectMethod that subtly altered
+            //   the format would surface in the factory tests.
+
+            // Given
+            InqPipeline pipeline = InqPipeline.builder().build();
+            RealHybridOrderService target = new RealHybridOrderService();
+
+            // When
+            HybridOrderService proxy = InqAsyncProxyFactory.of(pipeline)
+                    .protect(HybridOrderService.class, target);
+
+            // Then — the exact format from AbstractProxyWrapper.handleObjectMethod
+            assertThat(proxy.toString())
+                    .isEqualTo("InqHybridPipelineProxy -> " + target.toString());
         }
 
         @Test

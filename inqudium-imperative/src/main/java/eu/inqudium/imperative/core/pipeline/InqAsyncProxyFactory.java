@@ -121,10 +121,9 @@ public interface InqAsyncProxyFactory extends InqProxyFactory {
      * Creates a hybrid pipeline-driven factory with the default layer name
      * {@code "InqHybridPipelineProxy"}.
      *
-     * <p>The default value matches the prefix that
-     * {@code ProxyInvocationSupport.buildSummary(...)} produced for the
-     * predecessor terminal-based mechanism, keeping {@code toString()} output
-     * familiar to existing diagnostics.</p>
+     * <p>The default value appears as the {@code layerDescription} prefix in
+     * {@code AbstractProxyWrapper.handleObjectMethod}'s {@code toString()}
+     * format ({@code "<layerDescription> -> <realTarget>"}).</p>
      *
      * @param pipeline the pre-composed pipeline driving both dispatch paths
      * @return a new hybrid factory instance with the default name
