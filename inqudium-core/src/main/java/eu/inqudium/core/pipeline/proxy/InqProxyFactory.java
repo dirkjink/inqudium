@@ -168,10 +168,9 @@ public interface InqProxyFactory {
      * {@code "InqPipelineProxy"}.
      *
      * <p>Convenience overload for the common case where the layer name is
-     * not customised. The default value matches the prefix
-     * {@code ProxyInvocationSupport.buildSummary(...)} used to produce for the
-     * predecessor terminal-based mechanism, keeping {@code toString()} output
-     * familiar to existing diagnostics.</p>
+     * not customised. The default value appears as the {@code layerDescription}
+     * prefix in {@link AbstractProxyWrapper#handleObjectMethod}'s
+     * {@code toString()} format ({@code "<layerDescription> -> <realTarget>"}).</p>
      *
      * @param pipeline the pre-composed pipeline driving the dispatch chain
      * @return a new factory instance with the default name
