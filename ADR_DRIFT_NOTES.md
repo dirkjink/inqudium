@@ -153,3 +153,53 @@ Not on the critical path; library is pre-alpha.
 aspect's cache treatment follows: either listener-based invalidation (if
 replacement is supported), or documented undefined-behaviour-on-replacement
 (if not).
+
+---
+
+### Naming cleanup for proxy factory classes
+
+**Location:** `inqudium-imperative/src/main/java/eu/inqudium/imperative/core/pipeline/InqAsyncProxyFactory.java`
+(and its sync sibling `inqudium-core/.../InqProxyFactory.java`).
+
+**The drift:** After the proxy-consolidation refactor (PR series ending in
+PR #49), the public proxy-factory API is `InqProxyFactory` (sync) and
+`InqAsyncProxyFactory` (hybrid sync+async). The "Async" name is a historical
+artifact: the class supports hybrid dispatch (sync methods route through one
+extension, async methods through another), not async-only behavior. A future
+refactor could rename it to `InqHybridProxyFactory` or similar to make the
+hybrid nature explicit. This is a user-facing rename with no behavioral
+impact; it requires updating consumers (which now exist) and is therefore
+its own follow-up.
+
+**Surfaced in:** REFACTORING_PROXY_CONSOLIDATION.md, "What this refactor
+does NOT do" → "Naming cleanup".
+
+**Severity:** Cosmetic / API ergonomics — no correctness impact, but the
+class name misleads readers about the dispatch model.
+
+---
+
+### Unified introspection API across proxy / aspect-based mechanisms
+
+**Location:** `inqudium-core/src/main/java/eu/inqudium/core/pipeline/Wrapper.java`
+(proxy side) and `inqudium-spring/src/main/java/eu/inqudium/spring/InqShieldAspect.java`'s
+`ResolvedPipelineState` (aspect side, from refactor 6.B).
+
+**The drift:** After the proxy-consolidation refactor (PR series ending in
+PR #49), every proxy produced by the JDK-dynamic-proxy machinery is
+`Wrapper`-conforming with stable `chainId` and `layerDescription`. The
+remaining divergence is between proxy-based introspection (`Wrapper`) and
+aspect-based introspection (`InqShieldAspect`'s `ResolvedPipelineState`
+from 6.B). A future refactor could harmonize the two surfaces into a
+technology-spanning API — perhaps a thin wrapper type that both
+proxy-`Wrapper` and aspect-`ResolvedPipelineState` adapt to, exposing
+`chainId` and the topology in a uniform shape.
+
+**Surfaced in:** REFACTORING_PROXY_CONSOLIDATION.md, "What this refactor
+does NOT do" → "Unified introspection API".
+
+**Severity:** Substantive — diagnostics consumers (the topology log lines
+6.D introduces, future Micrometer / JFR bridges) currently need two code
+paths to introspect a chain, depending on whether the chain was assembled
+proxy-side or aspect-side. A unified surface would let those consumers
+work uniformly.
